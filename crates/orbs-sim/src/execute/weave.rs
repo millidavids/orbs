@@ -1,38 +1,22 @@
 //! `weave` — looking at what the work has bought (DESIGN.md §11.5, §19).
 //!
-//! # Progression had no surface at all
+//! Progression had no surface: `status` printed `experience 20` and
+//! `concentration 1` with nothing saying what they are for, what is next, or
+//! what they cost. So the way in is a word, as it is for
+//! [`unfurl`](super::unfurl). This hands a frontend screen the keyboard, and
+//! that screen draws the two tracks — the Ley Line ([`tower::ley`]) and the
+//! seven mastery lines ([`mod@crate::tower::mastery`]).
 //!
-//! `status` printed `experience 20` and `concentration 1` and that was the whole
-//! of it: two numbers with nothing saying what they are for, what is next, or
-//! what it costs. Concentration 1 — §11.5's *"moment the game becomes the game it
-//! advertises"* — arrived as a single line and was never chosen.
+//! The sim owns only the *decision to open it*. Where a cursor sits and which
+//! track is being looked at are facts about a pane, and rule 2 keeps panes out
+//! of this crate. Looking is not a world event, so `(seed, submissions)` replays
+//! identically whether or not anybody opened the screen.
 //!
-//! So the way in is a word, exactly as it is for [`unfurl`](super::unfurl). This
-//! hands a frontend screen the keyboard; that screen draws the two tracks — the
-//! Ley Line ([`tower::ley`]) and the seven mastery lines
-//! ([`mod@crate::tower::mastery`]) — and the total the first is
-//! measured against.
-//!
-//! # What the sim owns, and what it does not
-//!
-//! Only the *decision to open it*. Where a cursor sits and which track is being
-//! looked at are facts about a pane, and rule 2 keeps panes out of this crate —
-//! the same split `unfurl` makes, for the same reason. Looking is not a world
-//! event, so `(seed, submissions)` replays identically whether or not anybody
-//! opened the screen.
-//!
-//! # Taking a node
-//!
-//! A fork on the Ley Line offers its nodes and `take` chooses one. [`grant`] is
-//! the mutator behind it — *"a `Submission` variant and a queued effect on a
-//! tick boundary, the shape `Sim::write_spell` already has"* — and `steps_1` is
-//! the node that earned it: the menagerie cannot be automated at one
-//! instruction a tick, so a second step was the first thing worth buying.
-//!
-//! **Nothing on a mastery line is ever taken.** A station there is reached by
-//! doing its deed, and the screen refuses `take` on one in voice before it ever
-//! reaches a tick boundary; the world refuses it again here, because an id is
-//! an id and a screen's arithmetic is a second opinion about the rules.
+//! A fork on the Ley Line offers its nodes and `take` chooses one; [`grant`] is
+//! the mutator behind it, a queued effect on a tick boundary. Nothing on a
+//! mastery line is ever taken — a station there is reached by doing its deed,
+//! and the world refuses `take` on one again here, because a screen's arithmetic
+//! is a second opinion about the rules.
 
 use bevy_ecs::prelude::*;
 use orbs_render::{FieldName, RecordKind, Role};
@@ -44,10 +28,9 @@ use crate::tower;
 
 /// A request to open the weave screen.
 ///
-/// **Taken rather than read**, for the reason `Opening` and `Unfurling` both
-/// give: the verb asks once, and a frontend polling a persistent flag would
-/// reopen the screen every frame — including the frame after the player closed
-/// it.
+/// Taken rather than read, for `Opening` and `Unfurling`'s reason: the verb asks
+/// once, and a frontend polling a persistent flag would reopen the screen every
+/// frame, including the frame after the player closed it.
 #[derive(Resource, Debug, Default, Clone, Copy)]
 pub struct Weaving(bool);
 
@@ -59,10 +42,9 @@ impl Weaving {
 
     /// Whether a request is waiting, without taking it.
     ///
-    /// The peek exists because taking needs `&mut`, and a system reaching for it
-    /// stamps the resource's change tick merely by asking — which leaves its own
-    /// `resource_changed` run condition true for ever. That defect is recorded
-    /// against `open_requested`; this is the same pair of accessors.
+    /// Taking needs `&mut`, and a system reaching for it stamps the resource's
+    /// change tick merely by asking, leaving its own `resource_changed` run
+    /// condition true for ever. See `open_requested`.
     #[must_use]
     pub const fn pending(&self) -> bool {
         self.0
@@ -78,15 +60,13 @@ impl Weaving {
 
 /// Take a fork node, on the tick after the screen asked for it.
 ///
-/// **Every guard is re-asked here.** The screen refuses a locked node, a
-/// mastery station and a spent fork before it sends — and a queued effect that
-/// trusted the screen's arithmetic would be a second opinion about the rules,
-/// which is exactly how a screen and a world come to disagree. §19 records that
-/// shape going wrong repeatedly; it is cheap to ask twice and the world is the
-/// answer.
+/// Every guard is re-asked here. The screen refuses a locked node, a mastery
+/// station and a spent fork before it sends, but a queued effect that trusted
+/// the screen's arithmetic would be a second opinion about the rules (§19). It
+/// is cheap to ask twice and the world is the answer.
 ///
-/// Silent when it refuses, because the screen already said so in voice. What it
-/// says on success is a record, so `sift` and the log see the decision.
+/// Silent when it refuses, because the screen already said so in voice. Success
+/// is a record, so `sift` and the log see the decision.
 pub(super) fn grant(world: &mut World, id: &str) {
     if !tower::is_real(id) {
         return;
@@ -123,13 +103,10 @@ pub(super) fn grant(world: &mut World, id: &str) {
 pub(super) fn weave(world: &mut World) {
     world.resource_mut::<Weaving>().ask();
 
-    // **It answers, and it has to.** `a_dark_verb_only_acknowledges_and_a_live_one_does_not`
-    // asserts every live verb emits a record that is more than its own bare
-    // name, and `unfurl` — whose entire job is also handing a frontend surface
-    // the keyboard — sets the precedent with `unfurl_begins`.
-    //
-    // What it says is the number, because that is the one fact a player who
-    // typed this wanted and the transcript keeps it after the screen is closed.
+    // It answers, and it has to:
+    // `a_dark_verb_only_acknowledges_and_a_live_one_does_not` asserts every live
+    // verb emits a record that is more than its own bare name. What it says is
+    // the number, which the transcript keeps after the screen is closed.
     let earned = tower::Experience::get(*world.resource::<tower::Experience>());
     let next = tower::next(world);
     let key = if next.is_some() {
@@ -137,16 +114,13 @@ pub(super) fn weave(world: &mut World) {
     } else {
         "weave_begins_topped_out"
     };
-    // **`quantity` is the earned total, matching `FieldName::Quantity` below.**
-    // They were the other way round — the placeholder named `quantity` carried
-    // the *next threshold* while the field named `Quantity` carried the total —
-    // which is a trap for whoever authors the next line in this file.
+    // `quantity` is the earned total, matching `FieldName::Quantity` below. They
+    // were the other way round once, which is a trap for whoever authors the
+    // next line in this file.
     //
-    // The threshold rides in `detail` rather than in a field of its own, and
-    // deliberately: it is a fact about `progression.toml`, constant for the whole
-    // session, not a fact about this moment. A record says what happened; a
-    // machine reading the log back derives the rest from the content, exactly as
-    // it does for a recipe's duration.
+    // The threshold rides in `detail` rather than a field of its own: it is a
+    // fact about `progression.toml`, constant for the session, not a fact about
+    // this moment. A record says what happened.
     let message = world.resource::<Prose>().line(
         key,
         &[
@@ -214,15 +188,12 @@ mod tests {
 
     #[test]
     fn a_spell_cannot_seize_the_screen() {
-        // **The soft-lock.** `weave` opens a whole screen, which is `unfurl`'s
-        // objection with more of the window behind it — inside a `repeat` a
-        // spell re-seizes it faster than Escape can give it back, on the orb's
-        // clock rather than the player's. Driven through a real cast rather than
+        // The soft-lock: inside a `repeat` a spell re-seizes the screen faster
+        // than Escape can give it back. Driven through a real cast rather than
         // by calling `may_issue`, because the list is a `matches!` and nothing
-        // makes the compiler check it.
-        // **Stood in the laboratory before the spell is written**, or it is
-        // written for the root and the `attend` ends the invocation before the
-        // line under test ever runs — which passes for the wrong reason.
+        // makes the compiler check it. Stood in the laboratory before the spell
+        // is written, or it is written for the root and the `attend` ends the
+        // invocation before the line under test runs.
         let mut sim = Sim::new(1);
         sim.submit("attend laboratory");
         sim.step();
@@ -244,8 +215,8 @@ mod tests {
     #[test]
     fn a_topped_out_tower_is_not_told_to_work_toward_nothing() {
         // `next` is `None` once every authored threshold is passed, and the
-        // sentence about what is next would then name **0** — a target that
-        // reads as reached and is not a target at all.
+        // sentence about what is next would then name 0 — a target that reads
+        // as already reached.
         let mut sim = Sim::new(1);
         crate::tower::credit(sim.world_mut(), 10_000);
         sim.submit("weave");

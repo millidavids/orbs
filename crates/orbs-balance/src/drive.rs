@@ -1,21 +1,16 @@
 //! Driving a real `Sim` with a synthetic player, and sampling the curve.
 //!
-//! # It goes through `submit`, like everything else
-//!
-//! The harness has no privileged entry point: every command a policy issues is
-//! a line of text handed to [`Sim::submit`], resolved by the real parser and run
-//! on the next tick by the real schedule. That is what makes a sweep and a
-//! hand-played session comparable at all — CLAUDE.md's rule 4 in practice, and
-//! the reason there is deliberately no `Sim::scrollback_mut`.
-//!
-//! # A command is issued when the tower is free
+//! The harness has no privileged entry point: every command a policy issues is a
+//! line of text handed to [`Sim::submit`], resolved by the real parser and run on
+//! the next tick by the real schedule. That is what makes a sweep and a
+//! hand-played session comparable — CLAUDE.md's rule 4, and why there is
+//! deliberately no `Sim::scrollback_mut`.
 //!
 //! `CAPACITY` is 1 tower-wide, so a second production command issued while the
-//! first is in flight is refused, earns nothing, and quietly makes the sweep
-//! measure a policy nobody could play. The driver therefore waits on
-//! [`Sim::working`] exactly as a bound spell waits on the slot, and that wait is
-//! the *only* timing model here — no typing delay, no reaction time, nothing
-//! §19's Phase 0.5 entry refused.
+//! first is in flight is refused, earns nothing, and makes the sweep measure a
+//! policy nobody could play. The driver waits on [`Sim::working`] as a bound
+//! spell waits on the slot, and that wait is the *only* timing model here — no
+//! typing delay, no reaction time, nothing §19's Phase 0.5 entry refused.
 
 use std::collections::BTreeMap;
 
@@ -35,13 +30,12 @@ pub struct Sample {
     pub concentration: usize,
     /// The standing currency (§11.5). Rises on a sale, falls on a bad siege.
     ///
-    /// **Sampled because the ten rank thresholds are otherwise unfalsifiable.**
-    /// They run 25 to 15,000 and DESIGN.md's own renown entry ends *"every number
-    /// is a first pass and `orbs-balance` decides it"* — which it cannot do
-    /// without a column. Experience is not a usable proxy: several policies earn
-    /// at the tower's highest measured rate and mint no renown at all, so a
-    /// sweep that watched only experience would report *nothing moved* whether
-    /// or not renown had.
+    /// Sampled because the ten rank thresholds are otherwise unfalsifiable: they
+    /// run 25 to 15,000, and DESIGN.md's renown entry ends *"every number is a
+    /// first pass and `orbs-balance` decides it"*. Experience is no proxy —
+    /// several policies earn at the tower's highest measured rate and mint no
+    /// renown, so a sweep watching only experience reports *nothing moved*
+    /// either way.
     pub renown: u64,
 }
 
@@ -56,38 +50,28 @@ pub struct Run {
     pub samples: Vec<Sample>,
     /// Records the tower stamped with the **cost** accent.
     ///
-    /// **The diagnostic a balance harness most needs, and the first draft had no
-    /// column for it.** A policy whose commands are refused earns nothing for
-    /// them and still spends the ticks, so its rate is real but it is not
-    /// measuring the loop anybody wrote — it is measuring a loop that has fallen
-    /// out of phase with the tower. Two sweeps were read as balance findings
-    /// before this existed, and both were the policy's fault.
+    /// The diagnostic a balance harness most needs. A policy whose commands are
+    /// refused earns nothing and still spends the ticks, so its rate is real but
+    /// measures a loop out of phase with the tower — two sweeps were read as
+    /// balance findings before this existed, and both were the policy's fault.
     ///
-    /// **It counts a scour as well as a refusal, and cannot tell them apart.**
-    /// `refuse_busy` and `purge` both stamp [`Role::Cost`](orbs_render::Role) —
-    /// §4's accent triad says *"mana and arcane expenditure"*, which a scour
-    /// honestly is. Discriminating on the sentence would be matching prose, and
-    /// rule 6 puts prose in a file precisely so nothing in Rust depends on its
-    /// wording. So the number is *"things that cost something"* and
-    /// [`reasons`](Self::reasons) is what tells you which — which is why `--why`
-    /// exists rather than a cleverer classifier here.
+    /// It cannot tell a scour from a refusal: `refuse_busy` and `purge` both
+    /// stamp [`Role::Cost`](orbs_render::Role), and discriminating on the
+    /// sentence would match prose (rule 6). So the number is *"things that cost
+    /// something"* and [`reasons`](Self::reasons) says which — hence `--why`.
     ///
-    /// **A bound policy breaks the rule of thumb this column came with.**
-    /// *"Every entry should be a scour the policy asked for"* holds for a
-    /// synthetic player typing and not for one watching a spell: a spell that
-    /// **waits** stamps `Role::Cost` too — once per block, from `say_blocked` —
-    /// which is the runner doing exactly what §8 asks of it. `bound` carries
-    /// ~640 of them in a two-hour sweep and is perfectly healthy. Read `--why`
-    /// rather than the number: a wait is the loop working, a refusal is the loop
-    /// out of phase with the tower, and only the sentence separates them.
+    /// A spell that **waits** stamps `Role::Cost` too, once per block from
+    /// `say_blocked`: `bound` carries ~640 in a two-hour sweep and is healthy.
+    /// Read `--why`, not the number — only the sentence separates a wait from a
+    /// refusal.
     pub cost: usize,
     /// Runs that finished successfully — the work the rate is made of.
     pub landed: usize,
     /// Why the tower turned things down, commonest first.
     ///
     /// A count alone says a policy is broken; this says *where*. The sentence is
-    /// the authored prose the player would have read, so a reason here is
-    /// greppable straight back to `prose.toml`.
+    /// the prose the player would have read, so a reason greps straight back to
+    /// `prose.toml`.
     pub reasons: BTreeMap<String, usize>,
 }
 
@@ -95,8 +79,8 @@ impl Run {
     /// Experience per tick over the whole run — the number every policy is
     /// compared on.
     ///
-    /// Returns 0.0 rather than dividing by nought for a run of no length, which
-    /// is reachable with `--ticks 0` and is not worth an error.
+    /// Returns 0.0 rather than dividing by nought for a run of no length —
+    /// reachable with `--ticks 0`, and not worth an error.
     #[must_use]
     pub fn rate(&self) -> f64 {
         let Some(last) = self.samples.last() else {
@@ -127,8 +111,8 @@ impl Run {
 
 /// Run one policy for `ticks` and return its curve.
 ///
-/// `every` is the sampling interval. A row is always emitted for tick 0 and for
-/// the final tick, so a curve is never empty and its ends are always exact.
+/// `every` is the sampling interval. A row is always emitted for tick 0 and the
+/// final tick, so a curve is never empty and its ends are exact.
 #[must_use]
 pub fn run(
     policy: Policy,
@@ -137,10 +121,8 @@ pub fn run(
     every: u64,
     length: orbs_sim::content::Length,
 ) -> Run {
-    // **An open tower at the asked-for length.** `Sim::begun` is a *game* and is
-    // sealed, which would shut every room a policy needs; what the harness wants
-    // is the open tower it has always measured, with the curve a player would
-    // actually be climbing.
+    // An open tower at the asked-for length. `Sim::begun` is a sealed *game*,
+    // which would shut every room a policy needs.
     let mut sim = Sim::measured(seed, length);
     let mut samples = vec![sample(&sim)];
 
@@ -154,9 +136,9 @@ pub fn run(
     let every = every.max(1);
 
     while sim.tick().get() < ticks {
-        // **Free first, then act.** Asking for the next command while a run is
-        // in flight would have it refused and the lap lost; this is the same
-        // wait a bound spell performs against the production slot.
+        // Free first, then act: asking for the next command while a run is in
+        // flight has it refused and loses the lap. The wait a bound spell
+        // performs against the production slot.
         if busy(&sim) {
             sim.step();
         } else {
@@ -210,11 +192,10 @@ pub fn run(
 
 /// Count what the tower turned down against what it finished.
 ///
-/// `Role` is the discriminator rather than any field: `refuse_busy` and every
-/// other refusal in `tower/work/slot.rs` stamps [`Role::Cost`], a completion
-/// stamps [`Role::Success`], and a breach stamps [`Role::Danger`]. That is the
-/// accent triad §4 already commits to, so counting on it cannot drift from what
-/// the player sees on screen.
+/// `Role` is the discriminator rather than any field: every refusal in
+/// `tower/work/slot.rs` stamps [`Role::Cost`], a completion [`Role::Success`],
+/// a breach [`Role::Danger`]. That is §4's accent triad, so counting on it cannot
+/// drift from what the player sees on screen.
 ///
 /// [`Role::Cost`]: orbs_render::Role::Cost
 /// [`Role::Success`]: orbs_render::Role::Success
@@ -226,17 +207,15 @@ fn tally(sim: &Sim) -> (usize, usize, BTreeMap<String, usize>) {
     let mut reasons: BTreeMap<String, usize> = BTreeMap::new();
 
     for record in sim.scrollback().records().iter() {
-        // **A line that never resolved costs the policy a tick and used to be
-        // invisible here.** Every parser outcome is `Role::Normal` by design —
-        // `parser/report.rs` says the accent triad is danger, cost and success,
-        // and *"a parser needing one more word is none of those"* — so a
-        // command the tower could not read at all fell through the arm below
-        // and contributed to neither column.
+        // A line that never resolved costs the policy a tick and used to be
+        // invisible here. Every parser outcome is `Role::Normal` by design —
+        // `parser/report.rs`: *"a parser needing one more word is none of
+        // those"* — so a command the tower could not read fell through the arm
+        // below into neither column.
         //
-        // That is precisely the misdiagnosis `--why` exists to prevent: the
-        // downstream shape of an ambient reagent swap is `grind sage` ceasing to
-        // parse, and the reader was shown a `cost` column that could not see it
-        // and a reasons list pointing somewhere else entirely.
+        // That is the misdiagnosis `--why` exists to prevent: an ambient reagent
+        // swap shows up as `grind sage` ceasing to parse, and the reader got a
+        // `cost` column blind to it and a reasons list pointing elsewhere.
         let unread = matches!(
             record.outcome(),
             Some(Outcome::Unresolved | Outcome::Incomplete | Outcome::Candidate)
@@ -255,17 +234,14 @@ fn tally(sim: &Sim) -> (usize, usize, BTreeMap<String, usize>) {
                     *reasons.entry(why.to_owned()).or_default() += 1;
                 }
             }
-            // **A `Completion` that earned something**, not any success. This
-            // counted every `Role::Success` record, so `attend`, `kindle`,
-            // `empty` and each concentration gain all inflated it — `sweep
-            // --ticks 0` reported five landed runs before a command had been
-            // issued, against a field documented as *"runs that finished
-            // successfully — the work the rate is made of"*.
+            // A `Completion` that earned something, not any success. Counting
+            // every `Role::Success` let `attend`, `kindle`, `empty` and each
+            // concentration gain inflate it — `sweep --ticks 0` reported five
+            // landed runs before a command had been issued.
             //
-            // The rate is experience over ticks, so *the work the rate is made
-            // of* is precisely a run that yielded experience. Both halves are
-            // structural — a record kind and a counted field — so neither
-            // depends on prose the way a match on the message would.
+            // The rate is experience over ticks, so *"the work the rate is made
+            // of"* is a run that yielded experience. A record kind and a counted
+            // field, so neither half depends on prose.
             Role::Success
                 if record.kind() == RecordKind::Completion
                     && matches!(
@@ -283,9 +259,9 @@ fn tally(sim: &Sim) -> (usize, usize, BTreeMap<String, usize>) {
 
 /// Hand one line to the sim and let it land.
 ///
-/// A submitted line is queued and executed at the **start of the next tick**
+/// A submitted line is queued and executed at the start of the next tick
 /// (`orbs_sim::session`), so a caller that does not step never sees its effect —
-/// which is the commonest way to write a sweep that measures nothing.
+/// the commonest way to write a sweep that measures nothing.
 fn issue(sim: &mut Sim, line: &str) {
     sim.submit(line);
     sim.step();
@@ -293,16 +269,12 @@ fn issue(sim: &mut Sim, line: &str) {
 
 /// Whether the tower has anything in flight or queued.
 ///
-/// **Three things, and the triage slot is the one that was missed.**
-/// [`Sim::working`] reports the *production* slot only, so a driver waiting on it
-/// alone runs straight over a `purge` — §9 gives a pane one production slot *and
-/// one triage slot*, and a scour lives in the second. The symptom was a policy
-/// scouring twice a lap and being told *"you are already scouring the
-/// `balneum_mariae`"*, with the sweep reading 0.072 for a loop worth 0.140.
-///
-/// A scour is visible on the panel as [`State::Scouring`], which is the same
-/// accessor the instrument panel draws from — so this cannot disagree with what
-/// a player would see.
+/// Three things, and the triage slot was the one missed: [`Sim::working`] reports
+/// the *production* slot only, so waiting on it alone runs over a `purge`, which
+/// §9 puts in the pane's second slot. A policy scoured twice a lap, was told
+/// *"you are already scouring the `balneum_mariae`"*, and the sweep read 0.072
+/// for a loop worth 0.140. [`State::Scouring`] is the instrument panel's own
+/// accessor, so this cannot disagree with what a player sees.
 ///
 /// [`State::Scouring`]: orbs_sim::tower::State::Scouring
 fn busy(sim: &Sim) -> bool {
@@ -330,32 +302,21 @@ fn sample(sim: &Sim) -> Sample {
 /// Returns whether the player's hands were busy this step — `false` means there
 /// is still experience to earn and the caller should play the earning cycle.
 ///
-/// # Three visits, because each waits on a tick boundary
+/// Three visits, because each waits on a tick boundary. A slot has to be earned —
+/// concentration derives from work completed and no public API hands the sim a
+/// number — so the first stretch is a player grinding for sixteen experience.
+/// Then the write, queued through `Pending` and landing next tick, so `bind`
+/// cannot follow in the same breath without naming a spell the tower lacks.
 ///
-/// A slot has to be **earned**: concentration is derived from work completed,
-/// `debug_spawn` deliberately earns nothing, and no public API hands the sim a
-/// number, so the first stretch of this policy is a player grinding for sixteen
-/// experience exactly as CLAUDE.md's own See-it line does.
-///
-/// Then the write, which is queued through `Pending` like every other effect and
-/// lands on the next tick — so `bind` cannot be issued in the same breath, and a
-/// driver that tried would name a spell the tower does not have yet.
-///
-/// # It goes through `write_spell`, not through a debug door
-///
-/// `Sim::write_spell` is the editor's own public entry: it records the
-/// submission, so a swept session still replays, and it homes the spell to where
-/// the policy is standing. `debug_spell` would have worked and would have been
-/// wrong twice over — it is `cfg(debug_assertions)`, so a release sweep would
-/// have measured nothing, and it hands back a *shipped* spell rather than one a
-/// policy chose.
+/// `Sim::write_spell` is the editor's own public entry: it records the submission
+/// so a swept session still replays, and homes the spell where the policy stands.
+/// `debug_spell` is `cfg(debug_assertions)` and hands back a *shipped* spell, so
+/// a release sweep would measure nothing and a debug one the wrong thing.
 fn hand_over(sim: &mut Sim, name: &str, lines: &[&str]) -> bool {
-    // **Compared by filename**, because that is what the tower holds. `bound()`
+    // Compared by filename, because that is what the tower holds: `bound()`
     // answers `tending.spell` where a policy names `tending`, so a bare `==`
-    // never matched and the driver re-issued `bind` on every free tick — 1,920
-    // refusals in a two-hour sweep, and a `cost` column reading four times the
-    // work done. `with_extension` is the same normalisation every verb that
-    // names a spell already goes through.
+    // never matched and the driver re-issued `bind` every free tick — 1,920
+    // refusals in a two-hour sweep.
     let filename = orbs_sim::content::with_extension(name);
 
     // Standing automation. There is nothing left for a player to do, which is
@@ -379,17 +340,17 @@ fn hand_over(sim: &mut Sim, name: &str, lines: &[&str]) -> bool {
 
 /// One step of the archive, chosen the way `threading` chooses it.
 ///
-/// Opens a maze if there is none, otherwise issues a single `follow`. Tiers, in
-/// order, and they are the solver spell's rungs rather than a second idea about
-/// how a maze is solved:
+/// Opens a maze if there is none, otherwise issues a single `follow`. The tiers
+/// are the solver spell's rungs rather than a second idea about how a maze is
+/// solved:
 ///
 /// 1. a spoil to pick up, 2. the way out, 3. floor nobody has walked,
 /// 4. the least-walked way that is not where we came from, 5. back.
 ///
-/// **The `back` rung is what makes it a solver.** §19 records the version
-/// without one — *"the solver that was never a solver"* — which solved one seed
-/// and cycled for ever on another, because a fixed compass order sends the
-/// reading back where it came from at any junction where two ways read alike.
+/// The `back` rung is what makes it a solver. §19's *"solver that was never a
+/// solver"* had none: it solved one seed and cycled for ever on another, because
+/// a fixed compass order sends the reading back where it came from wherever two
+/// ways read alike.
 fn walk_one(sim: &mut Sim) {
     let Some(maze) = sim.stacks() else {
         issue(sim, "research");
@@ -445,34 +406,30 @@ fn walk_one(sim: &mut Sim) {
 
 /// The four sockets and the four sigils the aperture opens on.
 ///
-/// **Spelled out rather than imported**, exactly as `orbs-sim/tests/ward.rs`
-/// spells them out: a policy is a thing a player types, so a rename that broke
-/// the *player's* vocabulary would still compile against `tower::ward::SOCKETS`
-/// and this sweep would go on measuring a game nobody can play.
+/// Spelled out rather than imported, as `orbs-sim/tests/ward.rs` does: a policy
+/// is a thing a player types, so a rename breaking the *player's* vocabulary
+/// would still compile against `tower::ward::SOCKETS` and go on measuring a game
+/// nobody can play.
 const SOCKETS: [&str; 4] = ["first", "second", "third", "fourth"];
 const OPENING: [&str; 4] = ["nitre", "alum", "borax", "quartz"];
 
 /// Where a besieging policy has got to.
 ///
-/// **Two facts, and they were one `usize`.** `fight_one` took the shared `cycle`
-/// counter and used it as a round marker while a siege ran *and* as an idle tick
-/// count between sieges — so when a siege ended the counter still held its last
-/// round number, and the "every 64 ticks" `defend` retry actually fired 51 to 58
-/// ticks later, at a different offset after every siege depending on how many
-/// rounds it had run. The comment claimed a fixed cadence.
-///
-/// `Sweep` above is the precedent: a policy that needs state gets a named one.
+/// Two facts that were one `usize`. `fight_one` used the shared `cycle` counter
+/// as a round marker during a siege *and* as an idle tick count between them, so
+/// a finished siege left its last round number behind and the "every 64 ticks"
+/// `defend` retry fired 51 to 58 ticks later. `Sweep` below is the precedent: a
+/// policy that needs state gets a named one.
 #[derive(Debug, Default, Clone, Copy)]
 struct Fighting {
     /// The round a spend has already been made on, so the ladder runs once.
     spent_on: usize,
     /// The round the arsenal was last topped up on.
     ///
-    /// **Separate from [`spent_on`](Self::spent_on), and it has to be.** A
-    /// restock sharing the spend marker *consumes* the round's one command, so
-    /// the ladder never evaluated on a restock round — with a cadence of four
-    /// and two names to buy, that was over half of all rounds spent shopping
-    /// instead of fighting, in the policy whose whole job is to measure fighting.
+    /// Separate from [`spent_on`](Self::spent_on): a restock sharing the spend
+    /// marker *consumes* the round's one command, so the ladder never evaluated
+    /// on a restock round — over half of all rounds spent shopping, in the policy
+    /// whose job is to measure fighting.
     restocked_on: usize,
     /// Ticks spent waiting for the road, between sieges.
     idle: usize,
@@ -480,9 +437,8 @@ struct Fighting {
 
 /// Where a scrying policy has got to in its sweep.
 ///
-/// **Four sockets and a flag is the whole of it**, which is the point: §8's
-/// language has no variables, so a policy carrying more state than this would be
-/// measuring a spell nobody can write.
+/// Four sockets and a flag: §8's language has no variables, so a policy carrying
+/// more state would be measuring a spell nobody can write.
 #[derive(Debug, Default, Clone, Copy)]
 struct Sweep {
     /// The socket being worked, left to right.
@@ -494,19 +450,18 @@ struct Sweep {
 /// One turn-and-press of the lens, chosen the way `breaking` chooses it.
 ///
 /// Opens a reading if there is none — `probe` finds a far orb and presses it in
-/// one word — and otherwise turns the socket in hand and presses. Three
-/// outcomes, and they are the spell's three rungs:
+/// one word — and otherwise turns the socket in hand and presses. The three
+/// outcomes are the spell's three rungs:
 ///
 /// 1. `aligned` fell, so this socket *was* right: put the opening sigil back and
 ///    press again, which re-syncs the baseline the next delta is measured from.
 /// 2. `aligned` rose, so this socket has arrived: move to the next.
 /// 3. neither: turn it again.
 ///
-/// **The deltas are recomputed from the board rather than read off a reading**,
+/// The deltas are recomputed from the board rather than read off a reading,
 /// because `Sim` publishes the words to a *spell* and the numbers to a *record*.
-/// Comparing the last two attempts is the same arithmetic `Ward::press` does and
-/// cannot drift from it, whereas matching `the ward is closer` would be matching
-/// prose — which rule 6 puts in a file precisely so nothing in Rust depends on it.
+/// Comparing the last two attempts is `Ward::press`'s own arithmetic; matching
+/// `the ward is closer` would be matching prose, which rule 6 forbids.
 fn press_one(sim: &mut Sim, sweep: &mut Sweep) {
     // No reading open — either the first lap, or the last one gave. `probe`
     // opens the next and presses it, which is how a bound spell laps.
@@ -516,9 +471,8 @@ fn press_one(sim: &mut Sim, sweep: &mut Sweep) {
         return;
     }
 
-    // Unreachable by the sweep's own proof — a socket's cyclic walk always
-    // arrives — and a spin here would be silent, so it starts over rather than
-    // pressing an aperture nothing is moving.
+    // Unreachable — a socket's cyclic walk always arrives — but a spin here
+    // would be silent, so it starts over rather than pressing a still aperture.
     if sweep.socket >= SOCKETS.len() {
         *sweep = Sweep::default();
     }
@@ -550,14 +504,14 @@ fn press_one(sim: &mut Sim, sweep: &mut Sweep) {
 
 /// The three stations, spelled out rather than imported.
 ///
-/// A policy is a thing a *player* types, so a rename that broke the player's
-/// vocabulary would still compile against `tower::pylon::STATIONS` — the same
-/// reason `SOCKETS` above is written out.
+/// A policy is a thing a *player* types, so a rename breaking the player's
+/// vocabulary would still compile against `tower::pylon::STATIONS` — `SOCKETS`
+/// above, for the same reason.
 const STATIONS: [&str; 3] = ["wellspring", "conduit", "barrier"];
 
 /// How often the besieging driver puts more in the arsenal, in rounds.
 ///
-/// **Stores are a rate, so an arsenal has to be kept rather than filled.** One
+/// Stores are a rate, so an arsenal has to be kept rather than filled. One
 /// restock every four rounds, alternating between the two names it spends, so
 /// each is bought every eight — well inside `tower::WINDOW` at a siege's pace,
 /// and one extra tick per four rather than one per two.
@@ -568,18 +522,16 @@ const RESTOCK_EVERY: usize = 4;
 
 /// One step of the circle's search, taken the way `taming` takes it.
 ///
-/// **The spell's commands, in the spell's order, and nothing it cannot read.**
-/// No beast: `summon` draws one. A beast: step widdershins and call it in; when
-/// widdershins has come back round to the opening, step sunwise, and when
-/// sunwise has too, the keystone — which is the odometer the spell's three
-/// `repeat 6` loops make. Where each glyph stands comes off `Sim::beast` — the
-/// humour each glyph carries, which is what its reading says to a spell — and
-/// not off the board: building the view to read two words was three prose
-/// renders a step on this policy's hot path.
+/// The spell's commands, in the spell's order, and nothing it cannot read. No
+/// beast: `summon` draws one. A beast: step widdershins and call it in; when
+/// widdershins comes round to the opening, step sunwise, and when sunwise does
+/// too, the keystone — the odometer the spell's three `repeat 6` loops make.
+/// Where each glyph stands comes off `Sim::beast` rather than the board, because
+/// building the view to read two words was three prose renders a step on a hot
+/// path.
 ///
-/// **It carries no state between calls**, and that is the check on it: a
-/// search that needed a counter here would be measuring a spell nobody can
-/// write, because a spell has none either.
+/// It carries no state between calls, which is the check on it: a search needing
+/// a counter would be measuring a spell nobody can write.
 fn tame_one(sim: &mut Sim) {
     if sim.beast().is_none() {
         issue(sim, "summon");
@@ -587,10 +539,10 @@ fn tame_one(sim: &mut Sim) {
     }
     issue(sim, "limn widdershins");
     issue(sim, "summon");
-    // **Wrapped means back at the opening**, which the spell's inner loop
-    // reaches exactly on its sixth step — the moment it falls through to the
-    // next `limn`. A beast held on that call has no circle to read, so neither
-    // test passes and the next call draws another.
+    // Wrapped means back at the opening, which the spell's inner loop reaches on
+    // its sixth step — the moment it falls through to the next `limn`. A beast
+    // held on that call has no circle, so neither test passes and the next call
+    // draws another.
     if wrapped(sim, Glyph::Widdershins) {
         issue(sim, "limn sunwise");
         if wrapped(sim, Glyph::Sunwise) {
@@ -602,12 +554,10 @@ fn tame_one(sim: &mut Sim) {
 /// Whether a glyph has stepped back round to where every beast opens it, with a
 /// beast still waiting.
 ///
-/// **The opening is read from the circle, not spelled out here.** The commands
-/// issued are what a player types, for `STATIONS`' reason; where a search wraps
-/// is nothing anybody types, and a copy of `OPENING` in this file could move
-/// out of step with it — this policy would then never step the outer glyphs, and
-/// the column would measure a search that cannot hold most beasts with nothing
-/// to say so.
+/// The opening is read from the circle, not spelled out here: where a search
+/// wraps is nothing a player types, and a local copy of `OPENING` could drift,
+/// leaving the outer glyphs unstepped and the column silently measuring a search
+/// that cannot hold most beasts.
 fn wrapped(sim: &Sim, glyph: Glyph) -> bool {
     sim.beast()
         .is_some_and(|beast| beast.humour(glyph) == circle::OPENING[glyph.index()])
@@ -615,10 +565,10 @@ fn wrapped(sim: &Sim, glyph: Glyph) -> bool {
 
 /// One turn of a siege, decided the way `besieging` decides one.
 ///
-/// **The same ladder, in the same order, and that is the point.** A policy that
-/// played better than the shipped spell would measure a player nobody is, and
-/// one that played worse would blame the domain for the driver. §19's *"the
-/// harness has no player"* applied to a decision tree.
+/// The same ladder, in the same order. A policy that played better than the
+/// shipped spell would measure a player nobody is, and one that played worse
+/// would blame the domain for the driver. §19's *"the harness has no player"*,
+/// applied to a decision tree.
 fn fight_one(sim: &mut Sim, state: &mut Fighting) {
     let Some(board) = sim.rampart() else {
         issue(sim, "defend");
@@ -627,18 +577,14 @@ fn fight_one(sim: &mut Sim, state: &mut Fighting) {
     // A finished siege leaves its board up as a postmortem, so *"there is a
     // board"* is not *"there is a fight"* — `defend` starts the next one.
     if board.enemy.troops == 0 || board.garrison.troops == 0 {
-        // **Backing off, rather than asking every tick.** §11.5's cadence keeps
-        // the road empty for twenty minutes after a siege, and a driver that
-        // asked anyway filled the `cost` column with 7143 refusals in 7200
-        // ticks — which is CLAUDE.md's *"anything else means the loop has fallen
-        // out of phase with the tower"* a second time in one policy.
+        // Backing off rather than asking every tick. §11.5's cadence keeps the
+        // road empty for twenty minutes after a siege, and asking anyway filled
+        // the `cost` column with 7143 refusals in 7200 ticks. The wait is real
+        // world time either way; what changes is whether the column says so.
         //
-        // The wait is real world time either way; what changes is whether the
-        // column says so. A player standing in the bailey between sieges is
-        // brewing, and the additive rates elsewhere are where that shows up.
-        // **Its own counter, so 64 means 64.** Sharing the round marker made
-        // the first retry land 51–58 ticks after a siege rather than 64, and at
-        // a different offset after every one.
+        // Its own counter, so 64 means 64. Sharing the round marker made the
+        // first retry land 51–58 ticks after a siege, at a different offset
+        // after every one.
         state.idle = state.idle.wrapping_add(1);
         if state.idle.is_multiple_of(64) {
             issue(sim, "defend");
@@ -647,19 +593,14 @@ fn fight_one(sim: &mut Sim, state: &mut Fighting) {
         }
         return;
     }
-    // **The dice first, and the policy has to allocate or it is measuring the
-    // wrong game.** Pledging is the domain's central decision; a driver that
-    // skipped it would report what a player gets for *ignoring* the mechanic,
-    // which is not a ceiling worth pinning.
+    // The dice first: pledging is the domain's central decision, and skipping it
+    // would report what a player gets for *ignoring* the mechanic. The rule is
+    // `steadfast`'s, compressed: the buckler is never wasted, the line is thrown
+    // away against a volley, one die a tick.
     //
-    // The rule is `steadfast`'s, compressed: the buckler is never wasted, and
-    // the line is thrown away against a volley. One die a tick, because the
-    // driver issues one command a tick.
-    // **Only what it can pay for**, which is what makes this a policy rather
-    // than a stream of refusals. A driver that pledged blind would spend its one
-    // command a tick being told it is broke — CLAUDE.md's *"the loop has fallen
-    // out of phase with the tower"*, and the `cost` column is where it would
-    // show up.
+    // Only what it can pay for, which makes this a policy rather than a stream of
+    // refusals: pledging blind spends the one command a tick on being told it is
+    // broke, in the `cost` column.
     if let Some((die, _)) = board
         .coffer
         .iter()
@@ -678,45 +619,33 @@ fn fight_one(sim: &mut Sim, state: &mut Fighting) {
         return;
     }
 
-    // **At most one spend per round, and then hold.** Without this the policy
-    // reaches the `few` rung, is refused for want of a troop, and asks again on
-    // the next tick for ever — 6775 refusals in 7200 ticks, measured. The
-    // shipped spell does not have that failure because `hold` sits *outside* its
-    // ladder and runs every lap; this is that shape, in a driver that issues one
-    // command a tick.
+    // At most one spend per round, then hold. Without it the policy reaches the
+    // `few` rung, is refused for want of a troop, and asks again every tick —
+    // 6775 refusals in 7200, measured. The shipped spell avoids that because
+    // `hold` sits *outside* its ladder. Marking the round whether or not the
+    // spend succeeded is the honest part: a refused spell has still spent its
+    // instruction.
     //
-    // Marking the round whether or not the spend succeeded is the honest part: a
-    // spell that is refused has still spent its instruction.
-    //
-    // **`turns`, not the tally's length.** This keyed on the byte length of the
-    // rendered line *"round 5, 6 still coming"*, which only changes when a digit
-    // count does — so consecutive rounds collided, `state.spent_on == round`
-    // held, and the driver issued `hold` instead of evaluating its ladder. A
-    // policy that silently stopped using its arsenal is the exact failure the
-    // counter was added to prevent.
+    // `turns`, not the tally's length. The byte length of *"round 5, 6 still
+    // coming"* only changes when a digit count does, so consecutive rounds
+    // collided and the driver held instead of evaluating its ladder — silently
+    // ceasing to use its arsenal, the failure the counter exists to prevent.
     let round = usize::try_from(board.turns).unwrap_or(0) + 1;
 
-    // **The top-up, and it is deliberately *outside* the spend budget** (§19).
-    // Stores are a rate now, so an arsenal stocked once at setup goes thin and
-    // then out, and this policy would spend the rest of its 7,200 ticks being
-    // refused — the rate-of-nought collapse the setup comment above records.
+    // The top-up, deliberately *outside* the spend budget (§19). Stores are a
+    // rate now, so an arsenal stocked once at setup goes thin and then out, and
+    // this policy would spend the rest of its 7,200 ticks being refused. It does
+    // not mark `spent_on`, because a restock is not the round's move — sharing
+    // the marker left the ladder unevaluated on over half of all rounds.
     //
-    // **It does not mark `spent_on`**, because a restock is not the round's
-    // move: sharing the marker meant the ladder never evaluated on a restock
-    // round, and at this cadence that was more than half of all rounds spent
-    // shopping in the policy whose whole job is to measure fighting.
-    //
-    // **`debug_spawn` rather than learning to brew**, which is the point rather
-    // than a shortcut: this column measures *"the bailey, fought as the shipped
-    // decision tree fights it"*, and `debug_spawn` is deliberately *"the arsenal
-    // a player would have brewed"*. A rung that left for the laboratory would
-    // make the number a blend of two domains and the pinned rate meaningless.
+    // `debug_spawn` rather than learning to brew: it is *"the arsenal a player
+    // would have brewed"*, and a rung that left for the laboratory would blend
+    // two domains and make the pinned rate meaningless.
     if state.restocked_on != round && round.is_multiple_of(RESTOCK_EVERY) {
         state.restocked_on = round;
-        // **Alternating, because the driver issues one command a tick.** Both
-        // names have to stay inside `tower::WINDOW`, and buying them on
-        // consecutive rounds would take two turns out of every cadence instead
-        // of one.
+        // Alternating, because the driver issues one command a tick: both names
+        // have to stay inside `tower::WINDOW`, and consecutive rounds would take
+        // two turns out of every cadence instead of one.
         let name = if (round / RESTOCK_EVERY).is_multiple_of(2) {
             "debug_spawn troop 2"
         } else {
@@ -740,10 +669,9 @@ fn fight_one(sim: &mut Sim, state: &mut Fighting) {
         return;
     }
     if board.garrison.vigour * 2 <= board.garrison.full {
-        // **`warding`, where the spell writes `mending`.** `mending` is a
-        // `secret = true` recipe, so a tower that has not broken a ward cannot
-        // name it — and a policy naming it would be measuring a player further
-        // through the game than the one this column is about.
+        // `warding`, where the spell writes `mending`: `mending` is a
+        // `secret = true` recipe, so naming it would measure a player further
+        // through the game than this column is about.
         issue(sim, "quaff warding");
         return;
     }
@@ -752,23 +680,18 @@ fn fight_one(sim: &mut Sim, state: &mut Fighting) {
 
 /// One step of the forge's loop, reading the residue as the shipped table does.
 ///
-/// **It reads exactly what a spell reads**, which is the rule every world-reading
-/// policy here follows: the three columns' residue, off `Sim::lattice` — the same
-/// view the board draws from — and never the answer.
+/// It reads exactly what a spell reads, the rule every world-reading policy here
+/// follows: the three columns' residue off `Sim::lattice`, never the answer.
 ///
 /// The eight rungs are `dev_spells.toml`'s `forging`, in Rust. Keeping them in
 /// step is what makes this column measure the *loop* rather than a cleverer
-/// driver: if the two ever disagree, `the_shipped_table_is_the_answer_the
-/// _arithmetic_gives` fails first, because it checks the spell against the model
-/// over all 512 boards.
+/// driver: if the two disagree, `the_shipped_table_is_the_answer_the
+/// _arithmetic_gives` fails first, over all 512 boards.
 fn bind_one(sim: &mut Sim) {
-    // **Wait when the pool is short, rather than asking and being refused.**
-    //
-    // Without this the driver spent 6,236 of 7,200 ticks on *"hurried would take
-    // 6 quintessence, and you hold 4"* — which is the `cost` column's own
-    // diagnosis, *"the loop has fallen out of phase with the tower"*, and it
-    // measures a game nobody plays. A player short of quintessence waits for it;
-    // so does this.
+    // Wait when the pool is short rather than asking and being refused. Without
+    // this the driver spent 6,236 of 7,200 ticks on *"hurried would take 6
+    // quintessence, and you hold 4"*, measuring a game nobody plays. A player
+    // short of quintessence waits for it; so does this.
     let held = sim
         .world()
         .resource::<orbs_sim::tower::Quintessence>()
@@ -783,8 +706,8 @@ fn bind_one(sim: &mut Sim) {
     }
 
     let Some(board) = sim.lattice() else {
-        // Nothing open, so open one. **`hurried` every lap**, so the column
-        // measures one charm's economy rather than an average over five.
+        // Nothing open, so open one. `hurried` every lap, so the column measures
+        // one charm's economy rather than an average over five.
         issue(sim, "imbue mortar_and_pestle hurried");
         return;
     };
@@ -802,7 +725,7 @@ fn bind_one(sim: &mut Sim) {
         _ => &[1],
     };
     // Snap the columns the table names that are not already snapped, one a tick,
-    // then fall. Asking the board rather than counting laps is what makes this
+    // then fall. Asking the board rather than counting laps is what keeps this
     // correct when a fall springs back and the presses clear.
     for column in wanted {
         if !board.snapped.get(*column).copied().unwrap_or(false) {
@@ -816,22 +739,17 @@ fn bind_one(sim: &mut Sim) {
 
 /// One turn of the cyclic solution, or a fresh course when none is drawn.
 ///
-/// **The whole algorithm is three pairs in rotation.** Between any two stations
-/// exactly one haul is legal, so the policy never has to search — it picks the
-/// pair whose turn it is and asks the course which way round the haul runs. That
-/// is exactly what `dev_spells.toml`'s `holding` does with `let` and a part, and
-/// no more: the parity comes off the course's own height, and the direction off
-/// two `potency`s.
+/// Three pairs in rotation. Between any two stations exactly one haul is legal,
+/// so the policy never searches — it picks the pair whose turn it is and asks the
+/// course which way round the haul runs, which is what `dev_spells.toml`'s
+/// `holding` does with `let` and a part.
 ///
-/// **The rotation and the direction are the sim's, not a copy of them.**
-/// `tower::pylon::cycle` and `Course::between` are both `pub`, and `between`'s
-/// own doc says it is kept *"even though nothing in the game calls it"* — this is
-/// the caller it was waiting for. Transcribing either here would leave the
-/// harness able to drift into measuring a slower, wrong-station solve while
-/// `tower::pylon`'s optimality tests stayed green, and the code itself records
-/// that the failure is invisible: *"getting this backwards still finishes — in
-/// the conduit"*. `STATIONS` above stays written out for the opposite reason,
-/// which its own doc gives: it is a thing a **player** types.
+/// The rotation and the direction are the sim's, not a copy. `between`'s doc
+/// says it is kept *"even though nothing in the game calls it"* — this is that
+/// caller. Transcribing either would let the harness drift into measuring a
+/// slower, wrong-station solve while `tower::pylon`'s optimality tests stayed
+/// green, and the failure is invisible: *"getting this backwards still finishes
+/// — in the conduit"*. `STATIONS` stays written out: a *player* types it.
 fn haul_one(sim: &mut Sim, cycle: &mut usize) {
     // No course drawn — either the first lap, or the last one finished.
     // `muster` draws the next, which is how a bound spell laps.
@@ -845,11 +763,10 @@ fn haul_one(sim: &mut Sim, cycle: &mut usize) {
     let (a, b) = pairs[*cycle % pairs.len()];
     *cycle += 1;
 
-    // **`None` starts the rotation over rather than returning.** Both stations
-    // empty is unreachable while the rotation is in phase with the board — but
-    // `run` only advances the clock inside `issue`, so a bare `return` here is a
-    // spin with no tick, and `while sim.tick() < ticks` would never end. That is
-    // the hang `press_one` guards against in as many words one function up.
+    // `None` starts the rotation over rather than returning. Both stations empty
+    // is unreachable in phase with the board — but `run` only advances the clock
+    // inside `issue`, so a bare `return` is a spin with no tick and
+    // `while sim.tick() < ticks` never ends. `press_one` guards the same hang.
     let Some((from, to)) = course.between(a, b) else {
         *cycle = 0;
         issue(sim, "muster");
@@ -865,12 +782,11 @@ mod tests {
 
     #[test]
     fn a_line_the_tower_cannot_read_at_all_is_counted_and_named() {
-        // **The gap `--why` was built to close, and could not see.** Every
-        // parser outcome is `Role::Normal` — `parser/report.rs` reserves the
-        // accent triad for danger, cost and success — so a command the tower
-        // never resolved fell into neither column, and CLAUDE.md's instruction
-        // to *"read the `cost` column before the rate"* was reading a number
-        // that could not include it.
+        // The gap `--why` was built to close and could not see. Every parser
+        // outcome is `Role::Normal` — `parser/report.rs` reserves the triad for
+        // danger, cost and success — so an unresolved command fell into neither
+        // column, and *"read the `cost` column before the rate"* read a number
+        // that excluded it.
         let mut sim = Sim::new(0);
         sim.submit("xyzzy plugh");
         sim.step();
@@ -888,9 +804,9 @@ mod tests {
 
     #[test]
     fn nothing_lands_before_any_work_is_done() {
-        // `landed` counted every `Role::Success` record, so a sim that had
-        // issued no commands at all still reported finished runs — against a
-        // field documented as *"the work the rate is made of"*.
+        // `landed` counted every `Role::Success` record, so a sim that had issued
+        // no commands still reported finished runs — against a field documented
+        // as *"the work the rate is made of"*.
         let sim = Sim::new(0);
         let (_, landed, _) = tally(&sim);
         assert_eq!(landed, 0, "the tower reported finished work at tick zero");

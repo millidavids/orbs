@@ -4,15 +4,12 @@
 //! paths are places."* So a node is an entity, the tree is `ChildOf`/`Children`,
 //! and the world model stays ECS throughout (architectural rule 1).
 //!
-//! # Two orderings, and only one of them is safe
-//!
-//! Anything a player can see must be derived by walking [`Children`], which is a
-//! `Vec<Entity>` in insertion order. It must **never** come from a global query:
-//! archetype order is not insertion order, and an entity moves to a new table
-//! whenever a component is added or removed. Starting a brew would therefore
-//! reorder a listing — and because §6's noun matching resolves ties to whichever
-//! noun was registered first, it would silently change which noun a phrase
-//! resolves to and break replay from the same seed. No test would catch it.
+//! Two orderings, and only one is safe: anything a player can see is derived by
+//! walking [`Children`], never from a global query. Archetype order is not
+//! insertion order and an entity moves table when a component is added, so
+//! starting a brew would reorder a listing — and since §6 resolves ties to
+//! whichever noun was registered first, that silently changes what a phrase
+//! means and breaks replay. No test would catch it.
 
 use bevy_ecs::prelude::*;
 
@@ -93,25 +90,24 @@ pub struct Protected;
 /// A place that is furniture in a room rather than somewhere you travel to.
 ///
 /// §10.1's instruments. A fixture is a real place — `attend alembic` and
-/// `survey alembic` both work — but its **contents are nameable from the room it
-/// stands in**, because someone in the laboratory can plainly reach the sage in
+/// `survey alembic` both work — but its contents are nameable from the room it
+/// stands in, because someone in the laboratory can plainly reach the sage in
 /// the mortar. That is what makes the pipeline typable: `move husks from alembic
 /// to dispensary` has to be able to name `husks`.
 ///
-/// It does not weaken §19's *"you can only name what is where you are"*. That
-/// rule stops you acting on another **domain** at a distance, and a domain is
-/// never a fixture — the marker is exactly the line between the two.
+/// It does not weaken §19's *"you can only name what is where you are"*: that
+/// rule stops you acting on another domain at a distance, and a domain is never
+/// a fixture — the marker is the line between the two.
 #[derive(Component, Debug, Clone, Copy)]
 pub struct Fixture;
 
 /// The fixture that burns fuel for the ones that need heat — §10.1's athanor.
 ///
-/// **A marker, not `name == ATHANOR`.** Six sites compared a `Name` against a
-/// `&'static str` to decide whether a fixture behaves like the rest, with nothing
-/// binding them together: no test, no type. §10 puts five more domains in Phase
-/// 3a, and the day a second room gets a forge, `wield forge` starts an ordinary
-/// run with no recipe instead of lighting it. That is six edits the compiler
-/// never asks for; this is one component it does.
+/// A marker, not `name == ATHANOR`. Six sites compared a `Name` against a
+/// `&'static str` to decide whether a fixture behaves like the rest, with
+/// nothing binding them together — and the day a second room gets a forge,
+/// `wield forge` starts an ordinary run with no recipe instead of lighting it.
+/// Six edits the compiler never asks for, against one component it does.
 #[derive(Component, Debug, Clone, Copy)]
 pub struct HeatSource;
 
@@ -123,13 +119,11 @@ pub struct HeatSource;
 /// talks: you grind sage, you do not move sage into a mortar and then operate
 /// the mortar.
 ///
-/// **A component, not a table of names.** The alternative is a
-/// `match verb { Grind => "mortar_and_pestle", … }` somewhere in the executor,
-/// which is the same name-string dispatch the athanor and the dispensary were
-/// just moved off — six sites branching on a `&'static str` with nothing binding
-/// them together. Here the instrument declares what it does, in the one place
-/// instruments are declared, and §10's five further domains can coin their own
-/// verbs without touching the executor at all.
+/// A component, not a table of names: the alternative is
+/// `match verb { Grind => "mortar_and_pestle", … }` in the executor, which is
+/// the name-string dispatch the athanor and dispensary were just moved off.
+/// Here the instrument declares what it does where instruments are declared, so
+/// a new domain coins verbs without touching the executor.
 #[derive(Component, Debug, Clone, Copy)]
 pub struct Operation(pub crate::parser::Verb);
 
@@ -144,76 +138,57 @@ pub struct Store;
 /// Where finished work is kept, and the one place in the tower you can reach
 /// from anywhere — §10.1's arsenal.
 ///
-/// # Why it is not a [`Store`]
-///
-/// A store is *"the fallback a `move` falls back to"*: `reachable` searches it
-/// last, and anything turned out of an instrument lands there. An arsenal that
-/// were one would quietly capture stray reagents, which is the opposite of what
-/// it is for. What it holds is finished work — an
-/// [`Essence`](crate::parser::NounKind::Essence) or a
+/// Not a [`Store`]: a store is the fallback a `move` falls back to, so an
+/// arsenal that were one would quietly capture stray reagents. This holds
+/// finished work — an [`Essence`](crate::parser::NounKind::Essence) or a
 /// [`Scroll`](crate::parser::NounKind::Scroll) — and `pipeline` refuses anything
-/// else at the door, naming what the room is for.
+/// else at the door.
 ///
-/// # The exemption, stated as one
-///
-/// §7 is *"you can only name what is where you are"*, and `tower::scene`
-/// records that acting on another **domain** at a distance is Phase 10's unlock.
-/// This is a deliberate hole in that rule, and it is narrow: places, spells and
-/// the maze's readings already have the same one, for the same reason — a
-/// spellbook you carry is not a shelf you walk to, and neither is a bandolier.
-///
-/// **Nameable is not enough.** The exemption has to reach *every* verb that can
-/// now name what is in here, or a word resolves at full confidence and then
-/// reports "no such thing" — §15's dead end, arriving through the affordance
-/// meant to remove one. `pipeline::reachable`, `pipeline::purge` and
-/// `files::here_or_place` are the three lookups that had to learn it.
+/// A deliberate, narrow hole in §7's *"you can only name what is where you
+/// are"*; places, spells and the maze's readings have the same one, because a
+/// spellbook you carry is not a shelf you walk to. Nameable is not enough — the
+/// exemption has to reach every verb that can now name what is in here, or a
+/// word resolves at full confidence and reports "no such thing".
+/// `pipeline::reachable`, `pipeline::purge` and `files::here_or_place` all
+/// learned it.
 #[derive(Component, Debug, Clone, Copy)]
 pub struct Keep;
 
 /// One of the four ways the archive's reading can go — see `tower::maze`.
 ///
-/// **A place that is not somewhere you go.** It has to be a `NounKind::Place`,
-/// because that is the only kind the place half of a spell's question resolves
-/// against; without it `if north has passage` cannot be written at all. But a
-/// compass bearing is not a room, so this is what `attend` refuses on and what
-/// keeps the four off the instrument panel — the same shape as [`Store`], which
-/// exists because a shelf is not an instrument.
+/// A place that is not somewhere you go. It must be a `NounKind::Place` — the
+/// only kind a spell's question resolves its place half against, so without it
+/// `if north has passage` cannot be written. But a bearing is not a room, so
+/// this is what `attend` refuses on and what keeps the four off the panel.
 #[derive(Component, Debug, Clone, Copy)]
 pub struct Reading;
 
 /// One of a set a spell's `for each` walks — `for each way`, `for each socket`.
 ///
-/// **Not derivable from [`Reading`], which is why it exists.** The archive's
-/// four ways, the lens's four sockets and its six sigils all carry that marker,
-/// so a `for each` over the marker would hand a spell in the lens ten things
-/// when it asked for four. The set is a fact the fixtures declare
-/// (`build::Branch::group`), not a consequence of what kind of thing they are.
+/// Not derivable from [`Reading`], which is why it exists: the archive's four
+/// ways and the lens's four sockets and six sigils all carry that marker, so a
+/// `for each` over it would hand a spell in the lens ten things when it asked
+/// for four. The set is declared (`build::Branch::group`).
 ///
-/// **Singular, because the word names the cursor as well as the set.**
-/// `for each way` binds `way`, and the body reads `if way has spoil` — one word
-/// to learn rather than two.
+/// Singular, because the word names the cursor as well as the set: `for each
+/// way` binds `way`, and the body reads `if way has spoil`.
 #[derive(Component, Debug, Clone)]
 pub struct Grouped(pub String);
 
 /// Everything at `node` belonging to the set `group`, in the order it was
 /// raised.
 ///
-/// **Raise order, never query order.** `tower::node` records archetype order as
-/// a bug that changes what a phrase resolves to with no test catching it, and a
-/// `for each` whose members came back in a different order on a rebuilt world
-/// would break replay — which is the whole reason [`children_of`] is what this
-/// walks.
+/// Raise order, never query order. `tower::node` records archetype order as a
+/// bug that changes what a phrase resolves to with no test catching it, and a
+/// `for each` whose members came back differently on a rebuilt world would break
+/// replay — which is why this walks [`children_of`].
 #[must_use]
 pub fn group_at(world: &World, node: Entity, group: &str) -> Vec<Entity> {
-    // **The arsenal is walked wherever you are standing, and it is the only set
-    // that is.** §19 built it as *"the one room reachable from every other"* and
-    // `scene` already folds its contents into the naming scope for that reason —
-    // so `for each store` resolving only in a room nobody attends would be the
-    // words being nameable and unreachable, which is the exact defect the
-    // registration loop exists to prevent.
-    //
-    // Every other set is a fixture in the room the spell is standing in: a way
-    // belongs to a maze, a socket to a ward. A store belongs to the tower.
+    // The arsenal is walked wherever you stand, and it is the only set that is:
+    // §19 built it as the one room reachable from every other, and `scene`
+    // already folds its contents into the naming scope. `for each store`
+    // resolving only in a room nobody attends would be nameable-but-unreachable.
+    // Every other set is a fixture in the room: a way belongs to a maze.
     let node = if group == super::stores::STORE {
         match super::keep(world) {
             Some(arsenal) => arsenal,
@@ -251,23 +226,15 @@ pub fn groups_at(world: &World, node: Entity) -> Vec<String> {
 
 /// The reading words a room can answer `has` with, in set order.
 ///
-/// # Keyed on the **set**, not on the room and not on [`Reading`]
+/// Keyed on the *set*, not the room and not [`Reading`]. Keying on `Reading`
+/// shipped a defect: `recall scripting` gated on *does this room have any
+/// reading child* and then printed `maze::readings()` regardless, so the lens's
+/// page taught the archive's words and named none of the ward's six deltas.
 ///
-/// `Reading` is the wrong question and asking it shipped a real defect:
-/// `recall scripting` gated the section on *does this room have any reading
-/// child* and then printed `maze::readings()` whatever the answer was about. The
-/// lens's four sockets and six sigils carry that marker, so the lens's scripting
-/// page taught the archive's `passage wall exit back spoil marks gleaning` and
-/// named none of the ward's six deltas — which are, since the lens rework, the
-/// whole of what a lens spell may branch on. The one page a player can learn
-/// that vocabulary from listed the wrong room's.
-///
-/// The set is the right key because it is already **declared**
-/// (`build::Branch::group`) rather than inferred, and because the vocabulary
-/// genuinely belongs to it: every `way` answers the same seven words, every
-/// `socket` the same six. A domain that adds a set adds an arm here, in the one
-/// place it was already adding a declaration — which is what keeps §10's five
-/// remaining rooms from each needing an arm scattered somewhere else.
+/// The set is right because it is declared (`build::Branch::group`) rather than
+/// inferred, and the vocabulary genuinely belongs to it — every `way` answers
+/// the same seven words. A domain that adds a set adds an arm here, where it was
+/// already adding a declaration.
 #[must_use]
 pub fn readings_at(world: &World, node: Entity) -> Vec<&'static str> {
     let mut words: Vec<&'static str> = Vec::new();
@@ -298,77 +265,54 @@ fn readings_of(set: &str) -> Vec<&'static str> {
         // it has and whether that is nearly out.
         "column" => vec!["lit"],
         "charm" => vec![super::charm::GRACED, super::charm::EBBING],
-        // The arsenal's items, which answer with how well stocked the tower is
-        // in each — `fresh`, `thin`, `spent`. This is what lets a spell keep its
-        // own stores up: walk them, find what has gone thin, and go make it.
+        // The arsenal's items answer with how well stocked the tower is —
+        // `fresh`, `thin`, `spent` — which is what lets a spell keep its own
+        // stores up: walk them, find what has gone thin, go make it.
         super::stores::STORE => super::stores::readings(),
-        // **The bailey's three have no arm and that is a gap, not a decision.**
-        // `siege::readings()` returns all eighteen words as one list, and
-        // splitting them across `area`, `die` and `band` is a judgement about
-        // which word belongs to which set rather than a line of code. Recorded
-        // here so the next person to open this file finds it named.
+        // The bailey's three have no arm, and that is a gap rather than a
+        // decision: `siege::readings()` returns all eighteen words as one list,
+        // and splitting them across `area`, `die` and `band` is a judgement
+        // about which word belongs where.
         _ => Vec::new(),
     }
 }
 
 /// A file whose text is **stored**, rather than derived from the record stream.
 ///
-/// # Why this is not how `orb.log` works, and must not become it
+/// Not how `orb.log` works, and must not become it. §3 forbids unlogged output,
+/// so the record stream *is* the log and neither `orb.log` nor `laboratory.log`
+/// has contents of its own — which is what keeps a search working when the
+/// eldritch renderer corrupts the display.
 ///
-/// §3 forbids unlogged output, which makes the record stream *the* log: `orb.log`
-/// is the whole of it and `laboratory.log` is that same stream filtered by where
-/// each line happened. Neither has contents of its own, and that is what keeps a
-/// search working when the eldritch renderer corrupts the display — the filter
-/// runs over field values and never over anything a view put on screen.
-///
-/// A `.spell` is the opposite kind of thing: lines a player wrote, which stay
-/// exactly as written until the player changes them. Deriving one would mean
-/// inventing records for it; filtering the stream to find it would mean a spell
-/// could be edited by something the orb happened to say.
-///
-/// So `peruse` reads this when it is present and falls back to the stream when
-/// it is not, and the two paths stay separate. **`Name` alone does not say which
-/// kind a file is** — the component does.
+/// A `.spell` is the opposite: lines a player wrote, which stay as written.
+/// Deriving one would mean inventing records; filtering the stream to find it
+/// would let the orb edit a spell by saying something. So `peruse` reads this
+/// when present and falls back to the stream when not. `Name` alone does not say
+/// which kind a file is — the component does.
 #[derive(Component, Debug, Clone, PartialEq, Eq)]
 pub struct Held(pub Vec<String>);
 
 /// [`Held`], as the orb read it — the lines `spell::compile` actually compiles.
 ///
-/// # Derived, and that is the whole of why this is allowed to exist
+/// Derived, which is why it is allowed to exist at all: §19 deleted
+/// `scribe::canonicalise` because save-time rewriting destroyed the player's
+/// words whenever it understood only part of one. [`Held`] stays byte-exact;
+/// this sits beside it and can be thrown away and rebuilt. With no reader it is
+/// a copy, and `compile` reads this and only this, so there is one source rather
+/// than two that can disagree.
 ///
-/// §19 deleted `scribe::canonicalise` because save-time rewriting *"destroyed
-/// the player's words whenever it understood only part of one — four times, each
-/// fixed by another special case in the rewriter"*. [`Held`] is still byte-exact
-/// and still what `peruse` shows. This sits **beside** it and can be thrown away
-/// and rebuilt, which the rewriter never could.
+/// Fingerprinted per line, not per file: the editor writes out after every pause
+/// in the typing, and a whole-file hash would re-read every line for one
+/// keystroke at 436µs each.
 ///
-/// **With no reader it is a copy**, line for line, and the game is exactly what
-/// it was. That is the point: `compile` reads this and only this, so there is one
-/// source rather than two that can disagree — the defect §19 records more often
-/// than any other.
+/// Kept only for the reader that made it. With text alone as the key a reading
+/// outlived its reader — a spell read by the model and saved again on `plain`
+/// kept compiling the model's words, and a verbatim copy passed for a reading
+/// nobody took. [`by`](Self::by) says whose it is.
 ///
-/// # Fingerprinted per line, not per file
-///
-/// The editor writes the buffer out after every pause in the typing, so a
-/// whole-file hash would re-read every line for one keystroke — at 436µs a line.
-/// [`of`](Self::of) holds one hash per line, so a line whose text has not moved
-/// keeps its reading for free.
-///
-/// # ...and kept only for the reader that made it
-///
-/// The text alone was the key, and a reading outlived its reader: a spell read
-/// by the model and saved again with the driver on `plain` kept compiling the
-/// model's words, and a verbatim copy — a restored save, a repaired sabotage —
-/// passed for a reading nobody took. [`by`](Self::by) says whose it is, and
-/// [`kept`](Self::kept) answers only the reader named there.
-///
-/// # It travels in the save, and it is never re-derived
-///
-/// `Submission::Wrote` deliberately stores the pre-canonical buffer so replay
-/// re-derives it, *"safe when the derivation is `analyse`, and unsafe when a GPU
-/// did the reading"* (§19). Once a model reads a spell, that stops being true —
-/// so the read lines travel with the submission and land in `NodeSave`, and a
-/// replay never constructs a reader.
+/// It travels in the save and is never re-derived. `Submission::Wrote` stores
+/// the pre-canonical buffer so replay re-derives it, which is *"safe when the
+/// derivation is `analyse`, and unsafe when a GPU did the reading"* (§19).
 #[derive(Component, Debug, Clone, PartialEq, Eq)]
 pub struct Read {
     /// One line per line of [`Held`], canonical where the orb could read it.
@@ -379,10 +323,9 @@ pub struct Read {
     /// that made [`lines`](Self::lines), or [`None`] where no reader's answer
     /// can be vouched for.
     ///
-    /// **`None` is a spell no reader in this session read** — an authored one,
-    /// or one restored from a save. Its lines compile, and they are not taken
-    /// for what the reader in hand would say: the first write reads every line
-    /// of it again.
+    /// `None` is a spell no reader in this session read — authored, or restored
+    /// from a save. Its lines compile and are not taken for what the reader in
+    /// hand would say; the first write reads every line again.
     pub by: Option<u64>,
 }
 
@@ -406,10 +349,9 @@ impl Read {
     /// The line at `at` as it compiles: its reading, if that was read from
     /// `held`, and `held` itself otherwise.
     ///
-    /// **Line by line, never all or nothing.** Every write keeps the two in
-    /// step, so a mismatch is something outside the game — a save edited by
-    /// hand, most likely — and one edited line is no reason to throw away the
-    /// reading of every other.
+    /// Line by line, never all or nothing: every write keeps the two in step, so
+    /// a mismatch comes from outside the game — a hand-edited save, most likely
+    /// — and one edited line is no reason to discard every other reading.
     #[must_use]
     pub fn compiled<'a>(&'a self, at: usize, held: &'a str) -> &'a str {
         match self.lines.get(at) {
@@ -440,8 +382,8 @@ impl Read {
 
     /// What the reader `by` made of `line`, if this holds that reading.
     ///
-    /// **By text, not by position.** A reader is asked about one line at a time
-    /// and answers from nothing else, so a line's reading goes wherever the line
+    /// By text, not by position. A reader is asked about one line at a time and
+    /// answers from nothing else, so a line's reading goes wherever the line
     /// does — and a line typed above it no longer sends every line below back to
     /// the reader.
     #[must_use]
@@ -465,27 +407,20 @@ fn fingerprint_of(line: &str) -> u64 {
 
 /// The domain a spell is written for.
 ///
-/// # Data on the node, not a directory
-///
-/// The obvious shape is `/grimoire/laboratory/morning.spell`, and it breaks the
-/// tower: a directory spawns as a [`NounKind::Place`](crate::parser::NounKind),
-/// so a `laboratory` under the grimoire collides on the leaf with
-/// `/tower/laboratory` — `find_place` matches a full path *or* a bare leaf, so
-/// `attend laboratory` would become a walk-order coin flip between a room and a
-/// folder, and `every_place_leaf_is_unique` fails, which is the test that exists
-/// *"rather than the echo quietly starting to lie."*
-///
-/// What was wanted is which domain a spell is **for**, and that is a fact about
-/// the spell rather than about where its bytes live.
+/// Data on the node, not a directory. `/grimoire/laboratory/morning.spell`
+/// breaks the tower: a directory is a
+/// [`NounKind::Place`](crate::parser::NounKind), so that `laboratory` collides
+/// on the leaf with `/tower/laboratory` and `attend laboratory` becomes a
+/// walk-order coin flip. Which domain a spell is *for* is a fact about the
+/// spell, not about where its bytes live.
 #[derive(Component, Debug, Clone, PartialEq, Eq)]
 pub struct Domain(pub String);
 
 /// The leaf name of `place`, for [`FieldName::At`](orbs_render::FieldName::At).
 ///
-/// One helper rather than a `world.get::<Name>(...).map_or_else(...)` at each of
-/// eleven emit sites, because those eleven already disagreed once about *which
-/// field* the instrument went in and the fix is worth nothing if they can drift
-/// again on *what it is called*.
+/// One helper rather than `world.get::<Name>(...).map_or_else(...)` at eleven
+/// emit sites, which already disagreed once about *which field* the instrument
+/// went in.
 #[must_use]
 pub fn where_at(world: &World, place: Entity) -> String {
     world
@@ -544,23 +479,11 @@ pub fn path_of(world: &World, node: Entity) -> String {
 
 /// The topmost node of the tree `node` hangs from.
 ///
-/// # Why this is one function and not five
-///
-/// The walk itself is four lines, and it was written out four times — once in
-/// `execute::navigate` as `root`, once inside `tower::scene` as `root_of`, once
-/// inline in `execute::files` to find a domain log, and once per test that
-/// wanted "the root" and reached for [`Cwd`] instead.
-///
-/// That last shortcut is the dangerous one, because **`Cwd` is where the player
-/// stands, not where the tree begins**, and the two are the same thing only for
-/// as long as `/tower` is the only root. §8 puts the player's spells in a
-/// `/grimoire` beside it rather than inside it; the moment that lands, every
-/// test that walked from `Cwd` keeps passing while quietly covering half the
-/// filesystem — including `every_place_leaf_is_unique`, whose whole purpose is
-/// failing *"rather than the echo quietly starting to lie."*
-///
-/// So the walk lives here, beside [`path_of`] and [`children_of`], and the day
-/// the root moves it is one function that learns about it.
+/// One function, not five: the four-line walk was written out four times, and
+/// once per test that wanted "the root" and reached for [`Cwd`]. That shortcut
+/// is the dangerous one — `Cwd` is where the player stands, not where the tree
+/// begins, and with `/grimoire` beside `/tower` every test that walked from
+/// `Cwd` keeps passing while covering half the filesystem.
 #[must_use]
 pub fn filesystem_root(world: &World, node: Entity) -> Entity {
     let mut at = node;
@@ -591,16 +514,10 @@ pub fn children_of(world: &World, node: Entity) -> Vec<Entity> {
 
 /// The path of the node carrying `id`, if the tower still holds one.
 ///
-/// # Why a save needs this
-///
-/// Components that must survive a save hold a [`NodeId`] rather than an
-/// `Entity`, for the reason this module already gives — an `Entity` is a
-/// generational index and means nothing across a save. But a `NodeId` is a
-/// counter in spawn order, so it is stable only while `build`'s tables are, and
-/// a save keyed on one would be invalidated by a phase that adds a domain.
-///
-/// So the document spells every reference as a **path**, and this is the one
-/// direction of that translation. [`find_by_path`] is the other.
+/// A save needs it because a [`NodeId`] is a counter in spawn order, stable only
+/// while `build`'s tables are — so a save keyed on one is invalidated by a phase
+/// that adds a domain. The document spells every reference as a path instead;
+/// this is one direction of that translation and [`find_by_path`] the other.
 #[must_use]
 pub fn path_of_id(world: &World, id: NodeId) -> Option<String> {
     let root = filesystem_root(world, world.resource::<Cwd>().0);
@@ -612,12 +529,9 @@ pub fn path_of_id(world: &World, id: NodeId) -> Option<String> {
 /// The node at `path`, if there is one.
 #[must_use]
 pub fn find_by_path(world: &World, path: &str) -> Option<Entity> {
-    // **An empty path names nothing, and used to name the root.** `split('/')`
-    // over `""` yields no segments, so the walk below returned the node it
-    // started from — which turned every "this path is gone" guard that relies on
-    // `None` into a guard that silently resolved to the filesystem root. A
-    // player standing there has no prompt content, and a `Working` re-inserted
-    // against it is a run that can never land.
+    // An empty path names nothing, and used to name the root: `split('/')` over
+    // `""` yields no segments, so the walk returned where it started and every
+    // "this path is gone" guard resolved to the filesystem root instead.
     if path.split('/').all(str::is_empty) {
         return None;
     }

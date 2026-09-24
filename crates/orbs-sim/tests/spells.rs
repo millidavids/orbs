@@ -3,14 +3,11 @@
 //! The other half of `questions.rs`: that file holds the grammar to its word,
 //! this one holds it to the tower. Six laboratories are driven into named states
 //! and every shape of question is asked of each, because a condition that parses
-//! and a condition that finds anything are different claims — which is exactly
-//! what §19 records the last bug in this subsystem turning on.
+//! and a condition that finds anything are different claims (§19).
 //!
-//! **Behaviour, not representation.** Nothing here inspects a `Program`.
-//! §19's standing lesson from that bug is that *"asserting on `holds` directly
-//! would have agreed with the bug"* — what caught it was running the spell and
-//! asking which branch executed. So the questions are asked by casting spells
-//! whose two branches do visibly different things.
+//! Behaviour, not representation: nothing here inspects a `Program`, because
+//! *"asserting on `holds` directly would have agreed with the bug"* (§19). The
+//! questions are asked by casting spells whose branches differ visibly.
 
 use orbs_render::{FieldName, Value};
 use orbs_sim::Sim;
@@ -21,11 +18,8 @@ use orbs_sim::Sim;
 
 /// The six worlds every question below is asked of.
 ///
-/// Named for what a player would say about them, and **driven** rather than
-/// fabricated — a grind is ten ticks, so the states are reached by doing the
-/// work. That is slower than poking components and it is the only way the states
-/// are real: `Fouled` in particular has no constructor, it is what an instrument
-/// becomes.
+/// Named for what a player would say about them, and driven rather than
+/// fabricated: `Fouled` has no constructor, it is what an instrument becomes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum World {
     /// Nothing lit, nothing running, nothing ground yet.
@@ -97,21 +91,15 @@ fn run(sim: &mut Sim, lines: &[&str]) {
 /// Whether `question` holds in `world`, by casting a spell that says which
 /// branch it took.
 ///
-/// # Why the branches are two `wait`s
-///
-/// **The branch has to be visible without changing the world it was asked
-/// about.** The obvious pair — grind one thing or grind another — fails three
-/// ways at once: a grind needs the mortar free, which two of these worlds do not
-/// have; it takes ten ticks to say anything; and `Banked` reaches its state *by
+/// Two `wait`s, because the branch has to be visible without changing the world
+/// it was asked about. Grinding fails three ways: it needs the mortar free, it
+/// takes ten ticks to say anything, and `Banked` reaches its state *by
 /// grinding*, so the setup has already said the word the assertion looks for.
-/// That last one is the dangerous one, because it does not fail — it passes,
-/// wrongly.
 ///
-/// A `wait` for something that never happens says `watches for <name>`
-/// immediately, names itself, needs no instrument, and changes nothing. The
-/// spell then blocks, which is exactly what we want: the answer has been given.
+/// A `wait` for something that never happens says `watches for <name>` at once,
+/// needs no instrument and changes nothing, then blocks.
 ///
-/// Only records **after the cast** are read, so nothing the setup said can be
+/// Only records after the cast are read, so nothing the setup said can be
 /// mistaken for what the spell did.
 fn asks(world: World, question: &str) -> Option<bool> {
     let mut sim = world.build();
@@ -182,10 +170,9 @@ fn resolves(named: &str) -> bool {
 
 #[test]
 fn an_abbreviation_resolves_and_a_typo_does_not() {
-    // **The line this draws is the one `fuzzy` already draws**: a prefix of three
-    // characters or more always scores at or above 850, and a typo only reaches
-    // it as a single slip in a long word. At the prompt the player is there to
-    // see the echo; a spell resolves with nobody watching, so it takes the
+    // The line `fuzzy` already draws: a prefix of three characters or more
+    // always scores at or above 850, and a typo only reaches it as a single slip
+    // in a long word. A spell resolves with nobody watching, so it takes the
     // stricter half.
     for abbreviation in [
         "mortar_and_pestle",
@@ -205,26 +192,21 @@ fn an_abbreviation_resolves_and_a_typo_does_not() {
 
 #[test]
 fn one_slip_in_a_long_word_still_resolves_and_that_is_the_known_edge() {
-    // **Pinned because it is a limit, not an accident.** `athanr` is one deletion
-    // from `athanor` in a seven-letter word, which scores 858 — over the 850
-    // floor. The floor is drawn where `fuzzy` already draws one (a prefix is
-    // always ≥ 850, a typo rarely is), and moving it up far enough to catch this
-    // would start refusing real abbreviations.
+    // Pinned because it is a limit, not an accident: `athanr` is one deletion
+    // from `athanor` and scores 858, over the 850 floor, and raising the floor
+    // to catch it would start refusing real abbreviations.
     //
-    // It is safe in a way the case below is **not**: a slip can only ever resolve
-    // to something that exists, and there is nothing else near `athanor` for it
-    // to land on. What the floor and the tie rule exist to stop is a typo landing
-    // on a *different real thing*, which is the next test.
+    // Safe in a way the case below is not: a slip can only resolve to something
+    // that exists, and there is nothing else near `athanor`.
     assert!(resolves("athanr"), "the known edge moved");
 }
 
 #[test]
 fn a_near_miss_never_becomes_the_thing_it_is_near() {
-    // **The case that set the threshold.** `similarity("ground-salt",
-    // "ground-sage")` is 819 — comfortably over the prompt's floor of 600 — so a
-    // question written while the salt happened to be absent would have compiled
-    // into a question about the sage. The file would say one thing and the
-    // running spell ask another, with nothing on screen to show it.
+    // The case that set the threshold: `similarity("ground-salt",
+    // "ground-sage")` is 819, over the prompt's floor of 600, so a question
+    // written while the salt was absent would have compiled into one about the
+    // sage.
     let ready = World::Ready; // holds ground-sage, and no ground-salt anywhere
     assert_eq!(
         asks(ready, "the mortar_and_pestle has ground-sage"),
@@ -241,8 +223,8 @@ fn a_near_miss_never_becomes_the_thing_it_is_near() {
 #[test]
 fn two_things_equally_close_are_a_coin_flip_and_the_orb_refuses_to_toss_it() {
     // With both products on the shelf, `ground` is an equally good prefix of
-    // `ground-sage` and `ground-salt` — and `best_match` would hand back
-    // whichever was registered first. That is iteration order deciding what a
+    // `ground-sage` and `ground-salt`, and `best_match` would hand back
+    // whichever was registered first — iteration order deciding what a
     // laboratory does.
     let mut sim = World::Scouring.build();
     assert!(
@@ -260,9 +242,8 @@ fn two_things_equally_close_are_a_coin_flip_and_the_orb_refuses_to_toss_it() {
         ],
     );
     sim.step();
-    // **From here on only.** The world above was *built* by grinding, so a sweep
-    // over the whole transcript would find the setup's own work and read it as
-    // the spell's — which passes, wrongly.
+    // From here on only: the world above was built by grinding, so a sweep over
+    // the whole transcript would read the setup's work as the spell's.
     let before = messages(&sim).len();
     run(&mut sim, &["invoke tie"]);
     sim.step_n(20);
@@ -282,24 +263,18 @@ fn two_things_equally_close_are_a_coin_flip_and_the_orb_refuses_to_toss_it() {
 
 #[test]
 fn the_margin_is_below_the_closest_call_the_vocabulary_makes() {
-    // **What keeps `SPELL_MARGIN` honest as the tower grows.** The rule is that
-    // a name must beat the runner-up by more than the margin, and the margin can
-    // only be as large as the *narrowest* win a real abbreviation needs — today
-    // `sag`, which beats `sage-husks` to `sage` by 67.
-    //
-    // Every prefix of every name in the room is tried, in the world that holds
-    // the most look-alikes. What comes out is the closest call the shipped
-    // vocabulary asks anyone to make; a new reagent that squeezes it fails here,
-    // naming both words, rather than resolving silently in somebody's spell.
+    // What keeps `SPELL_MARGIN` honest as the tower grows: a name must beat the
+    // runner-up by more than the margin, so the margin can only be as large as
+    // the narrowest win a real abbreviation needs — today `sag`, which beats
+    // `sage-husks` to `sage` by 67. Every prefix of every name in the room is
+    // tried, in the world with the most look-alikes.
     let sim = World::Scouring.build();
-    // **Only names that actually compete.** `clearly` asks for a `Place` when the
-    // question is about somewhere and `Any` when it is about a thing, so scoring
-    // every name against every other invents rivals that can never meet —
-    // `laboratory` against `laboratory.log`, which no place query can see.
+    // Only names that actually compete: `clearly` asks for a `Place` about
+    // somewhere and `Any` about a thing, so scoring every name against every
+    // other invents rivals that can never meet.
     //
-    // **And deduplicated by leaf**: §6.1 registers a `Topic` beside every reagent
-    // so `recall ground-sage` reads the manual, so the scene holds that word
-    // twice. Two entries for one thing are not two candidates, which is what made
+    // Deduplicated by leaf, because §6.1 registers a `Topic` beside every
+    // reagent, so the scene holds the word twice — which is what made
     // `ground-sag` ambiguous with itself.
     let mut names: Vec<String> = sim
         .scene()
@@ -311,9 +286,8 @@ fn the_margin_is_below_the_closest_call_the_vocabulary_makes() {
     names.sort_unstable();
     names.dedup();
 
-    // Every reading that would change if the margin moved from nothing to what it
-    // is: a name that wins by a hair. Empty is the claim — raising the margin
-    // refuses nothing that a player relies on.
+    // Every reading that would change if the margin moved from nothing to what
+    // it is: a name that wins by a hair. Empty is the claim.
     let mut hairs: Vec<String> = Vec::new();
     for name in &names {
         // Three characters is where `fuzzy` starts calling a prefix an
@@ -334,10 +308,9 @@ fn the_margin_is_below_the_closest_call_the_vocabulary_makes() {
                 .get(1)
                 .map_or((0, name), |(score, name)| (*score, name));
             let lead = best.saturating_sub(next);
-            // A dead heat is a **real** ambiguity and must go on refusing — `gro`
-            // names `ground-sage` and `ground-salt` alike, and picking one would
-            // be the coin flip the rule exists to stop. What must not appear is a
-            // reading in between: won, but only just.
+            // A dead heat is a real ambiguity and must go on refusing — `gro`
+            // names `ground-sage` and `ground-salt` alike. What must not appear
+            // is a reading in between: won, but only just.
             if lead > 0 && lead <= orbs_sim::tower::spell::SPELL_MARGIN {
                 hairs.push(format!(
                     "\n  {typed:?} reaches {winner:?} by {lead} over {runner_up:?}"
@@ -357,23 +330,18 @@ fn the_margin_is_below_the_closest_call_the_vocabulary_makes() {
 
 #[test]
 fn every_abbreviation_a_player_relies_on_survives_the_margin() {
-    // The other half of the sweep above, and the half worth asserting through the
-    // **real resolver** rather than by re-scoring: names of *things*, where the
-    // scene holds `ground-sage` and `ground-salt` side by side and a manual topic
-    // beside each of them.
-    //
-    // A margin is only safe if it refuses coin flips and nothing else, so both
-    // columns matter equally: the left one is what must keep working, the right
-    // one is what must not be guessed at.
+    // The other half of the sweep above, asserted through the real resolver
+    // rather than by re-scoring: names of *things*, where the scene holds
+    // `ground-sage` and `ground-salt` side by side with a manual topic beside
+    // each. A margin is only safe if it refuses coin flips and nothing else.
     let world = World::Scouring;
     for abbreviation in [
         "sage",
         "sag",
         "ground-sage",
-        // Two characters short of the whole word, with its twin on the shelf and
-        // its own manual entry beside it — the reading that was refused as
-        // ambiguous *with itself* until `clearly` learned that two entries for
-        // one word are one candidate.
+        // Two characters short of the whole word, with its twin on the shelf
+        // and its own manual entry beside it — refused as ambiguous *with
+        // itself* until `clearly` learned two entries are one candidate.
         "ground-sag",
         "rock-salt",
         "rock",
@@ -406,11 +374,10 @@ fn every_abbreviation_a_player_relies_on_survives_the_margin() {
 
 #[test]
 fn a_word_that_names_nothing_at_all_is_a_typo_rather_than_an_answer_of_no() {
-    // **The other face of the complaint this work started from.** A thing that is
-    // simply not here yet answers no — that is `if the dispensary has
-    // ground-sage` before you have ground any, the commonest question in the
-    // game. A thing that is not a *name* at all is a typo, and answering it no
-    // for ever is the same silence, arriving from the other direction.
+    // A thing not here yet answers no — `if the dispensary has ground-sage`
+    // before you have ground any — but a thing that is not a *name* at all is a
+    // typo, and answering it no for ever is the same silence from the other
+    // direction.
     let mut sim = with_spell(
         "slip",
         &["if the dispensary has ground-slat", "grind sage", "end"],
@@ -440,10 +407,10 @@ fn a_word_that_names_nothing_at_all_is_a_typo_rather_than_an_answer_of_no() {
 
 #[test]
 fn a_thing_that_is_not_there_yet_is_an_answer_of_no_rather_than_a_fault() {
-    // **The commonest question in the game.** `if the dispensary has ground-sage`
-    // is asked *before* there is any, so treating an absent product as a missing
-    // referent would break the loop the whole feature exists for. The name is
-    // real — it is in the recipes — and only its presence is in question.
+    // The commonest question in the game: `if the dispensary has ground-sage` is
+    // asked *before* there is any, so treating an absent product as a missing
+    // referent would break the loop the feature exists for. The name is real and
+    // only its presence is in question.
     assert_eq!(
         asks(World::Cold, "the dispensary has ground-sage"),
         Some(false)
@@ -476,9 +443,8 @@ fn one_instrument_at_a_time() {
     use World::{Banked, Cold, Grinding, Ready, Scouring};
     let _ = (Cold, Ready, Banked, Grinding, Scouring);
 
-    // The athanor: burning is **working**, and this session's fix is what makes
-    // it so. Banked and cold are both idle — a damped fire is fuel put by, not
-    // work in progress.
+    // The athanor: burning is *working*. Banked and cold are both idle — a
+    // damped fire is fuel put by, not work in progress.
     holds_in(
         "the athanor is idle",
         [
@@ -513,15 +479,12 @@ fn one_instrument_at_a_time() {
             Some(true),
         ],
     );
-    // ...and `is empty` asks about **contents**, not about the panel's word for
-    // the instrument: a mortar holding what it just made is *not* empty even
-    // though it is idle, and one being scoured *is* empty even though it is busy.
-    // Those are the two rows a player would guess wrong, which is why they are
-    // here rather than assumed.
+    // ...and `is empty` asks about contents, not the panel's word: a mortar
+    // holding what it just made is *not* empty though it is idle, and one being
+    // scoured *is* empty though it is busy.
     //
     // `empty mortar_and_pestle` turns the husks out with the product, so Banked
-    // and Scouring both leave a bare mortar — which is worth knowing, because a
-    // spell that grinds twice depends on it.
+    // and Scouring both leave a bare mortar.
     holds_in(
         "the mortar is empty",
         [
@@ -540,8 +503,8 @@ fn several_instruments_at_once() {
     use World::{Grinding, Scouring};
     let _ = (Grinding, Scouring);
 
-    // **Two idle tools**, which is the question a real spell asks before it
-    // starts a stage. False wherever the mortar is busy.
+    // Two idle tools, the question a real spell asks before starting a stage.
+    // False wherever the mortar is busy.
     holds_in(
         "the mortar is idle and the flask is idle",
         [
@@ -553,7 +516,7 @@ fn several_instruments_at_once() {
             Some(false),
         ],
     );
-    // **Either of two**, which is the point of `or`: the flask is free in every
+    // Either of two, which is the point of `or`: the flask is free in every
     // world, so this is true even where the mortar is not.
     holds_in(
         "either the mortar is idle or the flask is idle",
@@ -611,9 +574,8 @@ fn an_ingredient_here_and_not_there() {
             Some(false),
         ],
     );
-    // A base reagent is endless, so the shelf always has it — which is §11.5's
-    // floor, and the reason "the dispensary is bare of sage" is not a world that
-    // can be built.
+    // A base reagent is endless, so the shelf always has it — §11.5's floor, and
+    // why "the dispensary is bare of sage" is not a world that can be built.
     holds_in("the dispensary has sage", [Some(true); 6]);
 }
 
@@ -671,8 +633,7 @@ fn the_shared_subject_answers_the_same_as_the_long_way_round() {
 #[test]
 fn grouping_changes_the_answer_where_precedence_cannot() {
     // `(idle or idle) and has-product` against `idle or (idle and has-product)`,
-    // in a world where the two differ — which is the whole reason `either` is a
-    // word.
+    // in a world where the two differ — the whole reason `either` is a word.
     let world = World::Grinding; // mortar busy, flask idle, no product anywhere
     assert_eq!(
         asks(
@@ -705,10 +666,9 @@ fn grouping_changes_the_answer_where_precedence_cannot() {
 
 #[test]
 fn one_name_the_tower_lacks_makes_the_whole_question_unanswerable() {
-    // **Strict, and neither branch runs.** Kleene — answering from the half that
-    // resolved — was considered and rejected: an instrument that has stopped
-    // existing is §8.1's substitution surface, and a spell carrying on over it is
-    // the thing that must not pass quietly.
+    // Strict, and neither branch runs. Kleene — answering from the half that
+    // resolved — was rejected: an instrument that has stopped existing is
+    // §8.1's substitution surface.
     for question in [
         "the mortr is idle",
         "the mortr is idle and the mortar is idle",
@@ -747,9 +707,8 @@ fn every_name_it_could_not_place_is_named_once() {
         .into_iter()
         .filter(|line| line.contains("to ask about"))
         .collect();
-    // **Once for the whole cast**, not once per turn of the loop. It was once per
-    // evaluation, which for a question inside a `repeat` is one Danger record
-    // every tick for as long as the spell runs.
+    // Once for the whole cast, not once per turn of the loop: per evaluation, a
+    // question inside a `repeat` is one Danger record every tick.
     assert_eq!(
         complaints.len(),
         1,
@@ -767,9 +726,9 @@ fn every_name_it_could_not_place_is_named_once() {
 
 #[test]
 fn a_name_that_stops_resolving_is_reported_rather_than_answered() {
-    // **The case cast-time resolution is sold on.** The names are fixed when the
-    // spell is cast; if the world moves under it, the question stops having an
-    // answer and says so — §8.1's substitution surface, working.
+    // The case cast-time resolution is sold on: names are fixed when the spell
+    // is cast, so if the world moves under it the question stops having an
+    // answer and says so (§8.1).
     let mut sim = with_spell(
         "watching",
         &["repeat", "if the mortar is idle", "survey", "end", "end"],
@@ -789,19 +748,17 @@ fn a_name_that_stops_resolving_is_reported_rather_than_answered() {
 
 /// Every command a spell issued, read out of the log rather than the transcript.
 ///
-/// The prompt pane deliberately draws *what the player did, not what their
-/// spells did* (`prompt.rs`), so a spell's own record of itself is in the stream
-/// and not on screen. That is the same reason `peruse laboratory.log` exists.
+/// The prompt pane draws *what the player did, not what their spells did*
+/// (`prompt.rs`), so a spell's record of itself is in the stream, not on screen.
 fn issued(sim: &Sim) -> Vec<String> {
     messages(sim)
 }
 
 #[test]
 fn four_blocks_deep_runs_the_steps_it_should_and_no_others() {
-    // **The arithmetic most likely to break under nesting.** A branch costs two
-    // path elements going in, a loop one, and walking out has to pop exactly what
-    // was pushed — pop one too few and the path lands in the *other* half of an
-    // `if` and runs it as well.
+    // The arithmetic most likely to break under nesting: a branch costs two path
+    // elements going in, a loop one, and walking out has to pop exactly what was
+    // pushed — one too few and the path lands in the *other* half of an `if`.
     let mut sim = with_spell(
         "deep",
         &[
@@ -823,10 +780,9 @@ fn four_blocks_deep_runs_the_steps_it_should_and_no_others() {
     run(&mut sim, &["invoke deep"]);
     sim.step_n(40);
 
-    // It starts cold, so the outer `if` is taken, the inner one is taken, and the
-    // athanor is lit. On the next turn the athanor is *not* idle, so the outer
-    // `else` damps it — and round again. What matters is that it finishes and
-    // that both halves of both branches were reachable.
+    // It starts cold, so the outer `if` is taken, the inner one is taken, and
+    // the athanor is lit. Next turn it is *not* idle, so the outer `else` damps
+    // it. What matters is that it finishes and that all four halves ran.
     assert!(
         mentioned(&sim, "takes light"),
         "the innermost branch never ran: {:?}",
@@ -878,8 +834,7 @@ fn a_question_answered_differently_next_turn_takes_the_other_branch() {
 #[test]
 fn an_unanswerable_question_inside_a_loop_stops_neither_the_loop_nor_the_spell() {
     // §8's taxonomy is titled *"scripts always log and never halt"*. Neither
-    // branch runs, and the loop keeps turning — which is the difference between
-    // a question with no answer and a spell with a problem.
+    // branch runs, and the loop keeps turning.
     let mut sim = with_spell(
         "shrug",
         &[
@@ -911,8 +866,8 @@ fn an_unanswerable_question_inside_a_loop_stops_neither_the_loop_nor_the_spell()
 #[test]
 fn a_malformed_spell_with_compound_questions_still_runs() {
     // Unclosed, stray and misordered blocks, each reported once, with a compound
-    // condition in the middle of them — because §8 forbids refusing at save and
-    // halting at cast, which leaves running it as the only answer.
+    // condition among them — §8 forbids refusing at save and halting at cast,
+    // which leaves running it as the only answer.
     let mut sim = with_spell(
         "rough",
         &[
@@ -985,9 +940,9 @@ fn everything_a_file_can_hold_survives_a_save() {
 
 #[test]
 fn saving_the_same_spell_again_never_moves_it() {
-    // **The reported complaint, as a property.** `quit` saves, so a spell was
-    // re-read against whatever happened to be on the shelf every time it was
-    // opened — and lines got shorter each visit.
+    // The reported complaint, as a property: `quit` saves, so a spell was
+    // re-read against whatever was on the shelf every time it opened, and lines
+    // got shorter each visit.
     let typed: Vec<String> = [
         "grind the sage",
         "if the mortar is idle and the dispensary has sage",
@@ -1071,8 +1026,8 @@ fn saving_says_nothing_however_compound_the_spell() {
 #[test]
 fn no_line_a_spell_can_say_has_a_hole_in_it() {
     // A placeholder no emit site fills draws as itself, which `prose.toml`
-    // documents as deliberate. Swept over the **whole stream** rather than a list
-    // of keys, so a new failure line is covered the day it is written.
+    // documents as deliberate. Swept over the whole stream rather than a list of
+    // keys, so a new failure line is covered the day it is written.
     let mut sim = with_spell(
         "broken",
         &[
@@ -1251,11 +1206,10 @@ fn laboratory() -> Sim {
 
 #[test]
 fn a_byproduct_no_one_has_made_yet_is_not_a_fault() {
-    // **The rule `fix` states and the editor used to contradict.** A thing is
-    // placed if the room has it *or* the recipes name it — every `leaves` name
-    // is in the second class and in the first only after a run. Re-deriving that
-    // check with a different question painted `if the dispensary has ash` red on
-    // a line that works perfectly, and counted it on the status row.
+    // The rule `fix` states and the editor used to contradict: a thing is placed
+    // if the room has it *or* the recipes name it, and every `leaves` name is in
+    // the second class until a run puts it in the first. Re-deriving the check
+    // painted `if the dispensary has ash` red on a line that works perfectly.
     for byproduct in ["ash", "phlegm", "sediment", "dregs", "husks", "ground-sage"] {
         let reading = read(&[
             &format!("if the dispensary has {byproduct}"),
@@ -1272,10 +1226,9 @@ fn a_byproduct_no_one_has_made_yet_is_not_a_fault() {
 
 #[test]
 fn a_thing_named_where_a_place_belongs_is_reported_before_it_is_cast() {
-    // The mirror of the test above, and the same root cause: the check asked
+    // The mirror of the test above, same root cause: the check asked
     // `NounKind::Any` where `fix` asks `Place`, so a reagent standing in for a
-    // place was called clean here and then failed at run time — the editor
-    // silent about the one fault it exists to show.
+    // place was called clean here and then failed at run time.
     let reading = read(&["if the sage is idle", "survey", "end"]);
     assert_eq!(
         reading[0].fault.as_ref().map(|fault| fault.key),
@@ -1297,11 +1250,9 @@ fn a_thing_named_where_a_place_belongs_is_reported_before_it_is_cast() {
 
 #[test]
 fn every_unplaced_name_in_a_question_is_reported_rather_than_the_first() {
-    // **`watch::every` states the rule from the other end** — *"§8.1's rule is
-    // that the culprit is never anonymous, not that one culprit is enough"* — and
-    // the compile half stopped at the first failure. So `interpret` named `mortr`
-    // and said nothing at all about `sagg`, and a player fixed one typo, asked
-    // again, and was told about the next one.
+    // `watch::every` states the rule from the other end — §8.1's culprit is
+    // never anonymous — and the compile half stopped at the first failure, so
+    // `interpret` named `mortr` and said nothing about `sagg`.
     let reading = read(&[
         "if the mortr is idle and the mortar has sagg",
         "survey",
@@ -1312,7 +1263,7 @@ fn every_unplaced_name_in_a_question_is_reported_rather_than_the_first() {
 
     // A word that names nothing outranks a place the tower lacks: the first
     // leaves a question that cannot be *asked*, the second one that cannot be
-    // *answered*. `sagg` is the typo, so it decides the key.
+    // *answered*.
     assert_eq!(fault.key, "spell_unreadable_if", "{fault:?}");
     assert!(
         detail.contains("sagg"),
@@ -1332,12 +1283,9 @@ fn every_unplaced_name_in_a_question_is_reported_rather_than_the_first() {
 
 #[test]
 fn a_spell_not_written_yet_is_quoted_rather_than_resolved() {
-    // **§8's own worked example**, and the bug §19 records being written into a
-    // file once already — here on the surface that replaced the file. The parser
-    // weights the verb double, so a perfect `invoke` with a meaningless argument
-    // still clears `MIN_SIMILARITY`: this read back as `invoke first_light.spell`,
-    // the orb telling the player with confidence that it would run a spell they
-    // had not named.
+    // §8's own worked example (§19). The parser weights the verb double, so a
+    // perfect `invoke` with a meaningless argument still clears
+    // `MIN_SIMILARITY`: this read back as `invoke first_light.spell`.
     let reading = read(&["invoke not_written_yet"]);
     assert_eq!(reading[0].heard, "invoke not_written_yet");
     assert_eq!(
@@ -1352,17 +1300,13 @@ fn a_spell_not_written_yet_is_quoted_rather_than_resolved() {
 
 #[test]
 fn a_forward_reference_holds_however_many_spells_already_exist() {
-    // **The half above could not see.** A forward reference matches no spell
-    // well, so *which* resolution the parser returns depends on how many spells
-    // are on the shelf: one, and it resolves (the verb is weighted double); four,
-    // and it ties between them and comes back `Ambiguous`. `names_a_spell` only
-    // covered the first two shapes, so the second called a forward reference a
-    // fault — `spell_missing`, on a line §8 uses as its own worked example.
+    // What the half above could not see: a forward reference matches no spell
+    // well, so which resolution the parser returns depends on how many are on
+    // the shelf — one resolves (the verb is weighted double), four tie and come
+    // back `Ambiguous`. `names_a_spell` covered only the first.
     //
-    // Shelving the dev ladders in a debug build is what surfaced it, but a player
-    // with four spells of their own would have found it just the same. So this
-    // asserts the property against a grimoire that has grown, rather than against
-    // whatever it happens to hold today.
+    // A player with four spells of their own would have found it, so this
+    // asserts against a grimoire that has grown rather than today's.
     let mut sim = Sim::new(1);
     sim.submit("attend laboratory");
     sim.step();

@@ -1,25 +1,20 @@
-//! The acceptance test for the archive's maze: **can a player teach the orb to
-//! solve one?**
+//! The acceptance test for the archive's maze: can a player teach the orb to
+//! solve one?
 //!
 //! This file exists before the generator, the verb or the picture, because the
 //! whole design rests on one claim — that Trémaux's algorithm is expressible in
-//! §8's language *without* the language gaining a variable, because the maze
-//! holds the search's state. If that is false the archive is the one room
-//! automation can never reach, and nothing else about it is worth building.
+//! §8's language *without* a variable, because the maze holds the search's
+//! state. If that is false the archive is the one room automation cannot reach.
 //!
-//! Most of what it pins is the **cast**. A condition's names are resolved when a
-//! spell is cast (`spell::compile`), against the room as it is at that instant —
-//! and a name it cannot place nulls the whole condition, so the `if` runs
-//! neither half. No cell is `walked` at the moment a solver is cast, which is
-//! precisely the moment its names have to resolve. `tower::scene_at` registering
-//! the readings is what makes that work, and this is what would catch it being
-//! removed.
+//! Most of what it pins is the cast. `spell::compile` resolves a condition's
+//! names when the spell is cast, and a name it cannot place nulls the whole
+//! condition, so the `if` runs neither half. No cell is `walked` then, which is
+//! precisely when the names have to resolve — `tower::scene_at` registering the
+//! readings is what makes that work.
 //!
-//! **And one of them pins the walk**, which for a while nothing did. Every test
-//! here checked that the sentences survive being read, and *survives the cast*
-//! was quietly standing in for *reaches the exit* — two different claims, only
-//! one of them tested. It was not idle worry: the obvious flat ladder parses
-//! perfectly, casts clean, walks two cells and then oscillates for ever. See
+//! One test pins the walk, which for a while nothing did: *survives the cast*
+//! was standing in for *reaches the exit*. The obvious flat ladder parses
+//! perfectly, casts clean, walks two cells and oscillates for ever. See
 //! [`four_way_solver`].
 
 use orbs_render::{FieldName, RecordKind, Value};
@@ -54,52 +49,43 @@ fn solver() -> Vec<String> {
 
 /// A full four-way solver, as a player would eventually write one.
 ///
-/// **Five tiers**: the way out; a square nobody has walked; the least-walked way
-/// that is *not* the way you came; and, last, the way you came. That last pair is
-/// what makes it a solver rather than something that resembles one — see
+/// Five tiers: the way out; a square nobody has walked; the least-walked way
+/// that is *not* the way you came; and last, the way you came. That last pair
+/// is what makes it a solver rather than something that resembles one — see
 /// [`orbs_sim::tower::maze::BACK`]. Without it the ladder cycles for ever at a
-/// junction where two ways read alike and the compass order sends it back where
-/// it came from; it solved 7x7 backtracker mazes and nothing harder.
+/// junction where two ways read alike, and it solved nothing harder than a 7x7.
 ///
-/// **`else`, not sixteen `if`s in a row, and the difference is the whole test.**
-/// A flat ladder walks two cells and then oscillates for ever: the passage tier
-/// steps into a fresh cell, and four lines later the *same lap* reads the cell
-/// just left as walked and steps straight back. Guarding the retreat behind
-/// *nowhere new to go* moves the pendulum down a tier rather than removing it —
-/// the least-walked rung then steps back and the most-walked rung returns.
+/// `else`, not sixteen `if`s in a row, and the difference is the whole test: a
+/// flat ladder walks two cells and then oscillates, because the passage tier
+/// steps into a fresh cell and four lines later the *same lap* reads that cell
+/// as walked and steps straight back. Guarding the retreat only moves the
+/// pendulum down a tier. `else` says "the first line that matches, then stop",
+/// which is the rule a ladder is *read* as carrying — one move per lap.
 ///
-/// The rule a ladder is *read* as carrying — "the first line that matches, and
-/// then stop" — is the thing `else` says and a sequence of `if`s does not. One
-/// move per lap, by construction.
-///
-/// Fifty-odd lines, and every one of them costs a tick. That is the price the
-/// design says a player can optimise, stated as a number rather than a promise.
+/// Fifty-odd lines, and every one costs a tick. That is the price the design
+/// says a player can optimise, stated as a number rather than a promise.
 fn four_way_solver(laps: u32) -> Vec<String> {
     let ways = ["north", "east", "south", "west"];
-    // Five rungs, and the last two are the whole difference between a solver and
-    // a thing that looks like one. `back` is *not* a reading in the same axis —
-    // a way can carry a tread count and be the way you came at once — so the
+    // Five rungs, the last two being the difference between a solver and a
+    // thing that looks like one. `back` is *not* a reading in the same axis — a
+    // way can carry a tread count and be the way you came at once — so the
     // middle rungs exclude it and the bottom rung is the retreat.
     //
-    // **Twenty rungs, not the twenty-four `dev_spells.toml` carries.** That one
-    // has four `spoil` rungs on top so a single file serves both errands; here
-    // they would be four always-false conditions costing a tick per move, and
-    // `BUDGET` below exists to notice the language getting slower. Two ladders
-    // for two properties, deliberately — see the note on `BUDGET`.
+    // Twenty rungs, not the twenty-four `dev_spells.toml` carries: its four
+    // `spoil` rungs would be always-false conditions costing a tick per move,
+    // and `BUDGET` below exists to notice the language getting slower.
     let ladder: Vec<(String, &str)> = ["exit", "passage"]
         .into_iter()
         .flat_map(|reading| ways.map(|way| (format!("{way} has {reading}"), way)))
         .chain(
-            // **The tiers that used to be `walked` and `twice`**, which were two
-            // buckets over a count the maze had all along. `1 or fewer marks`
-            // needs the `wall` guard because absence answers nought to a
-            // comparison; `2 or more` does not, since nought is never two.
-            // **A `(reading, extra guard)` pair, not a template string.** This
-            // held `"1 or fewer marks and not {way} has wall"` and substituted
-            // `{way}` by hand *inside* a `format!` that interpolates `{way}`
-            // itself — two mechanisms in one expression, where a rung that
-            // forgot the `.replace` would emit a literal `{way}`, parse as a
-            // thing name, and answer no for ever.
+            // The tiers that used to be `walked` and `twice`, two buckets over
+            // a count the maze had all along. `1 or fewer marks` needs the
+            // `wall` guard because absence answers nought to a comparison;
+            // `2 or more` does not, since nought is never two.
+            // A `(reading, guard)` pair, not a template string: the string
+            // substituted `{way}` by hand inside a `format!` interpolating
+            // `{way}` itself, so a rung forgetting the `.replace` emitted a
+            // literal `{way}` that parsed as a thing name and answered no.
             [("1 or fewer marks", true), ("2 or more marks", false)]
                 .into_iter()
                 .flat_map(|(reading, guard_wall)| {
@@ -145,12 +131,11 @@ fn messages(sim: &Sim) -> Vec<String> {
 
 #[test]
 fn a_solver_survives_the_cast_with_every_condition_intact() {
-    // **The claim the design rests on.** `compile::fix` nulls a condition naming
-    // a thing it cannot place — a guard §19 added because `has ground-slat`
-    // answered "no" for ever — and it cannot tell a word for a not-yet-existing
-    // state from a typo. Without the readings in the scene, every line below
-    // compiles to a branch that takes neither half, and a bound solver would
-    // walk into a wall for ever with nothing on screen saying why.
+    // The claim the design rests on. `compile::fix` nulls a condition naming a
+    // thing it cannot place (§19 added it because `has ground-slat` answered
+    // "no" for ever) and cannot tell a word for a not-yet-existing state from a
+    // typo. Without the readings in the scene every line below takes neither
+    // half, and a bound solver walks into a wall with nothing saying why.
     let mut sim = Sim::new(1);
     sim.submit("attend archive");
     sim.step();
@@ -171,10 +156,9 @@ fn a_solver_survives_the_cast_with_every_condition_intact() {
 
 #[test]
 fn the_readings_are_offered_before_any_maze_exists() {
-    // **Stable is the point.** `bind::stand` recasts a held spell every lap, so
-    // a solver must compile identically each time. A vocabulary that came and
-    // went with the maze would make a bound spell work on some laps and not on
-    // others — the worst failure available, because it looks like the maze.
+    // Stability is the point: `bind::stand` recasts a held spell every lap. A
+    // vocabulary that came and went with the maze would make a bound spell work
+    // on some laps and not others — a failure that looks like the maze.
     let mut sim = Sim::new(1);
     sim.submit("attend archive");
     sim.step();
@@ -243,13 +227,11 @@ fn the_solver_is_writable_and_castable_end_to_end() {
 
 #[test]
 fn a_solver_walks_a_generated_maze_to_the_exit() {
-    // **The claim the other tests only gesture at.** Every one of them pins the
-    // *cast*; none walks a step, so "you can teach the orb to solve a maze" was
-    // an assumption with a test-shaped hole under it. This is the one that says
-    // the language is sufficient — not that the sentences parse, but that the
-    // rules they encode actually reach the exit.
-    // **Swept, not sampled.** One seed is one maze, and a policy that happens to
-    // suit one layout is exactly the failure a single fixture cannot see.
+    // The other tests pin the *cast* and none walks a step, so "you can teach
+    // the orb to solve a maze" was an assumption with a hole under it. This
+    // says the rules the sentences encode actually reach the exit.
+    // Swept, not sampled: one seed is one maze, and a policy that happens to
+    // suit one layout is the failure a single fixture cannot see.
     let mut worst = 0;
     for seed in 1..=12 {
         let mut sim = Sim::new(seed);
@@ -272,12 +254,10 @@ fn a_solver_walks_a_generated_maze_to_the_exit() {
         );
         worst = worst.max(ticks);
 
-        // **And it lands on the archive's shelf.** What the stacks give up is
-        // stock, so it goes where stock goes and the player moves four of them
-        // into the lectern to assemble. Asked of `tower::home` rather than named
-        // here, because `debug_spawn` asks the same rule — and a fragment that
-        // was in one place when won and another when spawned is the split this
-        // closed.
+        // And it lands on the archive's shelf: what the stacks give up is
+        // stock, so it goes where stock goes. Asked of `tower::home` rather
+        // than named here, because `debug_spawn` asks the same rule — a
+        // fragment in one place when won and another when spawned was a split.
         let world = sim.world();
         let shelf =
             orbs_sim::tower::home(world, "fragment").expect("a fragment has nowhere to live");
@@ -289,19 +269,17 @@ fn a_solver_walks_a_generated_maze_to_the_exit() {
         );
     }
 
-    // **A ceiling on the cost, not just on the outcome.** A solver that arrives
-    // eventually is not the same claim as one a player would wait for, and this
-    // is what would notice the language getting slower rather than broken.
+    // A ceiling on the cost, not only the outcome: a solver that arrives
+    // eventually is not one a player would wait for, and this notices the
+    // language getting slower rather than broken.
     assert!(
         worst <= BUDGET,
         "the slowest maze took {worst} ticks, over the {BUDGET} this pins",
     );
-    // **And the exact figure, because the ladder is tier-for-tier equivalent.**
-    // `1 or fewer marks` and `2 or more marks` replaced `walked` and `twice`
-    // over the same count with the same rung order, and a comparison costs no
-    // extra step — the whole condition tree is evaluated inside one `Kind::If`.
-    // So the number must not move at all, and a loose ceiling would have hidden
-    // it drifting by hundreds while still passing.
+    // And the exact figure: the marks tiers replaced `walked` and `twice` over
+    // the same count with the same rung order, and a comparison costs no extra
+    // step, so the number must not move at all. A loose ceiling would hide it
+    // drifting by hundreds while still passing.
     assert_eq!(
         worst, WORST,
         "the ladder is no longer tier-for-tier what it was",
@@ -318,40 +296,33 @@ const CEILING: u64 = 40_000;
 /// *is the ladder still the ladder*. A change to the tiers that kept the rung
 /// count would slide this by hundreds and stay under the ceiling.
 ///
-/// **5699, and the docs said 5123 for two versions.** Nothing checked it — the
-/// ceiling passed at either figure — so the number in `ROADMAP.md` and in
-/// `BUDGET`'s own doc drifted from the number the suite measured. That is the
-/// whole argument for an equality here: a loose bound cannot notice a stale
-/// claim about itself.
+/// 5699, and the docs said 5123 for two versions: nothing checked it, so the
+/// number in `ROADMAP.md` and in `BUDGET`'s own doc drifted from what the suite
+/// measured. A loose bound cannot notice a stale claim about itself.
 const WORST: u64 = 5_699;
 
 /// The slowest a swept maze may be, in ticks.
 ///
-/// **6500 against an observed worst of [`WORST`]**, over the twelve seeds above.
-/// It said 5123 until the figure was pinned as an equality and turned out to be
-/// 5699 — see `WORST` for why a loose bound could not notice.
-/// Loose enough that a differently-shaped maze does not fail it, tight enough to
-/// notice the language getting slower — which is the only way this number is
-/// worth having, since a test that merely says *eventually* would pass on a
-/// solver nobody would wait for.
+/// 6500 against an observed worst of [`WORST`], over the twelve seeds above. It
+/// said 5123 until the figure was pinned as an equality and turned out to be
+/// 5699 — see `WORST` for why a loose bound could not notice. Loose enough that
+/// a differently-shaped maze does not fail it, tight enough to notice the
+/// language getting slower.
 ///
-/// It has climbed twice and both times for a reason worth the ticks. 900 while
-/// the walls lived *between* cells; 1600 once a wall became a square of its own,
+/// It has climbed twice, both times for a reason worth the ticks: 900 while the
+/// walls lived *between* cells; 1600 once a wall became a square of its own,
 /// because a corridor square is a step too; and 9000 at 16x16 with a denser
-/// carve, which is about five times the floor. Roughly two hours of world time
-/// per fragment for a bound solver — paid while the player is elsewhere, which
-/// is what a bound spell is for, and not paid at all by a player walking it by
-/// hand at the speed of their own keyboard.
+/// carve. Roughly two hours of world time per fragment for a bound solver —
+/// paid while the player is elsewhere, and not paid at all by a player walking
+/// it by hand.
 const BUDGET: u64 = 6_500;
 
 #[test]
 fn a_solved_maze_leaves_no_readings_behind() {
-    // **The order of two lines.** `refresh` ran before the `Maze` was removed,
-    // so the four ways kept the solved maze's last readings for ever: `survey
-    // north` answered `passage` with nothing open, and a bound solver read them,
-    // fired its `follow` tier every lap and was told *"research first"* for the
-    // rest of its `repeat` — a spell stuck in a loop with the world telling it
-    // the truth and the scene lying.
+    // The order of two lines: `refresh` ran before the `Maze` was removed, so
+    // the four ways kept the solved maze's last readings for ever. A bound
+    // solver read them, fired its `follow` tier every lap and was told
+    // *"research first"* for the rest of its `repeat`.
     let mut sim = Sim::new(1);
     sim.submit("attend archive");
     sim.step();
@@ -373,12 +344,11 @@ fn a_solved_maze_leaves_no_readings_behind() {
         sim.submit(&format!("survey {way}"));
         sim.step();
         let said: Vec<String> = messages(&sim).split_off(before);
-        // **Every word a way can publish**, asked from `maze::readings` rather
-        // than listed here. It listed `passage`/`walked`/`twice`; two of those
-        // three no longer exist, so the assertion had quietly decayed to
-        // *"does not say passage"* — and `marks` is the reading most likely to be
-        // left behind, being the only one raised through `raise_count` with a
-        // `Stock` child of its own.
+        // Every word a way can publish, asked of `maze::readings` rather than
+        // listed here: the old list named `walked` and `twice`, which no longer
+        // exist, so the assertion had decayed to *"does not say passage"*.
+        // `marks` is the likeliest to be left behind, being the only one raised
+        // through `raise_count` with a `Stock` child of its own.
         for word in orbs_sim::tower::maze::readings() {
             assert!(
                 !said.iter().any(|line| line.contains(word)),
@@ -447,12 +417,11 @@ fn a_lectern_collecting_fragments_is_not_reported_as_fouled() {
 }
 
 /// The archive's lectern.
-/// The kind a fragment is, **asked rather than written down here**.
+/// The kind a fragment is, asked rather than written down here.
 ///
-/// A test that hard-codes it can drift from `research::give_fragment`, and then
-/// it is setting up a state the game cannot reach — which is exactly what
-/// happened while the maze gave `NounKind::Fragment` and `debug_spawn` gave
-/// `Reagent` for the same word (§19).
+/// A hard-coded kind can drift from `research::give_fragment` and set up a
+/// state the game cannot reach, as when the maze gave `NounKind::Fragment` and
+/// `debug_spawn` gave `Reagent` for the same word (§19).
 fn fragment_kind() -> orbs_sim::parser::NounKind {
     orbs_sim::content::Recipes::builtin().kind_of("fragment")
 }
@@ -472,18 +441,16 @@ fn lectern_of(sim: &Sim) -> bevy_ecs::entity::Entity {
 
 #[test]
 fn four_fragments_on_the_lectern_become_a_scroll() {
-    // **The assembly half needed no new mechanism.** `Recipes::matching` is an
-    // multiset over what an instrument holds *with a count per name*, so four
-    // fragments in the lectern and a `wield` is a recipe firing — the same door
-    // every laboratory stage goes through. This is the test that says so,
-    // because a recipe authored and never fired is a recipe nobody knows works.
+    // The assembly half needed no new mechanism: `Recipes::matching` is a
+    // multiset over what an instrument holds with a count per name, so four
+    // fragments and a `wield` is a recipe firing. A recipe authored and never
+    // fired is a recipe nobody knows works.
     let mut sim = Sim::new(1);
     sim.submit("attend archive");
     sim.step();
-    // **Placed the way solving places them.** `debug_spawn` puts stock in the
-    // dispensary, which is in the *laboratory* — and §7 keeps a domain's
-    // belongings unreachable from another room, so a tester cannot carry one
-    // across. This is the same `give` the exit calls, four times over.
+    // Placed the way solving places them: `debug_spawn` puts stock in the
+    // laboratory's dispensary, and §7 keeps a domain's belongings unreachable
+    // from another room. The same `give` the exit calls, four times over.
     let lectern = {
         let world = sim.world();
         let cwd = world.resource::<orbs_sim::Cwd>().0;
@@ -501,10 +468,9 @@ fn four_fragments_on_the_lectern_become_a_scroll() {
     sim.submit("wield lectern");
     sim.step_n(30);
 
-    // **Any scroll, not one name.** What the lectern makes is *drawn* from the
-    // scrolls it knows, so pinning a name here would make this test fail the day
-    // a second one is authored — and it would be failing on the roll working.
-    // What has to hold is that four fragments become *a scroll*.
+    // Any scroll, not one name: what the lectern makes is drawn from the
+    // scrolls it knows, so pinning a name would fail the day a second is
+    // authored — and fail on the roll working.
     let scrolls = orbs_sim::content::Recipes::builtin();
     let scrolls: Vec<&str> = scrolls
         .outputs()
@@ -544,11 +510,9 @@ fn a_way_is_not_a_room_and_the_stacks_can_be_abandoned() {
     // ...and `research` inserts no `Working`, so without its own branch `stop`
     // would find the stacks, do nothing, and say it had.
     //
-    // **`stop stacks`, and it was `stop lectern`.** The maze has its own
-    // instrument now, so `stop lectern` reaches an *assembly* and answers *"the
-    // lectern is not working"* — which is the separation working rather than a
-    // regression, and is what this test would otherwise have gone on asserting
-    // the opposite of.
+    // `stop stacks`, not `stop lectern`: the maze has its own instrument now,
+    // so `stop lectern` reaches an *assembly* and answers *"the lectern is not
+    // working"*. That is the separation working, not a regression.
     sim.submit("research");
     sim.step();
     sim.submit("stop stacks");

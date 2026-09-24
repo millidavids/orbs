@@ -1,46 +1,22 @@
 //! A door for a tester, in the builds a tester runs.
 //!
-//! # Why this is not a verb
+//! `debug_spawn` puts reagents on the shelf so a state costing forty ticks of
+//! grinding is one line away. It is deliberately not a
+//! [`Verb`](crate::parser::Verb): §6.1's tutorial counts the verbs that *work*
+//! and would offer one absent from the player's build, `Verb::ALL` is walked by
+//! the completion table, `recall` and a test that drives every verb, and a
+//! tester typing `debug_spaw` should be told so rather than have the tower
+//! change under them. So it is matched exactly, before the parser sees the line,
+//! in [`SpellWord`](crate::parser::SpellWord)'s shape.
 //!
-//! `debug_spawn` puts reagents on the shelf so a state that takes forty ticks of
-//! grinding can be reached in one line. It is deliberately **not** a
-//! [`Verb`](crate::parser::Verb), and every reason is about the vocabulary it
-//! would otherwise join:
+//! A release build has no code for it — the module is `cfg(debug_assertions)`,
+//! so a player who types it gets the ordinary *"nothing here answers to that"*.
+//! Four lines of prose do ship, because `prose.toml` is `include_str!`'d whole
+//! and moving them to string literals would cost rule 6's uniformity (the width,
+//! shouting and CP437 lints all read that file) for something nobody can invoke.
 //!
-//! - §6.1's tutorial lists the verbs that *work*, and its most important metric
-//!   is the dead-end rate. A word that only exists in some builds would be
-//!   counted, offered, and then absent from the one the player has.
-//! - §6's naming pass exists so no two verbs collide, and `Verb::ALL` is walked
-//!   by the completion table, `recall`, and a test that drives every verb through
-//!   a real `Sim`. A variant that comes and goes with a `cfg` makes all of those
-//!   differ between builds.
-//! - It is not fuzzy-matched, because a tester typing `debug_spaw` should be told
-//!   so rather than have the tower quietly change under them.
-//!
-//! So it is matched **exactly**, before the parser sees the line, in the same
-//! shape [`SpellWord`](crate::parser::SpellWord) uses and for the same stated
-//! reason: *"checked before the fuzzy matcher ever sees the line"*. The parser's
-//! vocabulary does not know it exists.
-//!
-//! # What a release build has
-//!
-//! No code. The module is `cfg(debug_assertions)`, so the word, the parse, the
-//! queue variant and the effect are all absent — a player who types it gets the
-//! ordinary *"nothing here answers to that"*, because as far as that build is
-//! concerned nothing does.
-//!
-//! **Four lines of prose do ship**, and that is not an oversight to fix.
-//! `prose.toml` is `include_str!`'d whole, so `debug_spawn_done` and its three
-//! neighbours are in the binary as text no code can reach. Moving them out to
-//! string literals to save four lines would cost rule 6's uniformity — the width
-//! lint, the shouting lint and the CP437 lint all read that file — for something
-//! nobody can invoke. `the_word_does_nothing_in_a_release_build` is what makes
-//! the distinction hold: the strings are dead weight, and the door is shut.
-//!
-//! **One consequence worth stating**: a session that used it does not replay in a
-//! release build. `Submissions` records the typed line like any other, and a
-//! release build reading it back resolves nothing. Debug sessions replay in debug
-//! builds, which is where they were recorded.
+//! One consequence: a session that used it does not replay in a release build.
+//! Debug sessions replay in debug builds, which is where they were recorded.
 
 use bevy_ecs::prelude::*;
 use orbs_render::{FieldName, RecordKind, Role};
@@ -58,15 +34,13 @@ pub const SPAWN: &str = "debug_spawn";
 
 /// `debug_learn [name]` — hand the player a recipe the lens would have found.
 ///
-/// **A state worth testing costs six broken wards to reach**, which is about
-/// four hundred ticks of pressing, and the roll is a roll — so a See-it line for
-/// discovery would otherwise be *"scry until it happens"*. This is the same
-/// argument `debug_spawn` was built on, one domain over.
+/// The state costs six broken wards — four hundred ticks of pressing — and the
+/// roll is a roll, so a See-it line for discovery would otherwise be *"scry
+/// until it happens"*. `debug_spawn`'s argument, one domain over.
 ///
-/// Bare, it learns the next unfound secret in the file's own order, which is the
-/// order the lens itself reveals them in. Named, it learns that one — and refuses
-/// a name that is not a secret, because learning something already known is a
-/// state the game cannot reach and therefore not one worth testing from.
+/// Bare, it learns the next unfound secret in the file's order, which is the
+/// order the lens reveals them in. Named, it learns that one, and refuses a name
+/// that is not a secret — the game cannot reach that state either.
 pub const LEARN: &str = "debug_learn";
 
 /// What a `debug_learn` line asked for.
@@ -92,14 +66,10 @@ pub fn giveaway(line: &str) -> bool {
 
 /// `debug_course` — leave the standing course one haul from finished.
 ///
-/// A course is `2^n - 1` hauls and the tallest is 127 of them, so a See-it line
-/// for the *completion* — the walls going back up, the experience, the record —
-/// would otherwise open with a hundred commands. Everything downstream runs as
-/// it would have: the last haul is a real haul through the real verb, and what
-/// it triggers is the real `finish`.
-///
-/// It skips the puzzle, which is not what a See-it line for the completion is
-/// looking at. `debug_ward` is the same word one room over.
+/// A course is `2^n - 1` hauls and the tallest is 127, so a See-it line for the
+/// *completion* would open with a hundred commands. Everything downstream runs
+/// as it would have — the last haul is real and triggers the real `finish`. It
+/// skips the puzzle, which is not what the line is looking at.
 pub const COURSE: &str = "debug_course";
 
 /// Whether this line is a `debug_course`.
@@ -110,16 +80,11 @@ pub fn shortcut(line: &str) -> bool {
 
 /// `debug_circle` — limn the circle so the waiting beast's next call holds it.
 ///
-/// **The temper is not touched**, which is the difference from `debug_ward`: the
-/// ward's shortcut rewrites the answer, and a beast's temper is a puzzle the
-/// table drew, so a shortcut that rewrote it could leave one no circle answers.
-/// This limns the glyphs to a solution instead, and republishes for
-/// `debug_course`'s reason — the glyphs' readings are what a spell reads next.
-///
-/// Everything downstream runs as it would have: the next `summon` is a real call
-/// through the real verb, and what a hold pays is counted as it always is. It
-/// skips the reasoning, which is not what a See-it line for the *hold* is
-/// looking at.
+/// The temper is not touched, unlike `debug_ward`'s rewritten answer: a beast's
+/// temper is a puzzle the table drew, and rewriting it could leave one no circle
+/// answers. This limns the glyphs to a solution instead, and republishes because
+/// their readings are what a spell reads next. The next `summon` is a real call
+/// through the real verb; only the reasoning is skipped.
 pub const CIRCLE: &str = "debug_circle";
 
 /// Whether this line is a `debug_circle`.
@@ -131,15 +96,10 @@ pub fn beckoned(line: &str) -> bool {
 /// `debug_siege` — leave the standing siege one round from won.
 ///
 /// A siege is a dozen rounds and a `hold` is a whole turn of decisions, so a
-/// See-it line for the *ending* — the wall going back up, the escrow, the record
-/// — would otherwise open with a dozen commands and depend on the dice falling a
-/// particular way. Everything downstream runs as it would have: the last round
-/// is a real `hold` through the real verb, with real rolls, and what it triggers
-/// is the real `settle`.
-///
-/// It is `debug_course` one room over, and it **republishes** for the same
-/// reason: a siege's readings are rewritten by the round that follows, so a
-/// stale board would be the thing a decision tree reads.
+/// See-it line for the *ending* would open with a dozen commands and depend on
+/// the dice. The last round is a real `hold` with real rolls, triggering the
+/// real `settle`. `debug_course` one room over, and it republishes for the same
+/// reason: a stale board is what a decision tree would read.
 pub const SIEGE: &str = "debug_siege";
 
 /// Whether this line is a `debug_siege`.
@@ -162,22 +122,14 @@ pub fn swapping(line: &str) -> bool {
 
 /// `debug_take <id>` — hold a mastery node without earning it.
 ///
-/// **Three distillations is 24 experience**, which is about two hundred ticks of
-/// setup before a See-it line for the *gated* thing can begin — and §8's channel
-/// puts three words behind two of those nodes, so every line about `queue`,
-/// `pull` or `alongside` would have opened with the laboratory. Same argument as
-/// `debug_spawn` and `debug_learn`: the state is worth testing and the road to
-/// it is not what the line is looking at.
+/// Three distillations is 24 experience — two hundred ticks of setup before a
+/// See-it line for the *gated* thing can begin, and §8's channel puts three
+/// words behind two of those nodes. `debug_spawn`'s argument.
 ///
-/// **It skips the earning and nothing else.** The grant is the real grant
-/// through `Taken::hold`, so `spell::budget`, `is_gated` and
-/// `compile::check_learned` all see exactly what a played tower would — which is
-/// what makes it a shortcut rather than a second implementation.
-///
-/// What it does *not* skip is whether the node is real: an id nothing grants is
-/// refused, because a tower holding a marker is a state the game cannot reach
-/// and therefore not one worth testing from. That is `debug_learn`'s rule about
-/// secrets, one screen over.
+/// It skips the earning and nothing else: the grant goes through `Taken::hold`,
+/// so `spell::budget`, `is_gated` and `compile::check_learned` see what a played
+/// tower would. An id nothing grants is refused — a tower holding a marker is a
+/// state the game cannot reach, which is `debug_learn`'s rule about secrets.
 pub const TAKE: &str = "debug_take";
 
 /// Read a `debug_take` line, if that is what this is.
@@ -225,31 +177,26 @@ pub fn reaching(line: &str) -> Option<Option<String>> {
 
 /// A tester's door to a standing, for the ranks.
 ///
-/// **It *sets* the total rather than adding to it**, which is what lets one word
-/// go both ways: a rank is lost by falling back through it, and reaching that
-/// state otherwise means losing a siege on purpose. A negative argument is not a
-/// number and is refused with everything else that is not — see [`Asking`],
-/// which exists because folding that case into "nought" wiped the state a tester
-/// was building.
+/// It *sets* the total rather than adding, which lets one word go both ways: a
+/// rank is lost by falling back through it, and reaching that state otherwise
+/// means losing a siege on purpose. A negative argument is refused with
+/// everything else that is not a number — see [`Asking`], which exists because
+/// folding that case into "nought" wiped the state a tester was building.
 ///
-/// The lowest rank is 25 renown — about seven brewed clarities — and the highest
-/// is fifteen thousand. Every one of the ten sits behind an hour or a day of
-/// play, so without this the titles are a surface nobody can look at.
+/// The ranks run from 25 renown to fifteen thousand, every one behind an hour or
+/// a day of play, so without this the titles are a surface nobody can look at.
 pub const RENOWN: &str = "debug_renown";
 
 /// What a `debug_renown` line asked for.
 ///
-/// **Three states, because two silently destroyed the thing being set up.** The
-/// argument used to be `Option<u64>` with an unreadable word folded into `None`
-/// by `unwrap_or_default` — so `debug_renown magisterr`, or a tester probing the
-/// ten ranks by name, *zeroed* the tower's renown and answered `renown is 0` as
-/// though that had been asked for. `debug_take` and `debug_reach` both answer a
-/// bad argument by naming the alternatives and mutating nothing, and this is
-/// that shape.
-/// **Named `Asking` rather than `Standing`**, because `tower::Standing` is
-/// already a re-exported type meaning what a ley node *is* — two types with one
-/// name in one crate is the kind of near-collision §19 keeps finding defects
-/// behind.
+/// Three states, because two silently destroyed the thing being set up: the
+/// argument was `Option<u64>` with an unreadable word folded into `None`, so
+/// `debug_renown magisterr` *zeroed* the tower's renown and answered
+/// `renown is 0`. `debug_take` and `debug_reach` name the alternatives and
+/// mutate nothing, which is this shape.
+///
+/// Named `Asking` rather than `Standing`, because `tower::Standing` already
+/// means what a ley node *is*.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Asking {
     /// A bare `debug_renown`: say where the tower stands, change nothing.
@@ -293,23 +240,16 @@ pub fn lesson(line: &str) -> Option<Lesson> {
 
 /// What a tester asked for, if this line is a spawn order at all.
 ///
-/// `debug_spawn ground-sage` is one; `debug_spawn ground-sage 5` is five. A count
-/// that is not a number is **refused rather than defaulted** — `debug_spawn sage
-/// lots` meaning one sage is the kind of quiet reinterpretation this whole
-/// subsystem spent a week removing.
+/// `debug_spawn ground-sage` is one; `debug_spawn ground-sage 5` is five. A
+/// count that is not a number is refused rather than defaulted — `debug_spawn
+/// sage lots` meaning one sage is the quiet reinterpretation this subsystem
+/// spent a week removing.
 ///
-/// # And optionally where
-///
-/// `debug_spawn fragment 4 lectern` puts them in the lectern. The destination
-/// was added when the archive gained an instrument that *consumes* stock: there
-/// is exactly one `Store` in the tower and it is in the laboratory, so §7 made
-/// every archive state unreachable from this tool — four fragments on a lectern
-/// could be reached by walking the stacks four times and by nothing else, which is the
-/// forty ticks of grinding this exists to skip, several hundred times over.
-///
-/// **Any fixture, from anywhere.** The same argument the shelf lookup makes:
-/// requiring the tester to be standing in the right room first puts back the
-/// walking the tool is for.
+/// `debug_spawn fragment 4 lectern` says where. The destination was added when
+/// the archive gained an instrument that *consumes* stock: the tower's one
+/// `Store` is in the laboratory, so §7 made every archive state unreachable from
+/// this tool. Any fixture, from anywhere — requiring the tester to stand in the
+/// right room first puts back the walking the tool is for.
 #[must_use]
 pub fn order(line: &str) -> Option<Order> {
     let rest = line.trim().strip_prefix(SPAWN)?;
@@ -324,28 +264,24 @@ pub fn order(line: &str) -> Option<Order> {
     };
     let count = match words.next() {
         None => 1,
-        // **Zero is not a count, it is a request for nothing.** `stock::give`
-        // would spawn a node holding `Counted(0)`, and `stock::take` documents
-        // the invariant that breaks: *"a pile that reaches zero is despawned, so
-        // *is there any* stays the same question it always was — a node
-        // existing."* A nought-node answers `has ash` yes for ever while nothing
-        // can ever be taken from it, which is precisely a world state the game
-        // cannot otherwise reach — the thing this tool refuses to create.
+        // Zero is not a count, it is a request for nothing. `stock::give` would
+        // spawn a `Counted(0)` node, breaking `stock::take`'s invariant that a
+        // pile reaching zero is despawned — so it would answer `has ash` yes for
+        // ever while nothing could be taken from it.
         Some(count) => count.parse().ok().filter(|count| *count > 0)?,
     };
-    // **A destination is not a number**, and refusing one here rather than at
-    // the shelf is what keeps the old guarantee. `debug_spawn sage 2 3` was
-    // refused outright before there was a third slot; read as a *place* called
-    // `3` it would find nothing and say so, which is a worse answer to what is
+    // A destination is not a number, and refusing one here rather than at the
+    // shelf keeps the old guarantee: `debug_spawn sage 2 3` read as a *place*
+    // called `3` finds nothing and says so, which is a worse answer to what is
     // almost certainly a mistyped count.
     let into = match words.next() {
         None => None,
         Some(word) if word.parse::<u32>().is_ok() => return None,
         Some(word) => Some(word.to_owned()),
     };
-    // **Every word read, or none of them** — the rule the question grammar next
-    // door is built on, and it belongs here for the same reason: `debug_spawn
-    // sage 2 lectern spare` naming one destination is a line half-obeyed.
+    // Every word read, or none of them — the question grammar's rule, and for
+    // its reason: `debug_spawn sage 2 lectern spare` naming one destination is a
+    // line half-obeyed.
     if words.next().is_some() {
         return None;
     }
@@ -387,10 +323,8 @@ pub fn run(world: &mut World, order: &Order) {
 
 /// Put `count` of `name` on the shelf, or wherever `into` names.
 fn spawn(world: &mut World, name: &str, count: u32, into: Option<&str>) {
-    // **Known names only.** Spawning `xyzzy` would put a node in the tower that
-    // no recipe, no instrument and no `survey` row knows what to do with — a
-    // world state the game cannot otherwise reach, which is the opposite of what
-    // a testing tool is for.
+    // Known names only: `xyzzy` would put a node in the tower no recipe, no
+    // instrument and no `survey` row knows what to do with.
     let Some(known) = known(world)
         .into_iter()
         .find(|word| word.eq_ignore_ascii_case(name))
@@ -399,18 +333,11 @@ fn spawn(world: &mut World, name: &str, count: u32, into: Option<&str>) {
         return;
     };
 
-    // **Where the thing belongs, by default.** Not the floor, not wherever the
-    // player happens to be, and — since `tower::home` — no longer *always* the
-    // laboratory's shelf either: sage lands on the dispensary, a fragment in the
-    // archive's cabinet, a potion in the arsenal, because that is where the game
-    // itself would have left each of them.
-    //
-    // That is the whole point of the word. A tester types `debug_spawn <thing>`
-    // and the thing is in the room it is used in, reachable, ready to be `move`d
-    // or ground or wielded — with no third argument and no knowledge of the
-    // tower's layout. A named destination overrides it for the cases where the
-    // point *is* the layout, and obeys the same rule about what a shelf is (see
-    // [`shelf`]).
+    // Where the thing belongs, by default: sage on the dispensary, a fragment in
+    // the archive's cabinet, a potion in the arsenal, because that is where the
+    // game would have left each of them. A tester types `debug_spawn <thing>`
+    // and it is in the room it is used in, with no knowledge of the layout. A
+    // named destination overrides it where the point *is* the layout.
     let into = match into {
         Some(into) => shelf(world, into),
         None => tower::home(world, &known).or_else(|| dispensary(world)),
@@ -419,24 +346,15 @@ fn spawn(world: &mut World, name: &str, count: u32, into: Option<&str>) {
         say(world, "debug_spawn_nowhere", &known, Role::Danger);
         return;
     };
-    // **The kind the laboratory would have given it.** A potion is an `Essence`
-    // and everything else is crafting stock (`work::produce`), so spawning
-    // `clarity` as a reagent would put a node in the tower with the right name
-    // and the wrong kind — a thing no `distil` could have made and no slot will
-    // take. That is precisely the state this refuses to create, arriving through
-    // the check meant to prevent it.
+    // The kind the laboratory would have given it. Spawning `clarity` as a
+    // reagent puts a node in the tower with the right name and the wrong kind —
+    // one no `distil` could have made and no slot will take.
     let kind = world.resource::<Recipes>().kind_of(&known);
 
-    // **And the arsenal's door holds for a tester too.** It takes finished work
-    // only, so a reagent standing in it is a state no `move` could produce —
-    // the same objection as an unknown name, a nought-count and a wrong kind,
-    // which this word already refuses three times over. A testing tool that can
-    // build impossible worlds is a tool whose bug reports have to be checked
-    // against the tool first.
-    //
-    // Asked of the **kind**, like the door itself: `tower::admits` owns the rule
-    // and this asks it rather than restating it, because two expressions of one
-    // rule is how they come to disagree (§19).
+    // The arsenal's door holds for a tester too: it takes finished work only, so
+    // a reagent in it is a state no `move` could produce. A tool that can build
+    // impossible worlds is one whose bug reports get checked against the tool.
+    // Asked of the *kind*, like the door itself, so there is one rule (§19).
     if world.get::<tower::Keep>(into).is_some()
         && !matches!(
             kind,
@@ -447,22 +365,12 @@ fn spawn(world: &mut World, name: &str, count: u32, into: Option<&str>) {
         return;
     }
     tower::give(world, into, &known, kind, count);
-    // **Stamped to a full store, not to one making.** A store's standing is a
-    // *rate*, recorded at `tally::done` — and this word never goes through that
-    // door, so without a stamp every spawned thing would arrive `spent`: a
-    // shortcut that hands you stock the game will not let you spend.
-    //
-    // **One stamp is not enough either**, and three tests said so before this
-    // comment did. One making is a rate of one, which is `thin` — so a spawned
-    // troop brought half the bodies it should, and a fixture testing the *Ley
-    // Line's garrison grant* failed on the arsenal's freshness rule instead.
-    // That is a shortcut making a test measure the wrong thing.
-    //
-    // The word's own sentence is *"the shelf finds it had it all along"*, and
-    // the industry behind the shelf is part of *all along*. So it stamps a full
-    // store, and a test that wants a thin one ages it with `meditate` — which is
-    // what the mechanic's own tests do, and is the honest way to reach that
-    // state.
+    // Stamped to a full store, not to one making. A store's standing is a rate
+    // recorded at `tally::done`, which this word never goes through, so without
+    // a stamp every spawned thing arrives `spent`. One stamp is not enough
+    // either: a rate of one is `thin`, so a spawned troop brought half the
+    // bodies it should and a garrison-grant test failed on freshness instead.
+    // A test that wants a thin store ages it with `meditate`.
     for _ in 0..tower::FRESH_AT {
         tower::made(world, &known);
     }
@@ -471,16 +379,12 @@ fn spawn(world: &mut World, name: &str, count: u32, into: Option<&str>) {
 
 /// The tower's shelf, wherever the player is standing.
 ///
-/// **Walked from the root rather than read out of the current room.** A tester
-/// setting up a state should not have to be standing in the right place first —
-/// and the point of the tool is to skip the forty ticks of walking and grinding
-/// that reaching the state would otherwise cost, which a `cwd` check would put
-/// straight back.
+/// Walked from the root rather than read out of the current room: a `cwd` check
+/// would put back the walking this tool exists to skip.
 ///
-/// `None` only if the tower has no `Store` at all, which `build::raise` always
-/// makes. It reports rather than panicking: a missing dispensary is a build bug,
-/// and a sentence naming it is more use to whoever caused it than a stack trace
-/// from a debug command.
+/// `None` only if the tower has no `Store`, which `build::raise` always makes.
+/// It reports rather than panicking — a missing dispensary is a build bug, and a
+/// sentence naming it beats a stack trace from a debug command.
 fn dispensary(world: &World) -> Option<Entity> {
     let mut stack = vec![tower::root(world)];
     while let Some(node) = stack.pop() {
@@ -494,29 +398,23 @@ fn dispensary(world: &World) -> Option<Entity> {
 
 /// The shelf called `named`, anywhere in the tower.
 ///
-/// **Somewhere a `move` could reach, not any node.** Stock lives inside
-/// instruments and stores; a pile standing on an ordinary domain node is one
-/// `move` cannot pick up and `survey` reports oddly, which is again a state the
-/// game cannot otherwise reach. Naming `laboratory` therefore finds nothing and
-/// says so, rather than half-working.
+/// Somewhere a `move` could reach, not any node: stock lives inside instruments
+/// and stores, and a pile on an ordinary domain node is one `move` cannot pick
+/// up. Naming `laboratory` finds nothing and says so rather than half-working.
 ///
-/// **The arsenal is the exception, because the game makes it one.** It is a
-/// domain rather than a `Fixture`, so the fixture test alone refused it — and
-/// that put every arsenal state back out of a tester's reach, which is the exact
-/// gap that made this function take a name in the first place. What decides the
-/// question is not what shape the node is but whether `pipeline::reachable` can
-/// see into it, and it can see into exactly two things: a fixture where you
-/// stand, and the arsenal from anywhere (`tower::keep`).
+/// The arsenal is the exception because the game makes it one — a domain rather
+/// than a `Fixture`, so the fixture test alone refused it and put every arsenal
+/// state out of reach. What decides it is whether `pipeline::reachable` can see
+/// into the node: a fixture where you stand, or the arsenal from anywhere.
 fn shelf(world: &World, named: &str) -> Option<Entity> {
     let leaf = crate::parser::leaf(named);
     let mut stack = vec![tower::root(world)];
     while let Some(node) = stack.pop() {
-        // **A way is a fixture and is not a shelf**, which is the one case the
-        // fixture test gets wrong on its own. `north` and its three siblings
-        // carry `Fixture` so the maze can publish readings into them — and
-        // `research::refresh` despawns *everything* in a way on the step after,
-        // so a reagent put there is a pile that vanishes with no line saying so.
-        // A tester chasing that would be chasing the tool.
+        // A way is a fixture and is not a shelf — the one case the fixture test
+        // gets wrong alone. `north` and its siblings carry `Fixture` so the maze
+        // can publish readings into them, and `research::refresh` despawns
+        // everything in a way on the next step, so a reagent put there vanishes
+        // with no line saying so.
         let holds_stock = (world.get::<tower::Fixture>(node).is_some()
             || world.get::<tower::Keep>(node).is_some())
             && world.get::<tower::Reading>(node).is_none();
@@ -616,10 +514,9 @@ mod tests {
 
     /// What the place called `place` holds after `line`, by name and count.
     ///
-    /// **One place, not the whole tower.** Sweeping the tree finds the endless
-    /// `sage` on the dispensary's shelf whatever the spawn did, so *"is there
-    /// sage"* is true before the command runs — a test that asks it is asserting
-    /// nothing, which is the shape §19 records three tests having.
+    /// One place, not the whole tower: sweeping the tree finds the endless
+    /// `sage` on the dispensary whatever the spawn did, so *"is there sage"* is
+    /// true before the command runs and the test asserts nothing.
     fn held_by(line: &str, place: &str) -> Vec<(String, u32)> {
         let mut sim = crate::Sim::new(1);
         sim.submit(line);
@@ -641,16 +538,11 @@ mod tests {
 
     #[test]
     fn every_name_the_tool_offers_lands_in_the_room_it_belongs_to() {
-        // **The list, the door and the layout all have to agree.** A word printed
-        // by a bare `debug_spawn` and then refused — or dropped in a room the
-        // tester is not in and cannot reach — is worse than a shorter list: the
-        // tester believes the tool and looks for the bug in the game.
-        //
-        // Driven per name and against `tower::home` rather than a room written
-        // down here, because a room written down here is the hand-kept list the
-        // rule exists to replace. What this pins is that the tool obeys the rule,
-        // and `every_material_has_a_home_a_move_can_reach` pins that the rule has
-        // an answer for everything.
+        // The list, the door and the layout all have to agree: a word printed by
+        // a bare `debug_spawn` and then refused is worse than a shorter list,
+        // because the tester believes the tool and looks for the bug in the
+        // game. Driven against `tower::home` rather than a room written down
+        // here, which would be the hand-kept list the rule replaces.
         let sim = crate::Sim::new(1);
         let names = known(sim.world());
         assert!(!names.is_empty(), "the tool offers nothing at all");
@@ -674,16 +566,10 @@ mod tests {
 
     #[test]
     fn every_material_the_game_has_is_one_the_tool_can_make() {
-        // **The other direction, and it is the one that rots.** The list above
-        // is derived from the *recipes*, so a material authored in
-        // `materials.toml` that no recipe names would have a colour, a manual
-        // route and no way for a tester to hold one — and nothing would say so,
-        // because both files parse perfectly.
-        //
-        // It is also the shape of the ask this test was written for: *"make sure
-        // all new items are in `debug_spawn`"* is a promise that has to keep
-        // being true, and a promise kept by hand is one kept until somebody is
-        // busy.
+        // The other direction, and the one that rots: the list above is derived
+        // from the *recipes*, so a material in `materials.toml` that no recipe
+        // names has a colour, a manual route and no way for a tester to hold
+        // one — and both files parse perfectly, so nothing says so.
         let sim = crate::Sim::new(1);
         let names = known(sim.world());
         let materials = crate::content::Materials::builtin();
@@ -706,11 +592,8 @@ mod tests {
             "a potion could not be put in the arsenal: {kept:?}",
         );
 
-        // And the door holds for a tester too. Stock standing in the arsenal is
-        // a state no `move` could produce, which is the same objection as an
-        // unknown name and a wrong kind — both of which this word already
-        // refuses. A tool that can build impossible worlds makes every bug report
-        // start by checking the tool.
+        // And the door holds for a tester too: stock in the arsenal is a state no
+        // `move` could produce.
         let kept = held_by("debug_spawn sage 1 arsenal", tower::ARSENAL);
         assert!(
             !kept.iter().any(|(name, _)| name == "sage"),

@@ -27,7 +27,7 @@ pub const TURNED: char = '~';
 /// One thing a glyph is given: a sense, or another glyph, and whether its wire
 /// is turned.
 ///
-/// **One struct, not two lists side by side** — a name and its turn cannot come
+/// One struct, not two lists side by side, so a name and its turn cannot come
 /// apart when a line is built.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Given {
@@ -51,8 +51,8 @@ pub struct Line {
 
 /// A beast at the circle, as the board needs it.
 ///
-/// **Every word is handed in**, because this crate may not depend on `orbs-sim`
-/// and the words are content: the senses' names are prose, and the glyphs and
+/// Every word is handed in, because this crate may not depend on `orbs-sim` and
+/// the words are content: the senses' names are prose, and the glyphs and
 /// humours are the parser's.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Circle {
@@ -72,9 +72,9 @@ pub struct Circle {
     pub labels: [String; 2],
     /// The line at the foot, already written.
     ///
-    /// **Handed in rather than composed here** — rule 6: *"2 calls, 2 rows
-    /// balk"* is a sentence, and a sentence built from literals in a painter is
-    /// prose nobody can reload.
+    /// Handed in rather than composed here — rule 6: *"2 calls, 2 rows balk"* is
+    /// a sentence, and one built from literals in a painter is prose nobody can
+    /// reload.
     pub tally: String,
 }
 
@@ -99,12 +99,11 @@ impl Circle {
 
     /// The board's size in character cells, border excluded.
     ///
-    /// **Fixed, never sized to what is standing** — a board that grew a row the
-    /// first time the beast was called would move the transcript under the
-    /// player's eye at the moment they were reading the answer. **The same for
-    /// a lesser circle**, which draws one line of wiring and two senses and
-    /// leaves the foot blank, so the transcript does not move the day the whole
-    /// circle opens either.
+    /// Fixed, never sized to what is standing: a board growing a row the first
+    /// time the beast was called would move the transcript under the player's
+    /// eye as they read the answer. The same for a lesser circle, which draws
+    /// one line of wiring and two senses and leaves the foot blank, so the
+    /// transcript does not move the day the whole circle opens either.
     #[must_use]
     pub const fn size() -> (u16, u16) {
         (Self::COLS, Self::HEIGHT)
@@ -113,7 +112,7 @@ impl Circle {
     /// One row of the board, as cells. Blank past what the circle holds and
     /// inside the footprint; `None` past the footprint.
     ///
-    /// **Laid out from what it is handed** — as many wiring lines as
+    /// Laid out from what it is handed — as many wiring lines as
     /// [`lines`](Self::lines), as many sense rows as [`senses`](Self::senses) —
     /// so the whole circle and the lesser one are one painter.
     #[must_use]
@@ -201,7 +200,7 @@ impl Circle {
             Style::BRIGHT,
             Some(TINT),
         );
-        // **A turned wire is marked on its name**, where the eye is when it reads
+        // A turned wire is marked on its name, where the eye is when it reads
         // what a glyph is given — not in a legend the board has no row for.
         let given: Vec<String> = line
             .given
@@ -270,10 +269,10 @@ impl Circle {
 /// A row's name, exactly [`Circle::LABEL`] cells wide: clipped to leave one
 /// blank before the cells, and padded.
 ///
-/// **Clipped, not only padded**, because the senses' names and the two labels
-/// are prose a writer can reload — and a name of twelve or more pushed its
-/// row's cells right while the numbers and the marks stayed put, which is a mark
-/// under the wrong row: the one failure this board most has to avoid.
+/// Clipped, not only padded, because the senses' names and the two labels are
+/// prose a writer can reload: a name of twelve or more pushed its row's cells
+/// right while the numbers and marks stayed put, putting a mark under the wrong
+/// row — the one failure this board most has to avoid.
 fn label(name: &str) -> String {
     let clipped: String = name.chars().take(Circle::LABEL - 1).collect();
     format!("{clipped:<width$}", width = Circle::LABEL)

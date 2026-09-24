@@ -1,24 +1,22 @@
 //! Filtering records — what `sift` and a pipe stage actually do.
 //!
-//! DESIGN.md §7: *"Pipes and `grep` operate on records, never on rendered
-//! text."* The distinction is easy to nod at and easy to lose, so it is worth
-//! being exact about what "rendered text" means here. Matching runs against a
-//! field's **own value**. It never sees:
+//! §7: *"Pipes and `grep` operate on records, never on rendered text."* Matching
+//! runs against a field's own value, and never sees:
 //!
-//! - column padding, alignment, or a truncated tail — a match must not depend on
+//! - column padding, alignment or a truncated tail — a match must not depend on
 //!   how wide the pane happened to be;
 //! - box drawing, headers, or any other structure a view added;
 //! - eldritch corruption — §3 keeps the model faithful and corrupts only the
-//!   rendering, so a sifted term finds the message the orb *meant* even while
-//!   the tube is showing it damaged.
+//!   rendering, so a sifted term finds the message the orb meant even while the
+//!   tube shows it damaged.
 //!
-//! The last one is why the design calls this *"the only model that survives the
-//! eldritch renderer corrupting output"*. Search over rendered text would go
+//! The last is why the design calls this *"the only model that survives the
+//! eldritch renderer corrupting output"*: search over rendered text would go
 //! blind exactly when threat is highest.
 //!
-//! The authored linear variant is deliberately not searched either: it is a
-//! rendering of the record for a screen reader, so matching it would make the
-//! result set differ between players.
+//! The authored linear variant is not searched either. It is a rendering of the
+//! record for a screen reader, so matching it would make the result set differ
+//! between players.
 
 use crate::record::field::FieldName;
 use crate::record::stream::{Record, Records};
@@ -107,11 +105,11 @@ impl Records {
 /// and can never equal an ASCII byte, so a match can neither straddle nor split
 /// a character boundary.
 ///
-/// **Public because a `.spell` is searched too.** `sift` over the record stream
-/// goes through [`Record::matches`], but a spell's lines are stored text
-/// (`tower::Held`) rather than records, and a second implementation would be a
-/// second answer to *"does this line match?"* — the case-folding rule is one §19
-/// already had to correct once, when `sift ERROR feed.log` searched for `error`.
+/// Public because a `.spell` is searched too. `sift` over the record stream goes
+/// through [`Record::matches`], but a spell's lines are stored text rather than
+/// records, and a second implementation would be a second answer to *"does this
+/// line match?"* — a rule §19 already had to correct once, when `sift ERROR
+/// feed.log` searched for `error`.
 #[must_use]
 pub fn contains_ignoring_case(haystack: &str, needle: &str) -> bool {
     let (haystack, needle) = (haystack.as_bytes(), needle.as_bytes());

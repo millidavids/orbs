@@ -3,44 +3,25 @@
 //! Authored in `content/progression.toml`, not here (rule 6). This module knows
 //! the *shape* of the two tracks and nothing about their numbers.
 //!
-//! # Two tracks, two shapes
+//! Two tracks, two shapes. The Ley Line is the tower's: one list of stations on
+//! total experience, each a *step* (`grants` something) or a *fork* (`nodes` to
+//! choose one of, taken with `take`), and either may also `opens` a room, a
+//! recipe or a charm. Mastery is per domain: one straight line per room you work
+//! in — six, not §10's seven, since the grimoire left `DOMAINS` (§19) — with a
+//! [`Deed`] on each station and no choices anywhere. §19 records the two names
+//! being attached the other way round when the weave shipped.
 //!
-//! **The Ley Line is the tower's.** One list of stations on total experience. A
-//! station is a *step* — `grants` something, and passing it is the grant — or a
-//! *fork* — `nodes` to choose one of, taken with `take`. A station may also
-//! `opens` something: a room, a recipe, a charm.
+//! It reaches decisions, so it is not hot-reloadable, unlike
+//! [`Materials`](super::Materials) next door: a weight changes what a run earns
+//! and a threshold gates a verb, and content reaching a decision loads once or
+//! `(seed, submissions)` stops replaying.
 //!
-//! **Mastery is per domain.** One straight line per room you work in — six, not
-//! §10's seven, since the grimoire left `DOMAINS` (§19) — each a list of
-//! stations with a [`Deed`] on it. No choices anywhere: a station is reached
-//! when its deed is done and the one before it is reached.
-//!
-//! §19 records that the two names were attached the other way round when the
-//! weave shipped — the Ley Line was the no-choice track and Mastery the tree —
-//! and why they swapped.
-//!
-//! # It reaches decisions, so it is not hot-reloadable
-//!
-//! The opposite of [`Materials`](super::Materials) next door, and for the reason
-//! that module states: a tint is read by the panel and by nothing else, so
-//! swapping it cannot change what the world does. A **weight** changes what a
-//! run earns and a **threshold** gates a verb, so both are decisions — and
-//! `Sim::new` is explicit that content reaching a decision loads once, because
-//! otherwise `(seed, submissions)` stops replaying.
-//!
-//! # Anything nobody can name is an error
-//!
-//! Every name in this file is checked against something at load: `[earns]` keys
-//! against the instruments, a `grants` against the closed set below, a fork's
-//! nodes against the grant parser, a deed against the recipes and the events,
-//! an `opens` against the rooms, the gated recipes and the charms. A name
-//! matching nothing would earn or open nothing, which looks exactly like a
-//! number someone chose — the indistinguishable-typo problem `materials.toml`
-//! records paying for once.
-//!
-//! **Validated against other content**, so the check takes a [`Catalogue`]
-//! rather than reaching for resources, which keeps it a pure function and lets
-//! `Sim::new` decide the order.
+//! Anything nobody can name is an error. Every name is checked at load —
+//! `[earns]` keys against the instruments, `grants` against the closed set
+//! below, a deed against the recipes and events, an `opens` against the rooms
+//! and charms — because a name matching nothing earns nothing and looks exactly
+//! like a number someone chose. Validated against a [`Catalogue`] rather than
+//! resources, which keeps it pure and lets `Sim::new` decide the order.
 
 use std::collections::BTreeMap;
 
@@ -55,13 +36,11 @@ const BUILTIN: &str = include_str!("../../content/progression.toml");
 /// The file's name, for an error a writer can act on.
 const FILE: &str = "progression.toml";
 
-/// What a ley-line **step** may grant.
+/// What a ley-line step may grant.
 ///
-/// **A closed set, checked at load.** The same rule as `[earns]`'s keys and
-/// `materials.toml`'s colours: a `grants` nobody implements would give the step
-/// nothing, which reads exactly like a step deliberately authored as a marker —
-/// and the file would be correct on its face while the curve quietly stopped
-/// half way up.
+/// A closed set, checked at load, for `[earns]`'s reason: a `grants` nobody
+/// implements gives the step nothing, which reads like a step authored as a
+/// marker while the curve quietly stops half way up.
 pub const GRANTS: [&str; 2] = [CONCENTRATION, QUINTESSENCE];
 
 /// What the Ley Line grants first — a spell the orb can hold.
@@ -72,17 +51,13 @@ pub const QUINTESSENCE: &str = "quintessence";
 
 /// What work is worth, and what it buys.
 ///
-/// **`Default` is the built-in table, not an empty one.** `Fuels` and
-/// `Materials` both carry the same hand-written impl, and `Materials` records
-/// why: a derived `Default` gives an empty map, `Sim` installs it with
-/// `init_resource`, and every run silently earns nothing while the file on disk
-/// is perfectly correct.
+/// `Default` is the built-in table, not an empty one — `Fuels` and `Materials`
+/// carry the same hand-written impl, because a derived `Default` gives an empty
+/// map and every run silently earns nothing while the file on disk is correct.
 ///
-/// **Unknown sections fail the load**, which is the rule the tracks are
-/// defaulted *for*. With both optional, the old `[concentration] levels = [16]`
-/// parsed happily into a tower with no curve at all — every threshold gone, no
-/// verb refusing, and the file correct on its face. A misspelled section is the
-/// same defect as a misspelled `[earns]` key and gets the same answer.
+/// Unknown sections fail the load, which is the rule the tracks are defaulted
+/// *for*: with both optional, `[concentration] levels = [16]` parsed happily
+/// into a tower with no curve at all.
 #[derive(Debug, Clone, Deserialize, Resource)]
 #[serde(deny_unknown_fields)]
 pub struct Progression {
@@ -90,9 +65,8 @@ pub struct Progression {
     earns: BTreeMap<String, u64>,
     /// The tower's line: steps and forks on total experience.
     ///
-    /// **Defaulted**, so a file with no track at all is a tower that earns and
-    /// buys nothing rather than a load failure. The tests below author `[earns]`
-    /// alone for exactly this reason.
+    /// Defaulted, so a file with no track is a tower that earns and buys nothing
+    /// rather than a load failure. The tests below author `[earns]` alone.
     #[serde(default)]
     ley_line: Vec<Station>,
     /// The rooms' lines, one station at a time, in the file's order.
@@ -100,10 +74,9 @@ pub struct Progression {
     mastery: Vec<Milestone>,
     /// What the tower is called, by how much renown it holds.
     ///
-    /// **Titles, not gates**, so a rank carries `at` and `id` and nothing else —
-    /// there is no `opens` here on purpose. Defaulted like the other two tracks,
-    /// so a file with no ranks is a tower nobody has heard of rather than a load
-    /// failure.
+    /// Titles, not gates, so a rank carries `at` and `id` and no `opens`.
+    /// Defaulted like the other two tracks, so a file with no ranks is a tower
+    /// nobody has heard of rather than a load failure.
     #[serde(default)]
     renown: Vec<Rank>,
 }
@@ -128,8 +101,8 @@ pub struct Station {
     /// the closed set `check` holds it to.
     #[serde(default)]
     pub grants: Option<String>,
-    /// What to choose one of, for a fork. **Ordered**, and the order is the
-    /// file's; the painter re-orders by lane.
+    /// What to choose one of, for a fork. Ordered as the file orders them; the
+    /// painter re-orders by lane.
     #[serde(default)]
     pub nodes: Vec<String>,
     /// What passing it opens, if anything. Keys as `tower::opened::Key` reads.
@@ -188,26 +161,17 @@ impl Default for Progression {
 impl Progression {
     /// This curve, stretched to `length`.
     ///
-    /// # What moves and what does not
+    /// Thresholds move; rates do not. `ley_line`'s and `renown`'s `at` and each
+    /// mastery `done` are stretched by index; [`earns`](Self::earns) is left
+    /// exactly as authored, because stretching what a run is *worth* too would
+    /// multiply both sides of the same fraction and cancel the feature with
+    /// every `orbs-balance` rate still passing.
     ///
-    /// **Thresholds move; rates do not.** `ley_line`'s and `renown`'s `at`, and
-    /// the counts inside each mastery `done`, are stretched by their index on
-    /// their own line. [`earns`](Self::earns) is left **exactly** as authored —
-    /// it is what a run is *worth*, so stretching it alongside the thresholds
-    /// would multiply both sides of the same fraction and cancel the whole
-    /// feature, while every rate `orbs-balance` pins would still pass. That is
-    /// the failure this method is most likely to be broken by, so a test asserts
-    /// `earns` is identical before and after.
+    /// Each line is indexed on its own, so every room opens on the schedule it
+    /// opens on now — flat file order would put the menagerie's first deed a
+    /// third of the way up the ramp for no reason a player could see.
     ///
-    /// # Each line is indexed on its own
-    ///
-    /// Mastery is seven lines, not one, and a station's ramp is its position on
-    /// **its own room's line** — so every room's first station is unchanged and
-    /// every room opens on the schedule it opens on now. Indexing the flat file
-    /// order instead would put the menagerie's first deed a third of the way up
-    /// the ramp for no reason a player could see.
-    ///
-    /// Applied before `check`, whose `ascends` gate every length survives: a
+    /// Applied before `check`, whose `ascends` gate survives every length: a
     /// strictly increasing sequence times a non-decreasing positive one is
     /// strictly increasing.
     #[must_use]
@@ -339,10 +303,9 @@ impl Progression {
                         ),
                     ));
                 }
-                // **A `grants` nobody implements gives the step nothing**, which
-                // reads exactly like a step deliberately authored as a marker —
-                // and the curve would stop half way up with the file correct on
-                // its face.
+                // A `grants` nobody implements gives the step nothing, which
+                // reads like a step authored as a marker — and the curve stops
+                // half way up with the file correct on its face.
                 (Some(grants), false) if !GRANTS.contains(&grants.as_str()) => {
                     return Err(super::ContentError::new(
                         FILE,
@@ -355,10 +318,9 @@ impl Progression {
                 }
                 _ => {}
             }
-            // **Every node of a fork grants something, and the parser decides.**
+            // Every node of a fork grants something, and the parser decides.
             // There are no markers: a node nothing implements would draw, be
-            // aimed at, and be refused — which is a promise about a thing
-            // nobody has built, the shape §19 refused for the tree.
+            // aimed at, and be refused — a promise about a thing nobody built.
             if let Some(node) = station
                 .nodes
                 .iter()
@@ -374,10 +336,9 @@ impl Progression {
                     ),
                 ));
             }
-            // **One node per lane.** A fork is a choice between kinds of play —
-            // more resources, better combat, a faster orb — and two craft
-            // nodes at one fork would be a choice inside one kind, which is not
-            // what the designer asked the line to offer.
+            // One node per lane. A fork is a choice between kinds of play — more
+            // resources, better combat, a faster orb — and two craft nodes at
+            // one fork would be a choice inside one kind.
             let mut lanes: Vec<crate::tower::Lane> = Vec::new();
             for node in &station.nodes {
                 let Some(lane) = crate::tower::granted(node).map(crate::tower::Grant::lane) else {
@@ -454,14 +415,10 @@ impl Progression {
 
     /// Every gated product is opened by some station.
     ///
-    /// **The other direction, and the half that was missing.** `check_opens`
-    /// refuses a key that names nothing; nothing refused a *product* that no key
-    /// names. Because `Opened::start` is *everything no station opens*, such a
-    /// product is not unreachable — it is handed to the player at tick 0, with
-    /// the file correct on its face and every test green. `gated = true` says
-    /// *earned*, so a station losing its `opens` line is the
-    /// indistinguishable-typo failure this module's header is about, arriving
-    /// from the side the check did not cover.
+    /// The other direction, and the half that was missing: `check_opens`
+    /// refuses a key naming nothing, but nothing refused a *product* no key
+    /// names. Since `Opened::start` is everything no station opens, such a
+    /// product is handed to the player at tick 0 with every test green.
     fn check_gated(&self, catalogue: &Catalogue<'_>) -> Result<(), super::ContentError> {
         let opened: Vec<&str> = self
             .ley_line
@@ -512,11 +469,10 @@ impl Progression {
                     ));
                 };
                 let (known, of): (bool, &[&str]) = match &parsed {
-                    // **`is_room`, not `DOMAINS`.** A station may open a room
-                    // that is not one you *work* in — the bailey and the
-                    // grimoire are both shut until they are earned and neither
-                    // has a mastery line. Checking the narrower list refused the
-                    // ley step at 16 that opens the grimoire.
+                    // `is_room`, not `DOMAINS`: a station may open a room that
+                    // is not one you *work* in — the bailey and the grimoire are
+                    // both earned and neither has a mastery line. The narrower
+                    // list refused the ley step at 16.
                     crate::tower::opened::Key::Domain(name) => {
                         (crate::tower::opened::is_room(name), &crate::tower::DOMAINS)
                     }
@@ -580,11 +536,10 @@ impl Progression {
 
     /// How many spells the orb can hold at `experience`.
     ///
-    /// **Derived, never stored.** The level is a function of one number against
-    /// this table, so a save carries the number and nothing can fall out of step
-    /// with it — the same shape as a spell's `Program` being derived from its
-    /// text rather than kept beside it. `check` refuses an unsorted track, so
-    /// counting what has been passed is the whole of it.
+    /// Derived, never stored: the level is a function of one number against this
+    /// table, so a save carries the number and nothing can fall out of step with
+    /// it. `check` refuses an unsorted track, so counting what has been passed
+    /// is the whole of it.
     #[must_use]
     pub fn concentration(&self, experience: u64) -> usize {
         self.granting(CONCENTRATION)
@@ -594,11 +549,10 @@ impl Progression {
 
     /// How many ley steps granting quintessence have been passed.
     ///
-    /// **`concentration`'s twin, and deliberately a second method rather than a
-    /// public `granting`.** The steps' grants are a closed set (`GRANTS`), so
-    /// every reader of it is a named question about a named grant — exposing
-    /// the iterator would invite a caller to ask about a word the set does not
-    /// hold and silently get nought.
+    /// `concentration`'s twin, and a second method rather than a public
+    /// `granting`: the grants are a closed set (`GRANTS`), so exposing the
+    /// iterator would invite a caller to ask about a word it does not hold and
+    /// silently get nought.
     #[must_use]
     pub fn quintessence(&self, experience: u64) -> usize {
         self.granting(QUINTESSENCE)
@@ -627,11 +581,10 @@ impl Progression {
 
 /// Refuse a track whose totals do not strictly ascend.
 ///
-/// **The sort is the meaning of the list**, because every reading of it counts
-/// with `take_while` and stops at the first total it cannot afford. `[30, 16]`
-/// gates the second step behind 30 *and* never awards the first at 16 — a track
-/// that reads as authored and behaves as neither, with no verb refusing and
-/// nothing to look at.
+/// The sort is the meaning of the list: every reading counts with `take_while`
+/// and stops at the first total it cannot afford, so `[30, 16]` gates the second
+/// step behind 30 *and* never awards the first at 16 — a track that reads as
+/// authored and behaves as neither.
 fn ascends(track: &str, totals: impl Iterator<Item = u64>) -> Result<(), super::ContentError> {
     let totals: Vec<u64> = totals.collect();
     let Some(pair) = totals.windows(2).find(|two| {
@@ -705,9 +658,9 @@ mod tests {
 
     #[test]
     fn one_clarity_is_the_first_threshold() {
-        // **The number the whole curve is anchored to**, spelled out here rather
-        // than trusted: grind sage, digest, grind salt, mix, distil. If a weight
-        // moves and the threshold does not, this is what says so.
+        // The number the whole curve is anchored to, spelled out rather than
+        // trusted: grind sage, digest, grind salt, mix, distil. If a weight
+        // moves and the threshold does not, this says so.
         let curve = Progression::builtin();
         let clarity = curve.earns("mortar_and_pestle")
             + curve.earns("balneum_mariae")
@@ -723,11 +676,9 @@ mod tests {
 
     #[test]
     fn the_shipped_curve_reads_the_same_at_every_total_that_matters() {
-        // The whole game is anchored to 16 meaning one clarity: `tests/
-        // progression.rs` walks a brew to it, `tests/binding.rs` reaches a slot
-        // through it, and `bind` refuses below it. So this pins the *readings*,
-        // exhaustively across the interesting range and independently of how
-        // the file is shaped underneath.
+        // The whole game is anchored to 16 meaning one clarity, so this pins
+        // the *readings* across the interesting range, independently of how the
+        // file is shaped underneath.
         let curve = Progression::builtin();
         for total in 0..=40 {
             let expected = usize::from(total >= 16);
@@ -797,10 +748,9 @@ mod tests {
 
     #[test]
     fn the_section_this_replaced_fails_the_load_rather_than_being_ignored() {
-        // **The migration hazard, pinned.** Both tracks are `serde(default)` so a
-        // file may omit them — which meant the old `[concentration] levels = [16]`
-        // parsed happily into a tower with *no curve at all*: every threshold
-        // gone, no verb refusing, and the file correct on its face.
+        // Both tracks are `serde(default)`, so the old `[concentration] levels
+        // = [16]` once parsed happily into a tower with *no curve at all*, the
+        // file correct on its face.
         assert!(
             Progression::parse("[earns]\nmortar_and_pestle = 1\n[concentration]\nlevels = [16]\n")
                 .is_err(),
@@ -818,9 +768,9 @@ mod tests {
 
     #[test]
     fn a_curve_that_does_not_ascend_fails_the_load() {
-        // **`take_while` stops at the first level it cannot afford**, so
-        // `[30, 16]` would gate level 2 behind 30 *and* never award level 1 at
-        // 16 — a table that reads as authored and behaves as neither.
+        // `take_while` stops at the first level it cannot afford, so `[30, 16]`
+        // would gate level 2 behind 30 *and* never award level 1 at 16 — a
+        // table that reads as authored and behaves as neither.
         let out_of_order = authored(&ley_line(&[30, 16]));
         assert_eq!(
             out_of_order.concentration(16),
@@ -867,8 +817,8 @@ mod tests {
 
     #[test]
     fn a_fork_node_the_orb_cannot_parse_fails_the_load() {
-        // **There are no markers.** A node nothing implements would draw, be
-        // aimed at, and be refused — a promise about a thing nobody has built.
+        // There are no markers: a node nothing implements would draw, be aimed
+        // at, and be refused — a promise about a thing nobody has built.
         assert!(
             small(&authored(
                 "[[ley_line]]\nat = 24\nnodes = [\"steps_1\", \"tbi_b\"]\n"
@@ -890,12 +840,10 @@ mod tests {
 
     #[test]
     fn a_gated_product_no_station_opens_fails_the_load() {
-        // **The half `check_opens` does not cover.** A key naming nothing is
-        // refused; a *product* nothing names was not — and because
-        // `Opened::start` is everything no station opens, the product is then
-        // handed to every tower at tick 0, with the file correct on its face.
-        // A station losing its `opens` line looks exactly like a designer
-        // deciding the thing should be free.
+        // The half `check_opens` does not cover: a key naming nothing is
+        // refused, a *product* nothing names was not. `Opened::start` is
+        // everything no station opens, so the product goes to every tower at
+        // tick 0 and a lost `opens` line looks like a deliberate freebie.
         let curve = authored(&ley_line(&[16]));
         let gated = curve.check(&catalogue(&["clarity", "warding"], &["warding"], &[]));
         assert!(gated.is_err(), "a gated product nothing opens was accepted");
@@ -988,10 +936,9 @@ mod tests {
 
     #[test]
     fn an_opens_names_something_that_can_be_opened() {
-        // The first station is here to satisfy `check_gated`, which wants the
-        // catalogue's one gated product opened by *something*: this test is
-        // about the other direction, and without it every case would fail for
-        // the other check's reason.
+        // The first station satisfies `check_gated`, which wants the
+        // catalogue's one gated product opened by *something* — without it
+        // every case here would fail for the other check's reason.
         let curve = |opens: &str| {
             authored(&format!(
                 "[[mastery]]\ndomain = \"laboratory\"\nid = \"laboratory_1\"\n\

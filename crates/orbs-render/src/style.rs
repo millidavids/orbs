@@ -1,44 +1,33 @@
 //! Semantic styling — and one channel that is deliberately not.
 //!
 //! A [`Style`] says what a cell *means*. Turning that into a phosphor hue, an
-//! ANSI index, or a glyph variant is the frontend's job, and each frontend does
-//! it differently: the Bevy build has curated phosphor themes, the terminal
-//! build has indexed ANSI inherited from the user's terminal (DESIGN.md §13).
-//! A concrete colour must never appear in this crate.
+//! ANSI index or a glyph variant is the frontend's job, and each does it
+//! differently — curated phosphor themes in the Bevy build, the user's own
+//! terminal's ANSI indices in the other (DESIGN.md §13). A concrete colour must
+//! never appear in this crate.
 //!
-//! Two rules from the design are enforced here by the type system rather than by
-//! discipline:
+//! Two design rules the types enforce rather than discipline:
 //!
-//! - **Colour never carries meaning alone** (§14). [`Role`] is carried into the
-//!   screen-reader stream alongside the text, so the meaning survives with no
-//!   pixels at all.
-//! - **Eldritch and sabotage signal vocabularies are disjoint** (§3). Because
-//!   [`Presentation`] is an enum, a cell cannot be both, and the tonal system
-//!   cannot jam the diagnostic system at peak threat.
+//! - Colour never carries meaning alone (§14). [`Role`] rides into the
+//!   screen-reader stream beside the text, so meaning survives with no pixels.
+//! - Eldritch and sabotage vocabularies are disjoint (§3). [`Presentation`] is
+//!   an enum, so the tonal system cannot jam the diagnostic one at peak threat.
 //!
-//! # The exception, and why it is safe
-//!
-//! [`Depiction`] is the one channel here that says nothing. It selects a colour
-//! ramp and no more: it is how the athanor's meter becomes a picture of a fire
-//! rather than a reading of one.
-//!
-//! That does not weaken the rule above, and the reason is worth stating rather
-//! than trusting. §14 forbids colour being the **sole carrier of meaning**; the
-//! guarantee that makes it true is that every [`Role`] reaches the linear stream
-//! beside its text. A channel carrying *no* meaning has nothing to withhold from
-//! a listener, so it cannot break that guarantee — which is why
-//! [`Depiction`] is asserted by test to be absent from the stream entirely, and
-//! why [`Style::depicted`] refuses to paint over an accent.
+//! [`Depiction`] is the exception: it selects a colour ramp and says nothing, so
+//! the athanor's meter is a picture of a fire rather than a reading of one. §14
+//! forbids colour being the *sole* carrier of meaning, and a channel carrying
+//! none has nothing to withhold from a listener — hence the test that it never
+//! reaches the linear stream, and [`Style::depicted`] refusing to paint over an
+//! accent.
 
 /// What a cell *means*, from the accent set reserved strictly for meaning.
 ///
 /// DESIGN.md §4: the base hue carries all ordinary text through intensity
 /// variation alone, and accents are never decorative.
 ///
-/// Deliberately **not** `#[non_exhaustive]`. Every consumer is in this
-/// workspace, and exhaustive matching is the point: a frontend that gains a new
-/// role must be made to handle it, because the failure mode of a missed arm is
-/// silently rendering danger as ordinary text.
+/// Deliberately not `#[non_exhaustive]`: every consumer is in this workspace,
+/// and a frontend that gains a new role must be made to handle it — a missed arm
+/// renders danger as ordinary text.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Role {
     /// Ordinary text. Carried by the base hue.
@@ -69,25 +58,17 @@ pub enum Intensity {
 
 /// A presentation treatment applied on top of the base style.
 ///
-/// The two non-plain variants are mutually exclusive by design rule (§3), which
-/// is why this is an enum and not a set of flags.
+/// An enum, not flags: the two non-plain variants are mutually exclusive by
+/// design rule (§3).
 ///
-/// # One face per variant
-///
-/// The Bevy frontend draws each variant from a different face of the same font
-/// family (`assets/fonts/unscii/`), which is why this enum is worth its own
-/// channel rather than being folded into [`Role`]:
-///
-/// | Variant | Face | Native |
-/// |---|---|---|
-/// | [`Presentation::Plain`] | `unscii-16` | 8×16 |
-/// | [`Presentation::Eldritch`] | `unscii-8-fantasy` | 8×8, row-doubled |
-/// | [`Presentation::Tampered`] | `unscii-8-mcr` | 8×8, row-doubled |
-///
-/// All three share metrics and repertoire, so a face swap can never move a cell.
-/// The terminal frontend has no such control and renders all three identically —
-/// an accepted degradation (§8.1), since `verify` is the authoritative detector
-/// on every surface and every frontend.
+/// Its own channel rather than folded into [`Role`] because the Bevy frontend
+/// draws each variant from a different face of `assets/fonts/unscii/` —
+/// `unscii-16` for [`Plain`](Self::Plain), `unscii-8-fantasy` for
+/// [`Eldritch`](Self::Eldritch), `unscii-8-mcr` for
+/// [`Tampered`](Self::Tampered), the last two row-doubled from 8×8. All three
+/// share metrics and repertoire, so a face swap can never move a cell. The
+/// terminal frontend renders all three identically — accepted degradation
+/// (§8.1), since `verify` is the authoritative detector on every surface.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Presentation {
     /// Rendered faithfully. Carries the prose budget, so it gets the face drawn
@@ -108,22 +89,20 @@ pub enum Presentation {
     /// A sabotage tell (§8.1): the frontend draws a subtly wrong variant of the
     /// glyph.
     ///
-    /// A **bonus channel, never the only one.** `verify` is the authoritative
-    /// detector on every surface and every frontend; the terminal build cannot
-    /// render this at all because it does not control the font, and the design
-    /// accepts that as degradation rather than breakage.
+    /// A bonus channel, never the only one — `verify` is the authoritative
+    /// detector everywhere, so the terminal build not controlling its font is
+    /// degradation rather than breakage.
     Tampered,
 }
 
 /// How hot a flame or spark cell is — see [`Depiction::flame`] and
 /// [`Depiction::spark`].
 ///
-/// **Four steps, where an earlier design had three.** That argument was that
-/// CP437 gives flame two glyphs (`▓` and `█`) and a ramp longer than the glyphs
-/// can back is colour variation with nothing underneath it. It no longer holds:
-/// the bottom half of the fire is solid `█` by construction and carries *all* of
-/// its motion in hue, so the ramp is doing the work alone there and a coarse one
-/// reads as a two-tone flicker rather than a glow.
+/// Four steps, not the three an earlier design had. That argument — CP437 gives
+/// flame two glyphs, so a longer ramp is colour with nothing under it — stopped
+/// holding once the bottom half of the fire became solid `█` by construction,
+/// carrying *all* of its motion in hue. The ramp works alone there, and a coarse
+/// one reads as a two-tone flicker rather than a glow.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Heat {
     /// Dull: the tip of the flame, and a spark about to go out.
@@ -139,29 +118,18 @@ pub enum Heat {
 
 /// How far along a gauge's fill a cell sits — see [`Depiction::gauge`].
 ///
-/// # A hue ramp, where every other ramp in the game is a brightness ramp
+/// The one hue ramp in a game of brightness ramps: red through yellow to green,
+/// brightest in the middle, so it has no monotonic-brightness test and could not
+/// pass one. Fire, liquid and smoke depict a *substance getting more intense*;
+/// this depicts a *distance being closed*, which the eye reads as a journey
+/// rather than a temperature.
 ///
-/// Fire, liquid and smoke each climb from dim to bright, and `orbs-tui`'s tests
-/// assert exactly that. This one runs **red through yellow to green** and its
-/// middle is its brightest, so it has no monotonic-brightness test and could not
-/// pass one. That is deliberate: those ramps depict a *substance getting more
-/// intense*, and this depicts a *distance being closed*, which the eye reads as a
-/// journey rather than a temperature.
-///
-/// # Why it may be colour at all (§14)
-///
-/// **The fill length is the information and the hue is reinforcement.** A gauge
-/// with every colour stripped still says how full it is — that is what the
-/// bracket, the pipes and the reading beside it are for — so this passes the one
-/// test a treatment has to pass to be allowed on screen. In greyscale the ramp
-/// collapses and nothing is lost, which is the same bargain the spell's syntax
-/// colouring makes.
-///
-/// **Six steps.** Three would read as a traffic light changing rather than a bar
-/// warming, which is the *"two-tone flicker rather than a glow"* the fire's own
-/// ramp was widened to avoid. Six is also as many as a sixteen-colour terminal
-/// can tell apart, so both frontends draw the whole ramp rather than one drawing
-/// a coarser copy.
+/// Colour is allowed (§14) because the fill length is the information and the
+/// hue only reinforces it: the bracket, the pipes and the reading beside it
+/// still say how full a gauge is, so in greyscale nothing is lost. Six steps —
+/// three would read as a traffic light changing rather than a bar warming, and
+/// six is as many as a sixteen-colour terminal can tell apart, so both frontends
+/// draw the whole ramp.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Fill {
     /// Barely begun.
@@ -192,8 +160,7 @@ impl Fill {
 
     /// Which step `done` out of `total` sits on.
     ///
-    /// **Integer throughout**, like every other measurement the render path
-    /// makes: a deterministic sim must render deterministically, and a float here
+    /// Integer throughout, like every measurement the render path makes: a float
     /// would be one more thing replay has to trust. `total` of nought is
     /// [`Faint`](Self::Faint) — a gauge measuring nothing has not started.
     #[must_use]
@@ -201,10 +168,9 @@ impl Fill {
         if total == 0 {
             return Self::Faint;
         }
-        // **`Whole` is reserved for *actually* full**, and the five below it
-        // split what is left evenly. An even sixth at the top would paint a bar
-        // one short of its tier the same green as one that had arrived, which is
-        // the one thing this ramp must not say.
+        // `Whole` is reserved for actually full, and the five below it split
+        // what is left evenly. An even sixth at the top would paint a bar one
+        // short of its tier the same green as one that had arrived.
         if done >= total {
             return Self::Whole;
         }
@@ -220,38 +186,26 @@ impl Fill {
 
 /// The colour family a material draws its instrument's bar in.
 ///
-/// **A name, never a value.** This module forbids concrete colours and that
-/// still holds: `Green` says *which family*, and what green is on a given tube is
-/// the frontend's answer, exactly as it is for [`Role`]. **`orbs-tui` does
-/// resolve the same eight names to ANSI indices, and is right** — the prediction
-/// this comment used to make is now `orbs-tui`'s `theme::hue`, and the closed
-/// set is what makes it right: eight names, eight hues, no fallback, so a ninth
+/// A name, never a value: `Green` says *which family*, and what green is on a
+/// given tube is the frontend's answer, as it is for [`Role`]. `orbs-tui`
+/// resolving the same eight names to ANSI indices in `theme::hue` is fine
+/// because the set is closed — eight names, eight hues, no fallback, so a ninth
 /// tint breaks that build on purpose.
 ///
-/// # It carries a hint, and the hint is never the only carrier
+/// A tint hints at what is inside an instrument — sage grinds green, its husks
+/// are brown — *over* `survey` rather than instead of it. Three things keep it
+/// inside §14: `survey <instrument>` names the contents on every frontend; the
+/// panel names the instrument and its state, both of which reach the linear
+/// stream; and a tint never paints over an accent, so `Fouled` keeps its
+/// `Role::Danger` label, for the same reason [`Style::depicted`] drops a picture
+/// on an accented cell. DESIGN.md §19 records the widening and the Phase 13 item
+/// carrying the accessibility promise it moved.
 ///
-/// A tint says what is inside an instrument — sage grinds green, its husks are
-/// brown — which is a *hint over* `survey`, not a substitute for it. Three things
-/// keep it inside §14:
-///
-/// - `survey <instrument>` names the contents outright, on every frontend.
-/// - The panel names the instrument and its state, and both reach the linear
-///   stream.
-/// - A tint **never paints over an accent**. `Fouled` draws its label in
-///   `Role::Danger` and the accent wins, for the same reason
-///   [`Style::depicted`] drops a picture on an accented cell: §4 reserves the
-///   triad strictly for meaning.
-///
-/// DESIGN.md §19 records the widening this represents, and the Phase 13 item that
-/// carries the accessibility promise it moved.
-///
-/// # Eight, and closed
-///
-/// Deliberately **not** `#[non_exhaustive]`, matching [`Role`] and
-/// [`Depiction`]: a frontend that gains a tint must be made to handle it rather
-/// than silently drawing a material in the base hue. Authored data selects one
-/// *by name* and an unknown name is a load error — never a silent fallback,
-/// which is the defect `Recipe::heat` and `craft_of` each already paid for.
+/// Deliberately not `#[non_exhaustive]`, matching [`Role`] and [`Depiction`]: a
+/// frontend that gains a tint must be made to handle it rather than silently
+/// drawing a material in the base hue. Authored data selects one *by name* and
+/// an unknown name is a load error, not a silent fallback — the defect
+/// `Recipe::heat` and `craft_of` each already paid for.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Tint {
     /// Growing things: herbs, leaves, sage.
@@ -307,9 +261,8 @@ impl Tint {
 
     /// The tint a name selects, or `None` if it names nothing.
     ///
-    /// **`None` is an error for the caller to report, not a default to
-    /// substitute.** A typo that silently drew the base hue would look exactly
-    /// like a material nobody had tinted yet.
+    /// `None` is for the caller to report, not to substitute a default for: a
+    /// typo drawing the base hue looks exactly like an untinted material.
     #[must_use]
     pub fn from_name(name: &str) -> Option<Self> {
         Self::ALL
@@ -320,12 +273,12 @@ impl Tint {
 
 /// A region's colour, which is one family or two being combined.
 ///
-/// **A payload is affordable here and would not be on a [`Cell`](crate::Cell).**
-/// This lives in the `Frame`'s tint side-table, one entry per instrument bar, so
+/// A payload is affordable here and would not be on a [`Cell`](crate::Cell):
+/// this lives in the `Frame`'s tint side-table, one entry per instrument bar, so
 /// it costs a handful of words a frame rather than a byte per grid position.
-/// That is the whole reason the tint went on the `Frame` rather than into
-/// [`Style`], and it is what lets the flask express a thing the other
-/// instruments cannot: two materials on their way to becoming one.
+/// That is why the tint went on the `Frame` rather than into [`Style`], and it
+/// is what lets the flask say what the other instruments cannot — two materials
+/// on their way to becoming one.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Wash {
     /// The family this region draws in.
@@ -333,10 +286,9 @@ pub struct Wash {
     /// A second, mixed evenly with the first.
     ///
     /// `Some` only for the `flask_and_rod` mid-combination, where the growing
-    /// portion of the bar is literally the two inputs becoming one thing. The
-    /// frontend averages the two families rather than picking a third, because a
-    /// third colour appearing is a *substitution* and the picture is about a
-    /// *mixture*.
+    /// portion of the bar is the two inputs becoming one thing. The frontend
+    /// averages the two families rather than picking a third: a third colour
+    /// reads as a *substitution*, and the picture is about a *mixture*.
     pub with: Option<Tint>,
 }
 
@@ -349,10 +301,9 @@ impl Wash {
 
     /// Two families combining.
     ///
-    /// Order does not matter to the eye and must not matter here either — the
-    /// flask's two inputs are a set, and `mix(a, b)` drawing differently from
-    /// `mix(b, a)` would make the bar depend on which reagent the player happened
-    /// to put in first.
+    /// The flask's two inputs are a set, so order must not matter here either:
+    /// `mix(a, b)` drawing differently from `mix(b, a)` would make the bar
+    /// depend on which reagent the player happened to put in first.
     #[must_use]
     pub const fn mixing(first: Tint, second: Tint) -> Self {
         Self {
@@ -364,12 +315,11 @@ impl Wash {
 
 /// How hard a cell of liquid is moving.
 ///
-/// The balneum mariae's bar is a level of liquid, and **all of its motion is
-/// here** — the glyph never changes, so the value survives with the colour
-/// thrown away and there is nothing in the picture that could be mistaken for a
-/// bubble. Three steps, because the liquid is one solid glyph and the ramp is
-/// doing the work alone: two would read as a two-tone flicker, and a fourth
-/// would be a distinction nobody can see at this brightness.
+/// The balneum mariae's bar is a level of liquid and all of its motion is here:
+/// the glyph never changes, so the value survives the colour being thrown away
+/// and nothing in the picture can be mistaken for a bubble. Three steps, since
+/// one solid glyph leaves the ramp working alone — two would read as a two-tone
+/// flicker, a fourth is invisible at this brightness.
 ///
 /// Ordered still-to-moving, so `Ord` sorts the way the picture reads.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -385,10 +335,9 @@ pub enum Roil {
 
 /// How thick a smoke cell is.
 ///
-/// Two steps, for the reason [`Heat`]'s *three*-step version was argued on:
-/// smoke has `░` and `▒` and nothing else, so a longer ramp would be colour with
-/// nothing under it. That argument stopped binding `Heat` when the flame's bottom
-/// half became glyph-constant; it still binds this.
+/// Two steps, on the argument [`Heat`] was once held to: smoke has `░` and `▒`
+/// and nothing else, so a longer ramp would be colour with nothing under it.
+/// The flame's bottom half became glyph-constant and escaped it; smoke has not.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Density {
     /// A wisp.
@@ -400,29 +349,21 @@ pub enum Density {
 
 /// A depictive treatment: what the cell is a picture *of*.
 ///
-/// **Carries no meaning**, and is the only thing in this module of which that is
-/// true. Everything a [`Role`] says survives with no pixels at all, because the
-/// role travels into the linear stream beside its text; this says nothing, is
-/// spoken nowhere, and a frontend that ignored it entirely would lose no
-/// information — only a picture. See this module's header for why that is what
-/// makes it safe.
+/// The only thing in this module carrying no meaning: it is spoken nowhere, and
+/// a frontend ignoring it entirely would lose a picture and no information. See
+/// the module header for why that makes it safe.
 ///
-/// Deliberately **not** `#[non_exhaustive]`, matching [`Role`]: every consumer is
-/// in this workspace, and a frontend that gains a new depiction should be made to
-/// handle it rather than silently drawing it as ordinary text.
+/// Deliberately not `#[non_exhaustive]`, matching [`Role`]: a frontend that
+/// gains a depiction must be made to handle it rather than silently drawing it
+/// as ordinary text.
 ///
-/// # Flat, not nested, and the reason is [`Cell`](crate::Cell)'s size
-///
-/// The obvious shape is `Flame(Heat)`/`Smoke(Density)`/`Spark(Heat)`. That is a
-/// **two**-byte tagged enum, which pushes [`Style`] from 3 bytes to 5 and — past
-/// `char`'s 4-byte alignment — [`Cell`](crate::Cell) from 8 to 12. Every screen
-/// pays it: `Frame::reset` memsets the whole grid every frame, measured at
-/// +1.2 µs a frame and +28 KiB of buffer at 160×44, for a picture that occupies
-/// about thirty cells of one instrument panel.
-///
-/// Spelled out, the discriminant is one byte and `Cell` is exactly what it was.
-/// [`Depiction::flame`] and friends keep the nested shape available where it
-/// reads better.
+/// Flat rather than the obvious `Flame(Heat)`/`Smoke(Density)`/`Spark(Heat)`,
+/// because that is a two-byte tagged enum: it pushes [`Style`] from 3 bytes to 5
+/// and, past `char`'s 4-byte alignment, [`Cell`](crate::Cell) from 8 to 12.
+/// `Frame::reset` memsets the whole grid every frame, so every screen pays
+/// +1.2 µs and +28 KiB at 160×44 for a picture occupying thirty cells of one
+/// panel. Spelled out, the discriminant is one byte. [`Depiction::flame`] and
+/// friends keep the nested shape where it reads better.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Depiction {
     /// Not a picture of anything. Everything on screen but the instruments.
@@ -442,12 +383,10 @@ pub enum Depiction {
     SmokeThick,
     /// A spark at [`Heat::Ember`].
     ///
-    /// Sparks are their own variants rather than flame in the plume, because
-    /// they draw from a different glyph set — the small marks `∙ ° ·` rather
-    /// than the shade blocks — and folding them in would cost the invariant that
-    /// a flame cell is always one of two glyphs. They resolve against the
-    /// **same** ramp: a spark is a piece of the fire, so a theme that tuned one
-    /// tuned both.
+    /// Their own variants rather than flame in the plume: they draw from the
+    /// small marks `∙ ° ·` rather than the shade blocks, and folding them in
+    /// would cost the invariant that a flame cell is one of two glyphs. Same
+    /// ramp, though — a spark is a piece of the fire, so tuning one tunes both.
     SparkEmber,
     /// A spark at [`Heat::Flame`].
     SparkBody,
@@ -475,20 +414,19 @@ pub enum Depiction {
     LiquidRolling,
     /// What a run has left settled at the bottom of a vessel.
     ///
-    /// Its own step rather than the bottom of the liquid ramp: sediment is a
-    /// different *substance*, and a bath holding nothing but the last run's grit
-    /// must not read as a bath holding a little liquid.
+    /// Its own step rather than the bottom of the liquid ramp: a bath holding
+    /// nothing but the last run's grit must not read as one holding a little
+    /// liquid.
     Sediment,
 }
 
 impl Depiction {
     /// Every variant, for consumers that must handle the whole set.
     ///
-    /// **Kept honest by a test, not by memory.** `orbs`'s palette walks this to
-    /// prove every depiction resolves to a colour — and that walk used to be a
-    /// hand-written array in the consumer, which is a list that silently falls
-    /// behind the enum the moment a variant is added. `exhaustive` below fails to
-    /// *compile* if this misses one.
+    /// `orbs`'s palette walks this to prove every depiction resolves to a
+    /// colour. That walk used to be a hand-written array in the consumer, which
+    /// falls behind the enum the moment a variant is added; the test below fails
+    /// to *compile* if this misses one.
     pub const ALL: [Self; 21] = [
         Self::None,
         Self::GaugeFaint,
@@ -657,28 +595,22 @@ impl Depiction {
 
     /// Whether a material's tint must **not** be painted over this picture.
     ///
-    /// **One rule, in the crate that owns the vocabulary.** Both frontends
-    /// resolve tints and both encoded this independently — `orbs-tui` as three
-    /// `if`s, the Bevy build as an exhaustive `match` — under a comment saying
-    /// the two had *to* agree, because a tint that declines in one and
-    /// resolves in the other means the two builds disagree about what a fouled
-    /// instrument looks like. Nothing enforced it: each build's test re-derived
-    /// the same predicate locally and compared the function against a copy of
-    /// itself, so each proved only that it agreed with itself.
+    /// One rule, in the crate that owns the vocabulary. Both frontends encoded
+    /// it independently, each proving only that it agreed with itself, while a
+    /// tint declining in one and resolving in the other means the two builds
+    /// disagree about what a fouled instrument looks like.
     ///
-    /// Fire is never tinted — it is its own light source, and a green flame is
-    /// a different substance rather than a hinted one. Sediment is waste, and
+    /// Fire is never tinted — it is its own light source, and a green flame is a
+    /// different substance rather than a hinted one. Sediment is waste, and
     /// §10.1 gives waste one look so it reads as waste at a glance.
     ///
-    /// This is a fact about a *picture*, not about a phosphor or an ANSI index,
-    /// which is why it belongs here and not in either resolver. It is the same
-    /// rule [`Style::depicted`] enforces for the other channel.
+    /// A fact about a *picture* rather than a phosphor or an ANSI index, which
+    /// is why it belongs here and not in either resolver — the same rule
+    /// [`Style::depicted`] enforces for the other channel.
     #[must_use]
     pub const fn declines_tint(self) -> bool {
-        // **A gauge is not a material either.** It stands at the top of the pane
-        // rather than inside an instrument, so there is no substance whose
-        // colour it could take — and a gauge that picked up the tint of whatever
-        // was being brewed would say the fill meant something about sage.
+        // A gauge is not a material either: it stands at the top of the pane, so
+        // a tint it picked up would say the fill meant something about sage.
         self.is_flame()
             || self.is_spark()
             || self.is_smoke()
@@ -689,32 +621,25 @@ impl Depiction {
 
 /// What part of speech a cell belongs to, when it is a line of a spell.
 ///
-/// # Enrichment, and §14 is the reason it may exist at all
-///
-/// A spell is a file a player reads, and colouring its parts is a legibility aid
-/// — never information. §14 requires the file to read correctly with none of it:
+/// Enrichment, allowed by §14 because the file reads correctly with none of it:
 /// the words say what they say, `interpret` reports what the orb heard, and a
-/// screen reader hears one sentence per line. Take every colour away and nothing
-/// is lost but comfort, which is the test a treatment has to pass to be allowed
-/// on screen.
+/// screen reader hears one sentence per line. Take the colour away and only
+/// comfort is lost.
 ///
-/// **It obeys the rule a [`Wash`] and a [`Depiction`] already obey: it declines
-/// on an accent.** A line `interpret` could not read is drawn in `Role::Danger`,
-/// and the fault is the thing the eye must go to; syntax over the top of it
-/// would be decoration winning over meaning, which §4 forbids in one sentence.
+/// It declines on an accent, as a [`Wash`] and a [`Depiction`] do. A line
+/// `interpret` could not read is drawn in `Role::Danger` and is where the eye
+/// must go; syntax over the top would be decoration winning over meaning (§4).
 ///
-/// **Unlike those two it is not a field on [`Style`]**, and the reason is
-/// measured rather than stylistic: `Cell` is pinned at eight bytes because a
-/// `Frame` holds 7,040 of them and resets every frame, and a fifth byte on
-/// `Style` cost +28 KiB and ~1.2 µs a frame on *every* screen.
-/// `a_cell_stays_eight_bytes` is what said so, by failing.
+/// Unlike those two it is not a field on [`Style`], for a measured reason:
+/// `Cell` is pinned at eight bytes because a `Frame` holds 7,040 of them and
+/// resets every frame, and a fifth byte on `Style` cost +28 KiB and ~1.2 µs a
+/// frame on *every* screen — `a_cell_stays_eight_bytes` said so by failing.
 ///
-/// It reaches a frontend two ways instead, and neither costs a cell anything.
-/// The [`Intensity`] is resolved as the run is painted, so weight is already in
-/// the `Style`. The **hue** rides `Frame`'s syntax side-table — one
-/// `(Rect, Lexeme)` per run, the same shape [`Wash`] uses for an instrument bar
-/// and for the same reason: *"a payload is affordable here and would not be on a
-/// `Cell`"*. See [`Frame::lit`](crate::Frame::lit).
+/// It reaches a frontend two other ways, neither costing a cell anything. The
+/// [`Intensity`] is resolved as the run is painted, so weight is already in the
+/// `Style`; the hue rides `Frame`'s syntax side-table, one `(Rect, Lexeme)` per
+/// run, the shape [`Wash`] uses for an instrument bar and for the same reason.
+/// See [`Frame::lit`](crate::Frame::lit).
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Lexeme {
     /// Not part of a spell, or a part with nothing to say about it.
@@ -744,17 +669,15 @@ pub enum Lexeme {
     Filler,
     /// A word the question grammar fixes in place — `is`, `has`, `be`, `each`.
     ///
-    /// **Not [`Filler`](Self::Filler), and telling them apart is why this
-    /// exists.** Both are small words the player types between the interesting
-    /// ones, and they are opposites: filler is what the orb *strips*, and this is
-    /// what it reads to know which question is being asked. Drawn dim, `is` and
-    /// `has` looked exactly like the `the` beside them.
+    /// Not [`Filler`](Self::Filler), which is its opposite: filler is what the
+    /// orb *strips*, this is what it reads to know which question is being
+    /// asked. Drawn dim, `is` and `has` looked like the `the` beside them.
     Grammar,
     /// One of the three states a place reports, or a spelling of one.
     ///
     /// `idle`, `free`, `still`, `working`, `busy`, `running`, `empty`, `bare` —
-    /// a closed vocabulary that only ever appears as the answer half of an `is`.
-    /// A [`Name`](Self::Name) is something the tower *has*; this is something it
+    /// a closed vocabulary appearing only as the answer half of an `is`. A
+    /// [`Name`](Self::Name) is something the tower *has*; this is something it
     /// is doing, and a question reads better when the two do not look alike.
     State,
 }
@@ -762,32 +685,18 @@ pub enum Lexeme {
 impl Lexeme {
     /// How strongly this part of a spell is drawn.
     ///
-    /// # Weight is the first axis and still carries the reading on its own
+    /// Weight is the first axis and still carries the reading alone — a dump has
+    /// no colour, `ORBS_DUMP` is the project's primary instrument, and a
+    /// greyscale tube is a §14 accessibility case — so §19 records hue being
+    /// added beside it rather than instead of it. Bright is the scaffolding
+    /// (where a block opens, closes or calls), Normal the content, Dim the noise
+    /// the orb strips or never reads.
     ///
-    /// A spell had this and nothing else for four versions, and §19 records why
-    /// hue was added beside it rather than instead of it: **a dump has no
-    /// colour**, `ORBS_DUMP` is the project's primary instrument, and a greyscale
-    /// tube is a §14 accessibility case. So weight keeps the split it always had,
-    /// and the hue is a second, finer cut over the top:
+    /// [`Grammar`](Self::Grammar) sits at Normal, which is what it was added
+    /// for: drawn dim beside a `the` there was nothing to tell them apart by.
     ///
-    /// | | |
-    /// |---|---|
-    /// | **Bright** | the scaffolding — where a block opens, closes, or calls |
-    /// | Normal | the content: what it does, to what, and what it is doing |
-    /// | Dim | the noise: filler the orb strips, and comments it never reads |
-    ///
-    /// [`Grammar`](Self::Grammar) sits at **Normal**, which is the whole of what
-    /// it was added for. It reads like filler and is its opposite — filler is
-    /// what §6 strips, `is` and `has` are what the question turns on — and drawn
-    /// dim beside a `the` there was nothing to tell them apart by.
-    ///
-    /// # One rule, not one per frontend
-    ///
-    /// Both builds resolve this the same way and neither gets an opinion, which
-    /// is [`Depiction::declines_tint`]'s argument applied again: that one was
-    /// three `if`s in `orbs-tui` mirroring an exhaustive `match` in the Bevy
-    /// build, under a comment saying the two had to agree, with nothing making
-    /// them.
+    /// One rule, not one per frontend — [`Depiction::declines_tint`]'s argument
+    /// again.
     #[must_use]
     pub const fn weight(self) -> Intensity {
         match self {
@@ -811,10 +720,9 @@ pub struct Style {
     pub presentation: Presentation,
     /// What the cell is a picture of, if anything.
     ///
-    /// **Frontends must resolve through [`Style::depicted`], never this field.**
-    /// The accessor is where "a depiction never paints over an accent" lives, and
-    /// a frontend reading the field directly would draw a `Role::Danger` cell in
-    /// flame colours — losing the one accent the game most needs legible.
+    /// Frontends must resolve through [`Style::depicted`], never this field: the
+    /// accessor is where "a depiction never paints over an accent" lives, and
+    /// reading the field directly draws a `Role::Danger` cell in flame colours.
     pub depiction: Depiction,
 }
 
@@ -870,18 +778,17 @@ impl Style {
         Self { depiction, ..self }
     }
 
-    /// The depiction a frontend should actually draw — **the only correct way to
-    /// read [`Style::depiction`]**.
+    /// The depiction a frontend should draw — the only correct way to read
+    /// [`Style::depiction`].
     ///
     /// Yields [`Depiction::None`] on any cell carrying an accent, whatever the
-    /// field says. §4 reserves the accent triad strictly for meaning and a
-    /// depiction means nothing, so where the two collide the accent wins; the
-    /// alternative is a `Role::Danger` cell rendered in flame colours, which is
-    /// a breach drawn as decoration.
+    /// field says: §4 reserves the triad strictly for meaning and a depiction
+    /// means nothing, so the accent wins rather than a breach being drawn as
+    /// decoration.
     ///
-    /// Enforced here rather than at each call site because there is one call site
-    /// *per frontend*, in different crates, and the Bevy build getting it right
-    /// would say nothing about `orbs-tui`.
+    /// Enforced here rather than at each call site because there is one call
+    /// site *per frontend*, in different crates, and the Bevy build getting it
+    /// right would say nothing about `orbs-tui`.
     #[must_use]
     pub const fn depicted(self) -> Depiction {
         match self.role {
@@ -930,11 +837,9 @@ mod tests {
 
     #[test]
     fn every_depiction_is_in_all() {
-        // **The match is the test.** Adding a variant to `Depiction` makes this
-        // fail to compile, which is the only thing that keeps `ALL` from
-        // silently falling behind — and a stale `ALL` is worse than none,
-        // because the palette's coverage walk would go on passing while no
-        // longer covering everything.
+        // The match is the test: a new variant fails to compile here. A stale
+        // `ALL` is worse than none — the palette's coverage walk would go on
+        // passing while no longer covering everything.
         for depiction in Depiction::ALL {
             let named = match depiction {
                 Depiction::None
@@ -972,8 +877,7 @@ mod tests {
 
     #[test]
     fn a_gauge_warms_evenly_and_only_a_full_bar_reads_full() {
-        // Asserted as **properties over the whole range**, not at hand-picked
-        // indices: the claim is that the ramp warms evenly, and a spot check
+        // Properties over the whole range, not hand-picked indices: a spot check
         // would pass on a ramp that jumped somewhere nobody looked.
         let steps: Vec<Fill> = (0..=100).map(|done| Fill::of(done, 100)).collect();
 
@@ -992,9 +896,8 @@ mod tests {
         assert_eq!(steps[0], Fill::Faint);
         assert_eq!(steps[100], Fill::Whole);
 
-        // **A bar one short of full must not read as finished**, which is the
-        // one place an even split would lie: green is the arrival, not the
-        // approach.
+        // A bar one short of full must not read as finished — green is the
+        // arrival, not the approach.
         assert_eq!(Fill::of(99, 100), Fill::Near);
         assert_eq!(Fill::of(11, 12), Fill::Near);
 
@@ -1026,10 +929,8 @@ mod tests {
 
     #[test]
     fn a_depiction_never_paints_over_an_accent() {
-        // §4 reserves the accent triad strictly for meaning, and a depiction
-        // means nothing. A `Role::Danger` cell rendered in flame colours is a
-        // breach drawn as decoration — so the accessor drops the picture rather
-        // than the accent, whatever the field holds.
+        // §4 reserves the triad strictly for meaning, so the accessor drops the
+        // picture rather than the accent, whatever the field holds.
         let blaze = Depiction::flame(Heat::Blaze);
         assert_eq!(Style::NORMAL.with_depiction(blaze).depicted(), blaze);
 

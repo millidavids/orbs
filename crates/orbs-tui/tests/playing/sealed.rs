@@ -12,11 +12,10 @@ fn a_fresh_game_refuses_the_archive_and_a_clarity_opens_it() {
     if !available() {
         return;
     }
-    // **Earned the way a player earns it, at a tester's pace.** One clarity is
-    // the laboratory's first station and the archive is what it opens;
-    // `debug_spawn` skips the four runs before the still and `meditate` skips
-    // the minute the still takes, which is the difference between a scenario
-    // and an afternoon.
+    // Earned the way a player earns it, at a tester's pace. One clarity is the
+    // laboratory's first station and the archive is what it opens; `debug_spawn`
+    // skips the four runs before the still and `meditate` skips the minute the
+    // still takes — the difference between a scenario and an afternoon.
     let game = Game::sealed();
     game.does("attend archive", "the archive is not yours yet")
         .does("attend laboratory", "/tower/laboratory")
@@ -33,11 +32,10 @@ fn the_towers_own_line_opens_the_grimoire() {
     if !available() {
         return;
     }
-    // **Two clarities is sixteen, and sixteen is the tower's line rather than
-    // any room's.** The grimoire and the forge are the only two rooms that open
-    // that way, and nothing applied a Ley step's `opens` at all until a review
-    // found it — every test there was drove the mastery track, so a played gate
-    // is what this route has been missing.
+    // Two clarities is sixteen, and sixteen is the tower's line rather than any
+    // room's. The grimoire and the forge are the only rooms that open that way,
+    // and nothing applied a Ley step's `opens` until a review found it — every
+    // test there was drove the mastery track.
     let game = Game::sealed();
     game.does("attend grimoire", "the grimoire is not yours yet")
         .does("attend laboratory", "/tower/laboratory")

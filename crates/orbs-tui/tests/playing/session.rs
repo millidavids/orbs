@@ -6,9 +6,9 @@
 //! being handed the number, a spell running against a world it changed, a room
 //! that only misbehaves once something else has happened in it.
 //!
-//! **They assert on outcomes, never on stock.** A long run meets ambient
-//! sabotage — `drift` poisons a log at 1/300 per tick — so a listing is not a
-//! stable claim, while a count, a name and an experience total are.
+//! They assert on outcomes, never on stock. A long run meets ambient sabotage —
+//! `drift` poisons a log at 1/300 per tick — so a listing is not a stable claim,
+//! while a count, a name and an experience total are.
 
 use crate::play::{Game, available};
 
@@ -58,8 +58,8 @@ fn an_afternoon_in_the_stacks() {
         return;
     }
     // Open a maze, walk it by hand, then hand it to the solver and take what it
-    // wins. **`1 or more`, never an exact count**: how many laps land inside
-    // 7200 ticks depends on the wall clock, which is not a claim about the game.
+    // wins. `1 or more`, never an exact count: how many laps land inside 7200
+    // ticks depends on the wall clock, which is not a claim about the game.
     let game = Game::seeded(11);
     game.does("attend archive", "/tower/archive")
         .does("help", "the work")
@@ -74,12 +74,11 @@ fn an_afternoon_in_the_stacks() {
     // one. `threading` is on the grimoire's shelf from tick 0 in a debug build.
     game.does("debug_spell threading", "threading")
         .does("invoke threading", "threading.spell")
-        // **Three, because this maze has been walked on.** A fresh one is solved
-        // inside ~7200 ticks; this one starts from wherever the hand-walk above
-        // left the reading, with marks already laid, so the ladder has further
-        // to go. `MAX_MEDITATE` is 3600 and a larger number is silently clamped,
-        // which is how a first pass at measuring this "found" a plateau that was
-        // the cap (§19).
+        // Three, because this maze has been walked on. A fresh one solves inside
+        // ~7200 ticks; this starts from wherever the hand-walk left the reading,
+        // with marks already laid. `MAX_MEDITATE` is 3600 and a larger number is
+        // silently clamped, which is how a first measurement "found" a plateau
+        // that was the cap (§19).
         .meditates(3600)
         .meditates(3600)
         .meditates(3600)
@@ -92,10 +91,10 @@ fn an_evening_writing_a_spell() {
     if !available() {
         return;
     }
-    // **Two distillations first, and they are not decoration**: `bind` costs 16
-    // experience, concentration is derived from work completed, and
-    // `debug_spawn` deliberately earns none. There is no way to grant it, so the
-    // only route to a bound spell is to actually do the work.
+    // Two distillations first, and not decoration: `bind` costs 16 experience,
+    // concentration is derived from work completed, and `debug_spawn` earns
+    // none. There is no way to grant it, so the only route to a bound spell is
+    // to do the work.
     let game = Game::start();
     game.does("attend laboratory", "/tower/laboratory")
         .does("kindle charcoal", "fuel for 600 ticks")

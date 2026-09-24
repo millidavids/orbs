@@ -16,12 +16,10 @@
 //! see anything the others cannot — which is the property that lets the tube
 //! corrupt the first without the second, third, or fourth noticing.
 //!
-//! # Why this lives in `orbs-render`
-//!
-//! A record is the interface between `orbs-sim` and `orbs-render`, and an
-//! interface belongs to whichever side both can depend on. This crate has no
-//! dependencies at all, so `orbs-sim` can take it on for the cost of a
-//! millisecond of compile time; the reverse would drag the world model, parser,
+//! It lives in `orbs-render` because a record is the interface between the two
+//! crates, and an interface belongs to whichever side both can depend on. This
+//! crate has no dependencies at all, so `orbs-sim` can take it on for a
+//! millisecond of compile time; the reverse would drag the world model, parser
 //! and script engine into the crate whose tests must stay pure presentation.
 //!
 //! It also already owns the vocabulary a record has to carry —

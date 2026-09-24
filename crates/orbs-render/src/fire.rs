@@ -1,65 +1,36 @@
 //! What a burning meter looks like.
 //!
 //! The athanor is the one instrument that is literally a fire (DESIGN.md §10.1),
-//! and its meter reports fuel **remaining** where every other instrument reports
-//! ticks elapsed — see `orbs_sim::tower::Meter`, which this crate deliberately
-//! does not depend on. So its bar drains, and
-//! drawing it as fire gets the right story for free: the flame shrinks and the
-//! smoke above it grows.
+//! and its meter reports fuel *remaining* where every other reports ticks
+//! elapsed. So its bar drains, and drawing it as fire gets the story for free:
+//! the flame shrinks and the smoke above it grows, hottest at the base because a
+//! fuel bed glows where the fuel is. The bottom half is solid `█` and carries
+//! its motion in hue; `▓` begins about halfway up, where a real flame breaks up.
+//! Sparks come off the top and cool as they rise.
 //!
-//! Nothing here knows what a second is. A frontend owns the clock and passes a
-//! phase, exactly as it does for [`tween`] — this decides only what
-//! a cell *is*, never when.
+//! Nothing here knows what a second is — a frontend owns the clock and passes a
+//! phase, as for [`tween`] — and an integer hash of position and tick, never an
+//! RNG, keeps `ORBS_DUMP` reproducible and this out of `orbs-sim`'s streams.
 //!
-//! # The shape of a fire
+//! Three properties hold the rest of it together.
 //!
-//! Hottest at the **base**, mellowing toward the tip — a fuel bed glows where the
-//! fuel is, not where it has already burned. So heat falls with height, and the
-//! bottom half of the flame is **solid `█` throughout**, carrying every bit of
-//! its motion in hue. `▓` only begins about halfway up and grows commoner toward
-//! the tip, which is where a real flame breaks up. Sparks come off the top and
-//! rise through the plume, cooling as they go.
+//! No cell changes faster than [`crate::FLIP_HZ`], by construction. 6 Hz is
+//! inside the 3–30 Hz photosensitive band by a recorded exemption (§19): the
+//! band is for flashes over a substantial part of the visual field, and this is
+//! a bar two cells wide. The two mitigations below are what make that
+//! defensible; remove one and the rate comes down with it.
 //!
-//! # Four properties this module is built to hold
+//! Nothing turns over together, and each step is small — every cell's tick
+//! boundaries are offset by a fraction of a tick (the `stagger` below), and the
+//! ramp is compressed enough that a flip is a hue step rather than an on/off
+//! flash. Whole-field modulation is the hazard, not motion.
 //!
-//! **No cell changes faster than [`crate::FLIP_HZ`], by construction.** A cell's
-//! appearance is a function of its **tick index**, and the tick index advances
-//! [`crate::FLIP_HZ`] times a second and no faster, whatever the noise does.
-//!
-//! **[`crate::FLIP_HZ`] is 6 Hz, and that is inside the photosensitive band.** §14 and
-//! the CRT port both fixed 3–30 Hz as the band to stay out of, and this is a
-//! deliberate, recorded departure from it — DESIGN.md §19. The short version:
-//! the band exists for flashes covering a substantial part of the visual field
-//! (W3C puts the threshold at a quarter of it), and this element is a bar two
-//! cells wide. The blanket floor was calibrated on the *whole tube* flickering at
-//! 19.1 Hz, which is three orders of magnitude more area. The mitigations below
-//! are what make the exemption defensible rather than merely convenient — if any
-//! of them is removed, the rate has to come back down with it.
-//!
-//! **Nothing turns over together, and each step is small.** Every cell's tick
-//! boundaries are offset by a fixed fraction of a tick (the `stagger` below), so a change
-//! is always a few cells out of thirty rather than the strip as a whole; and the
-//! ramp the base shifts along is deliberately compressed, so a flip is a hue step
-//! rather than an on/off flash. Whole-field modulation is the hazard, not motion.
-//!
-//! **The fill boundary survives with no colour at all.** The cell ahead of the
-//! flame front is **always blank** — that pin is absolute, and sparks are barred
-//! from it. Behind the front is `█` or `▓`, so the join is at worst 75% against
-//! nothing at all.
-//!
-//! That is the strongest join the alphabet can draw, and it arrived by a route
-//! worth recording: the empty track *was* a solid field of `░`, and giving that
-//! glyph up to the smoke — where it is now the last of a puff pittering out —
-//! left the background empty as a side effect. The rule had been relaxed once
-//! already (from `█`/`░` to `█`-or-`▓` against `░`, a 3:1 coverage step, to let
-//! `▓` reach the flame tip); this bought back more than that cost. The join that
-//! was never allowed is `▓` against `▒` — one dither step, which the CRT's
-//! phosphor bloom erases, and the meter's value is read off this join.
-//!
-//! **It is deterministic.** The noise is an integer hash of position and tick,
-//! never an RNG, so the same phase draws the same fire — which is what keeps
-//! `ORBS_DUMP` reproducible and keeps this out of `orbs-sim`'s seeded streams
-//! altogether.
+//! The fill boundary survives with no colour at all. The cell ahead of the flame
+//! front is always blank — an absolute pin, sparks included — and behind it is
+//! `█` or `▓`, so the join is at worst 75% against nothing. Giving `░` up to the
+//! smoke emptied the track, which is what bought the one relaxation this rule has
+//! had, `▓` reaching the flame tip. Never allowed is `▓` against `▒`: one dither
+//! step, which the CRT's bloom erases, and the value is read off this join.
 
 use crate::pulse::{
     PRIME_SPARK, TICKS_PER_CYCLE, drift_noise, hash, noise, rising, shade, shade2, shared_tick,
@@ -76,30 +47,24 @@ const SPARK_ODDS: u32 = 17;
 
 /// How many cells a puff of smoke rises before it loses one step of body.
 ///
-/// Sets how far the plume reaches: a puff starts with `0..=7` of body and goes
-/// out when it runs out, so the last of it is gone around `8 × THIN_EVERY` cells
-/// up. At three that is roughly twenty — longer than any bar the panel draws, so
-/// the plume fades because it is fading rather than because it hit a ceiling.
+/// At three the last of a `0..=7` puff is gone around twenty cells up — longer
+/// than any bar the panel draws, so the plume fades because it is fading rather
+/// than because it hit a ceiling.
 const THIN_EVERY: u16 = 3;
 
-/// How much body a puff needs to show at all on a **cold** hearth.
+/// How much body a puff needs to show at all on a *cold* hearth.
 ///
-/// Against a `0..=7` vigour, and rising a step per cell, so the wisp tapers off
-/// over about three: 37% of the bottom cell, then 25%, then 12%, then nothing.
-/// High on purpose — this is a hearth that has gone out, and anything more reads
-/// as a fire someone forgot to draw.
+/// Against a `0..=7` vigour rising a step per cell, so the wisp tapers off over
+/// about three. High on purpose: anything more reads as a fire someone forgot
+/// to draw.
 const COLD_FLOOR: u16 = 5;
 
 /// How much hotter the flare runs at the instant of ignition, in ramp steps.
 ///
 /// Added to every cell's warmth and decayed to nothing, so `kindle` lands as a
-/// fire catching rather than as a bar changing value.
-///
-/// **It pushes the ramp up; it does not flatten it.** At four, the bottom half
-/// saturates at `Core` while the tip only reaches `Blaze` — the flame stays a
-/// flame with a cooler tip, and gets brighter. Six would take every cell to
-/// `Core` and the whole bar would go one flat colour for half a second, which
-/// reads as a UI flash rather than as something catching light.
+/// fire catching rather than as a bar changing value. Four pushes the ramp up
+/// without flattening it; six would take every cell to `Core` and the bar would
+/// go one flat colour, which reads as a UI flash.
 const FLARE_BOOST: u16 = 4;
 
 /// How much likelier a spark is while the flare lasts.
@@ -110,10 +75,8 @@ const FLARE_SPARKS: u32 = 4;
 
 /// What the hearth is doing, beyond how full it is.
 ///
-/// A struct rather than three more arguments because these travel together
-/// everywhere and always will: they are one description of a fire's state, and
-/// [`Painter::fire_meter`](crate::Painter::fire_meter) would otherwise be at six
-/// parameters before the next thing anyone wants to add to a flame.
+/// A struct rather than three more arguments: they travel together, and
+/// [`Painter::fire_meter`](crate::Painter::fire_meter) would be at six.
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub struct Burn {
     /// Elapsed seconds from the frontend's own clock. Nothing here knows what a
@@ -122,38 +85,28 @@ pub struct Burn {
     /// How recently it was lit: `1.0` at the instant of ignition, decaying to
     /// `0.0`.
     ///
-    /// Drives the flare: the flame **grows up out of the base** as this decays,
-    /// burning hard where it has just caught and settling behind itself, while
-    /// the plume throws a shower of sparks. Fuel above the front is drawn as
-    /// nothing — present, but not alight.
-    ///
-    /// So the bar animates *to* its value over the tick after `kindle` rather
-    /// than snapping to it — **the one place the fire shows less than its
-    /// value**, and the same trade
+    /// Drives the flare: the flame grows up out of the base as this decays,
+    /// burning hard where it has just caught, while the plume throws sparks.
+    /// Fuel above the front is present but not alight, so the bar animates *to*
+    /// its value — the same trade
     /// [`RecordView::revealing`](crate::RecordView::revealing) makes for
-    /// arriving text and
-    /// [`ScreenLayout::transition`](crate::ScreenLayout::transition) makes for
-    /// arriving panes. §14 is unharmed: the linear stream never sees the
-    /// animation. DESIGN.md §19 records why it is worth paying.
+    /// arriving text. The linear stream never sees it (§14, §19).
     pub flare: f32,
     /// Whether there is fire at all.
     ///
-    /// `false` is a **cold hearth**, not an empty bar: no flame at any fill, no
-    /// sparks, and a wisp of smoke off the bottom. The athanor reports no meter
-    /// once it is out (`State::Cold`), so this is the only thing distinguishing
-    /// "gone out" from "burning, with nothing left".
+    /// `false` is a cold hearth, not an empty bar: no flame, no sparks, a wisp
+    /// of smoke off the bottom. The athanor reports no meter once it is out
+    /// (`State::Cold`), so this is the only thing telling *gone out* from
+    /// *burning, with nothing left*.
     pub lit: bool,
 }
 
 /// One cell of a burning meter.
 ///
-/// `step` counts from the end the bar fills from — leftward for a horizontal
-/// meter, upward for a vertical one — so both orientations share this and cannot
-/// drift apart. `filled` is what [`filled_of`](crate::paint) computed, so the
-/// fire and the plain meter always agree about where the boundary is.
-///
-/// `guttering` is the exception to that agreement and the only one: a fire with
-/// fuel left but not enough to fill a cell. See [`gutter`].
+/// `step` counts from the end the bar fills from, so both orientations share
+/// this and cannot drift apart. `filled` is [`filled_of`](crate::paint)'s, so
+/// the fire and the plain meter agree about the boundary. `guttering` is the
+/// exception: fuel left, but not enough to fill a cell. See [`gutter`].
 pub(crate) fn cell(
     lane: u16,
     step: u16,
@@ -165,15 +118,10 @@ pub(crate) fn cell(
         return cold(lane, step, burn.phase);
     }
 
-    // **The flame is only as tall as the fire has caught.** While the flare
-    // climbs, the fuel above the front is there but not alight, and it is drawn
-    // as *nothing*. Drawing it as dark flame instead — which is what "present
-    // but unlit" literally is — filled the whole bar with dithered orange the
-    // instant `kindle` landed, and the flare then read as a highlight sweeping
-    // over an already-full bar rather than as a fire taking hold.
-    //
-    // At rest `caught` is `filled`, so every path below is the ordinary one and
-    // nothing needs to know a flare exists.
+    // The flame is only as tall as the fire has caught: fuel above the front is
+    // there but not alight, and drawn as *nothing*. Drawn as dark flame instead,
+    // `kindle` filled the bar with dithered orange and the flare read as a
+    // highlight sweeping it. At rest `caught` is `filled`.
     let front = caught(filled, burn.flare);
 
     if step < front {
@@ -181,12 +129,9 @@ pub(crate) fn cell(
     } else if step == 0 && guttering {
         gutter(lane, burn.phase)
     } else {
-        // **A guttering ember stands in for a lit cell.** Without this the plume
-        // starts at `ahead == 0` on the ember's own cell, the pinned blank never
-        // gets drawn, and the ember ends up directly against `▒` — the one join
-        // forbidden everywhere else in this module. There is no *value* to
-        // misread there, since nothing is filled, but a `▓` touching a `▒` is
-        // muddy wherever it happens.
+        // A guttering ember stands in for a lit cell; without this the pinned
+        // blank is never drawn and the ember sits against `▒`, the one join
+        // forbidden everywhere else here.
         let base = if guttering { 1 } else { front };
         plume(lane, step, step.saturating_sub(base), front, burn)
     }
@@ -194,15 +139,10 @@ pub(crate) fn cell(
 
 /// The last of a fire, when the bar has rounded its fuel away.
 ///
-/// **The one place the fire deliberately shows more than the plain meter would.**
-/// A hearth with a few ticks left divides to zero cells, and a bar that draws
-/// nothing says *out* — which is wrong, and wrong in the direction that matters,
-/// because "still lit" and "cold" are the two states `kindle` distinguishes and
-/// the whole panel exists to save the player from having to touch a thing to
-/// learn its state.
-///
-/// Always `▓` and never `█`: a guttering ember is not a solid cell of fire, and
-/// keeping the glyph distinct is what stops this reading as one cell of fill.
+/// The one place the fire deliberately shows more than the plain meter: a hearth
+/// with a few ticks left divides to zero cells, and a bar drawing nothing says
+/// *out* — the state `kindle` turns on. Always `▓`, never `█`, or it reads as
+/// one cell of fill.
 fn gutter(lane: u16, phase: f32) -> (char, Depiction) {
     let noise = noise(lane, 0, tick_of(phase, lane, 0));
     let heat = if shade(noise) >= 3 {
@@ -215,25 +155,19 @@ fn gutter(lane: u16, phase: f32) -> (char, Depiction) {
 
 /// A hearth that has gone out: a wisp of smoke off the bottom and nothing else.
 ///
-/// Tapered over about three cells rather than cut off at one, so it reads as
-/// smoke thinning rather than as a row of dots. Everything above is clear — a
-/// cold athanor is the one instrument that draws no track at all, which is what
-/// makes it obviously different from a banked one at a glance.
+/// Tapered over about three cells so it reads as smoke thinning rather than a
+/// row of dots. Everything above is clear — the one instrument that draws no
+/// track at all, which is what tells it from a banked one at a glance.
 fn cold(lane: u16, step: u16, phase: f32) -> (char, Depiction) {
-    // **The wisp travels, so its coordinate has to survive the cycle wrap.**
-    // See [`rising`].
+    // The wisp travels, so its coordinate has to survive the cycle wrap. See
+    // [`rising`].
     let drift = rising(step, shared_tick(phase), TICKS_PER_CYCLE);
     let vigour = drift_noise(lane, drift) >> 5;
-    // **Never nothing at the very bottom.** `vigour` clears `COLD_FLOOR` about
-    // three times in eight, so all four cells of a two-lane wisp could miss at
-    // once — and with motion off the phase is pinned at zero, which freezes that
-    // blank forever. A cold hearth drawing nothing at all is indistinguishable
-    // from a row the panel forgot, which is precisely the invisible-state defect
-    // §10.1's panel exists to remove.
-    //
-    // The third time this lesson has been paid for: `caught` floors the flame at
-    // one cell so ignition is never a blank frame, and the pour floors the block
-    // at one for the same reason. A picture that can vanish is not a picture.
+    // Never nothing at the very bottom: `vigour` clears `COLD_FLOOR` about three
+    // times in eight, so a narrow wisp could miss every cell — and with motion
+    // off the phase is pinned at zero, freezing that blank. A hearth drawing
+    // nothing is the invisible-state defect §10.1's panel exists to remove, and
+    // a picture that can vanish is not a picture.
     if step == 0 && lane == 0 {
         return ('░', Depiction::smoke(Density::Thin));
     }
@@ -246,32 +180,21 @@ fn cold(lane: u16, step: u16, phase: f32) -> (char, Depiction) {
 
 /// A cell of the fire itself, `step` cells up from the base of `filled`.
 ///
-/// **Hottest at the base.** An earlier version put the brightest cell at the
-/// flame *front* on the reasoning that the front is where fuel is being consumed.
-/// It read as a bar with a bright edge rather than as a fire: what an eye expects
-/// is a glowing bed that mellows into its tip.
+/// Hottest at the base: the brightest cell at the flame *front* read as a bar
+/// with a bright edge, where an eye expects a glowing bed mellowing into a tip.
 fn flame(lane: u16, step: u16, height: u16, burn: Burn) -> (char, Depiction) {
     let noise = noise(lane, step, tick_of(burn.phase, lane, step));
 
-    // How far up the flame, in quarters. The whole shape is expressed against
-    // this rather than against a cell count, so a two-cell fire and a
-    // twenty-cell one have the same proportions — the athanor's bar spans both
-    // within one burn, and a flare spans both within one second.
-    //
-    // `height` is how tall the flame *is*, which during a flare is how far it
-    // has caught rather than how much fuel there is. So the gradient stretches
-    // as the fire climbs instead of the fire filling in a pre-drawn gradient.
+    // How far up the flame, in quarters rather than cells, so a two-cell fire
+    // and a twenty-cell one have the same proportions. `height` is how far the
+    // flame has *caught*, so the gradient stretches as the fire climbs rather
+    // than the fire filling in a pre-drawn gradient.
     let up = quarters(step, height);
 
-    // Warm at the bottom, cool at the top, with the noise shifting each cell
-    // through the ramp rather than settling it on one step. `up * 2` against a
-    // noise of `0..=3` is what makes every height shift between two colours
-    // instead of holding one: the base moves between `Blaze` and `Core`, the
-    // tip between `Ember` and `Flame`.
-    //
-    // **The flare adds heat on top of the shape.** The fire being *shorter* is
-    // what makes it climb (see `cell`); this is what makes the newly-caught part
-    // of it burn hard and settle. Both fade together over one tick.
+    // Warm at the bottom, cool at the top, the noise shifting each cell through
+    // the ramp rather than settling it on one step. The flare adds heat on top
+    // of the shape: being *shorter* is what makes the fire climb, this is what
+    // makes the newly-caught part burn hard and settle.
     let warmth = (3 - up) * 2 + shade(noise) + tween::mix(0, FLARE_BOOST, burn.flare);
     let heat = match warmth {
         0 | 1 => Heat::Ember,
@@ -280,10 +203,9 @@ fn flame(lane: u16, step: u16, height: u16, burn: Burn) -> (char, Depiction) {
         _ => Heat::Core,
     };
 
-    // **Solid for the bottom half, breaking up toward the tip.** `up >= 2` is
-    // the halfway line; above it `▓` grows commoner, so the flame frays where a
-    // real one does. A second draw from the same noise rather than a second
-    // hash — cooler cells being the broken ones is the correlation you want.
+    // Solid for the bottom half, breaking up toward the tip. A second draw from
+    // the same noise rather than a second hash — cooler cells being the broken
+    // ones is the correlation you want.
     let glyph = if up >= 2 && shade2(noise) + up * 2 >= 7 {
         '▓'
     } else {
@@ -295,29 +217,18 @@ fn flame(lane: u16, step: u16, height: u16, burn: Burn) -> (char, Depiction) {
 /// How far up the fuel the fire has caught, in cells — the flame's real height.
 ///
 /// Climbs from the base to `filled` as `flare` decays, so `kindle` is a fire
-/// taking hold rather than a full bar changing colour. Everything above it is
-/// drawn as nothing: fuel that is present but has not lit.
+/// taking hold rather than a full bar changing colour; everything above is
+/// present but not lit. The one place the fire shows less than its value, and
+/// only for the tick after ignition — the trade
+/// [`Reveal`](crate::RecordView::revealing) makes for arriving text, and §14 is
+/// unharmed because the linear stream never sees it.
 ///
-/// **This is the one place the fire meter shows less than its value**, and only
-/// for the single tick after ignition. It is the same trade
-/// [`Reveal`](crate::RecordView::revealing) makes for arriving text and
-/// [`ScreenLayout::transition`](crate::ScreenLayout::transition) makes for
-/// arriving panes: a value animating *to* the truth reads better than one
-/// teleporting to it, and the linear stream — which is what §14 actually
-/// protects — never sees the animation at all.
-///
-/// **At least one cell, always.** At the exact instant of ignition the front
-/// would otherwise be at zero and the bar would be empty for a frame, right when
-/// the player is looking for something to have happened.
-///
-/// At rest (`flare == 0`) this is `filled`, so every path that uses it is the
-/// ordinary one and nothing needs to special-case a hearth that is simply
-/// burning.
+/// At least one cell, always, or ignition is a blank frame right when the player
+/// is looking for something to have happened. At rest (`flare == 0`) this is
+/// `filled`, so nothing special-cases a hearth that is simply burning.
 fn caught(filled: u16, flare: f32) -> u16 {
-    // **No fuel, no flame, floor or no floor.** The `max(1)` below exists so a
-    // fire always shows *something* the instant it is lit; applied to an empty
-    // bar it invents a cell of fire out of nothing, which put a flame on a spent
-    // athanor and on every zero-valued reading the plain meter draws empty.
+    // No fuel, no flame, floor or no floor: the `max(1)` below put a flame on a
+    // spent athanor and on every zero-valued reading the plain meter draws empty.
     if filled == 0 {
         return 0;
     }
@@ -337,22 +248,18 @@ fn quarters(step: u16, total: u16) -> u16 {
 
 /// A cell above the fire: a spark if one is passing, otherwise smoke.
 ///
-/// `front` is the flame's real height — [`caught`], not `filled` — because that
-/// is what the call site passes and what the spark test below means. The two
-/// agree on the only question asked of them (`caught` is zero exactly when
-/// `filled` is), so the old name was harmless and wrong, which is the kind that
-/// survives longest.
+/// `front` is the flame's real height — [`caught`], not `filled` — which is what
+/// the call site passes and what the spark test means.
 fn plume(lane: u16, step: u16, ahead: u16, front: u16, burn: Burn) -> (char, Depiction) {
-    // **The pinned boundary, and the one cell a spark may not occupy.** Empty,
-    // which reads as the clear hot air a real fire has above it before the smoke
-    // gathers — and which is also the strongest join the alphabet can draw. The
-    // meter's value is read off it.
+    // The pinned boundary, and the one cell a spark may not occupy. Empty reads
+    // as the clear hot air above a fire, and is the strongest join the alphabet
+    // can draw; the meter's value is read off it.
     if ahead == 0 {
         return (' ', Depiction::None);
     }
-    // **No fire, no sparks.** A spent athanor is still `Burning` for the tick
-    // before it goes out, and its bar is all plume; sparks coming off nothing
-    // would say there is fuel left when the bar says there is none.
+    // No fire, no sparks. A spent athanor is still `Burning` for the tick before
+    // it goes out and its bar is all plume; sparks coming off nothing would say
+    // there is fuel left when the bar says there is none.
     if front > 0
         && let Some(spark) = spark(lane, step, ahead, burn)
     {
@@ -363,22 +270,19 @@ fn plume(lane: u16, step: u16, ahead: u16, front: u16, burn: Burn) -> (char, Dep
 
 /// A scrap of fire riding the plume, if one is at this cell.
 ///
-/// **A spark keeps a fixed identity for its whole life.** Its `drift` coordinate
-/// is constant while it travels — `step` and the tick rise together — so one hash
-/// settles both whether it exists and how far it gets, and it simply moves. That
-/// is why there is no stationary cutoff here: a lifetime read off the *travelling*
-/// coordinate rides along with the spark, where one read off `ahead` would be a
-/// fixed ceiling that every spark died at and would read as a hard edge.
+/// A spark keeps a fixed identity for life: its `drift` coordinate is constant
+/// while it travels, so one hash settles whether it exists and how far it gets.
+/// Hence no stationary cutoff — a lifetime read off `ahead` would be a ceiling
+/// every spark died at, which reads as a hard edge.
 fn spark(lane: u16, step: u16, ahead: u16, burn: Burn) -> Option<(char, Depiction)> {
     // Wrapped through [`rising`], or every spark in flight is replaced by a
     // different one at the cycle boundary — see there.
     let drift = rising(step, shared_tick(burn.phase), TICKS_PER_CYCLE);
     let seed = hash(u32::from(lane).wrapping_mul(PRIME_SPARK) ^ u32::from(drift));
 
-    // A fire catching throws a shower, and then settles to the odd one. Stepped
+    // A fire catching throws a shower, then settles to the odd one. Stepped
     // rather than interpolated: the odds are an integer modulus, and easing one
-    // would mean sparks blinking in and out as the divisor crossed each value
-    // instead of a burst that thins.
+    // would blink sparks in and out as the divisor crossed each value.
     let odds = if burn.flare > 0.25 {
         SPARK_ODDS / FLARE_SPARKS
     } else {
@@ -406,41 +310,29 @@ fn spark(lane: u16, step: u16, ahead: u16, burn: Burn) -> Option<(char, Depictio
 
 /// A cell of the smoke itself, `ahead` cells past the front.
 fn smoke(lane: u16, step: u16, ahead: u16, phase: f32) -> (char, Depiction) {
-    // **The plume drifts, and it needs a shared clock to do it.** Subtracting
-    // the tick from the position translates the pattern one cell per tick, away
-    // from the fire — upward in a vertical meter, rightward in a horizontal one.
+    // The plume drifts: subtracting the tick from the position translates the
+    // pattern one cell per tick, away from the fire.
     //
-    // This is the one place `stagger` is deliberately *not* used, and the reason
-    // is that the two properties genuinely conflict. A translation only reads as
-    // one if neighbouring cells step together; staggered, cell `s+1` is half the
-    // time a tick behind cell `s`, the shift never lines up, and measurement
-    // says so — the drift washed out to 78504 aligned against 78640 in place,
-    // which is a coin toss. The term was doing nothing but costing a hash.
+    // The one place `stagger` is deliberately *not* used — a translation only
+    // reads as one if neighbouring cells step together, and staggered it
+    // measured as a coin toss. Safety survives: what moves together here is a
+    // dim glyph on the dim half of the bar, and the flame keeps its stagger,
+    // which is the half where a synchronised flicker would be bright enough to
+    // matter.
     //
-    // Safety survives the exchange because [`crate::FLIP_HZ`] is unaffected — a smoke
-    // cell still changes at the capped rate and no faster — and because what
-    // moves together here is a dim glyph on the dim half of the bar. The
-    // **flame** keeps its stagger, and that is the half where a synchronised
-    // flicker would be bright enough to matter.
-    //
-    // **And it wraps through [`rising`] rather than by plain subtraction**,
-    // because the cycle boundary is the one place a *correlated* sequence of
-    // ticks can tear — measured at 24 of 32 cells translating across the wrap
-    // against 31 of 32 elsewhere. See `pulse::rising`.
+    // It wraps through [`rising`] rather than by plain subtraction: the cycle
+    // boundary is the one place a *correlated* sequence of ticks can tear. See
+    // `pulse::rising`.
     let drift = rising(step, shared_tick(phase), TICKS_PER_CYCLE);
 
-    // **The pattern is a function of `drift` and nothing else**, which is what
-    // makes it translate rather than merely churn. Passing the tick to the hash
-    // as well — the obvious thing, since every other sample here is
-    // position-and-time — re-randomises the whole plume every tick and the
-    // motion vanishes. It measured as a coin toss.
+    // A function of `drift` and nothing else, which is what makes it translate
+    // rather than churn: passing the tick to the hash as well re-randomises the
+    // whole plume every tick, and measured as a coin toss.
     let vigour = u16::try_from(drift_noise(lane, drift) >> 5).unwrap_or(0);
 
-    // **`ahead` is both the cell's height and the puff's age, and they are the
-    // same number.** A puff at height `h` left the fire `h` ticks ago — it rose
-    // one cell per tick to get there — so thinning it by `ahead` is not the
-    // stationary threshold that killed an earlier version of the drift. The puff
-    // ages *because* it travels, which is what fading is.
+    // `ahead` is both the cell's height and the puff's age: a puff at height `h`
+    // left the fire `h` ticks ago. So thinning by it is not the stationary
+    // threshold that killed an earlier drift — the puff ages *because* it moves.
     match vigour.saturating_sub(ahead / THIN_EVERY) {
         // Gone. Most of a plume is air, and this is what buys the top of the bar
         // back: the empty track used to be a solid wall of `░`.
@@ -476,16 +368,11 @@ mod tests {
 
     #[test]
     fn no_cell_outruns_the_declared_flip_rate() {
-        // **The rate is inside the photosensitive band by exemption, so this
-        // test changed shape rather than changed number.** It used to assert
-        // `FLIP_HZ < 3.0`; the exemption (DESIGN.md §19) rests on the element
-        // being a two-cell bar rather than the tube, so what has to be held now
-        // is that the rate is *bounded and known* — the quantiser is the only
-        // thing standing between 6 Hz and whatever the noise felt like doing.
-        //
-        // The ceiling is 30 Hz because that is the far edge of the band: past it
-        // the hazard argument changes entirely and this file should not be where
-        // that gets decided quietly.
+        // The rate is inside the photosensitive band by exemption (§19), so what
+        // has to hold is that it is *bounded and known* — the quantiser is all
+        // that stands between 6 Hz and whatever the noise felt like doing. The
+        // ceiling stays short of 30 Hz, past which the hazard argument changes
+        // entirely and this file is not where that gets decided quietly.
         const { assert!(FLIP_HZ <= 8.0, "past what the §19 exemption argued for") }
         const { assert!(FLIP_HZ > 0.5, "the flip rate is slow enough to look dead") }
 
@@ -511,21 +398,14 @@ mod tests {
 
     #[test]
     fn cells_do_not_all_turn_over_together() {
-        // Whole-field modulation is the hazard the rate cap alone does not
-        // cover: a strip where every cell changed on the same instant would be
-        // a flash however slow. `stagger` is what prevents it, so this fails if
-        // it is ever removed as "an offset that makes no difference".
+        // Whole-field modulation is the hazard the rate cap does not cover: a
+        // strip where every cell changed at once would be a flash however slow.
+        // `stagger` prevents it, so this fails if it is ever removed as "an
+        // offset that makes no difference".
         //
-        // **Measured on the flame, not on the whole bar.** The plume is
-        // deliberately *un*staggered — a translation only reads as one if
-        // neighbouring cells step together, and `smoke` documents the exchange
-        // at length — so half the bar turning over at once is the design rather
-        // than the defect, and the exchange is safe because what moves together
-        // there is a dim glyph on the dim half.
-        //
-        // The old version swept all twenty cells against a threshold of ten and
-        // passed with nine. That is not a margin; it is a coin landing the right
-        // way, and re-keying the plume's drift was enough to tip it.
+        // Measured on the flame, not the whole bar: the plume is deliberately
+        // *un*staggered (see `smoke`), so half the bar turning over at once is
+        // the design rather than the defect.
         let (steps, filled) = (20u16, 10u16);
         let mut busiest = 0;
         let mut previous = bar(steps, filled, 0.0);
@@ -554,14 +434,8 @@ mod tests {
     fn the_fill_boundary_survives_in_greyscale() {
         // §14: no meaning carried by colour alone. The meter's *value* is read
         // off this one join, so it has to be findable with the hue thrown away,
-        // at every phase and every fill.
-        //
-        // **The lit side is `█` or `▓`; the dark side is blank.** The lit side
-        // was pinned to `█` alone until `▓` was allowed to reach the flame tip —
-        // a 3:1 coverage step where the plain meter draws 4:1. Handing `░` over
-        // to the smoke then emptied the track and made the join 75%-or-100%
-        // against nothing, which is stronger than either. The dark side is
-        // pinned absolutely, sparks included.
+        // at every phase and every fill. The lit side is `█` or `▓`; the dark
+        // side is blank, pinned absolutely and sparks included.
         for phase in sweep() {
             for filled in 1..20u16 {
                 let cells = bar(20, filled, phase);
@@ -592,16 +466,11 @@ mod tests {
 
     #[test]
     fn a_cold_hearth_is_never_a_blank_column() {
-        // **The failure this exists for.** `vigour` clears `COLD_FLOOR` about
-        // three times in eight, and the wisp is only three cells tall, so every
-        // draw in a narrow bar could miss at once — and reduce-motion pins the
-        // phase at zero, which freezes that blank for the session. A cold
-        // hearth drawing nothing is indistinguishable from a row the panel
-        // forgot, and "you cannot tell what state a thing is in without touching
-        // it" is the complaint §10.1's panel was built to answer.
-        //
-        // Swept over the phase because the wisp travels: a version floored only
-        // at one phase would leave the others able to vanish.
+        // The failure this exists for: every draw in a narrow bar could miss at
+        // once, and reduce-motion pins the phase at zero, freezing that blank
+        // for the session — the invisible-state complaint §10.1's panel answers.
+        // Swept over the phase because the wisp travels: flooring one phase
+        // would leave the rest able to vanish.
         let out = |phase: f32| Burn {
             phase,
             flare: 0.0,
@@ -620,10 +489,9 @@ mod tests {
 
     #[test]
     fn a_cold_hearth_smokes_at_the_bottom_and_nowhere_else() {
-        // What `State::Cold` draws instead of a bar. It has to be *visible* —
-        // this is the only thing telling a player the athanor is out rather
-        // than that the panel forgot to draw it — and it has to be slight, or a
-        // dead hearth reads as a lit one.
+        // What `State::Cold` draws instead of a bar: visible, or the panel looks
+        // like it forgot the row, and slight, or a dead hearth reads as a lit
+        // one.
         let (mut bottom, mut above) = (0u32, 0u32);
         for phase in sweep() {
             for step in 0..16u16 {
@@ -654,10 +522,9 @@ mod tests {
 
     #[test]
     fn a_guttering_ember_keeps_its_clear_air() {
-        // A hearth with fuel the bar rounded away shows one faint ember, and the
-        // cell above it is the same pinned blank a real flame front gets. Without
-        // it the ember sits against `▒` — `▓` touching `▒` is the one join this
-        // module forbids everywhere else.
+        // A hearth with fuel the bar rounded away shows one faint ember, with
+        // the same pinned blank above it a real flame front gets. Without it the
+        // ember sits against `▒`, the one join this module forbids.
         for phase in sweep() {
             let (glyph, depiction) = cell(0, 0, 0, true, lit(phase));
             assert_eq!(glyph, '▓', "the ember was not a guttering one");
@@ -681,9 +548,8 @@ mod tests {
     #[test]
     fn a_catching_fire_burns_harder_than_a_settled_one() {
         // The other half of the flare, and the half a glyph dump cannot show:
-        // what has *just* caught burns at the top of the ramp and settles behind
-        // itself. Growth alone would give a fire that grew at its resting
-        // brightness, which reads as a bar filling rather than as fuel taking.
+        // growth alone gives a fire growing at its resting brightness, which
+        // reads as a bar filling rather than as fuel taking.
         let filled = 16u16;
         let hottest = |flare: f32| {
             let burn = Burn {
@@ -725,11 +591,9 @@ mod tests {
 
     #[test]
     fn the_flame_grows_into_the_bar_rather_than_filling_it_at_once() {
-        // **The fuel above the front is drawn as nothing.** Drawing it as dark
-        // flame is what "present but not alight" literally is, and it filled the
-        // whole bar with dithered orange the instant `kindle` landed — the flare
-        // then read as a highlight sweeping over an already-full bar rather than
-        // as a fire taking hold.
+        // The fuel above the front is drawn as nothing: as dark flame it filled
+        // the bar with dithered orange the instant `kindle` landed, and the
+        // flare read as a highlight sweeping it.
         let filled = 16u16;
         let alight = |flare: f32| {
             let burn = Burn {
@@ -773,9 +637,8 @@ mod tests {
     #[test]
     fn a_settled_fire_is_the_full_height_of_its_fuel() {
         // The invariant the growth above must not cost: once the flare is over,
-        // the fire meter and the plain meter agree cell for cell about where the
-        // value is. `paint` has the cross-check against `meter` itself; this
-        // pins the piece that lives here.
+        // the fire and the plain meter agree cell for cell. `paint` has the
+        // cross-check against `meter` itself.
         for filled in [1u16, 5, 16] {
             for phase in [0.0, 0.4, 7.3] {
                 let lit_cells = (0..filled)
@@ -813,10 +676,9 @@ mod tests {
 
     #[test]
     fn the_fire_is_brightest_at_its_base() {
-        // The inversion. An earlier version put the hottest cell at the flame
-        // *front*, which read as a bar with a bright edge rather than as a fire.
-        // Averaged over a cycle because every cell shifts through the ramp — the
-        // point is the gradient, not any one frame.
+        // The hottest cell at the flame *front* read as a bar with a bright edge
+        // rather than as a fire. Averaged over a cycle because every cell shifts
+        // through the ramp: the point is the gradient, not any one frame.
         let (filled, mut base, mut tip) = (16u16, 0u32, 0u32);
         let rank = |depiction| match depiction {
             Depiction::FlameCore => 3,
@@ -836,10 +698,9 @@ mod tests {
 
     #[test]
     fn the_bottom_half_is_solid_and_the_top_frays() {
-        // The glyph rule, stated as the two halves it divides the flame into:
-        // below the midpoint every cell is `█` at every phase, so all of the
-        // motion down there is colour; above it `▓` appears and grows commoner
-        // toward the tip.
+        // The glyph rule as the two halves it divides the flame into: below the
+        // midpoint every cell is `█` at every phase, so the motion down there is
+        // all colour; above it `▓` grows commoner toward the tip.
         let filled = 16u16;
         let mut frayed = [0u32; 16];
         for phase in sweep() {
@@ -908,18 +769,15 @@ mod tests {
                         "cell {index} at {phase} smoked as {glyph:?}",
                     );
                 } else if depiction.is_spark() {
-                    // Sparks are the one thing allowed a third vocabulary — they
-                    // are small marks rather than fill, so they cannot be
-                    // mistaken for either region however they are coloured.
+                    // Sparks get a third vocabulary: small marks rather than
+                    // fill, so neither region can claim them.
                     assert!(
                         glyph == '∙' || glyph == '°' || glyph == '·',
                         "cell {index} at {phase} sparked as {glyph:?}",
                     );
                 } else {
-                    // Air. Most of a plume is, now that the empty track is not a
-                    // solid field of `░` — but it has to be *actually* empty, or
-                    // the depiction and the glyph disagree about whether there
-                    // is anything there.
+                    // Air, and it has to be *actually* empty, or depiction and
+                    // glyph disagree about whether anything is there.
                     assert_eq!(
                         glyph, ' ',
                         "cell {index} at {phase} is a picture of nothing but draws {glyph:?}",
@@ -940,19 +798,14 @@ mod tests {
 
     #[test]
     fn the_cycle_wraps_without_a_seam() {
-        // **The plume has to keep *travelling* through the wrap**, which is a
-        // stronger claim than the one this test used to make and the reason it
-        // caught nothing. The old version compared `CYCLE_SECS - 0.01` against
-        // `0.0` — and `shared_tick` rounds, so `23.99` *is* tick 0. It was
-        // comparing a tick against itself and could not have failed.
+        // The plume has to keep *travelling* through the wrap. The old version
+        // compared `CYCLE_SECS - 0.01` against `0.0`, and `shared_tick` rounds,
+        // so it compared a tick against itself and caught nothing.
         //
-        // The real hazard is specific to a drift. Everywhere else consecutive
-        // ticks are uncorrelated hashes, so the wrap looks like any other
-        // boundary; a translating pattern is deliberately correlated, so the
-        // `143 → 0` step used to jump its coordinate 143 cells and re-randomise
-        // the whole plume in one frame, once every twenty-four seconds. It
-        // measured at 24 of 32 cells translating across the wrap against 31 of
-        // 32 elsewhere. See `pulse::rising`.
+        // The hazard is specific to a drift: elsewhere consecutive ticks are
+        // uncorrelated hashes, but a translating pattern is deliberately
+        // correlated, so `143 → 0` re-randomised the whole plume once every
+        // twenty-four seconds. See `pulse::rising`.
         let wrap = carried(TICKS_PER_CYCLE - 1);
         let interior: Vec<usize> = (10..20u16).map(carried).collect();
         let worst = interior.iter().copied().min().unwrap_or(0);
@@ -966,14 +819,12 @@ mod tests {
     #[test]
     fn the_plume_travels_through_every_tick_boundary() {
         // The wrap above is one boundary out of 144, and singling one out is how
-        // the seam survived the *old* test. Every boundary, so a future change
-        // to `CYCLE_SECS`, `FLIP_HZ` or the span arithmetic has nowhere to hide.
+        // the seam survived the old test. Every boundary, so a change to
+        // `CYCLE_SECS`, `FLIP_HZ` or the span arithmetic has nowhere to hide.
         //
-        // **Judged against the plume's own typical tick**, not against a fixed
-        // number. A floor loose enough to be robust to the noise is loose enough
-        // to sit under a torn frame — measured, it was: 21 cells carried at the
-        // seam against a two-thirds floor of 19. What a tear actually looks like
-        // is one tick well below the rest, so the rest is the yardstick.
+        // Judged against the plume's own typical tick: a floor loose enough to
+        // be robust to the noise is loose enough to sit under a torn frame. A
+        // tear is one tick well below the rest, so the rest is the yardstick.
         let every: Vec<usize> = (0..TICKS_PER_CYCLE).map(carried).collect();
         let mut sorted = every.clone();
         sorted.sort_unstable();
@@ -1021,14 +872,10 @@ mod tests {
 
     #[test]
     fn a_full_bar_is_all_fire_and_an_empty_one_all_smoke() {
-        // The athanor drains to nothing and is kindled back to full, so both
-        // ends are states a player sees every session.
-        //
-        // **The empty end must not spark**, and that is a claim about the world
-        // rather than about glyphs: a spent athanor is still `Burning` for the
-        // tick before it goes out, so sparks coming off it would say there is
-        // fuel left at the exact moment the bar says there is none. It may show
-        // the last of its smoke, and mostly shows nothing.
+        // Both ends are states a player sees every session. The empty end must
+        // not spark: a spent athanor is still `Burning` for the tick before it
+        // goes out, so sparks would say there is fuel left when the bar says
+        // there is none. The last of its smoke is allowed.
         for phase in sweep() {
             for (glyph, depiction) in bar(16, 16, phase) {
                 assert!(depiction.is_flame(), "{glyph:?}");
@@ -1044,13 +891,9 @@ mod tests {
 
     #[test]
     fn the_plume_drifts_rather_than_boiling_in_place() {
-        // Smoke hashed on its own position would seethe. The pattern has to
-        // translate away from the fire, which is what `drift` buys — so a later
-        // frame should look like an earlier one shifted, not like a fresh one.
-        // Summed over many phases rather than judged on one pair: `stagger`
-        // deliberately puts neighbouring cells on different tick boundaries, so
-        // any single frame is a translation *with jitter* and the tendency is
-        // the honest thing to measure.
+        // Smoke hashed on its own position would seethe; a later frame should
+        // look like an earlier one shifted. Summed over many phases because
+        // `stagger` makes any single frame a translation *with jitter*.
         let steps = 40u16;
         let filled = 4u16;
         let at = |phase: f32| -> Vec<char> {

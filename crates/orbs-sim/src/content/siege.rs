@@ -4,9 +4,8 @@
 //! thing *is* and this one says what it *does* in one room. Folding them
 //! together would put a combat number on a reagent that will never see one.
 //!
-//! **Authored rather than hardcoded** (rule 6). Balancing this domain means
-//! moving these numbers dozens of times, and in Rust that is a recompile per
-//! guess.
+//! Authored rather than hardcoded (rule 6): balancing this domain means moving
+//! these numbers dozens of times, and in Rust that is a recompile per guess.
 
 use std::collections::BTreeMap;
 
@@ -94,10 +93,8 @@ impl Spendables {
 impl Spendable {
     /// The [`Effect`] this is, if it is one of the three that edit a roll.
     ///
-    /// Returns `None` for `troops` and `vigour`, which change the *band* rather
-    /// than the dice — the caller distinguishes them, because a bonus and a
-    /// reinforcement are not the same kind of thing however similar they look
-    /// in a table.
+    /// Returns `None` for `troops` and `vigour`, which change the *band*
+    /// rather than the dice.
     #[must_use]
     pub fn effect(&self) -> Option<Effect> {
         match self.kind.as_str() {
@@ -129,10 +126,9 @@ mod tests {
 
     #[test]
     fn every_entry_names_a_kind_the_game_understands() {
-        // **An unknown kind fails the build**, the way an unknown tint does in
-        // `materials.toml`: a silent fallback would make a typo indistinguishable
-        // from a deliberate choice, and the item would sit in the arsenal doing
-        // nothing with every test green.
+        // An unknown kind fails the build, as an unknown tint does in
+        // `materials.toml`: a silent fallback would leave the item sitting in
+        // the arsenal doing nothing with every test green.
         let spendables = Spendables::builtin();
         for name in spendables.names() {
             let entry = spendables.get(name).expect("just listed");

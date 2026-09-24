@@ -1657,6 +1657,11 @@ ORBS_DUMP="attend laboratory; grind sage; meditate 12; empty mortar_and_pestle" 
 ORBS_DUMP=1 ORBS_GRID=80x22 cargo run -p orbs    # the 80×22 authoring floor
 ORBS_DUMP=1 ORBS_BOOT=post cargo run -p orbs     # a boot stage as text
 ORBS_BOOT=0 cargo run -p orbs                    # skip the boot sequence
+ORBS_THRESHOLD=0 cargo run -p orbs               # ...and the orb's menu, straight into a tower
+ORBS_THRESHOLD=1 ORBS_DUMP=1 cargo run -p orbs   # the threshold, which a dump has no other way to reach
+ORBS_MENU='settings\nsound' ORBS_DUMP="menu" cargo run -p orbs   # a menu page, driven by words
+ORBS_MANUAL=entering ORBS_MENU=manual ORBS_DUMP=1 ORBS_THRESHOLD=1 cargo run -p orbs  # a chapter
+ORBS_SOUND=1 cargo run -p orbs                   # names every cue as it plays — the one surface with no picture
 ORBS_LINE="grind sa" ORBS_DUMP=1 cargo run -p orbs   # ...with a line half-typed
 ORBS_SCROLL=14 ORBS_DUMP="..." cargo run -p orbs     # ...scrolled back 14 records
 ORBS_FIRE_PHASE=0.33 ORBS_DUMP="..." cargo run -p orbs   # ...an instrument mid-animation
@@ -3599,23 +3604,87 @@ The menu's `quit` does **not** ask twice. The question guards the word typed at
 the *prompt*, where it can be a typo for something else; a `quit` chosen from a
 list headed *what now?* is already the second step.
 
-### The menu's three pages, and more than one tower
+### The threshold — the orb before there is a tower
 
-`resume` · `saves` · `new` · `quit`, then `back` on either inner page. Every
-choice is a word, prefix-matched like the editor's and the weave's — `r`, `s`,
-`n`, `q`, `b`, and `s`/`m`/`l` for the lengths. **Escape steps one page and never
-leaves the orb**: the one irreversible choice here is always typed.
+**The screen a player now sees first**, between the boot card and any game. It is
+the *same menu*, in a different stance: `Stance::Threshold` drops `resume` from
+the top page and makes the screen impossible to close, because there is nothing
+behind it but a scratch world that never ticks and is never kept.
 
-**A dump keeps no save** (`ORBS_SAVE=off`, which `dumps.sh` pins), so `saves` and
-`new` say so rather than drawing an empty list. Point it at a real path to see
-them:
+```bash
+ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_THRESHOLD=1 ORBS_DUMP=1 cargo run -q -p orbs
+#   the orb is awake. no tower yet   ← and `new  raise a tower`, not "another"
+ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_THRESHOLD=1 ORBS_DUMP=1 ORBS_MENU="resume" cargo run -q -p orbs
+#   the orb does not know 'resume'   ← refused, not silently ignored (§6)
+ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_THRESHOLD=1 ORBS_DUMP=1 ORBS_MENU='play\nnew' cargo run -q -p orbs
+#   the lengths — reached with ORBS_SAVE=off, which used to refuse outright
+```
+
+> ⚑ That last line said `ORBS_MENU="new"` for one version and printed *"the orb
+> does not know 'new'"*: `new` moved a page down under `play` at `0.16.1`, in the
+> same change that wrote the line. A See-it line that still *runs* is not one
+> that still *sees* — which is also how `dumps.sh`'s `menu_plain` capture came
+> to record a refusal under a name claiming otherwise.
+
+**`ORBS_THRESHOLD=0` is the way past it**, and every harness carries it:
+`scripts/play.sh`, `scripts/tui.sh` and the probe are all written to reach a
+*tower*, and a scenario about the laboratory that had to type its way through a
+menu first would be testing the door.
+
+> ⚠ **A dump cannot see this feature at all, and the pictures above are the
+> smaller half of the gate.** `ORBS_DUMP` is answered *before* the `App` is built
+> and makes its own `Sim`, so `Threshold`, the clock gate, the keyboard routing
+> and the swap do not exist in a capture — all 147 of them are byte-identical
+> whatever the threshold does. The real gate is the one scenario that opens the
+> game the way a player does:
+>
+> ```bash
+> scripts/play.sh routing::the_threshold_reaches_a_tower
+> ```
+>
+> It found a defect on its first run that nothing else could: the terminal build
+> noticed a swap inside `Session::tick`, the threshold stops the clock, and so
+> the menu asked for a tower that nothing ever heard. Every unit test was green.
+
+### The menu's pages, and more than one tower
+
+`resume` · `play` · `settings` · `manual` · `quit`, then `back` on every inner
+page. Every choice is a word, prefix-matched like the editor's and the weave's —
+`r`, `p`, `se`, `m`, `q`, `b`, and `s`/`m`/`l` for the lengths. **Escape steps
+one page and never leaves the orb**: the one irreversible choice here is always
+typed. (At the threshold it does not leave the *menu* either — see above.)
+
+> ⚑ **`saves`, `new` and `options` were the vocabulary until `0.16.1`**, and all
+> three moved: the first two are a level down under `play`, and `options` is
+> `settings`. A See-it line written before that does not run. §19 records the
+> supersession.
+
+**A dump reaches no save at all unless `ORBS_SAVE` names one.** It calls
+`save::seal()` when it does not, so `play` says *this orb keeps no saves at all*
+rather than listing your real towers — and `abandon` cannot reach them.
+
+> ⚑ **That used to be a convention rather than a rule, and it cost a
+> reproduction.** `dumps.sh` exported `ORBS_SAVE=off` and nothing in the code
+> required it to: a capture taken without it listed a profile's real games, and
+> `ORBS_MENU=$'play\nabandon 1\nabandon 1'` **renamed one**. The seal closed it;
+> then an exported-but-**empty** `ORBS_SAVE=` slipped past the seal's own check
+> and overwrote a tower again. `save::named` is the one expression of *"did
+> somebody name a path?"* now. The export in `dumps.sh` stays as a belt beside
+> that brace.
+
+`new` does **not** refuse: a session with
+nowhere to keep a tower can still play one, and refusing there would have made
+the threshold unreachable-past from every instrument in the project. Point it at
+a real path to see the listing:
 
 ```bash
 mkdir -p /tmp/t
-ORBS_SAVE=/tmp/t/orbs-save.toml ORBS_BOOT=0 ORBS_DUMP="menu" ORBS_MENU="saves" \
+ORBS_SAVE=/tmp/t/orbs-save.toml ORBS_BOOT=0 ORBS_DUMP="menu" ORBS_MENU="play" \
   cargo run -q -p orbs     # the towers, numbered — the dump wrote slot 1 itself
-ORBS_SAVE=/tmp/t/orbs-save.toml ORBS_BOOT=0 ORBS_DUMP="menu" ORBS_MENU="new" \
+ORBS_SAVE=/tmp/t/orbs-save.toml ORBS_BOOT=0 ORBS_DUMP="menu" ORBS_MENU='play\nnew' \
   cargo run -q -p orbs     # short / medium / long
+ORBS_SAVE=/tmp/t/orbs-save.toml ORBS_BOOT=0 ORBS_DUMP="menu" ORBS_MENU='play\nabandon 1' \
+  cargo run -q -p orbs     # asks once; a second `abandon 1` does it
 ```
 
 **Slot 1 *is* `orbs-save.toml`**, so nothing a player already had has moved;
@@ -3659,9 +3728,10 @@ silently inert in the other build. A See-it line using either does not move
 across frontends, and this sentence exists because the paragraph above used to
 say *every* without qualification.
 
-**`scripts/dumps.sh <dir>` captures every surface the game can draw** — 98
-screens — and is the instrument for a refactor whose gate is that nothing
-changes. Run it before and after, then `diff -r`. It pins `ORBS_WIZARD`, because
+**`scripts/dumps.sh <dir>` captures every surface the game can draw** — 187
+screens at `0.16.11`, and **count it rather than quoting this**, which said 98
+for several versions — and is the instrument for a refactor whose gate is that
+nothing changes. Run it before and after, then `diff -r`. It pins `ORBS_WIZARD`, because
 a baseline that varies with who ran it is not a baseline.
 
 **The bailey was absent from it until `0.8.15`**, and the way that surfaced is
@@ -3675,6 +3745,187 @@ to**, and the blindness looks exactly like stability.
 was 58; a plan written against it said 52; it then said 65 while the answer was
 73. `ls <dir> | wc -l` takes a second and the figure is only ever used to notice
 a screen that stopped being captured.
+
+### Hearing it — the one surface with no picture
+
+**`dumps.sh` is blind to the whole of this by construction.** `ORBS_DUMP` builds
+no `App`, the audio lives entirely in one, and you cannot diff a sound anyway. So
+audio has a switch of its own, and it is the gate:
+
+```bash
+ORBS_SOUND=1 cargo run -p orbs 2>&1 | grep '^sound:'
+# sound: hum (plain)     ← the bed, which is what says the audio path opened
+# sound: key             ← a glyph
+# sound: enter           ← a line committed
+# sound: done            ← something finished while you were elsewhere
+# sound: ill             ← a breach, a sabotage, a refusal that is not yours
+# sound: baulk           ← the orb did not understand you
+```
+
+`bevy_log` caps the subscriber at `INFO`, so the matching `trace!` is invisible
+in an ordinary run — this writes to stderr directly, for the reason the dump
+prints its own content warnings.
+
+**Seven cues, and every one of them is chosen from a record's `kind`, `role` and
+`outcome`** — which is exactly what `Record::marker` chooses the glyph in front
+of the line from. That is rule 2 held by a function signature rather than a
+promise: turn the sound off and you have lost a channel, never a fact. The
+terminal build has no audio at all, which is the same trade `F2` and `F12` make
+there.
+
+**The click has three rules, and it broke two of them.** It says *a key moved in
+the line you are typing* and nothing else — so a bare Shift, Ctrl, Alt or Super
+makes no sound (holding Shift for a capital used to click twice), and nothing
+clicks during the boot card, which takes no keys at all. Clicking through it read
+as the sequence being skippable, which §19 removed on purpose.
+
+**Three of the seven are §14's**: `done`, `ill` and `wrong` are the completion,
+the warning and the sabotage it asks to be distinct. `wrong` is the one worth
+hearing on purpose — two notes a semitone apart sounding together, which is a
+beat rather than a rise or a fall:
+
+```bash
+# a tampered surface against a clean one, by ear
+ORBS_SOUND=1 cargo run -p orbs      # then: attend laboratory, verify <surface>
+```
+
+#### Turning it down
+
+```bash
+ORBS_BOOT=0 ORBS_DUMP=1 ORBS_THRESHOLD=1 ORBS_SAVE=off \
+  ORBS_MENU='settings\nsound' cargo run -q -p orbs         # the page
+ORBS_BOOT=0 ORBS_DUMP=1 ORBS_THRESHOLD=1 ORBS_SAVE=off \
+  ORBS_MENU='settings\nsound\nhum\nvoice quiet' cargo run -q -p orbs
+#   hum      cycles to the next level        voice quiet   names one outright
+```
+
+**Two volumes, because the reasons to turn each down are different**: the hum is
+atmosphere and the cues are §14's ambient channel, so *hum off, voice full* has
+to be reachable. Four words rather than a number — the menu is typed and has no
+slider, and `voice 0.35` is a value nobody can guess or cycle to.
+
+**A dump keeps no settings**, deliberately (`main.rs` returns before
+`settings::keep`), so the round trip is checked against a real file:
+
+```bash
+printf 'hum = "off"\n' >> ~/.local/share/orbs/orbs-settings.toml
+ORBS_SOUND=1 cargo run -p orbs 2>&1 | grep '^sound: hum'
+# sound: hum (plain, off)
+```
+
+`off` spawns nothing at all rather than a silent player, and a level this build
+has never heard of falls back to `full` — a settings file from a later build
+must not be able to mute the game.
+
+**Only records the transcript *draws* ring.** A spell's output is in the log, not
+in the pane, so a tower with six bound spells is atmospheric rather than
+unusable.
+
+```bash
+cargo test -p orbs sound::          # the waveform, the table, and a real keystroke
+```
+
+Two of those tests are the ones worth knowing about. `a_keystroke_reaches_an_
+actual_audio_player` runs the **whole** plugin — `add_audio_source`, the startup
+table, the key reader, the message and a spawned `AudioPlayer<Cue>` — and needs
+no sound card, because `AudioPlugin` warns and goes inert without one.
+`the_transcript_a_tower_was_loaded_with_does_not_all_play_at_once` is the
+watermark: a restored save opens with a tail of records already in it.
+
+> **Editing a cue?** `.claude/skills/bevy-idioms/verify/src/audio.rs` is the
+> compile-verified snippet for Bevy 0.19's procedural-audio API, and CLAUDE.md
+> forbids recalling that from memory. `cd` there and `cargo check` before
+> changing a signature.
+
+### The manual — a book, reachable before there is a tower
+
+**`manual` on the menu, at the threshold and from inside a tower.** It is a
+surface of its own rather than a page of the menu: it has paragraphs, it wraps to
+whatever the pane is, and it scrolls, none of which the menu does.
+
+```bash
+T="ORBS_BOOT=0 ORBS_DUMP=1 ORBS_THRESHOLD=1 ORBS_SAVE=off ORBS_MENU=manual"
+env $T cargo run -q -p orbs                         # the contents page
+env $T ORBS_MANUAL="entering" cargo run -q -p orbs  # starting, continuing, abandoning
+env $T ORBS_MANUAL="yours"  cargo run -q -p orbs    # the three settings pages
+env $T ORBS_MANUAL="upkeep" cargo run -q -p orbs    # the arsenal and quintessence
+env $T ORBS_MANUAL="inside" cargo run -q -p orbs    # every room's own three lines
+env $T ORBS_GRID=80x22 cargo run -q -p orbs         # the contents page at the floor
+env $T ORBS_MANUAL='spells\n<pgdn>' cargo run -q -p orbs
+env $T ORBS_MANUAL='spells\n<esc>\n<esc>' cargo run -q -p orbs   # out, and the menu behind it
+```
+
+`ORBS_MANUAL` is `ORBS_MENU`'s shape: a line is a chapter to open, and
+`<esc>`/`<pgup>`/`<pgdn>`/`<up>`/`<down>` are the keys. **Escape steps one level
+at a time** — out of a chapter, then out of the manual — like everywhere else.
+
+> ⚠ **`<pgdn>` in a dump steps a row, not a screen.** A screenful needs a height,
+> and a dump takes no measurement before the script runs. The real paging is held
+> by `scripts/play.sh routing::the_manual_pages_and_the_transcript_behind_it_does_not`,
+> which also pages the transcript afterwards so each half fails alone.
+>
+> ⚑ **Page a chapter that is taller than the pane**, or you are testing nothing:
+> `Reader::scroll` clamps, so a chapter that fits is correctly unmovable. That
+> scenario paged `keys`, which fits at its grid — and waited for *any* screen
+> change, which the 1 Hz clock supplies on its own. It uses `spells` now and
+> watches the chapter's own first line. `pgdn for more` is drawn only when there
+> is more, so it is the cheap way to tell.
+
+**Nineteen chapters, and three of them are built rather than written.**
+`commands` is every verb in the game in `help`'s own groups; `language` is every
+word a spell is written with; `inside` is every room's `man_here/start/solve`
+lines gathered in one place. All three come out of the 578 prose keys `recall`
+already holds, so a verb authored tomorrow appears with no code change — and
+there is no second copy of a verb's page to come adrift from `help`.
+
+**The difference from `help` and `man` is the one that earns the chapters.**
+`help` answers *what can I do where I am standing*, and a sealed tower's `help`
+cannot mention a room it has not opened. `man` answers *what is this room*. The
+manual answers *what is behind a door you have not opened*, which is the question
+a player at the front door is actually asking.
+
+#### Editing the manual without a recompile
+
+**`manual.toml` is live, like `prose.toml`** — rule 6 is not satisfied by
+`include_str!`, and a book that needed a rebuild per sentence is the writing cost
+rule 6 exists to avoid.
+
+```bash
+ORBS_CONTENT=crates/orbs-sim/content cargo run -p orbs
+# ...then edit a line of crates/orbs-sim/content/manual.toml while it runs:
+#   content: reloaded .../manual.toml      ← once, naming the file that moved
+```
+
+**With the manual *open*, the chapter changes under you** and keeps your place —
+by chapter *name*, so adding or reordering chapters does not throw you into
+whichever one inherited the index; a chapter you delete drops you at the
+contents.
+
+> ⚑ **That did not work for a version, and the log said it did.** The book is
+> assembled when the reader opens and nothing re-assembled it, so the edit
+> landed in the `Sim`, the log printed `reloaded manual.toml`, and the screen
+> went on showing the old text. Closing and reopening was the undocumented
+> workaround. A log line asserting the opposite of what happened is worse than
+> silence — it sends a writer looking at their own TOML.
+
+A dump reads both files too, and says so itself because it installs no `tracing`
+subscriber:
+
+```bash
+ORBS_CONTENT=crates/orbs-sim/content ORBS_BOOT=0 ORBS_DUMP=1 \
+  ORBS_THRESHOLD=1 ORBS_MENU=manual ORBS_MANUAL=orbs cargo run -q -p orbs
+```
+
+> **Read the log here, not only the screen.** Until `0.16.8` one edit reloaded
+> the file on *every tick* for the life of the run — the read landed in the
+> directory watch that had asked for it, queueing the next one. The game looked
+> perfect and the whole gate was green. Each live file now carries the mtime it
+> last applied. DESIGN.md §19 has the measurement.
+
+**Only these two files are live.** `recipes.toml` and `fuel.toml` reach
+decisions, so swapping either mid-session would break replay from
+`(seed, submissions)`. The startup line says which are live, once, where a writer
+will see it.
 
 ### `scripts/play.sh` — the game, played, as a test suite
 

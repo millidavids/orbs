@@ -1,9 +1,8 @@
 //! Landing whatever's time has come.
 //!
-//! One pass per tick over both pools. §14 announces **completions only** — a
-//! duration action finishing is the one event the player did not just cause, and
-//! announcing progress instead would be unusable at endgame with ~25 actions in
-//! flight.
+//! One pass per tick over both pools. §14 announces completions only: a duration
+//! action finishing is the one event the player did not just cause, and
+//! announcing progress would be unusable at endgame with ~25 actions in flight.
 
 use bevy_ecs::prelude::*;
 use orbs_render::{FieldName, RecordKind, Role};
@@ -75,10 +74,10 @@ pub fn finish(world: &mut World) {
         .collect();
 
     for (place, working) in landed {
-        // **Credited to whoever asked for it**, ticks after they asked. A spell
-        // charges the mortar and the mortar yields on its own schedule, in this
-        // system rather than in the runner — so a completion the player did not
-        // cause was the one line a loop still put in their transcript.
+        // Credited to whoever asked for it, ticks after they asked. A spell
+        // charges the mortar and the mortar yields on its own schedule, here
+        // rather than in the runner — so a completion the player did not cause
+        // was the one line a loop still put in their transcript.
         //
         // Taken rather than read: the run is over, and a credit left behind
         // would be spent on the next thing this instrument does, whoever starts
@@ -89,14 +88,14 @@ pub fn finish(world: &mut World) {
             .records_mut()
             .attribute(bidden.as_ref().map(|spell| spell.0.as_str()));
 
-        // The slot is released the moment the work lands, **before** anything is
+        // The slot is released the moment the work lands, before anything is
         // collected. A finished instrument holds its product until siphoned but
         // holds no Focus — otherwise a capacity-1 player who walked away from a
         // finished mortar could never start anything again, which is a soft-lock
         // reachable in the first ten minutes.
         world.entity_mut(place).remove::<Working>();
 
-        // **`transmutes()`, not `== Wield`.** §10.1's per-instrument verbs start
+        // `transmutes()`, not `== Wield`. §10.1's per-instrument verbs start
         // a run exactly as `wield` does, so asking for the one verb by name left
         // a finished `grind` releasing the slot, saying nothing useful, and
         // leaving the sage sitting whole in the mortar. See `Verb::transmutes`.
@@ -109,12 +108,12 @@ pub fn finish(world: &mut World) {
             continue;
         }
 
-        // **A press is the third kind of completed work**, beside a transmuting
-        // run and the generic one below. It makes no material, so `transmute`
-        // is wrong; and what it says depends on what the ward answered, so the
-        // generic sentence is wrong too. It also credits on its own terms — the
-        // yield scales with how few presses it took — which is the one thing
-        // `worth(verb)` below cannot express.
+        // A press is the third kind of completed work, beside a transmuting run
+        // and the generic one below. It makes no material, so `transmute` is
+        // wrong, and what it says depends on what the ward answered, so the
+        // generic sentence is too. It also credits on its own terms — the yield
+        // scales with how few presses it took — which `worth(verb)` cannot
+        // express.
         if working.verb == crate::parser::Verb::Probe {
             crate::execute::land_probe(world, place);
             world
@@ -124,11 +123,10 @@ pub fn finish(world: &mut World) {
             continue;
         }
 
-        // **A fall is the fifth kind**, on the press's argument exactly: it
-        // makes no material, so `transmute` is wrong, and what it says depends
-        // on whether every glyph came up lit, so the generic sentence below is
-        // wrong too. It also credits nothing — what a charm is worth is the
-        // charm.
+        // A fall is the fifth kind, on the press's argument exactly: it makes no
+        // material, so `transmute` is wrong, and what it says depends on whether
+        // every glyph came up lit, so the generic sentence is too. It credits
+        // nothing — what a charm is worth is the charm.
         if working.verb == crate::parser::Verb::Anneal {
             crate::execute::land_fall(world, place);
             world
@@ -138,10 +136,9 @@ pub fn finish(world: &mut World) {
             continue;
         }
 
-        // **An audit is the fourth kind**, on the press's argument exactly: it
-        // makes no material, so `transmute` is wrong, and what it says depends
-        // on what it found, so the generic sentence below is wrong too. §8.1's
-        // expensive `verify` — see `execute::audit`.
+        // An audit is the fourth kind, on the press's argument exactly: it makes
+        // no material, so `transmute` is wrong, and what it says depends on what
+        // it found. §8.1's expensive `verify` — see `execute::audit`.
         if working.verb == crate::parser::Verb::Verify {
             crate::execute::land_sweep(world);
             world
@@ -158,11 +155,11 @@ pub fn finish(world: &mut World) {
         let source = world
             .get::<Name>(place)
             .map_or_else(String::new, |name| name.0.clone());
-        // **The archive earns too.** This branch is the other kind of completed
-        // work — `divine` in one of the two rooms the game opens with — and
-        // leaving it at nothing would make half the opening game pay nothing at
-        // all. Keyed by the **verb**, because the archive has no instrument to
-        // key on; `progression.toml` documents that exception.
+        // The archive earns too. This branch is the other kind of completed work
+        // — `divine`, in one of the two rooms the game opens with — and leaving
+        // it at nothing would make half the opening game pay nothing. Keyed by
+        // the verb, because the archive has no instrument to key on;
+        // `progression.toml` documents that exception.
         let earned = super::super::worth(world, working.verb.canonical());
         world
             .resource_mut::<Scrollback>()

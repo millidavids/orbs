@@ -1,20 +1,14 @@
 //! The tower the player starts in.
 //!
-//! DESIGN.md §15 fixes the slice at **brewing and archive** — the two starting
+//! DESIGN.md §15 fixes the slice at brewing and archive — the two starting
 //! domains — so only those two branches exist. The other five arrive with §10's
 //! breadth item in Phase 11a.
 //!
-//! # Names are not prose
-//!
-//! Rule 6 and §12 put authored text in hot-reloadable content files, and §19
-//! already set where the line falls: *"zero authored prose crosses into Rust"* —
-//! the parser's own tables emit **facts**, never sentences, and `Verb::canonical`
-//! and `NounKind::label` are const tables nobody calls a violation.
-//!
-//! So this file names things and nothing else. There is not a sentence in it.
-//! The moment a fragment needs deciphered *text*, that text belongs in Phase 1's
-//! content file rather than here — and needing it is the signal that Phase 1 has
-//! been imported early.
+//! Names are not prose. Rule 6 and §12 put authored text in hot-reloadable
+//! content files, and §19 set where the line falls: *"zero authored prose
+//! crosses into Rust"* — a table may emit facts, never sentences. So this file
+//! names things and nothing else, and the moment a fragment needs deciphered
+//! *text* that text belongs in Phase 1's content file.
 
 use bevy_ecs::prelude::*;
 
@@ -27,30 +21,21 @@ use crate::parser::{NounKind, Verb};
 /// The tower. Protected: §7 guards catastrophic targets in character.
 const ROOT: &str = "tower";
 
-/// The player's spellbook — §8's `/grimoire`, a **sibling** of `/tower`.
+/// The player's spellbook — §8's `/grimoire`, a sibling of `/tower`.
 ///
-/// # A root domain, and deliberately not a §9 activity domain
+/// A root domain and deliberately not a §9 activity domain. §9's panes are per
+/// *activity*, and writing is not one: you do not run the grimoire concurrently
+/// with brewing, you go and write, and what you wrote runs somewhere else. So it
+/// adds nothing to the pane count, which §15's two-domain slice would collide
+/// with.
 ///
-/// §15 fixes the slice at two starting domains and §9 gives one pane per domain,
-/// *"two exist at the start"*; the roadmap's next domain is scrying, and its See
-/// it line is *"discover it in play rather than starting with it."* A third
-/// pane-bearing domain here would collide with all three.
+/// A sibling rather than `/tower/grimoire` because a spell is not kept in a
+/// room: §8 has the player editing `.spell` files in their own editor, and what
+/// survives that is a book you carry — which is also why `tower::scene`
+/// registers spells as nameable from anywhere.
 ///
-/// It does not, because **§9's panes are per *activity* — the seven you
-/// multiplex between — and writing is not one of them.** You do not run the
-/// grimoire concurrently with brewing; you go and write, and what you wrote runs
-/// somewhere else. It is addressable, it holds files, and the editor takes the
-/// main pane while it is open. It adds nothing to the pane count.
-///
-/// # Why a sibling rather than `/tower/grimoire`
-///
-/// A spell is not kept in a room. §8 has the player editing `.spell` files in
-/// their own editor, and the fiction that survives that is a book you carry, not
-/// a shelf you walk to — which is also why `tower::scene` registers spells as
-/// nameable from anywhere rather than only from inside here.
-/// **Public because sealing needs it and `DOMAINS` no longer carries it.** The
-/// grimoire is a room that can be shut without being a room you work in — see
-/// `opened::is_room`, which is the one place that distinction lives.
+/// Public because sealing needs it and `DOMAINS` no longer carries it: the
+/// grimoire can be shut without being a room you work in, see `opened::is_room`.
 pub const GRIMOIRE: &str = "grimoire";
 
 /// Branches of the starting tower, and what each holds.
@@ -62,15 +47,12 @@ const BRANCHES: &[Branch] = &[
     Branch {
         name: "laboratory",
         holds: &[
-            // No essences here any more. `clarity`, `warding` and `haste` were
-            // nodes on the laboratory floor when one command brewed one; §10.1
-            // makes them what the **alembic yields**, so they start in nobody's
-            // hands. They are still nameable everywhere as recipe `Topic`s
-            // (`scene::rebuild`), which is what `recall clarity` reads.
-            //
-            // `crucible` is gone and `balneum_mariae` took the processing stage
-            // (§10.1, §19), which leaves `retort` free to stay what it always
-            // was — a vessel. That is why `NounKind::Vessel` still has a noun.
+            // No essences here any more: §10.1 makes `clarity`, `warding` and
+            // `haste` what the alembic yields, so they start in nobody's hands,
+            // still nameable as recipe `Topic`s for `recall clarity` to read.
+            // And `balneum_mariae` took the crucible's processing stage (§10.1,
+            // §19), leaving `retort` free to stay a vessel — which is why
+            // `NounKind::Vessel` still has a noun.
             Holding::new(NounKind::Vessel, &["retort"]),
             Holding::new(NounKind::File, &["laboratory.log"]),
         ],
@@ -81,31 +63,24 @@ const BRANCHES: &[Branch] = &[
     },
     Branch {
         name: "archive",
-        // **`sigil-iv`, `sigil-ix` and `the-quiet-page` are gone**, and they were
-        // the last of the `divine` that took a fragment. Once `research` opened a
-        // the stacks instead of consuming a sigil (§19), nothing produced them,
-        // nothing consumed them and no prose said what one *was* — which is
-        // verbatim the complaint §19 records against `shard-of-dawn` and its
-        // three siblings: *"four invented names standing in for a decision nobody
-        // made"*. Three more of the same, left on the floor of the room that
-        // stopped needing them.
-        //
-        // What the archive yields now is `fragment`, and it accumulates on the
-        // lectern that made it rather than lying about.
+        // `sigil-iv`, `sigil-ix` and `the-quiet-page` are gone. Once `research`
+        // opened the stacks instead of consuming a sigil (§19), nothing produced
+        // them, nothing consumed them and no prose said what one *was* — §19's
+        // complaint against `shard-of-dawn`: *"four invented names standing in
+        // for a decision nobody made"*. What the archive yields now is
+        // `fragment`, and it accumulates on the lectern that made it.
         holds: &[Holding::new(NounKind::File, &["archive.log"])],
         places: ARCHIVE,
         role: None,
         operation: None,
         group: None,
     },
-    // **Scrying (§10), and the third domain the game opens.** A far wizard's orb
-    // is sealed with a ward; you press figures against it and read how it
-    // answers. See `tower::ward` for why the orb keeps no candidate set.
-    //
-    // It holds no materials at all, and that is deliberate: what a broken seal
-    // yields is experience, a stolen log, and occasionally a recipe — none of
-    // which is a thing on a shelf. So the lens needs no `Role::Store`, and
-    // `tower::home` has nothing to place here.
+    // Scrying (§10), the third domain the game opens. A far wizard's orb is
+    // sealed with a ward; you press figures against it and read how it answers.
+    // See `tower::ward` for why the orb keeps no candidate set. It holds no
+    // materials, deliberately: a broken seal yields experience, a stolen log and
+    // occasionally a recipe, none of them a thing on a shelf — so no
+    // `Role::Store`, and `tower::home` places nothing here.
     Branch {
         name: "lens",
         holds: &[Holding::new(NounKind::File, &["lens.log"])],
@@ -114,24 +89,22 @@ const BRANCHES: &[Branch] = &[
         operation: None,
         group: None,
     },
-    // **Defense (§10), and the fourth domain the game opens.** Raw arcane energy
-    // wells up in the wellspring; the wizard draws it through the conduit a ward
-    // at a time and assembles it into the barrier, and a greater ward will not
-    // rest upon a lesser. See `tower::pylon` for the puzzle and `tower::erosion`
-    // for the decay that decides how tall a course is.
+    // Defense (§10), the fourth domain the game opens. Raw arcane energy wells
+    // up in the wellspring; the wizard draws it through the conduit a ward at a
+    // time and assembles it into the barrier, and a greater ward will not rest
+    // upon a lesser. See `tower::pylon` for the puzzle and `tower::erosion` for
+    // the decay that decides how tall a course is.
     //
-    // **The room is `sanctum` and §10's table says `battlements/`** — §19 records
-    // the supersession. The fortification names committed the domain to a
-    // metaphor its own verbs never fitted: *hauling a ward from the barbican to
-    // the redoubt* is not a thing a wizard does. The tower's walls are stone and
-    // what he shores them up with is not.
+    // The room is `sanctum` where §10's table says `battlements/` (§19): the
+    // fortification names committed the domain to a metaphor its verbs never
+    // fitted — *hauling a ward from the barbican to the redoubt* is not a thing
+    // a wizard does.
     //
-    // Like the lens it holds no materials, and for the same reason: what a
-    // finished course yields is integrity and experience, neither of which is a
-    // thing on a shelf. **Deliberately no endless base reagent, ever** —
-    // `sabotage::substitution` picks its target with `% piles.len()`, so a third
-    // endless pile would move every rate `orbs-balance` has pinned. That file
-    // records the same change dropping clarity from 0.140 to 0.074.
+    // Like the lens it holds no materials: a finished course yields integrity
+    // and experience, neither a thing on a shelf. And deliberately no endless
+    // base reagent, ever — `sabotage::substitution` picks its target with `%
+    // piles.len()`, so a third would move every rate `orbs-balance` has pinned,
+    // once dropping clarity 0.140 to 0.074.
     Branch {
         name: "sanctum",
         holds: &[Holding::new(NounKind::File, &["sanctum.log"])],
@@ -140,12 +113,12 @@ const BRANCHES: &[Branch] = &[
         operation: None,
         group: None,
     },
-    // **The one room you can reach from any other**, and it starts empty: what
-    // is in it is what the player has finished. See [`Role::Keep`] and
-    // `tower::keep` for why the exemption is narrow and why this is not a second
+    // The one room you can reach from any other, and it starts empty: what is
+    // in it is what the player has finished. See [`Role::Keep`] and
+    // `tower::keep` for why the exemption is narrow and this is not a second
     // dispensary.
     //
-    // **Last, and the order is load-bearing.** §6 resolves a tie to whichever
+    // Last, and the order is load-bearing. §6 resolves a tie to whichever
     // noun was registered first, so raising the arsenal before the archive would
     // silently reorder every existing reading — `spawn order is part of the
     // world's determinism` (see [`node`](super::node)). A new domain goes on the
@@ -158,20 +131,14 @@ const BRANCHES: &[Branch] = &[
         operation: None,
         group: None,
     },
-    // **On the end, after the arsenal, and that is the rule above rather than an
-    // oversight.** *"A new domain goes on the end"* means the end of this list:
-    // inserting before the arsenal would shift its spawn index, and spawn order
-    // is §6's tie-resolution order. Appending leaves every existing reading
-    // exactly where it was.
+    // On the end, after the arsenal, which is the rule above rather than an
+    // oversight: *"a new domain goes on the end"* means the end of this list,
+    // because inserting ahead of the arsenal would shift its spawn index.
     //
-    // The menagerie is where a beast is held (§10, `tower::circle`). Like the
-    // lens and the sanctum it holds no materials of its own — what a hold
-    // yields is troops, and they keep themselves in the arsenal because they are
-    // finished work.
-    //
-    // **Deliberately no endless base reagent**, for the reason the sanctum
-    // records: `sabotage::substitution` picks its target with `% piles.len()`,
-    // so a third endless pile would move every rate `orbs-balance` has pinned.
+    // The menagerie is where a beast is held (§10, `tower::circle`), and holds
+    // no materials of its own: a hold yields troops, which keep themselves in
+    // the arsenal as finished work. No endless base reagent, for the sanctum's
+    // reason.
     Branch {
         name: "menagerie",
         holds: &[Holding::new(NounKind::File, &["menagerie.log"])],
@@ -180,19 +147,14 @@ const BRANCHES: &[Branch] = &[
         operation: None,
         group: None,
     },
-    // **On the end again, and for the third time the rule is the reason.** §6
-    // resolves a tie to whichever noun was registered first, so a new domain
+    // On the end again, the arsenal's rule for the third time: a new domain
     // goes after every existing one or every reading in the tower shifts.
     //
-    // The bailey is where a siege is fought (§5.1, `tower::siege`) — the courtyard
-    // inside the wall, which is where a defence actually happens and is the one
-    // fortification word the sanctum's rename left free. It holds no materials:
-    // what a siege *spends* comes from the arsenal and what it yields is
-    // experience and integrity, neither of which sits on a shelf.
-    //
-    // **Deliberately no endless base reagent**, third time — `sabotage::substitution`
-    // picks its target with `% piles.len()`, so a third endless pile would move
-    // every rate `orbs-balance` has pinned.
+    // The bailey is where a siege is fought (§5.1, `tower::siege`) — the
+    // courtyard inside the wall, and the one fortification word the sanctum's
+    // rename left free. No materials: what a siege *spends* comes from the
+    // arsenal and what it yields is experience and integrity. No endless base
+    // reagent either, for the sanctum's reason.
     Branch {
         name: siege::BAILEY,
         holds: &[Holding::new(NounKind::File, &["bailey.log"])],
@@ -205,16 +167,10 @@ const BRANCHES: &[Branch] = &[
     // rail's seven slots from the day `brief.rs` was written, drawn dark; it
     // lights up because this raises it and for no other reason.
     //
-    // **Appended, and it has to be.** §6 resolves a noun tie to whichever was
-    // registered first, so a domain slipped into the middle of this table would
-    // silently re-resolve names every shipped spell already uses.
-    //
-    // **Deliberately no endless base reagent**, fourth time —
-    // `sabotage::substitution` picks its target with `% piles.len()`, so a third
-    // endless pile would move every rate `orbs-balance` has pinned, and the file
-    // that records that also records the same change once dropping clarity from
-    // 0.140 to 0.074. The forge holds a log and nothing else: what a charm costs
-    // is quintessence, which is a resource rather than a shelf.
+    // Appended, and it has to be: a domain slipped into the middle of this
+    // table would silently re-resolve names every shipped spell already uses.
+    // No endless base reagent, for the sanctum's reason, and a log and nothing
+    // else — a charm costs quintessence, which is a resource, not a shelf.
     Branch {
         name: charm::FORGE,
         holds: &[Holding::new(NounKind::File, &["forge.log"])],
@@ -227,13 +183,13 @@ const BRANCHES: &[Branch] = &[
 
 /// The forge: the lattice a charm is bound on, and its three columns.
 ///
-/// **The lattice spends its one `Operation` on `imbue`**, which is the rampart's
-/// and the pylon's arrangement — one fixture, one word that opens the puzzle.
-/// `snap` and `settle` anchor to it rather than to the columns, which is the
-/// bailey's shape: a column is a thing you read and snap, not somewhere you stand.
+/// The lattice spends its one `Operation` on `imbue`, the rampart's and the
+/// pylon's arrangement. `snap` and `settle` anchor to it rather than to the
+/// columns, the bailey's shape: a column is a thing you read and snap, not
+/// somewhere you stand.
 ///
-/// **`group: Some("column")` is on the three and never on the lattice**, so
-/// `for each column` walks them. `groups_at` reads the *children* of where you
+/// `group: Some("column")` is on the three and never on the lattice, so `for
+/// each column` walks them — `groups_at` reads the *children* of where you
 /// stand.
 const FORGE: &[Branch] = &[
     Branch {
@@ -244,15 +200,14 @@ const FORGE: &[Branch] = &[
         operation: Some(Verb::Imbue),
         group: None,
     },
-    // **The three columns**, `Role::Reading` places for the areas' reason:
-    // `snap apex` resolves against `NounKind::Place`, and the role is what stops
-    // one being somewhere you can `attend`.
+    // The three columns, `Role::Reading` places for the areas' reason: `snap
+    // apex` resolves against `NounKind::Place`, and the role stops one being
+    // somewhere you can `attend`.
     //
-    // Three and not nine, and that is the sweep's doing rather than a
-    // simplification: a Lights Out solution is settled by its top row, so
-    // columns are all a player needs to address — and nine cell names are not
-    // available, because `crown` scores 800 against `brown`, `base` 750 against
-    // `bare` and `tier` 600 against `tower`.
+    // Three and not nine, and the naming sweep's doing: a Lights Out solution is
+    // settled by its top row, so columns are all a player needs to address, and
+    // nine cell names are not available anyway — `crown` scores 800 against
+    // `brown`, `base` 750 against `bare`, `tier` 600 against `tower`.
     Branch {
         name: "apex",
         holds: &[],
@@ -277,14 +232,11 @@ const FORGE: &[Branch] = &[
         operation: None,
         group: Some("column"),
     },
-    // **The five charms, as places.** `imbue mortar_and_pestle hurried` resolves
-    // its second slot against `NounKind::Place`, which is the dice's arrangement
-    // one room over — `d6`, `d8` and `d20` are `Role::Reading` branches *and*
-    // words `siege::readings()` declares, and a charm is the same thing said
-    // about the forge.
-    //
-    // `group: Some("charm")` so `for each charm` walks them, which is what a
-    // maintenance spell wants: *find the one that is ebbing and lay it again*.
+    // The five charms, as places, which is the dice's arrangement one room over:
+    // `imbue mortar_and_pestle hurried` resolves its second slot against
+    // `NounKind::Place`. `group: Some("charm")` so `for each charm` walks them,
+    // which is what a maintenance spell wants: *find the one that is ebbing and
+    // lay it again*.
     Branch {
         name: "hurried",
         holds: &[],
@@ -329,19 +281,15 @@ const FORGE: &[Branch] = &[
 
 /// The bailey: the rampart you watch from, and the two sides.
 ///
-/// **The rampart spends its one `Operation` on `defend`**, which is the circle's
-/// and the pylon's arrangement — one fixture, one word that opens the puzzle.
-/// `deploy`, `quaff` and `hold` anchor to it rather than to the two bands, which
-/// is the archive's shape: a band is a thing you *read*, not somewhere you stand.
+/// The rampart spends its one `Operation` on `defend`, the circle's and the
+/// pylon's arrangement. `deploy`, `quaff` and `hold` anchor to it rather than to
+/// the two bands, the archive's shape: a band is a thing you *read*, not
+/// somewhere you stand. The garrison and the enemy are `Role::Reading` for the
+/// sockets' reason — `if the enemy has outnumbered` needs the word to be a
+/// `NounKind::Place`, and the role stops it being somewhere you can `attend`.
 ///
-/// The garrison and the enemy are `Role::Reading` for the reason the compass
-/// bearings and the sockets are — a spell's question resolves its place half
-/// against `NounKind::Place`, so `if the enemy has outnumbered` needs the word to
-/// be one, and the role is what stops it also being somewhere you can `attend`.
-///
-/// **`group: Some("band")` is on the two and never on the domain Branch**, so
-/// `for each band` walks them. `groups_at` reads the *children* of where you
-/// stand.
+/// `group: Some("band")` is on the two and never on the domain Branch, so `for
+/// each band` walks them — `groups_at` reads the *children* of where you stand.
 const BAILEY: &[Branch] = &[
     Branch {
         name: siege::RAMPART,
@@ -351,13 +299,11 @@ const BAILEY: &[Branch] = &[
         operation: Some(Verb::Defend),
         group: None,
     },
-    // **The four areas a die is pledged to**, `Role::Reading` places for the
+    // The four areas a die is pledged to, `Role::Reading` places for the
     // sockets' reason: `pledge d20 buckler` resolves its second slot against
-    // `NounKind::Place`, and the role is what stops one being somewhere you can
-    // `attend`.
-    //
-    // `group: Some("area")` so `for each area` walks the four — which is the
-    // shape a solver wants: *find the one that is empty and put something in it*.
+    // `NounKind::Place`, and the role stops one being somewhere you can
+    // `attend`. `group: Some("area")` so `for each area` walks the four — the
+    // shape a solver wants: *find the empty one and put something in it*.
     Branch {
         name: "line",
         holds: &[],
@@ -390,18 +336,16 @@ const BAILEY: &[Branch] = &[
         operation: None,
         group: Some("area"),
     },
-    // **The coffer, and the dice in it.** The dice are places for the same
-    // reason the lens's sigils are: `pledge d20 buckler` names one in an
-    // argument. They are `group: Some("die")` so `for each die` walks the set a
-    // wizard holds.
+    // The coffer, and the dice in it. The dice are places for the lens's sigils'
+    // reason — `pledge d20 buckler` names one in an argument — and
+    // `group: Some("die")` so `for each die` walks the set a wizard holds. They
+    // exist whether or not they are free; what changes is what the *coffer*
+    // publishes.
     //
-    // **They exist whether or not they are free**, exactly as a sigil exists
-    // whether or not it is seated — what changes is what the *coffer* publishes.
-    // **`Role::Reading`, like the two bands and not like the rampart.** It is a
-    // *container* of readings rather than a reading itself — but so is the
-    // garrison, and `readings::reading` finds a node by that role. Left as
-    // `None` it was invisible to the publisher and `survey coffer` answered
-    // *"the coffer holds nothing"* with three dice in it.
+    // `Role::Reading` on the coffer too, although it is a *container* of
+    // readings: so is the garrison, and `readings::reading` finds a node by that
+    // role. Left as `None` it was invisible to the publisher and `survey coffer`
+    // answered *"the coffer holds nothing"* with three dice in it.
     Branch {
         name: siege::COFFER,
         holds: &[],
@@ -455,19 +399,13 @@ const BAILEY: &[Branch] = &[
 /// The menagerie: the circle a beast is held in, its three glyphs, and the six
 /// humours a glyph can be limned with.
 ///
-/// **The circle spends its one `Operation` on `summon`**, which is the pylon's
-/// arrangement — one fixture, one word that opens the puzzle. `limn` is anchored
-/// to it rather than to each glyph, which is the forge's shape: a glyph is a
-/// thing you name in an argument, not a place you stand, and there is one circle.
+/// The circle spends its one `Operation` on `summon`, the pylon's arrangement.
+/// `limn` is anchored to it rather than to each glyph, the forge's shape: a
+/// glyph is a thing you name in an argument, not a place you stand. The glyphs
+/// and humours are `Role::Reading` for the lens's sockets' reason.
 ///
-/// The glyphs and humours are `Role::Reading` for the reason the lens's sockets
-/// and sigils are: `limn keystone heed` resolves both slots against
-/// `NounKind::Place`, and a spell's `if the keystone has heed` resolves its place
-/// half the same way — and the role is what stops either being somewhere you can
-/// `attend`.
-///
-/// **Named by the model's own `const fn`s**, so the word the tower registers and
-/// the word `limn` looks up are one spelling rather than two that could drift.
+/// Named by the model's own `const fn`s, so the word the tower registers and
+/// the word `limn` looks up cannot drift apart.
 const MENAGERIE: &[Branch] = &[
     Branch {
         name: "circle",
@@ -514,25 +452,21 @@ const fn humour(humour: super::circle::Humour) -> Branch {
 
 /// The archive's one instrument, and the four ways its reading can go.
 ///
-/// The lectern is where a maze is opened and where fragments are assembled, and
-/// giving the archive a fixture at all is what retires three defects at once:
-/// `divine`'s completion had no sentence, a running `divine` could not be
-/// stopped (`stop` finds its target through `Fixture`), and the domain drew no
-/// panel. None of the three was worth patching separately — they were one
-/// absence.
+/// Giving the archive a fixture at all retires three defects that were one
+/// absence: `divine`'s completion had no sentence, a running `divine` could not
+/// be stopped (`stop` finds its target through `Fixture`), and the domain drew
+/// no panel.
 const ARCHIVE: &[Branch] = &[
-    // **Assembly, and nothing else now.** The lectern used to be both halves of
-    // the archive at once — the stacks open on it *and* a scroll coming
-    // together in it — which §19 records as the first instrument in the game
-    // that could be doing two things at once, and treated as a curiosity rather
-    // than as the design problem it was. `stop lectern` had to decide which of
-    // the two it meant; the panel had one row for both; and `follow`'s scope had
-    // nowhere to go because a fixture carries exactly one `Operation` and this
-    // one had spent it on `research`.
+    // Assembly, and nothing else now. The lectern used to be both halves of the
+    // archive at once — the stacks open on it *and* a scroll coming together in
+    // it — so `stop lectern` had to decide which it meant, the panel had one row
+    // for both, and `follow`'s scope had nowhere to go because a fixture carries
+    // exactly one `Operation` and this one had spent it on `research`. §19
+    // records it as the first instrument that could do two things at once.
     //
-    // It has **no operation** now: four fragments are moved in and `wield`ed,
-    // which is the ordinary way an instrument runs. Its picture comes from
-    // having recipes rather than from a verb — see `panel::craft_of`.
+    // No operation now: four fragments are moved in and `wield`ed, the ordinary
+    // way an instrument runs. Its picture comes from having recipes rather than
+    // from a verb — see `panel::craft_of`.
     Branch {
         name: "lectern",
         holds: &[],
@@ -541,26 +475,19 @@ const ARCHIVE: &[Branch] = &[
         operation: None,
         group: None,
     },
-    // **Every domain that holds stock needs somewhere to put it**, and the
-    // archive had none — so `empty lectern` answered *"there is nowhere here to
-    // put what the lectern holds"*, and `tower::home` had no archive home to send
-    // a `fragment` to, which put the archive's only stock out of a tester's reach
-    // in the room it is used in.
+    // Every domain that holds stock needs somewhere to put it, and the archive
+    // had none — so `empty lectern` answered *"there is nowhere here to put what
+    // the lectern holds"* and `tower::home` had no archive home for a
+    // `fragment`. A room with an instrument and nowhere to set anything down is
+    // a room where `empty` can never work. It was added for a stronger reason
+    // since gone (the lectern's `dust`) and stayed when the byproduct went,
+    // because the rule it serves is about *stock*, not waste.
     //
-    // **It was added for a stronger reason that has since gone**: the lectern
-    // shed `dust`, which was trapped in the instrument that made it and
-    // clearable only by `purge`. The byproduct went instead — §10.1 keeps that
-    // mechanic in the laboratory — and this stayed, because the rule it serves is
-    // about *stock*, not about waste. A room with an instrument and nowhere to
-    // set anything down is a room where `empty` is a word that can never work.
-    //
-    // **`cabinet`, measured rather than chosen** — 572 against `combine`, its
-    // nearest word, where the resolver's floor is 600. `shelf` and `chest` both
-    // land *on* the floor (600, against `help` and `check`), and `press`,
-    // `stacks` and `carrel` are over it. `almery` — a monastic book cupboard — is
-    // safest at 429 and was passed over for being a word nobody can type on a
-    // first guess, which is the same objection §19 records against the four
-    // invented shard names.
+    // `cabinet`, measured rather than chosen: 572 against `combine`, where the
+    // resolver's floor is 600. `shelf` and `chest` land *on* the floor and
+    // `press`, `stacks` and `carrel` are over it; `almery` is safest at 429 and
+    // was passed over as a word nobody types on a first guess — §19's objection
+    // to the four invented shard names.
     Branch {
         name: "cabinet",
         holds: &[],
@@ -569,19 +496,14 @@ const ARCHIVE: &[Branch] = &[
         operation: None,
         group: None,
     },
-    // **The stacks: an endless library, and the maze lives here.**
-    //
-    // §10 calls the archive *decipherment*, and the stacks are what that became
-    // — but walking is not assembly, and the two were sharing a fixture
-    // for no better reason than that the archive had only one. Splitting them
-    // gives each its own row on the panel, its own `stop`, and its own state, so
+    // The stacks: an endless library, and the maze lives here. Walking is not
+    // assembly, and the two shared a fixture only because the archive had one;
+    // split, each has its own panel row, its own `stop` and its own state, so
     // *"is a reading open"* and *"is a scroll coming together"* stop being one
     // question with two answers.
     //
-    // **Last, and the order is load-bearing.** §6 resolves a tie to whichever
-    // noun was registered first, so a fixture inserted ahead of the existing ones
-    // would silently change what an existing phrase resolves to. A new place goes
-    // on the end — the same rule the arsenal follows.
+    // Last, on the arsenal's rule: a fixture inserted ahead of the existing ones
+    // would silently change what an existing phrase resolves to.
     Branch {
         name: "stacks",
         holds: &[],
@@ -590,7 +512,7 @@ const ARCHIVE: &[Branch] = &[
         operation: Some(Verb::Research),
         group: None,
     },
-    // **The four ways are a set, and `for each way` walks it.** `Role::Reading`
+    // The four ways are a set, and `for each way` walks it. `Role::Reading`
     // cannot say so on its own: the lens's sockets and its six sigils carry the
     // same role, so a `for each` over the role would hand a spell in the lens
     // ten things when it asked for four.
@@ -630,26 +552,18 @@ const ARCHIVE: &[Branch] = &[
 
 /// The lens: one instrument, four sockets and six sigils.
 ///
-/// **Both verbs are scoped, and that is what keeps a third debt off the books.**
-/// `Scene::offering` derives a verb's scope from the `Operation` a fixture
-/// carries, and a fixture carries exactly one — which is the mechanism §19
-/// records `follow` and `wander` waiting on, both of them tower-wide words as a
-/// result. The prism spends its operation on `probe`, and the four **sockets
-/// each carry `dial`**, which costs nothing because they are places a player
-/// names anyway.
+/// Both verbs are scoped, which keeps a third debt off the books:
+/// `Scene::offering` derives a verb's scope from the one `Operation` a fixture
+/// carries, the mechanism §19 records `follow` and `wander` waiting on. The
+/// prism spends its operation on `probe` and the four sockets each carry `dial`,
+/// free because they are places a player names anyway. There is no oculus: a
+/// first pass gave the lens a second instrument for `scry`, which did not
+/// survive the naming sweep (`scr` reaches `scribe`).
 ///
-/// **There is no oculus.** A first pass gave the lens a second instrument to
-/// carry `scry`, and `scry` did not survive the naming sweep — `scr` reaches
-/// `scribe`, and `tests/naming.rs` deleted its last prefix exemption on the
-/// grounds that one outliving its cause is how a guard stops guarding. `probe`
-/// opens a reading when none is open, so the fixture that existed only to hold
-/// the other verb went with it.
-///
-/// Sockets and sigils are `Role::Reading` for the reason the archive's compass
-/// bearings are: a spell's question resolves its place half against
-/// `NounKind::Place`, so `if the first is settled` needs `first` to be one — and
-/// `Role::Reading` is what makes it a place you can name without being a room
-/// you can stand in (`attend` refuses one in voice).
+/// Sockets and sigils are `Role::Reading` for the archive's compass bearings'
+/// reason: `if the first is settled` resolves its place half against
+/// `NounKind::Place`, and the role makes `first` a place you can name without
+/// being a room you can stand in (`attend` refuses one in voice).
 const LENS: &[Branch] = &[
     // Where the ward is held and where the answer lands. `aligned`, `astray` and
     // `spent` are published as its children, exactly as the maze publishes on
@@ -748,24 +662,16 @@ const LENS: &[Branch] = &[
 
 /// The sanctum: one engine and the three stations a ward passes between.
 ///
-/// **The pylon spends its one `Operation` on `muster`, and each station carries
-/// `haul`** — which is the lens's arrangement rather than the archive's, and the
-/// difference is a debt `tests/naming.rs` already prices. `research`, `follow`
-/// and `wander` are all tower-wide words because the stacks is one fixture with
-/// one `Operation` to spend; the lens has five fixtures and so scoped both of
-/// its verbs for nothing. This room has four, and does the same.
+/// The pylon spends its one `Operation` on `muster` and each station carries
+/// `haul` — the lens's arrangement rather than the archive's. `research`,
+/// `follow` and `wander` are tower-wide because the stacks is one fixture with
+/// one `Operation` to spend; this room has four fixtures, so it scopes. The
+/// stations are `Role::Reading` for the lens's sockets' reason.
 ///
-/// The stations are `Role::Reading` for the reason the archive's compass
-/// bearings and the lens's sockets are: a spell's question resolves its place
-/// half against `NounKind::Place`, so `if the wellspring is empty` needs
-/// `wellspring` to be one — and the role is what stops it also being somewhere
-/// you can `attend`.
-///
-/// **The order is the course's order**, source first, and it is what a player
-/// reads off the board left to right. A course is drawn up at the `wellspring`
-/// and belongs at the `barrier`; the `conduit` is what it passes through.
-/// Nothing in the code depends on that — `pylon::Course` addresses them by index
-/// — but the names were chosen so the fiction and the puzzle agree.
+/// The order is the course's order, source first, which is what a player reads
+/// off the board left to right: drawn up at the `wellspring`, through the
+/// `conduit`, belonging at the `barrier`. `pylon::Course` addresses them by
+/// index, so only the fiction depends on it.
 const SANCTUM: &[Branch] = &[
     Branch {
         name: "pylon",
@@ -803,13 +709,11 @@ const SANCTUM: &[Branch] = &[
 
 /// §10.1's five instruments, plus the dispensary that feeds them.
 ///
-/// Each is a **place**, so `survey alembic` inspects one from across the
-/// laboratory while §19's *"you can only name what is where you are"* still
-/// governs what is *inside* it. That rule is why the pipeline names the
-/// instrument and never its contents.
-///
-/// Order is the parse (see [`BRANCHES`]): pipeline order first, the shared heat
-/// source, then the store.
+/// Each is a place, so `survey alembic` inspects one from across the laboratory
+/// while §19's *"you can only name what is where you are"* still governs what is
+/// *inside* it — which is why the pipeline names the instrument and never its
+/// contents. Order is the parse (see [`BRANCHES`]): pipeline order first, the
+/// shared heat source, then the store.
 const INSTRUMENTS: &[Branch] = &[
     Branch {
         name: "mortar_and_pestle",
@@ -857,10 +761,10 @@ const INSTRUMENTS: &[Branch] = &[
     Branch {
         name: "dispensary",
         // What the player starts with, and never runs out of. Charcoal is fuel
-        // rather than an ingredient, but it is carried and moved like everything
-        // else, which is the whole reason `Reagent` is one kind and not four —
-        // and it is endless for the same reason the other two are: a cold
-        // athanor with nothing to burn is a laboratory with nothing to do.
+        // rather than an ingredient but is carried and moved like everything
+        // else, which is why `Reagent` is one kind and not four — and endless
+        // for the other two's reason: a cold athanor with nothing to burn is a
+        // laboratory with nothing to do.
         holds: &[Holding::endless(
             NounKind::Reagent,
             &["sage", "rock-salt", "charcoal"],
@@ -874,15 +778,12 @@ const INSTRUMENTS: &[Branch] = &[
 
 /// Every fixture the tower raises that has a verb of its own.
 ///
-/// **What `progression.toml` may price.** Its `[earns]` keys used to be checked
-/// against `recipes.toml` alone, which was right while every instrument that
-/// *ran* also transformed something — and stopped being right twice over. The
-/// athanor has a verb and no recipe, so it could never have been priced; the
-/// `stacks` has a verb and no recipe and earns for every walk finished, so it
-/// had to be.
-///
-/// A fixture with neither — the dispensary, the cabinet — is a shelf, and pricing
-/// one would be authoring a number nothing can ever pay.
+/// What `progression.toml` may price. Its `[earns]` keys were checked against
+/// `recipes.toml` alone, which held while every instrument that *ran* also
+/// transformed something: the athanor has a verb and no recipe and so could
+/// never be priced, and the `stacks` has a verb and no recipe and earns for
+/// every walk finished. A fixture with neither — the dispensary, the cabinet —
+/// is a shelf, and pricing one would author a number nothing can ever pay.
 #[must_use]
 pub fn operated() -> Vec<&'static str> {
     fn walk(branches: &'static [Branch], into: &mut Vec<&'static str>) {
@@ -923,12 +824,10 @@ pub fn declared() -> Vec<Verb> {
 /// The fixture that declares `verb`, for a refusal that can name what is missing.
 ///
 /// §6 forbids a bare error, and *"there is nothing here to wander with"* is only
-/// half an answer — the other half is **which** thing. Walking the content rather
+/// half an answer — the other half is which thing. Walking the content rather
 /// than pairing verbs with names in the parser, so a new domain's refusal reads
-/// correctly the day the branch is authored.
-///
-/// Takes the anchor, so `follow` and `wander` both name the `stacks` they act
-/// through rather than nothing at all.
+/// correctly the day the branch is authored. It takes the anchor, so `follow`
+/// and `wander` both name the `stacks` they act through.
 #[must_use]
 pub fn fixture_of(verb: Verb) -> Option<&'static str> {
     fn walk(branches: &'static [Branch], wanted: Verb) -> Option<&'static str> {
@@ -956,29 +855,26 @@ struct Branch {
     operation: Option<Verb>,
     /// The set a `for each` walks, if this fixture is one of a set.
     ///
-    /// **Content, not a `NounKind` and not [`Role`].** `Role::Reading` already
-    /// covers the archive's four ways *and* the lens's four sockets *and* its
-    /// six sigils, so a `for each` over it would give a spell in the lens ten
-    /// things when it asked for four. The set is a fact about the fixtures
-    /// rather than about the kind of thing they are, and a domain declares its
-    /// own — which is what keeps §10's five remaining rooms from each needing an
-    /// arm somewhere.
+    /// Content, not a `NounKind` and not [`Role`]: `Role::Reading` covers the
+    /// archive's four ways *and* the lens's four sockets *and* its six sigils,
+    /// so a `for each` over it would give a spell in the lens ten things when it
+    /// asked for four. A domain declares its own, which keeps §10's remaining
+    /// rooms from each needing an arm somewhere.
     ///
-    /// **Singular, because it names the cursor too.** `for each way` binds
-    /// `way`, so the body reads `if way has spoil` with no second word to learn.
+    /// Singular, because it names the cursor too: `for each way` binds `way`, so
+    /// the body reads `if way has spoil` with no second word to learn.
     group: Option<&'static str>,
 }
 
 /// A fixture that is not an ordinary instrument.
 ///
-/// **A component, not a name comparison.** Six sites branched on `name ==
-/// ATHANOR` or `name != DISPENSARY` — `wield`, `stop`, the panel's state reader,
-/// the panel's own filter, `heat::find` and `reachable` — with nothing binding
-/// them together. §10 puts five more domains in Phase 11a, and the day a second
-/// room gets a forge, `wield forge` would have started a `Working` run with no
-/// recipe instead of lighting it, `stop` would have refused to bank its fuel, and
-/// the panel would have drawn a filling meter where a draining one belongs. Six
-/// edits, none of which the compiler would have asked for.
+/// A component, not a name comparison. Six sites branched on `name == ATHANOR`
+/// or `name != DISPENSARY` — `wield`, `stop`, the panel's state reader, the
+/// panel's own filter, `heat::find` and `reachable` — with nothing binding them
+/// together, and §10 has five more domains coming. The day a second room got a
+/// forge, `wield forge` would start a `Working` run instead of lighting it,
+/// `stop` would refuse to bank its fuel, and the panel would draw a filling
+/// meter where a draining one belongs: six edits the compiler cannot ask for.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Role {
     /// Burns fuel for the instruments that need heat (§10.1's athanor).
@@ -990,13 +886,11 @@ enum Role {
     Keep,
     /// One of the four ways the archive's reading can go.
     ///
-    /// A **place**, because `spell::compile` resolves the place half of a
-    /// question against `NounKind::Place` and nothing else — `if north has
-    /// passage` cannot be written unless `north` is one. That is also why it is
-    /// a `Role` rather than a bare fixture: a place in the scene is a place you
-    /// can `attend`, and walking into a compass bearing is not a thing the
-    /// wizard does. The role is what `attend` refuses on, and what keeps these
-    /// four off the instrument panel.
+    /// A place, because `spell::compile` resolves a question's place half
+    /// against `NounKind::Place` and nothing else. A `Role` rather than a bare
+    /// fixture because walking into a compass bearing is not a thing the wizard
+    /// does: the role is what `attend` refuses on, and what keeps these four off
+    /// the panel.
     Reading,
 }
 
@@ -1019,10 +913,9 @@ impl Holding {
     /// The tower never runs out of these.
     ///
     /// §11.5's ongoing alchemy rests on there always being something to do, and
-    /// a laboratory whose sage is spent after one grind has nothing. **What is
-    /// made from them is not endless** — that is where the game is: the base
-    /// reagents are the floor, and everything derived from them is scarce
-    /// because it costs the tower's time to make.
+    /// a laboratory whose sage is spent after one grind has nothing. What is
+    /// made from them is not endless — the base reagents are the floor, and
+    /// everything derived from them costs the tower's time.
     const fn endless(kind: NounKind, names: &'static [&'static str]) -> Self {
         Self {
             kind,
@@ -1039,12 +932,11 @@ impl Holding {
 /// the failure §13 exists to prevent — *"if the live game and the CLI harness
 /// diverged, we would not find out until Phase 11."*
 pub fn raise(world: &mut World) {
-    // **The filesystem root is nameless**, and that is what makes the whole
-    // restructure free: `path_of` collects a segment only where a `Name` is
-    // present, so a root without one contributes nothing and the paths stay
+    // The filesystem root is nameless, which is what makes the restructure free:
+    // `path_of` collects a segment only where a `Name` is, so the paths stay
     // `/tower/laboratory` and `/grimoire/first_light.spell`. It carries a
-    // `NodeId` like every other node — a save has to be able to name it — and no
-    // `Nameable`, so `find_place` cannot reach it and there is no `attend /`.
+    // `NodeId` because a save has to name it, and no `Nameable`, so `find_place`
+    // cannot reach it and there is no `attend /`.
     let filesystem = {
         let id = world.resource_mut::<NodeIds>().issue();
         world.spawn((id, Protected)).id()
@@ -1058,17 +950,16 @@ pub fn raise(world: &mut World) {
         raise_branch(world, tower, branch, true);
     }
 
-    // **After every branch, never inside one.** A satchel is a fixture like any
-    // other and belongs in a `places` list — but §6 resolves an ambiguous phrase
-    // to whichever noun was registered *first*, so a fixture inserted into the
-    // laboratory's list would push every noun in the five rooms after it one
-    // place down. Raising them all here, in one pass over the same slice, adds
-    // six nouns to the end of the registration order and moves none.
+    // After every branch, never inside one. A satchel belongs in a `places` list
+    // — but §6 resolves an ambiguous phrase to whichever noun was registered
+    // *first*, so one inserted into the laboratory's list would push every noun
+    // in the rooms after it down. One pass here adds six nouns to the end of the
+    // registration order and moves none.
     for branch in BRANCHES {
-        // **Not the arsenal.** It is the Keep — finished work, reachable from
-        // every room — and no spell is written *for* it, so a queue there would
-        // be a fixture nothing could ever read. It also puts a node among the
-        // things `keeping` walks, which is what `arsenal.rs` noticed first.
+        // Not the arsenal: it is the Keep — finished work, reachable from every
+        // room — and no spell is written *for* it, so a queue there would be a
+        // fixture nothing could ever read, and a node among the things `keeping`
+        // walks, which is what `arsenal.rs` noticed first.
         if matches!(branch.role, Some(Role::Keep)) {
             continue;
         }
@@ -1085,19 +976,15 @@ pub fn raise(world: &mut World) {
 
 /// Hang a satchel in one domain — §8's channel between two spells.
 ///
-/// **Every domain a spell can be written for, which is every one but the
-/// arsenal.** That is the whole of the rule, and it is short on purpose: a
-/// per-room list of which have queues is a list to keep in step with §10's
-/// remaining domains. A spell is written *for* a domain, so the satchel it means
-/// is always the one where it stands, and the name is the same everywhere for
-/// that reason — `<room>.log` is the same decision from the other side, where
-/// the name changes and the meaning does not, because a log is read from another
-/// room and a satchel never is.
+/// Every domain a spell can be written for, which is every one but the arsenal.
+/// Short on purpose: a per-room list of which have queues is one to keep in step
+/// with §10's remaining domains. A spell is written *for* a domain, so the
+/// satchel it means is always the one where it stands, and the name is the same
+/// everywhere for that reason — where `<room>.log` varies, because a log is read
+/// from another room and a satchel never is.
 ///
-/// **`Protected`, on the dispensary's argument.** `purge satchel` would scour a
-/// queue a running pipeline is reading, which is §7's *"a thing the loop depends
-/// on is safe by refusing, not by being emptied."* Emptying it is what `pull`
-/// does, one name at a time.
+/// `Protected`, on the dispensary's argument: `purge satchel` would scour a
+/// queue a running pipeline is reading (§7). Emptying it is `pull`'s job.
 fn raise_satchel(world: &mut World, tower: Entity, room: &str) {
     let Some(at) = super::children_of(world, tower)
         .into_iter()
@@ -1128,20 +1015,15 @@ fn raise_grimoire(world: &mut World, filesystem: Entity) {
         shelve(world, grimoire, name, spell);
     }
 
-    // **The dev ladders, on the shelf from tick 0 — in a debug build only.**
-    //
-    // They used to be reachable only through `debug_spell <name>`, which writes
-    // one out and refuses outside its own domain. That refusal exists because
-    // `scribe::write` homes a *new* spell to where the player stands; a spell
-    // raised here carries its own `Domain` from the file, so the room it is
-    // written for is right without anybody having walked there. `debug_spell`
-    // stays for the other job it does — handing back a fresh copy after one has
-    // been edited or `purge`d.
+    // The dev ladders, on the shelf from tick 0, in a debug build only. They
+    // used to be reachable only through `debug_spell <name>`, which refuses
+    // outside its own domain because `scribe::write` homes a *new* spell where
+    // the player stands; a spell raised here carries its own `Domain`, so the
+    // room it is written for is right without anybody walking there.
+    // `debug_spell` stays for its other job — a fresh copy after an edit.
     //
     // `cfg(debug_assertions)` here and `include_str!` under the same `cfg` in
-    // `execute::debug_spell`, so a release build has neither these nodes nor the
-    // eighty lines behind them. `the_dev_spells_are_shelved_only_in_a_debug_build`
-    // holds both halves.
+    // `execute::debug_spell`, so a release build has neither.
     #[cfg(debug_assertions)]
     for (name, spell) in crate::execute::dev_spells().iter() {
         shelve(world, grimoire, name, spell);
@@ -1165,11 +1047,11 @@ fn shelve(
         &crate::content::with_extension(name),
         NounKind::Script,
     );
-    // **A reading beside the text from the moment a spell exists.** An authored
-    // spell is already canonical, so this is the identity — but `Read` being
-    // present wherever `Held` is means `spell::source` never has to fall back,
-    // and the save's component-completeness lint can see the component at all.
-    // Nobody read it, so no reader may keep it: see `Read::by`.
+    // A reading beside the text from the moment a spell exists. An authored
+    // spell is already canonical, so this is the identity — but `Read` present
+    // wherever `Held` is means `spell::source` never has to fall back, and the
+    // save's component-completeness lint can see the component at all. Nobody
+    // read it, so no reader may keep it: see `Read::by`.
     world.entity_mut(node).insert((
         super::Held(spell.lines.clone()),
         super::Read::verbatim(&spell.lines),
@@ -1181,10 +1063,10 @@ fn shelve(
 /// Spawn one branch, its holdings, and any places inside it.
 ///
 /// `protect` marks the targets §7 guards *in character* — the root and the live
-/// domains. Instruments deliberately do **not** get it: `purge alembic` should
-/// empty the alembic, not refuse. What stops it deleting one is that `purge`
-/// clears any place rather than despawning it, so an instrument is safe by being
-/// a place. See [`super::work::purge`] for the two tiers.
+/// domains. Instruments deliberately do not get it, because `purge alembic`
+/// should empty the alembic rather than refuse; `purge` clears a place instead
+/// of despawning it, so an instrument is safe by being one. See
+/// [`super::work::purge`] for the two tiers.
 fn raise_branch(world: &mut World, parent: Entity, branch: &Branch, protect: bool) {
     let at = spawn(world, Some(parent), branch.name, NounKind::Place);
     if protect {
@@ -1210,29 +1092,26 @@ fn raise_branch(world: &mut World, parent: Entity, branch: &Branch, protect: boo
             world.entity_mut(at).insert(super::HeatSource);
         }
         Some(Role::Store) => {
-            // **Protected.** The dispensary was an ordinary fixture, so
-            // `purge dispensary` scoured it — despawning `sage`, `rock-salt` and
-            // `charcoal` at once. No recipe produces sage or charcoal, so the
-            // athanor could never be lit again and no potion could ever be
-            // brewed: an unwinnable tower from one command, against §7's
-            // *"destruction is a tool, not a trap"* and §11.5's *"not automating
-            // is never ruinous, only slower"*. An instrument is safe by being
-            // emptied rather than deleted; a shelf of stock is safe by refusing.
+            // Protected. As an ordinary fixture, `purge dispensary` despawned
+            // `sage`, `rock-salt` and `charcoal` at once, and no recipe produces
+            // sage or charcoal — an unwinnable tower from one command, against
+            // §7's *"destruction is a tool, not a trap"* and §11.5's *"not
+            // automating is never ruinous, only slower"*. An instrument is safe
+            // by being emptied; a shelf of stock is safe by refusing.
             world.entity_mut(at).insert((super::Store, Protected));
         }
         Some(Role::Keep) => {
-            // **`Protected` already**, from being a top-level branch, and that
-            // is the answer you want: the arsenal holds everything the player
-            // has finished, so `purge arsenal` refusing in character is exactly
-            // §7's guard doing its job on the highest-value room in the tower.
+            // `Protected` already, from being a top-level branch, and that is
+            // the answer you want: the arsenal holds everything the player has
+            // finished, so `purge arsenal` refusing in character is §7's guard
+            // doing its job on the highest-value room in the tower.
             world.entity_mut(at).insert(super::Keep);
         }
         Some(Role::Reading) => {
-            // **`Protected` too.** `purge north` would otherwise scour a
-            // direction — despawning the reading the maze had just written and
-            // leaving a solver asking a question about a place that had gone
-            // quiet, which reads exactly like a wall. The same argument the
-            // dispensary's makes: a thing the loop depends on is safe by
+            // `Protected` too: `purge north` would otherwise despawn the reading
+            // the maze had just written, leaving a solver asking about a place
+            // that had gone quiet — which reads exactly like a wall. The
+            // dispensary's argument: a thing the loop depends on is safe by
             // refusing, not by being emptied.
             world.entity_mut(at).insert((super::Reading, Protected));
         }
@@ -1283,18 +1162,15 @@ pub fn raise_reading(world: &mut World, at: Entity, word: &str) -> Entity {
 
 /// Put one reading inside a way, carrying a number.
 ///
-/// `marks` is the only one, and the count rides on `Stock` because that is
-/// where a quantity lives — so `has 2 or more marks` is answered by the same
-/// arithmetic that answers `has 4 fragment`, rather than by a second notion of
-/// how many of something there is.
+/// `marks` is the only one, and the count rides on `Stock` so that `has 2 or
+/// more marks` is answered by the arithmetic that answers `has 4 fragment`.
 ///
 /// Still `NounKind::Sense`, which matters twice: `holdings` skips those, so a
 /// counted reading cannot enter the multiset a recipe matches against; and the
 /// scene keeps offering the word at cast, when no maze is open.
 ///
-/// **Never called with nought.** A pile that reaches zero is despawned
-/// everywhere else in the tower; see `maze::MARKS` for why an unwalked way
-/// simply has no count instead.
+/// Never called with nought — see `maze::MARKS` for why an unwalked way has no
+/// count instead.
 pub fn raise_count(world: &mut World, at: Entity, word: &str, count: u32) -> Entity {
     let node = raise_reading(world, at, word);
     world.entity_mut(node).insert(Stock::Counted(count));
@@ -1309,14 +1185,12 @@ fn spawn(world: &mut World, parent: Option<Entity>, name: &str, kind: NounKind) 
         .id();
     if let Some(parent) = parent {
         world.entity_mut(node).insert(ChildOf(parent));
-        // **A node inherits its parent's seal.** `tower::seal` marks the tree
-        // that exists when it runs, and readings are published later and
-        // *re*-published as numbers move — `erode` rewrites the pylon's
-        // integrity, `defend::publish` each die's price. A child spawned
-        // unmarked under a shut room is a hole in the one invariant the marker
-        // exists for, and the two sabotage queries read it with a `Without`
-        // filter. Checking the parent alone is enough: the parent was marked by
-        // `seal` or inherited it here, so the property is inductive.
+        // A node inherits its parent's seal. `tower::seal` marks the tree that
+        // exists when it runs, but readings are published later and again as
+        // numbers move, so a child spawned unmarked under a shut room is a hole
+        // in the invariant the two sabotage queries read with `Without`.
+        // Checking the parent alone is enough: it was marked by `seal` or
+        // inherited it here, so the property is inductive.
         if world.get::<super::Sealed>(parent).is_some() {
             world.entity_mut(node).insert(super::Sealed);
         }
@@ -1332,15 +1206,12 @@ mod tests {
 
     #[test]
     fn every_self_anchored_verb_is_declared_by_a_fixture() {
-        // **The two halves of one rule, checked against each other.**
-        // `Verb::anchor` says a verb is scoped to a fixture; `BRANCHES` says which
-        // fixture and therefore which room. If the parser claims an anchor no
-        // fixture declares, the verb is scoped to nowhere and silently vanishes
-        // from every room's `help` — the opposite of the defect this pair fixed,
-        // and just as quiet.
-        //
-        // §19 records three entangled lists drifting exactly this way. This is the
-        // guard that stops the fourth.
+        // The two halves of one rule, checked against each other. `Verb::anchor`
+        // says a verb is scoped to a fixture; `BRANCHES` says which fixture and
+        // therefore which room. If the parser claims an anchor no fixture
+        // declares, the verb is scoped to nowhere and silently vanishes from
+        // every room's `help`. §19 records three entangled lists drifting this
+        // way; this is the guard against a fourth.
         let declared = declared();
         for verb in Verb::ALL {
             if verb.anchor() == Some(verb) {
@@ -1368,13 +1239,11 @@ mod tests {
 
     #[test]
     fn every_noun_kind_the_slice_uses_has_something_to_resolve_against() {
-        // The point of the whole item for §15's gate. Until this existed, the
+        // The point of the whole item for §15's gate: until this existed the
         // Essence, Vessel, Fragment and Place slots were unfillable, so half the
-        // sixteen-verb vocabulary could not be exercised by a tester at all.
-        //
-        // Walked rather than checked from one spot: a domain's belongings are
-        // nameable only from inside it, which is §7's whole point — see
-        // `tower::scene`.
+        // sixteen-verb vocabulary could not be exercised at all. Walked rather
+        // than checked from one spot, because a domain's belongings are nameable
+        // only from inside it (§7; see `tower::scene`).
         let mut sim = Sim::new(1);
         let mut seen = Vec::new();
         for domain in ["tower", "laboratory", "archive"] {
@@ -1386,22 +1255,15 @@ mod tests {
         // Derived from the signatures rather than listed, so retiring a verb or
         // adding one cannot leave this asserting about a slot nothing fills.
         //
-        // **Asked through `accepts` rather than `contains`.** A slot kind is not
-        // always a noun's own kind: nothing *is* a `Readable` or an `Any`, and
-        // asking whether the scene contains one is a question with no true
-        // answer. The question worth asking is whether anything in the world
-        // could **fill** the slot, which is the same question the matcher, the
-        // numbered prompt and Tab completion all ask.
-        //
-        // That also lets `Any` back in. It was excluded here for the same reason
-        // `Readable` would have had to be, and excluding a kind because the test
-        // asks the wrong question is how a stale exemption outlives its cause.
+        // Asked through `accepts` rather than `contains`, because nothing *is* a
+        // `Readable` or an `Any`. Whether anything could *fill* the slot is the
+        // question the matcher, the numbered prompt and Tab completion all ask,
+        // and it lets `Any` back in.
         //
         // Free text stays out: `Pattern` is whatever the player is searching
-        // for, `Count` is a number, and `Name` is a spell being **coined** — so
-        // nothing in the world enumerates any of the three, and a `Name` slot
-        // with something to resolve against would mean `scribe` could only make
-        // spells that already exist.
+        // for, `Count` is a number, and `Name` is a spell being coined, so
+        // nothing enumerates any of the three — a `Name` slot with something to
+        // resolve against would mean `scribe` could only make spells that exist.
         for wanted in crate::parser::Verb::ALL
             .into_iter()
             .flat_map(crate::parser::Verb::signature)
@@ -1412,14 +1274,13 @@ mod tests {
             //
             // - `Essence` — §10.1 makes a potion something the alembic *yields*,
             //   so nothing is an essence until the player brews one.
-            // - `Script` — there are no spells until Phase 1's script engine.
-            //   `scribe`/`bind`/`invoke` are dark for exactly this reason, which
+            // - `Script` — there are no spells until Phase 1's script engine;
+            //   `scribe`/`bind`/`invoke` are dark for this reason, which
             //   `is_live` already records.
             //
-            // `Readable` is deliberately **not** here. It accepts `File` as well
-            // as `Script`, and the logs exist — so the slot is satisfiable today
-            // and stays satisfiable when spells arrive. A slot kind that is
-            // unfillable for one of its members is not unfillable.
+            // `Readable` is deliberately not here: it accepts `File` as well as
+            // `Script` and the logs exist, so it is satisfiable today and stays
+            // so when spells arrive.
             if matches!(wanted, NounKind::Essence | NounKind::Script) {
                 continue;
             }
@@ -1432,43 +1293,30 @@ mod tests {
 
     #[test]
     fn every_place_leaf_is_unique() {
-        // **What makes leaf echoes safe.** `Intent::echo` draws a place as its
-        // last segment, because the full path clipped the destination off a
-        // three-argument `move` at the 80×22 floor. That is only unambiguous
-        // while no two places share a leaf.
-        //
-        // `score_against` matches a phrase against the full name or the leaf and
-        // nothing between, so a collision cannot be echoed around — there is no
-        // `laboratory/alembic` form the parser would accept. The answer is to
-        // forbid the collision, in the shape of the naming pass's own tests, so
-        // the day §10's seventh domain wants a second `dispensary` this fails
-        // rather than the echo quietly starting to lie.
+        // What makes leaf echoes safe. `Intent::echo` draws a place as its last
+        // segment, because the full path clipped the destination off a
+        // three-argument `move` at the 80×22 floor — unambiguous only while no
+        // two places share a leaf, and `score_against` matches the full name or
+        // the leaf and nothing between, so a collision cannot be echoed around.
+        // Forbidding it here means the day a domain wants a second `dispensary`
+        // this fails rather than the echo quietly starting to lie.
         let sim = Sim::new(1);
         let world = sim.world();
         let root = crate::tower::root(world);
 
-        // **The satchel is exempt, and it is the only thing that is.** There is
-        // one in every domain and they are all called `satchel`, which is the
-        // collision this test forbids — so the exemption has to earn itself
-        // rather than be granted.
+        // The satchel is exempt and is the only thing that is, so the exemption
+        // has to earn itself: there is one in every domain and they are all
+        // called `satchel`.
         //
-        // The rule the test protects is *an echo must say which place it means*.
-        // A satchel is the one fixture where the leaf is **already** the whole
-        // answer: a spell is written for a domain and a player stands in one, so
-        // the satchel either of them can reach is always the one here, and
-        // `watch::find` and `Scene::offers` both scope to `Cwd` without being
-        // asked to. `move sage to satchel` in the laboratory can mean nothing
-        // else.
+        // The rule is *an echo must say which place it means*, and a satchel's
+        // leaf is already the whole answer: `watch::find` and `Scene::offers`
+        // both scope to `Cwd` unasked, so `move sage to satchel` in the
+        // laboratory can mean nothing else.
         //
-        // The alternative was one tower-wide satchel, and it is worse in the way
-        // that keeps costing this project: it would be nameable everywhere and
-        // findable nowhere until three separate lookups were taught about it —
-        // §19's *"naming is only half"*, which `tower::keep` records paying
-        // twice. A per-room fixture needs no lookup to change at all.
-        //
-        // `<room>.log` took the other road and varied the name, correctly: a log
-        // is *read* by name from another room (`sift x menagerie.log`), so its
-        // leaf really does have to say which. A satchel never is.
+        // One tower-wide satchel is worse in the way that keeps costing this
+        // project: nameable everywhere and findable nowhere until three lookups
+        // were taught about it — §19's *"naming is only half"*. `<room>.log`
+        // varies correctly, because a log *is* read by name from another room.
         let mut leaves: Vec<String> = Vec::new();
         let mut stack = vec![root];
         while let Some(node) = stack.pop() {
@@ -1504,11 +1352,11 @@ mod tests {
 
     #[test]
     fn the_filesystem_root_is_nameless_and_holds_the_tower_and_the_grimoire() {
-        // **The root is not the tower any more**, and this is where that is
-        // written down. `/grimoire` is a sibling because a spell is a book you
-        // carry rather than a room you walk to (§8), and the root above them
-        // carries no `Name` — which is what keeps `path_of` yielding
-        // `/tower/laboratory` with no special case anywhere.
+        // The root is not the tower any more, and this is where that is written
+        // down. `/grimoire` is a sibling because a spell is a book you carry
+        // rather than a room you walk to (§8), and the root above them carries
+        // no `Name`, which keeps `path_of` yielding `/tower/laboratory` with no
+        // special case anywhere.
         let sim = Sim::new(1);
         let world = sim.world();
         let root = crate::tower::root(world);
@@ -1527,18 +1375,13 @@ mod tests {
 
     #[test]
     fn the_tower_is_a_tree_with_the_two_slice_domains() {
-        // §15 fixes the slice at two starting **activity** domains. `/grimoire`
-        // is not one — it is where you write, not something you run — so it is
-        // deliberately outside this assertion rather than added to it. See
-        // `GRIMOIRE`.
-        //
-        // **`/tower/arsenal` is the same kind of exception**, and it is inside
-        // the assertion rather than outside it because it *is* under `/tower`:
-        // it is where finished work is kept, not something you run, so it raises
-        // no instrument, offers no verb and draws an empty panel. What it is
-        // counted for here is the **order** — §6 resolves a tie to whichever
-        // noun was registered first, so a domain added anywhere but the end
-        // would silently change what an existing phrase resolves to.
+        // §15 fixes the slice at two starting *activity* domains. `/grimoire` is
+        // not one — it is where you write, not something you run — so it is
+        // deliberately outside this assertion (see `GRIMOIRE`), while
+        // `/tower/arsenal` is the same kind of exception inside it, because it
+        // *is* under `/tower`. What it is counted for is the order: §6 resolves
+        // a tie to whichever noun was registered first, so a domain added
+        // anywhere but the end changes what an existing phrase resolves to.
         let sim = Sim::new(1);
         let world = sim.world();
         let tower = children_of(world, crate::tower::root(world))[0];
@@ -1546,28 +1389,14 @@ mod tests {
         assert_eq!(path_of(world, tower), "/tower");
         assert_eq!(
             names_under(world, tower),
-            // The lens is **third, before the arsenal**, which is the rule this
+            // The lens is third, before the arsenal, which is the rule this
             // assertion exists for: a domain goes on the end of `BRANCHES` and
             // the arsenal is not a domain, so scrying slots in ahead of it and
-            // the two that came before do not move. The sanctum slots in behind
-            // the lens on the same rule, and moves nothing either.
-            //
-            // **The menagerie is behind the *arsenal*, and that is the rule
-            // working rather than an exception to it.** By Phase 5 the arsenal
-            // is no longer last, so "on the end" means the end of the list:
-            // putting a domain ahead of it would shift the arsenal's spawn
-            // index, and spawn order is §6's tie-resolution order. Appending
-            // leaves every one of the five before it exactly where it was.
-            //
-            // **The bailey is behind the menagerie, on the same rule for the
-            // third time.** It is not one of §10's seven — it is a place you
-            // descend into, the arsenal's shape — but it is still a `Branch`, so
-            // it still has a spawn index and still has to go on the end.
-            // **The forge is behind the bailey, on the same rule for the
-            // fourth time.** It is §10's seventh domain and the last one the
-            // design has, so it is also the last chance to get this wrong: put
-            // ahead of anything, it would shift that node's spawn index and
-            // silently re-resolve names in every spell already written.
+            // nothing before it moves. The menagerie is behind the *arsenal*,
+            // which is that rule working rather than an exception: by Phase 5
+            // the arsenal is no longer last, so "on the end" means the end of
+            // the list. A `Branch` inserted anywhere else shifts a spawn index,
+            // and spawn order is §6's tie-resolution order.
             [
                 "laboratory",
                 "archive",
@@ -1622,11 +1451,11 @@ mod tests {
 
     #[test]
     fn a_spell_is_nameable_from_anywhere_in_the_tower() {
-        // **The rule that keeps `invoke` usable.** Everything that is not a
-        // place is registered from `cwd`, and `/grimoire` is a protected domain
-        // rather than a `Fixture`, so without the exemption in `scene::rebuild`
-        // a spell could only be named while standing in the grimoire — which is
-        // the one room with no laboratory to run it in.
+        // The rule that keeps `invoke` usable. Everything that is not a place is
+        // registered from `cwd`, and `/grimoire` is a protected domain rather
+        // than a `Fixture`, so without the exemption in `scene::rebuild` a spell
+        // could only be named while standing in the grimoire — the one room with
+        // no laboratory to run it in.
         let mut sim = Sim::new(1);
         for domain in ["tower", "laboratory", "archive", "grimoire"] {
             sim.submit(&format!("attend {domain}"));
@@ -1643,15 +1472,12 @@ mod tests {
 
     #[test]
     fn a_spell_nameable_from_anywhere_is_readable_from_anywhere() {
-        // **The other half of the same rule, and it was missing.** The scene
-        // registered spells globally while the lookup still searched only `cwd`
-        // and then places, so from the laboratory `peruse first_light.spell`
-        // resolved at `Clear` confidence, found nothing, fell through to the
-        // record-stream reader and reported a **zero-line read of a
-        // three-line file**.
-        //
-        // Nameable and findable are one rule. Asserting only the first is what
-        // let them drift apart.
+        // The other half of the same rule, and it was missing: the scene
+        // registered spells globally while the lookup searched only `cwd` and
+        // then places, so `peruse first_light.spell` from the laboratory fell
+        // through to the record-stream reader and reported a zero-line read of a
+        // three-line file. Nameable and findable are one rule; asserting only
+        // the first let them drift apart.
         for domain in ["tower", "laboratory", "archive", "grimoire"] {
             let mut sim = Sim::new(1);
             sim.submit(&format!("attend {domain}"));
@@ -1659,10 +1485,9 @@ mod tests {
             sim.submit("peruse first_light.spell");
             sim.step();
 
-            // **`ScriptLine`, and this counted `LogLine` until `0.3.23`.** A
-            // spell read back as log output is the defect this test was written
-            // to catch wearing a different face, so the kind is now half of what
-            // it asserts rather than incidental to it.
+            // `ScriptLine`, and this counted `LogLine` until `0.3.23`. A spell
+            // read back as log output is this test's own defect wearing a
+            // different face, so the kind is half of what it asserts.
             let lines = sim
                 .scrollback()
                 .records()

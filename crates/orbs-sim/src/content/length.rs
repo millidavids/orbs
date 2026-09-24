@@ -1,26 +1,16 @@
 //! How long a game is, chosen when it begins (DESIGN.md §11.5, §19).
 //!
-//! # Why a game has a length at all
+//! A game has a length because the shipped curve tops out at 10,000 experience,
+//! roughly five thousand hand-played commands — reachable by hand. That makes
+//! playing manually barely worse than automating, which undercuts pillar 3. So
+//! the curve stretches, and how far is a choice the player makes once.
 //!
-//! The shipped curve tops out at 10,000 experience, which is roughly five
-//! thousand hand-played commands — **reachable by hand**. That makes playing
-//! manually barely worse than automating, which undercuts pillar 3: *automation
-//! is progression*. A tower you can finish by typing is a tower that never has to
-//! teach you to write a spell.
-//!
-//! So the curve stretches, and how far is a choice the player makes once.
-//!
-//! # The head is anchored and the tail is stretched
-//!
-//! **A flat multiplier would break the thing this exists to serve.**
-//! `progression.toml` on the first station: *"The player does the whole loop by
-//! hand once, and the reward is not having to do it again — which is pillar 3's
-//! promise landing as a mechanic rather than as a premise."* Six times that is
-//! six clarities brewed by hand before the first spell slot arrives; twenty-five
-//! times is twenty-five, against §12's *"a non-terminal player reaches hour two
-//! unaided"*.
-//!
-//! So the stretch **ramps**: nothing at the first station, full at the last.
+//! The head is anchored and the tail is stretched, because a flat multiplier
+//! would break the thing this serves: the first station is *do the whole loop by
+//! hand once*, and six times that is six clarities brewed by hand before the
+//! first spell slot, against §12's *"a non-terminal player reaches hour two
+//! unaided"*. So the stretch ramps — nothing at the first station, full at the
+//! last.
 //!
 //! ```text
 //! factor(i) = 1 + (k - 1) * (i / (n - 1))^2
@@ -32,37 +22,34 @@
 //! not move at all once the integer division has had its way, which is the ramp
 //! doing exactly what it is for.
 //!
-//! **It also dissolves the room-reveal problem without a list.** A first draft
-//! named five stations to exempt and three of the five were wrong; and because a
-//! mastery line is *sequential*, exempting one station does not protect it when a
-//! scaled station precedes it. An index-anchored ramp needs no exemptions: every
-//! line's first station is unchanged by construction.
+//! It also dissolves the room-reveal problem without a list: a first draft named
+//! five stations to exempt and three were wrong, and a mastery line is
+//! *sequential*, so exempting one station does not protect it when a scaled
+//! station precedes it. An index-anchored ramp leaves every line's first station
+//! unchanged by construction.
 //!
-//! # The tiers are the curve, not the clock
-//!
-//! Each is defined by **what the last station reads**, which is a fact. What that
-//! costs in hours is for `orbs-balance` to measure: §19 records the tower's
-//! automated rate as an open question — *"either the line's top or additivity is
-//! wrong"* — and a tier defined in hours would be a guess wearing a fact's
-//! clothes. Nothing here settles that question.
+//! The tiers are the curve, not the clock. Each is defined by what the last
+//! station reads, which is a fact; what that costs in hours is for
+//! `orbs-balance` to measure, and a tier defined in hours would be a guess
+//! wearing a fact's clothes (§19).
 
 use bevy_ecs::prelude::Resource;
 use serde::{Deserialize, Serialize};
 
 /// How long a game runs.
 ///
-/// **Serialised by name**, so a save reads `length = "medium"` rather than a
-/// number whose meaning would drift the moment a tier is retuned.
+/// Serialised by name, so a save reads `length = "medium"` rather than a number
+/// whose meaning would drift the moment a tier is retuned.
 ///
-/// **A `Resource` as well as a save field**, because the stretch is applied once
-/// at construction and the world then holds only its *result* — so without this
-/// nothing could answer *what length is this game* at save time, and the answer
-/// would have to be reverse-engineered from the curve.
+/// A `Resource` as well as a save field, because the stretch is applied once at
+/// construction and the world then holds only its *result* — so without this,
+/// *what length is this game* would have to be reverse-engineered from the
+/// curve at save time.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Resource)]
 #[serde(rename_all = "lowercase")]
 pub enum Length {
-    /// The curve exactly as authored. **What every tower had before length
-    /// existed**, and what a dump runs at so its baselines do not move.
+    /// The curve exactly as authored — what every tower had before length
+    /// existed, and what a dump runs at so its baselines do not move.
     Baseline,
     /// A brisk game.
     Short,
@@ -105,8 +92,7 @@ impl Length {
     /// What the **last** station on a track reads at this length, against a
     /// track whose last station currently reads `authored`.
     ///
-    /// **The tier is this number and nothing else.** Hours are swept, not
-    /// promised — see the module doc.
+    /// The tier is this number and nothing else; hours are swept, not promised.
     #[must_use]
     pub const fn last(self, authored: u64) -> u64 {
         match self {
@@ -139,9 +125,9 @@ impl Length {
 
     /// Stretch `authored`, the value at `index` of `count`.
     ///
-    /// **Never below what was authored**, and never nought: a threshold that
-    /// rounded down to zero would be a station reached before the game began, and
-    /// a deed of nought is refused at load.
+    /// Never below what was authored, and never nought: a threshold rounding
+    /// down to zero would be a station reached before the game began, and a deed
+    /// of nought is refused at load.
     #[must_use]
     pub const fn stretch(self, authored: u64, index: usize, count: usize) -> u64 {
         let stretched = (authored * self.ramp(index, count)) / SCALE;
@@ -156,9 +142,9 @@ impl Length {
 /// The fixed-point denominator [`Length::ramp`] returns over. Private, so its
 /// doc link there is plain text — the ratio is the contract, not this number.
 ///
-/// **Integer arithmetic throughout.** A curve computed in floats would be a
-/// world that could replay differently on a different target, which is the one
-/// property §13 will not spend.
+/// Integer arithmetic throughout: a curve computed in floats could replay
+/// differently on a different target, which is the one property §13 will not
+/// spend.
 const SCALE: u64 = 1_000;
 
 #[cfg(test)]
@@ -167,9 +153,9 @@ mod tests {
 
     #[test]
     fn the_head_never_moves_at_any_length() {
-        // **Pillar 3's landing point.** The first station is one clarity brewed
-        // by hand, and the reward is the slot that means never doing it again.
-        // Stretching it would make the tutorial the grind.
+        // Pillar 3's landing point: the first station is one clarity brewed by
+        // hand and the reward is the slot that means never doing it again, so
+        // stretching it would make the tutorial the grind.
         for length in [Length::Short, Length::Medium, Length::Long] {
             assert_eq!(length.stretch(16, 0, 16), 16, "{length:?} moved the head");
         }
@@ -194,8 +180,8 @@ mod tests {
 
     #[test]
     fn a_stretched_track_still_ascends_strictly() {
-        // **`Progression::check`'s load gate.** A track that stopped ascending
-        // would panic at startup, so this is asserted rather than argued.
+        // `Progression::check`'s load gate: a track that stopped ascending would
+        // panic at startup, so this is asserted rather than argued.
         let authored = [
             16, 24, 40, 56, 96, 160, 256, 400, 640, 1_000, 1_600, 2_500, 4_000, 6_400, 8_000,
             10_000,
@@ -249,13 +235,12 @@ mod tests {
 
     #[test]
     fn stretching_never_touches_what_a_run_earns() {
-        // **The failure that would cancel the feature in silence.** `earns` is
-        // what a run is *worth*; the thresholds are what it is worth *against*.
-        // Stretch both and you have multiplied numerator and denominator — the
-        // curve looks longer, plays identically, and every rate `orbs-balance`
-        // pins still passes, so nothing anywhere goes red.
-        // Every instrument `[earns]` prices, so a name added there is covered by
-        // the same assertion rather than by a second list nobody updates.
+        // The failure that would cancel the feature in silence: `earns` is what a
+        // run is worth and the thresholds are what it is worth against, so
+        // stretching both multiplies numerator and denominator — the curve looks
+        // longer, plays identically, and every pinned rate still passes. Every
+        // instrument `[earns]` prices, so a name added there is covered here
+        // rather than by a second list nobody updates.
         const PRICED: [&str; 10] = [
             "mortar_and_pestle",
             "balneum_mariae",
@@ -334,9 +319,9 @@ mod curve {
 
     /// Print the shipped ley line at every length. `--nocapture` to read it.
     ///
-    /// **Not an assertion.** The tiers are defined by the last station and the
-    /// hours are swept, so what this is for is looking at the shape — which is
-    /// the one thing a table of numbers in a plan cannot be checked against.
+    /// Not an assertion: the tiers are defined by the last station and the hours
+    /// are swept, so this is for looking at the shape — the one thing a table of
+    /// numbers in a plan cannot be checked against.
     #[test]
     fn the_shipped_line_at_every_length() {
         for length in [

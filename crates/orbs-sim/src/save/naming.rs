@@ -1,24 +1,22 @@
 //! The words a save spells its enums with.
 //!
-//! Every one of these is an **explicit table with a round-trip test**, never a
-//! `#[derive(Serialize)]` on the enum itself and never an index. Two reasons,
-//! and the second is the one that bites:
+//! Every one is an explicit table with a round-trip test, never a
+//! `#[derive(Serialize)]` and never an index. Two reasons, the second the one
+//! that bites:
 //!
-//! - A derive spells a variant with its Rust name, so renaming `Reagent` in the
-//!   parser would silently invalidate every save on disk. The names here are a
-//!   *format*, and they are allowed to disagree with the code.
-//! - [`NounKind::label`](crate::parser::NounKind::label) already exists and is
-//!   **not injective** — `File` and `Readable` both say `"file"`, `Place`,
-//!   `Stoppable` and `Workable` all say `"place"`. It is a word for a player,
-//!   not an identity, and reading a save back through it would quietly change
-//!   what a node is.
+//! - A derive spells a variant with its Rust name, so renaming `Reagent` would
+//!   silently invalidate every save on disk. These names are a format, and are
+//!   allowed to disagree with the code.
+//! - [`NounKind::label`](crate::parser::NounKind::label) is not injective —
+//!   `File` and `Readable` both say `"file"`, `Place`, `Stoppable` and
+//!   `Workable` all say `"place"`. It is a word for a player, not an identity,
+//!   and reading a save back through it would change what a node is.
 //!
 //! [`Presentation`] gets the same treatment for a different reason: it lives in
 //! `orbs-render`, whose `[dependencies]` is deliberately empty, so it cannot
-//! derive `Serialize` and a mapping has to live somewhere. Here is somewhere.
+//! derive `Serialize` and the mapping has to live somewhere.
 //!
-//! `Verb` is the exception that proves the rule: it has a canonical name that is
-//! already unique (`canonical_names_are_unique` in `parser::verb`) and already
+//! `Verb` is the exception: its canonical name is already unique and already
 //! player-facing, so the save spells it the way the player types it.
 
 use orbs_render::{FieldName, Presentation, RecordKind, Role};
@@ -165,7 +163,7 @@ pub(super) const fn record_kind_word(kind: RecordKind) -> &'static str {
 
 /// Every record kind.
 ///
-/// **`RecordKind::ALL`, not a copy.** The same trap [`FIELDS`] documents: a
+/// `RecordKind::ALL`, not a copy — the same trap [`FIELDS`] documents: a
 /// hand-written list compiles unchanged when an eleventh kind arrives, and
 /// `record_kind_from` then reads it back as `Message` while the round-trip test
 /// iterates the stale array and passes.
@@ -203,11 +201,10 @@ pub(super) fn role_from(word: &str) -> Role {
 
 /// Every field a record can carry.
 ///
-/// **`FieldName::ALL`, not a copy of it.** A hand-written list here would
-/// compile happily when a sixteenth field arrived, `field_from` would return
-/// `None` for it, `restore::stream` would drop it silently, and the round-trip
-/// test below would iterate the stale array and pass. The one place the list
-/// lives is `orbs-render`, and this borrows it.
+/// `FieldName::ALL`, not a copy of it. A hand-written list would compile
+/// happily when a sixteenth field arrived, `field_from` would return `None`,
+/// and `restore::stream` would drop it silently while the round-trip test
+/// iterated the stale array and passed.
 const FIELDS: [FieldName; FieldName::ALL.len()] = FieldName::ALL;
 
 /// The word for a field.
@@ -293,11 +290,9 @@ mod tests {
     /// Adding a variant to any of these must not compile until it has a word.
     ///
     /// The arrays above are hand-written where the upstream enum publishes no
-    /// `ALL` — and a hand-written array is the trap this whole module exists to
-    /// avoid, because it compiles unchanged when a variant arrives and the
-    /// reverse lookup then silently returns the fallback. An **exhaustive
-    /// match** is what closes it: this fails to build until the new variant is
-    /// listed, which is the same instrument
+    /// `ALL`, and such an array compiles unchanged when a variant arrives, the
+    /// reverse lookup then silently returning the fallback. The exhaustive
+    /// match closes it — the same instrument
     /// `every_noun_kind_has_a_word_and_the_word_reads_back` uses one screen up.
     #[test]
     fn no_variant_can_arrive_without_a_word() {

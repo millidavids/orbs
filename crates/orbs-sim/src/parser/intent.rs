@@ -19,7 +19,7 @@ pub struct Argument {
     pub slot: usize,
 }
 
-// **There is no `anchor` field, and there was one.** §8 binds referents *"by
+// There is no `anchor` field, and there was one. §8 binds referents *"by
 // stable entity ID"* so a destroyed-and-rebuilt thing fails the check instead of
 // being silently acted on — §8.1's substitution surface, and a real requirement
 // about things that *can* be rebuilt. §8's own example is `north_gate`, which a
@@ -35,13 +35,12 @@ pub struct Argument {
 impl Argument {
     /// The value as the echo shows it.
     ///
-    /// **Only a place is shortened.** Applying [`leaf`] to every argument
-    /// truncated free text at a slash: `sift march/north laboratory.log` echoed
-    /// `sift north laboratory.log`, teaching a command that searches for a
-    /// different string than the one that ran. `arguments.rs` states the
-    /// invariant this broke — *"free text: whatever was typed, in the case and
-    /// punctuation they typed it in"* — and the echo is what §6 says players
-    /// learn the vocabulary from.
+    /// Only a place is shortened. Applying [`leaf`] to every argument truncated
+    /// free text at a slash: `sift march/north laboratory.log` echoed `sift
+    /// north laboratory.log`, teaching a command that searches for a different
+    /// string than the one that ran. `arguments.rs` states the invariant this
+    /// broke — *"free text: whatever was typed, in the case and punctuation they
+    /// typed it in"* — and §6 makes the echo how players learn the vocabulary.
     #[must_use]
     pub fn display(&self) -> &str {
         if self.kind == NounKind::Place {
@@ -62,8 +61,8 @@ pub struct Intent {
     pub register: Register,
     /// Filled slots, in signature order.
     ///
-    /// **Compacted**, so an unfilled optional slot leaves no gap — read a
-    /// specific slot with [`slot`](Self::slot) rather than by index.
+    /// Compacted, so an unfilled optional slot leaves no gap — read a specific
+    /// slot with [`slot`](Self::slot) rather than by index.
     pub arguments: Vec<Argument>,
 }
 
@@ -73,15 +72,14 @@ impl Intent {
     /// `arguments` drops the `None`s that `Filled::slots` deliberately keeps —
     /// *"positional rather than compacted, so a later slot resolving while an
     /// earlier one does not cannot silently renumber the arguments"* — and
-    /// `execute::carry` then rebuilt the mapping by matching on **slice length**:
+    /// `execute::carry` then rebuilt the mapping by matching on slice length:
     /// two arguments meant the source was skipped, three meant it was named.
     ///
-    /// That reintroduced the renumbering hazard one layer up, and it held only by
-    /// accident: `move` is the sole signature with an optional slot, and it
-    /// happens to sit between two required ones. The next verb with an optional
-    /// argument would inherit an arity match that is not equivalent to a
-    /// positional read, and the mis-mapping is silent — `move` would hand the
-    /// destination to the source.
+    /// That reintroduced the renumbering hazard one layer up, holding only by
+    /// accident — `move` is the sole signature with an optional slot and it sits
+    /// between two required ones. The next verb with an optional argument would
+    /// inherit an arity match that is not a positional read, and the mis-mapping
+    /// is silent.
     #[must_use]
     pub fn slot(&self, index: usize) -> Option<&Argument> {
         self.arguments
@@ -108,20 +106,18 @@ impl Intent {
 /// Places resolve to full paths, so a three-argument `move` echoed
 /// `move charcoal /tower/laboratory/dispensary /tower/laboratory/athanor` — 74
 /// characters against the ~60 a pane gives at the 80×22 floor, and the
-/// destination was simply **clipped off** the one line whose job is saying where
-/// a thing went.
+/// destination was clipped off the one line whose job is saying where a thing
+/// went.
 ///
 /// The leaf is also what the player typed and what §7 says they say: *"a place
 /// answers to its full path; §6's matcher also accepts the last segment, which
 /// is what makes `attend laboratory` reach `/tower/laboratory` — players say the
 /// place, not the path."*
 ///
-/// **Only the last segment**, never a middle one. `score_against`
-/// (`super::scene`) matches a phrase against the full name or the leaf and
-/// nothing between, so echoing `laboratory/alembic` would teach a form the
-/// parser rejects — and the echo teaching a typeable command is the single thing
-/// §6 asks of it. Leaves staying unique is enforced by
-/// `every_place_leaf_is_unique`, not hoped for.
+/// Only the last segment, never a middle one: `score_against` (`super::scene`)
+/// matches a phrase against the full name or the leaf and nothing between, so
+/// echoing `laboratory/alembic` would teach a form the parser rejects.
+/// `every_place_leaf_is_unique` enforces the uniqueness this rests on.
 #[must_use]
 pub fn leaf(value: &str) -> &str {
     value.rsplit('/').next().unwrap_or(value)
@@ -137,16 +133,14 @@ pub enum Confidence {
     Forced,
     /// The orb worked the line out rather than reading it — the augury (§6).
     ///
-    /// **Renders as [`Forced`](Self::Forced) does**, and that is deliberate
-    /// rather than lazy. `Outcome` is a closed set of six with a test asserting
-    /// every marker differs, and a seventh glyph would be a second thing for a
-    /// player to learn about the same fact: *the orb acted on its best reading
-    /// and invites correction*. One `≈` for both.
+    /// Renders as [`Forced`](Self::Forced) does, deliberately: `Outcome` is a
+    /// closed set of six with a test asserting every marker differs, and a
+    /// seventh glyph would be a second thing to learn about the same fact — *the
+    /// orb acted on its best reading and invites correction*. One `≈` for both.
     ///
-    /// What it carries that `Forced` does not is **why**, and two things read
-    /// it: the trace, so a session can be sifted for what the model decided,
-    /// and the destructive guard, so `purge` confirms when it was inferred and
-    /// not when it was typed.
+    /// What it carries that `Forced` does not is *why*, and two things read it:
+    /// the trace, so a session can be sifted for what the model decided, and the
+    /// destructive guard, so `purge` confirms when it was inferred.
     Divined,
 }
 
@@ -254,20 +248,18 @@ pub enum Resolution {
         /// The verb they meant.
         verb: Verb,
     },
-    /// A word that means something **in a spell**, typed at the prompt.
+    /// A word that means something in a spell, typed at the prompt.
     ///
     /// [`Elsewhere`](Self::Elsewhere) one step further. That one covers a verb
     /// this *place* does not answer to; this covers a word the *prompt* does not
     /// answer to, and the same reasoning applies — *"I do not know that word"*
     /// would be a lie about a word the game taught the player in the editor.
     ///
-    /// **This exists because the alternative was destructive.** `wait for the
+    /// This exists because the alternative was destructive. `wait for the
     /// mortar` at the prompt used to open the editor on a new empty
-    /// `mortar.spell` — `for`/`the` are filler, `wait` is a `meditate` synonym
-    /// whose `Count` slot cannot take `mortar`, so the reading lost to
-    /// `scribe <Name>`, which takes free text. `repeat 3` resolved to `undo`.
-    /// A player learning a word in the editor and trying it here destroyed
-    /// something.
+    /// `mortar.spell`: `for`/`the` are filler and `wait` is a `meditate` synonym
+    /// whose `Count` slot cannot take `mortar`, so the reading lost to `scribe
+    /// <Name>`, which takes free text. `repeat 3` resolved to `undo`.
     InSpell {
         /// The word they used.
         word: super::SpellWord,

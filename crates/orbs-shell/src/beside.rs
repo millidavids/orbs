@@ -1,22 +1,19 @@
 //! A fixed-size board beside the transcript — the one layout four rooms share.
 //!
 //! The pylon, the rampart, the lattice and the menagerie's board each carried
-//! this function, character for character, with only the board's size between
-//! them. **Four copies of one rule is how two of them come to disagree**, which
-//! §19 records more often than anything else, so the rule lives here and each
-//! board says only how big it is.
+//! this function character for character, with only the board's size between
+//! them. Four copies of one rule is how two come to disagree (§19), so the rule
+//! lives here and each board says only how big it is.
 //!
-//! **Columns, never rows**, and every caller splits *after* the instrument
-//! panel — an instrument row is load-bearing where a board is a convenience, and
-//! whichever split runs second is the one whose refusal can fire. §19 records
-//! getting that order backwards once.
+//! Columns, never rows, and every caller splits after the instrument panel: an
+//! instrument row is load-bearing where a board is a convenience, and whichever
+//! split runs second is the one whose refusal can fire (§19).
 //!
-//! **Refused whole rather than truncated**, in both directions. A board that is
-//! a fixed size whatever is on it has no smaller view of itself to fall back to:
-//! half a Hanoi position shows wards resting on nothing, and half a truth table
-//! is a question with rows missing. The sheet and the map window their rows
-//! instead, and keep their own `split` for that reason — but they share the two
-//! figures below, because the transcript they leave is the same transcript.
+//! Refused whole rather than truncated, in both directions. A board of fixed
+//! size has no smaller view to fall back to — half a Hanoi position shows wards
+//! resting on nothing, half a truth table is a question with rows missing. The
+//! sheet and the map window their rows instead and keep their own `split`, but
+//! share the two figures below, because the transcript is the same transcript.
 
 use orbs_render::Rect;
 
@@ -32,9 +29,8 @@ pub(crate) const TRANSCRIPT_FLOOR: u16 = 24;
 
 /// Where a board sits, and what is left for the transcript.
 ///
-/// **`pub(crate)`, as everything in this module is** — CLAUDE.md's visibility
-/// rule: it is shared by the four boards inside this crate and by nothing
-/// outside it.
+/// `pub(crate)`, as everything in this module is — CLAUDE.md's visibility rule:
+/// shared by the four boards inside this crate and by nothing outside it.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Split {
     /// The board's own rectangle, border included. Empty when there is none.

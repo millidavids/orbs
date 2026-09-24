@@ -1,11 +1,14 @@
 mod commanding;
 mod editing;
 mod input;
+mod manualling;
 mod menuing;
 mod motion;
 mod plugin;
 mod reading;
 mod revealing;
+mod setting;
+mod thresholding;
 mod wandering;
 mod weaving;
 mod window;
@@ -21,9 +24,17 @@ pub(crate) use orbs_shell::{
 };
 
 pub(crate) use editing::Editing;
+pub(crate) use manualling::Reading;
 pub(crate) use menuing::Standing;
 pub use plugin::ShellPlugin;
 pub(crate) use plugin::ShellSystems;
+// A function key and the settings page are **one setting seen twice**: the key
+// cycles, and this is what stops the page disagreeing with it on the next
+// launch. See `setting::remember`.
+pub(crate) use setting::{
+    CRT, FOCUS, SIGHT, THEME, defaults as default_settings, remember as remember_setting,
+};
+pub(crate) use thresholding::playing;
 pub(crate) use wandering::Walk;
 pub(crate) use weaving::Loom;
 pub(crate) use window::track_window;

@@ -45,7 +45,7 @@ Rust · Bevy 0.19 · Windows, macOS, Linux · GPL-3.0-or-later
 
 | | |
 |---|---|
-| [docs/INSTRUCTIONS.md](docs/INSTRUCTIONS.md) | How to play — controls, the rooms, your first ten minutes |
+| [docs/INSTRUCTIONS.md](docs/INSTRUCTIONS.md) | How to play — a pointer to the in-game manual, which is where it lives now |
 | [docs/PLAYER_README.txt](docs/PLAYER_README.txt) | Save data, screenshots, reporting a bug |
 | [docs/HEALTH_WARNING.md](docs/HEALTH_WARNING.md) | Health & safety. **Nothing in this game flashes** |
 | [docs/CREDITS.md](docs/CREDITS.md) | What it is built from, and the licences that travel with it |

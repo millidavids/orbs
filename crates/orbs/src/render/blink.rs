@@ -6,13 +6,11 @@
 //! on its own — `orbs-tui` gets the terminal's own cursor and is none the
 //! poorer for it.
 //!
-//! # The rate is a safety constraint, not a taste one
-//!
-//! §14 and the CRT port (§19) both landed on the same number: **3–30 Hz is the
-//! photosensitive band**, and the tube's original "60Hz-ish" flicker turned out
-//! to be 19.1 Hz sitting squarely inside it. A caret is small and dim where that
-//! was the whole screen, but the rule is not worth relearning, so this blinks at
-//! well under 1 Hz — slower than a VT100 and comfortably below the floor.
+//! The rate is a safety constraint rather than a taste one. §14 and the CRT port
+//! (§19) landed on the same number — 3–30 Hz is the photosensitive band, and the
+//! tube's original "60Hz-ish" flicker was 19.1 Hz, squarely inside it. A caret
+//! is small and dim where that was the whole screen, but the rule is not worth
+//! relearning, so this blinks at well under 1 Hz.
 //!
 //! Driven from `Time`, never from the tick: the sim must not be able to observe
 //! it, or replay would depend on how long a frame took.
@@ -61,7 +59,7 @@ impl Blink {
 
     /// Carry the phase forward by `seconds`.
     ///
-    /// **Divided, not looped.** Draining whole half-cycles with
+    /// Divided, not looped. Draining whole half-cycles with
     /// `while elapsed >= HALF_CYCLE { elapsed -= HALF_CYCLE; … }` iterates once
     /// per half-cycle of elapsed time, so a frame arriving after a long stall — a
     /// breakpoint, a laptop lid, `Time`'s `max_delta` raised as `sim::clock` does

@@ -240,5 +240,6 @@ pub mod plugins {
     }
 }
 
+pub mod audio;
 pub mod round2;
 pub mod round3;

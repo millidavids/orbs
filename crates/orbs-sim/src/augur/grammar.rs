@@ -1,23 +1,16 @@
 //! A reader that matches the authored templates directly.
 //!
-//! **The baseline a trained reader has to beat**, and the reason it exists is
-//! that nobody knew whether one was needed. `content/phrasings.toml` is written
-//! either way — it is a model's only training data — so compiling it into a
-//! matcher costs a file and answers the question a model would otherwise be
-//! built to answer.
+//! The baseline a trained reader has to beat, built because nobody knew
+//! whether one was needed. `content/phrasings.toml` is written either way — it
+//! is a model's only training data — so compiling it into a matcher costs a
+//! file and answers the question a model would otherwise be built to answer.
 //!
-//! # What it can and cannot do
-//!
-//! It reads **reordering and extra words**, which is exactly what a flat
-//! synonym list cannot: `take me over to the laboratory` matches `take me to
-//! the {place}` because the literals still arrive in order. It cannot read a
-//! word it was never given — `pound the sage` is nothing to a grammar built on
-//! `smash`, `crush` and `grind up`, and no amount of template-writing closes
-//! that in general.
-//!
-//! That is the whole shape of the comparison. A trained reader's claim is that
-//! it generalises *past* the words it was shown; this measures what is left
-//! over when nothing does.
+//! It reads reordering and extra words, which a flat synonym list cannot: `take
+//! me over to the laboratory` matches `take me to the {place}` because the
+//! literals still arrive in order. It cannot read a word it was never given —
+//! `pound the sage` is nothing to a grammar built on `smash`, `crush` and
+//! `grind up`. A trained reader's claim is that it generalises *past* the words
+//! it was shown; this measures what is left over when nothing does.
 
 use super::{Augur, MAX_READINGS};
 use crate::content::Phrasings;
@@ -67,7 +60,7 @@ impl Grammar {
 
     /// Compiled from `phrasings`.
     ///
-    /// **`say` only.** A grammar taught the holdout would match it perfectly and
+    /// `say` only. A grammar taught the holdout would match it perfectly and
     /// measure nothing, which is the one way this comparison can lie.
     #[must_use]
     pub fn from_phrasings(phrasings: &Phrasings) -> Self {
@@ -114,16 +107,15 @@ fn compile(template: &str) -> Vec<Piece> {
             if let Some(name) = token.strip_prefix('{').and_then(|t| t.strip_suffix('}')) {
                 return Piece::Slot(name.to_owned());
             }
-            // **Filler is kept, and that is the opposite of what the matcher
-            // does.** `normalise::strip_filler` drops `in`, `the` and `to`
-            // because they carry no evidence about *which noun* an argument
-            // names — and for a grammar they are the evidence, because they are
-            // what tells one phrasing from another.
+            // Filler is kept, the opposite of what the matcher does.
+            // `normalise::strip_filler` drops `in`, `the` and `to` because they
+            // carry no evidence about *which noun* an argument names; for a
+            // grammar they are the evidence, because they tell one phrasing
+            // from another.
             //
             // Dropping them made *"what is in the {place}"* and *"what is
             // {topic}"* the same pattern, so `survey` and `recall` collided and
-            // whichever sorted first won. It cost 4,615 misreadings across the
-            // corpus: `what is brewing` answered `survey brewing`.
+            // whichever sorted first won — 4,615 misreadings across the corpus.
             //
             // Keeping them costs nothing, because a literal may still skip over
             // input it does not match: *"can you take me over to the
@@ -147,19 +139,16 @@ struct Capture {
 /// Returns what each slot captured and how loosely the words matched, or
 /// [`None`].
 ///
-/// # A literal may skip; a slot runs to the next literal
-///
 /// A literal passes over input it does not match — that is what lets *"can you
-/// take me over to the laboratory"* reach *"take me to the {place}"*, and it is
-/// the whole reason a grammar beats a synonym list.
+/// take me over to the laboratory"* reach *"take me to the {place}"*, and why a
+/// grammar beats a synonym list.
 ///
-/// **A slot takes everything up to the next literal, or the rest of the line if
-/// there is none**, rather than exactly one word. Taking one word was the first
-/// attempt and it scored the grammar at zero: in that same sentence the slot
-/// landed on `over` and answered `attend over`. Handing the extra words on is
-/// right rather than lax — a reader keeps the player's words and
-/// `parser::resolve` picks the name out of them, which is the same division of
-/// labour the trained reader will work under.
+/// A slot takes everything up to the next literal, or the rest of the line,
+/// rather than exactly one word: taking one word scored the grammar at zero,
+/// the slot in that sentence landing on `over` and answering `attend over`.
+/// Handing the extra words on is right rather than lax — a reader keeps the
+/// player's words and `parser::resolve` picks the name out of them, the
+/// division of labour the trained reader will work under.
 fn capture(pattern: &Pattern, words: &[&str]) -> Option<Capture> {
     let mut slots: Vec<(String, String)> = Vec::new();
     let mut near = 0usize;
@@ -204,31 +193,28 @@ fn capture(pattern: &Pattern, words: &[&str]) -> Option<Capture> {
 
 impl Augur for Grammar {
     fn read(&self, line: &str) -> Vec<String> {
-        // Whole, filler included — see `compile`. The pattern keeps its function
-        // words, so the input has to keep them too or they could never match.
-        //
-        // **Folded by the parser's own rule**, rather than lowercased and split.
-        // `fold` sheds the trailing punctuation the matcher sheds, and without
-        // it an exactly-typed `powder.` was a *near* miss of `powder`: the
-        // tie-break below applied backwards, with a template that matched every
-        // word exactly losing to one that did not.
+        // Whole, filler included — see `compile`. The pattern keeps its
+        // function words, so the input has to keep them too or they could never
+        // match. Folded by the parser's own rule rather than lowercased and
+        // split: `fold` sheds the trailing punctuation the matcher sheds, and
+        // without it an exactly-typed `powder.` was a *near* miss of `powder`,
+        // applying the tie-break below backwards.
         let tokens = Tokens::split(line);
         let words: Vec<&str> = tokens.words().iter().map(|word| word.matching).collect();
         if words.is_empty() {
             return Vec::new();
         }
 
-        // **Every template that matches, most insistent first.** A grammar
-        // cannot tell `run {script}` from `run the {place}` — nothing in the
-        // sentence says which `night_watch` is — so it offers both and lets the
-        // caller keep whichever resolves against the actual room.
+        // Every template that matches, most insistent first. A grammar cannot
+        // tell `run {script}` from `run the {place}` — nothing in the sentence
+        // says which `night_watch` is — so it offers both and lets the caller
+        // keep whichever resolves against the actual room.
         let mut found: Vec<(usize, usize, String)> = Vec::new();
         for pattern in &self.patterns {
-            // **Stop when nothing left can reach the list.** These are in weight
-            // order, so once `MAX_READINGS` distinct readings are held at a
-            // higher weight, no lighter pattern can displace one — and scanning
-            // all 2,900 templates, fuzzily, against every line the player types
-            // is work whose answer is thrown away.
+            // Stop when nothing left can reach the list. These are in weight
+            // order, so once `MAX_READINGS` readings are held at a higher
+            // weight no lighter pattern can displace one, and scanning all
+            // 2,900 templates fuzzily against every line is work thrown away.
             if found
                 .get(MAX_READINGS - 1)
                 .is_some_and(|(weight, _, _)| pattern.weight < *weight)
@@ -238,13 +224,12 @@ impl Augur for Grammar {
             let Some(Capture { slots, near }) = capture(pattern, &words) else {
                 continue;
             };
-            // **Substituted by name, not by position**, because a phrasing may
-            // name the slots in a different order from the command. *"load the
+            // Substituted by name, not by position, because a phrasing may name
+            // the slots in a different order from the command. *"load the
             // {place} with {reagent}"* means `move {reagent} {place}`, and
-            // filling markers in the order they were captured put the room in
-            // the reagent's slot and the reagent in the room's — a swapped
-            // command that resolved to something real and wrong. The grammar
-            // reading its own templates back at 94.7% is what found it.
+            // filling markers in capture order swapped the room and the reagent
+            // into each other's slots — a command that resolved to something
+            // real and wrong.
             let mut out = pattern.canonical.clone();
             for (name, value) in slots {
                 let marker = format!("{{{name}}}");
@@ -258,10 +243,10 @@ impl Augur for Grammar {
             if out.contains('{') {
                 continue;
             }
-            // Several templates of one entry reach the same command — `smash the
-            // sage` and `crush the sage` are both `grind sage`. Held once, at
-            // its best match, so a second copy neither spends a reading slot nor
-            // makes the count above wrong.
+            // Several templates of one entry reach the same command — `smash
+            // the sage` and `crush the sage` are both `grind sage`. Held once,
+            // at its best match, so a second copy neither spends a reading slot
+            // nor makes the count above wrong.
             match found.iter_mut().find(|(_, _, held)| *held == out) {
                 Some(held) if near < held.1 => held.1 = near,
                 Some(_) => {}
@@ -269,19 +254,17 @@ impl Augur for Grammar {
             }
         }
 
-        // **Among the equally insistent, the one that matched exactly.** A near
-        // word is there for the player's typing — `smsah the sage` — and was
-        // never meant to let one template claim another's word. It did: `mill
-        // the {reagent}` and `still the {reagent}` insist on the same two words,
-        // `still` is near enough to `mill`, and `grind` is written above
-        // `distil` — so `still the amber` answered `grind amber`, and the file's
-        // order decided it, which is the thing the weight sort exists to stop.
-        // `burn` found `churn`, `purge` found `merge`, `stir` found `still`:
-        // 2,407 of the corpus's 2,795 outranked readings were this one tie.
+        // Among the equally insistent, the one that matched exactly. A near
+        // word is there for the player's typing — `smsah the sage` — not to let
+        // one template claim another's word. It did: `still` is near enough to
+        // `mill` and `grind` is written above `distil`, so `still the amber`
+        // answered `grind amber` on the file's order alone. `burn` found
+        // `churn`, `purge` found `merge`: 2,407 of the corpus's 2,795 outranked
+        // readings were this one tie.
         //
-        // A tie on both still falls to the file's order, and it is stable on
-        // purpose: two templates that match a line equally well are a question
-        // only the room can answer, which is why the caller is offered both.
+        // A tie on both still falls to the file's order, stably on purpose: two
+        // templates that match a line equally well are a question only the room
+        // can answer, which is why the caller is offered both.
         found.sort_by_key(|(weight, near, _)| (core::cmp::Reverse(*weight), *near));
         found
             .into_iter()
@@ -332,8 +315,8 @@ mod tests {
 
     #[test]
     fn it_reads_extra_words_and_reordering() {
-        // The thing a flat synonym list cannot do, which is why a grammar is
-        // worth measuring before a model is built.
+        // What a flat synonym list cannot do, and why a grammar is worth
+        // measuring before a model is built.
         assert_eq!(
             grammar(GRIND)
                 .read("could you turn the sage into powder for me")
@@ -345,9 +328,8 @@ mod tests {
 
     #[test]
     fn it_abstains_from_a_word_it_was_never_given() {
-        // **The ceiling, stated as a test.** No amount of template-writing
-        // closes this in general, and it is exactly what a trained reader claims
-        // to do better.
+        // The ceiling, stated as a test. No amount of template-writing closes
+        // this, and it is what a trained reader claims to do better.
         assert!(grammar(GRIND).read("pound the sage").is_empty());
     }
 
@@ -361,17 +343,16 @@ mod tests {
 
     #[test]
     fn it_offers_both_readings_of_a_sentence_it_cannot_tell_apart() {
-        // **The reason the seam returns a list.** Nothing in `run night_watch`
-        // says whether `night_watch` is a script or a place, and a reader that
-        // cannot see the world has no way to find out. It offers both; the
-        // caller keeps whichever resolves.
+        // Why the seam returns a list. Nothing in `run night_watch` says
+        // whether `night_watch` is a script or a place, and a reader that
+        // cannot see the world has no way to find out; the caller keeps
+        // whichever resolves.
         //
-        // **Both templates are word-for-word identical here, deliberately.**
-        // `run {script}` against `run the {place}` used to be the fixture and
-        // stopped being ambiguous once `compile` kept filler: `the` is evidence
-        // now, so those two are different phrasings and the grammar tells them
-        // apart on its own. What is left genuinely undecidable is the case where
-        // the words really are the same and only the *kind* of the noun differs.
+        // Both templates are word-for-word identical deliberately: `run
+        // {script}` against `run the {place}` stopped being ambiguous once
+        // `compile` kept filler, since `the` is evidence now. What is left
+        // undecidable is words that really are the same, differing only in the
+        // *kind* of the noun.
         let grammar = grammar(
             r#"
             [[entry]]
@@ -460,10 +441,10 @@ mod tests {
 
     #[test]
     fn the_scan_stops_early_without_missing_a_better_match() {
-        // `read` stops once `MAX_READINGS` readings are held at a weight nothing
-        // left can beat — the 2,900 fuzzy template matches a line used to cost
-        // are what that saves. **A pattern of the same weight is still tried**,
-        // which is what keeps the exact one below five decoys from being missed.
+        // `read` stops once `MAX_READINGS` readings are held at a weight
+        // nothing left can beat, saving the 2,900 fuzzy matches a line cost. A
+        // pattern of the same weight is still tried, which keeps the exact one
+        // below five decoys from being missed.
         let grammar = grammar(
             r#"
             [[entry]]
@@ -503,10 +484,9 @@ mod tests {
     #[test]
     fn a_word_typed_exactly_is_exact_though_it_carries_a_stop() {
         // The tie-break above reads the *folded* word, as the matcher does.
-        // Without that, `powder.` was a near miss of `powder` — so the template
-        // that matched every word exactly scored as loosely as the one that did
-        // not, and the file's order broke the tie, which is the thing the
-        // ordering exists to stop.
+        // Without that, `powder.` was a near miss of `powder`, so an exact
+        // template scored as loosely as an inexact one and the file's order
+        // broke a tie the ordering exists to settle.
         let grammar = grammar(
             r#"
             [[entry]]

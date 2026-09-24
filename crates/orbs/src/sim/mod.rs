@@ -4,6 +4,7 @@ mod driver;
 mod persist;
 mod plugin;
 
+pub(crate) use content::ManualChangedMessage;
 pub(crate) use content::apply as apply_content;
 pub(crate) use driver::{Readers, Tower};
 pub(crate) use persist::{Kept, keep_now};

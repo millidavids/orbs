@@ -1,9 +1,9 @@
 //! What this binary is built out of — the one POST line only a frontend knows.
 //!
-//! The boot card is a **diegetic inventory of the machine** (§4), which is the
-//! whole argument for it existing: `tower/boot.rs` is built by walking the world
-//! so it cannot go stale, and a POST in front of it printing invented numbers
-//! would be the same lie one screen earlier.
+//! The boot card is a diegetic inventory of the machine (§4), which is the whole
+//! argument for it existing: `tower/boot.rs` is built by walking the world so it
+//! cannot go stale, and a POST in front of it printing invented numbers would be
+//! the same lie one screen earlier.
 //!
 //! So the engine line cannot live with the painter. The painter is shared —
 //! `orbs-tui` draws the same card — and a terminal build does not link Bevy at
@@ -19,9 +19,9 @@
 /// CLAUDE.md commits to `=0.19.0` and upgrading it is a deliberate one-window
 /// act in Phase 11c, so a number that can only change when someone edits the
 /// manifest is exactly as live as it needs to be.
-/// **A macro so the number is written once**, because `concat!` takes literals
-/// and not consts — and two copies of a version is exactly the drift this whole
-/// file exists to prevent.
+/// A macro so the number is written once, because `concat!` takes literals and
+/// not consts — and two copies of a version is the drift this file exists to
+/// prevent.
 macro_rules! bevy_version {
     () => {
         "0.19.0"
@@ -35,12 +35,10 @@ const BEVY: &str = bevy_version!();
 
 /// The engine line for this frontend, as the POST card prints it.
 ///
-/// **A `const`, not a `format!`.** This allocated, and `repaint` calls it once
-/// per frame for the whole boot sequence — some 780 allocations for a string
-/// with no runtime input at all. The surrounding code is unusually careful about
-/// exactly this: `Panel`, `Ghost` and `Bench::permitted` are all caches that
-/// exist because "twenty allocations at 60 Hz for 1 Hz data" was judged worth
-/// removing.
+/// A `const`, not a `format!`. This allocated, and `repaint` calls it once per
+/// frame for the whole boot sequence — some 780 allocations for a string with no
+/// runtime input. `Panel`, `Ghost` and `Bench::permitted` are all caches that
+/// exist for the same reason.
 pub(crate) const fn line() -> &'static str {
     concat!("bevy ", bevy_version!())
 }
@@ -55,16 +53,15 @@ mod tests {
         // act. This is what stops the splash drifting away from the manifest
         // silently when that window arrives.
         //
-        // **It stays in this crate on purpose.** Moved beside the painter it
-        // would resolve `CARGO_MANIFEST_DIR` to a crate that pins no engine, and
-        // pass by asserting nothing — which is exactly how `orbs-balance`'s
-        // first `agrees.rs` was green while measuring nothing (§19).
-        // **Every declaration, not merely one.** `crates/orbs/Cargo.toml`
-        // declares bevy twice — once plainly and once under
-        // `cfg(target_os = "linux")` — and a `contains` passes if *either* still
-        // says `0.19.0`. That is the exact shape of a half-finished Phase 11c
-        // upgrade, and the half most likely to be left behind is the one that
-        // decides what a Linux build actually links.
+        // It stays in this crate on purpose: moved beside the painter it would
+        // resolve `CARGO_MANIFEST_DIR` to a crate pinning no engine and pass by
+        // asserting nothing, which is how `orbs-balance`'s first `agrees.rs` was
+        // green while measuring nothing (§19).
+        //
+        // Every declaration, not merely one. `crates/orbs/Cargo.toml` declares
+        // bevy twice — plainly, and under `cfg(target_os = "linux")` — and a
+        // `contains` passes if either still says `0.19.0`. The half most likely
+        // to be left behind is the one that decides what a Linux build links.
         let manifest = include_str!("../../Cargo.toml");
         let declared = manifest
             .lines()

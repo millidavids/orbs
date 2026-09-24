@@ -1,8 +1,8 @@
 //! The picture — a fixed grid, and how big a cell of it is on a given window.
 //!
-//! DESIGN.md §4 and §9: cell size is a multiple of the 8×16 bitmap cell, and the
-//! picture is **4:3**. Those two facts together decide the grid rather than
-//! leaving it to the window, because a cell is twice as tall as it is wide:
+//! §4 and §9: cell size is a multiple of the 8×16 bitmap cell and the picture is
+//! 4:3. Those two decide the grid rather than leaving it to the window, because
+//! a cell is twice as tall as it is wide:
 //!
 //! ```text
 //! cols·CELL_WIDTH / (rows·CELL_HEIGHT) = 4/3   ⇔   cols : rows = 8 : 3
@@ -10,27 +10,19 @@
 //!
 //! So [`GRID`] is a constant and the window decides only [`scale_for`] — how
 //! many physical pixels one virtual pixel is worth. Resizing changes the size of
-//! the text and nothing else: no pane moves, no border is redrawn at a new
-//! width, and no sentence that fitted stops fitting.
+//! the text and nothing else.
 //!
-//! # What this replaced, and why
+//! This replaced `Fidelity`, an integer scale chosen from the window with the
+//! grid falling out of the division. Every layout constant then existed to
+//! manage a grid moving under it, and `F4` changed the grid as a side effect of
+//! changing the split (§19). The cost is that a larger window buys bigger text
+//! rather than more of it.
 //!
-//! This was `Fidelity`, an integer scale chosen *from* the window, with the grid
-//! falling out of the division — 1280×720 gave 160×45 and 1920×1080 gave 120×33.
-//! Every layout constant then existed to manage a grid moving under it, and `F4`
-//! changed the grid as a side effect of changing the split. §19 records the
-//! decision to fix the grid instead; the cost is that a window can no longer buy
-//! more text by being larger, only bigger text.
-//!
-//! # Whose arithmetic is whose
-//!
-//! The frontend does not compute the letterbox — `ScalingMode::AutoMin` in the
-//! camera projection does, and it works in *logical* pixels. [`scale_for`] is
-//! the same number in the open, in **physical** pixels, for the two callers that
-//! need it outside the projection: the CRT's cell size and the legibility floor.
-//! The two agree because aspect ratio is scale-factor invariant — on a 2×
-//! display the projection sees half the pixels and maps each to twice the area.
-//! Do not "fix" one to match the units of the other.
+//! The frontend does not compute the letterbox — `ScalingMode::AutoMin` does,
+//! in logical pixels. [`scale_for`] is the same number in the open, in physical
+//! pixels, for the two callers outside the projection: the CRT's cell size and
+//! the legibility floor. They agree because aspect ratio is scale-factor
+//! invariant, so do not "fix" one to match the other's units.
 //!
 //! The terminal frontend has no use for any of this: a terminal is whatever size
 //! the user made it, so `orbs-tui` reports its grid directly.
@@ -81,20 +73,15 @@ pub const MIN_SCALE: f32 = 1.0;
 
 /// Rows the input line occupies.
 ///
-/// **One, at the same size as everything else.** Two would mean double-size
-/// glyphs drawn into half the columns, and that is what this was for one
-/// version — because it used to be *derived*, spending a second row at the
-/// finest tier to buy back the pixel height a fine cell took away.
+/// One, at the same size as everything else. This used to be derived, spending a
+/// second row at the finest tier to buy back the pixel height a fine cell took
+/// away. With one grid there is no tier to compensate for, so the doubling
+/// became magnification — a prompt twice the size of the transcript at every
+/// window, three times at 4K (§19).
 ///
-/// With one grid there is no tier to compensate for, so the doubling stopped
-/// being compensation and became magnification: a prompt drawn twice the size of
-/// the transcript at every window, and three times the size again at 4K. §19
-/// already recorded size as *"a blunt instrument for distinguishability"*; on a
-/// fixed grid it is not even measuring the right thing.
-///
-/// The halving mattered for more than looks: at 2× the line was written into
-/// **half** the columns, so a 120-column grid gave the player 60 cells to type
-/// into. It now gives 118.
+/// It mattered for more than looks: at 2× the line was written into half the
+/// columns, so a 120-column grid gave the player 60 cells to type into. It now
+/// gives 118.
 pub const INPUT_ROWS: u16 = 1;
 
 /// Physical pixels per virtual pixel: how much of the window one cell is worth.
@@ -113,9 +100,9 @@ pub const INPUT_ROWS: u16 = 1;
 /// assert_eq!(scale_for((2560, 1440)), 2.0);
 /// assert_eq!(scale_for((3840, 2160)), 3.0);
 ///
-/// // **The default window.** A half step rather than a whole one, and it is
-/// // only safe because the cell is even on both axes: 8x16 becomes 12x24, so
-/// // every cell boundary is still a whole pixel.
+/// // The default window: a half step rather than a whole one, safe only
+/// // because the cell is even on both axes — 8x16 becomes 12x24, so every
+/// // cell boundary is still a whole pixel.
 /// assert_eq!(scale_for((1920, 1080)), 1.5);
 ///
 /// // ...and the picture never exceeds the window on either axis.
@@ -132,8 +119,8 @@ pub fn scale_for(window: (u32, u32)) -> f32 {
 
 /// A window measurement as a float, without a lossy cast.
 ///
-/// A window past 65535 physical pixels on one axis is not a case worth carrying
-/// arithmetic for, and clamping there keeps the conversion **exact** — `u32` has
+/// A window past 65535 physical pixels on one axis is not worth carrying
+/// arithmetic for, and clamping there keeps the conversion exact — `u32` has
 /// nine more bits than an `f32` mantissa, so the direct cast is a rounding step
 /// clippy is right to refuse.
 #[must_use]

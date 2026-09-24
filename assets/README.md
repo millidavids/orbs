@@ -47,8 +47,19 @@ channel that cannot disturb layout.
 The BSD-2-Clause obligation is satisfied by shipping the notice **with the
 binary** — a `LICENSES.txt` in the Steam depot, an in-game credits screen, or
 both. Since every screen in this game is terminal content (§13), the natural
-home is a `grimoire licences` topic, which costs a prose file rather than a
-UI screen.
+home is a prose file rather than a UI screen.
 
-**Not yet wired up.** Tracked as a Phase 5 ship task; the obligation only
-attaches on distribution, and nothing is distributed yet.
+**Wired up at `0.16.8`.** It is the manual's `notices` chapter rather than the
+`grimoire licences` topic this paragraph first proposed — the manual is a whole
+surface that had to exist anyway, it is reachable from the front door before
+there is a tower, and a `recall` topic is not: `recall` needs a `Sim` with the
+player standing somewhere, which is the wrong requirement for a legal notice.
+Spleen's copyright notice, the disclaimer, unscii's CC0 and the engine's
+MIT/Apache-2.0 are all in it verbatim.
+
+```bash
+ORBS_BOOT=0 ORBS_DUMP=1 ORBS_THRESHOLD=1 ORBS_SAVE=off \
+  ORBS_MENU=manual ORBS_MANUAL=notices cargo run -q -p orbs
+```
+
+The depot's `LICENSES.txt` is still owed and is a packaging task, not a code one.

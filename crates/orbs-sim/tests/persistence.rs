@@ -1,30 +1,19 @@
 //! The save format, held to the only claim that matters.
 //!
-//! # What "it works" means here
+//! Not *the document round-trips* — a save carrying half the world round-trips
+//! its half perfectly. The claim is that a loaded tower keeps running the same
+//! world, so the tests step the saved world and the loaded one side by side for
+//! hundreds of ticks and require them to stay identical. A component nobody
+//! carried diverges within a few hundred: a fire that is not lit, a brew that
+//! never lands, a stream that rolls a different number.
 //!
-//! Not *the document round-trips* — a save that carries half the world round-
-//! trips its half perfectly. The claim is that **a loaded tower keeps running
-//! the same world**, so the test steps the saved world and the loaded one side
-//! by side for hundreds of ticks and requires them to stay identical. A
-//! component nobody remembered to carry diverges within a few hundred ticks: a
-//! fire that is not lit, a brew that never lands, a stream that rolls a
-//! different number.
-//!
-//! # Which test is the instrument, and which one is not
-//!
-//! `a_loaded_tower_keeps_running_the_same_world` is the instrument. It is the
-//! only test here that **restores**, so it is the only one that can notice a
-//! component nobody carried: the loaded athanor is cold, the heated stage never
-//! lands, and the difference surfaces within a few hundred ticks in fields the
-//! document *does* carry.
-//!
-//! `two_routes_to_one_world_write_the_same_save` is **not**, and the first draft
-//! of this file claimed it was. Both of its sides are `capture()` on a world
-//! built by ordinary play — neither is restored — so a field `capture` omits is
-//! missing from both documents and it passes. Its real value is as a fifth
-//! `(seed, submissions)` determinism check, comparing far more world state than
-//! the four message-stream ones that already exist. Worth keeping, worth not
-//! mistaking.
+//! `a_loaded_tower_keeps_running_the_same_world` is the instrument, because it
+//! is the only test here that *restores*.
+//! `two_routes_to_one_world_write_the_same_save` is not, though the first draft
+//! claimed it was: both its sides are `capture()` on a world never restored, so
+//! a field `capture` omits is missing from both documents and it passes. Its
+//! value is as a fifth `(seed, submissions)` determinism check, over far more
+//! world state than the four message-stream ones.
 
 // `unwrap` on a render is right here and nowhere else: a save that will not
 // render *is* the failure this file exists to find, and the panic names the file
@@ -42,25 +31,20 @@ const SEEDS: [u64; 4] = [0, 3, 11, 42];
 /// How far the two worlds are run side by side after the load.
 ///
 /// Long enough for the laboratory's slowest stage to land twice, a `repeat` to
-/// lap, and — on the noisy seeds — a log to be poisoned under both worlds at
-/// once.
+/// lap, and — on the noisy seeds — a log to be poisoned under both worlds.
 ///
-/// **Not long enough for a reagent swap**, and that is measured rather than
-/// assumed: the first ambient one lands at tick 685 on the kindest of these four
-/// seeds and 4,387 on the unkindest, so no lie ever settles inside this window.
-/// An earlier version of this comment claimed otherwise.
+/// Not long enough for a reagent swap, measured rather than assumed: the first
+/// ambient one lands at tick 685 on the kindest of these four seeds and 4,387 on
+/// the unkindest, so no lie ever settles inside this window.
 /// `a_renamed_node_keeps_its_place_among_its_siblings` is where that case lives,
 /// and it steps until a swap really fires.
 const LOCKSTEP: u64 = 600;
 
 /// A world with something happening in every subsystem the save has to carry.
 ///
-/// **One builder, shared by every test in this file**, and that is deliberate
-/// rather than tidy. `every_component_the_world_holds_is_one_the_save_carries`
-/// can only see components that are *present*, and twelve of them are
-/// conditional — a `Ward` exists only while a reading is open, a `Quickened`
-/// only inside a window. The lint is exactly as strong as the world it is
-/// pointed at, so the world it is pointed at is the one the lockstep test uses.
+/// One builder shared by every test here, deliberately: the completeness lint is
+/// exactly as strong as the world it is pointed at, so it is pointed at the one
+/// the lockstep test uses.
 fn a_busy_tower(seed: u64) -> Sim {
     let mut sim = Sim::new(seed);
     for line in commands() {
@@ -72,16 +56,13 @@ fn a_busy_tower(seed: u64) -> Sim {
 
 /// The session the fixture plays, and what the two profiles can each reach.
 ///
-/// **`debug_spawn` and the dev-spell shelf are `cfg(debug_assertions)`**, so a
+/// `debug_spawn` and the dev-spell shelf are `cfg(debug_assertions)`, so a
 /// release build cannot reach a quickening window, a bound spell or 16
-/// experience without brewing for thousands of ticks. Six sibling test files
-/// answer that by gating the whole file on `debug_assertions`; this one does
-/// not, because the save format **ships in release** and a format with no
-/// release test is the half that matters going untested.
-///
-/// So the debug-only half is conditional and
+/// experience without brewing for thousands of ticks. Six sibling files gate
+/// themselves on `debug_assertions`; this one does not, because the save format
+/// ships in release. So the debug-only half is conditional and
 /// [`the_test_world_actually_holds_everything_it_is_meant_to`] asserts only what
-/// the profile in hand can actually reach. The round-trip, the lockstep and the
+/// the profile in hand can reach; the round-trip, the lockstep and the
 /// completeness lint run in both.
 fn commands() -> Vec<&'static str> {
     let mut lines = vec![
@@ -123,9 +104,9 @@ fn commands() -> Vec<&'static str> {
         "haul wellspring barrier",
         "haul wellspring conduit",
         // The menagerie: a beast drawn, a glyph limned and one stepped, and one
-        // call answered. **The answer is the subtle half** — it is only the last
-        // call's row, and a save that dropped it would come back a board with
-        // no balking marks under a beast the player has already called.
+        // call answered. The answer is the subtle half — only the last call's
+        // row, and a save that dropped it would come back a board with no
+        // balking marks under a beast the player has already called.
         "attend menagerie",
         "summon",
         "limn widdershins oppose",
@@ -136,12 +117,10 @@ fn commands() -> Vec<&'static str> {
         "research",
     ]);
 
-    // **The bearings a maze actually has.** `follow east` was in this list for
-    // one version and refused on three of the four seeds — *"there is no way
-    // east"* — so the reading never moved and `came` stayed `None`. A maze is
-    // generated, so the walk has to ask rather than assume: all four bearings
-    // are tried, and the ones that are walls cost a refused command and nothing
-    // else.
+    // The bearings a maze actually has. `follow east` alone refused on three of
+    // the four seeds — *"there is no way east"* — so the reading never moved and
+    // `came` stayed `None`. A maze is generated, so the walk asks rather than
+    // assumes: all four are tried, and the walls cost a refused command.
     lines.extend(["follow north", "follow east", "follow south", "follow west"]);
 
     if cfg!(debug_assertions) {
@@ -154,17 +133,14 @@ fn commands() -> Vec<&'static str> {
     }
 
     lines.extend([
-        // **Work in flight goes last, and that ordering is the point.** A grind
-        // is eight ticks; started at the top of this list it would have landed
-        // twenty ticks before the snapshot, and every assertion in this file
-        // would have been comparing two worlds with nothing happening in them.
-        // `the_test_world_actually_holds_everything_it_is_meant_to` caught
-        // exactly that.
+        // Work in flight goes last, and the ordering is the point: a grind is
+        // eight ticks, so started at the top it would have landed twenty ticks
+        // before the snapshot and every assertion here would compare two worlds
+        // with nothing happening in them.
         "attend laboratory",
         "grind sage",
-        // **Two, not four**, in a debug build: the quickening window above is
-        // still open, so the grind is halved to four ticks and `meditate 4`
-        // landed it exactly.
+        // Two, not four, in a debug build: the quickening window above is still
+        // open, so the grind is halved and `meditate 4` landed it exactly.
         if cfg!(debug_assertions) {
             "meditate 2"
         } else {
@@ -177,9 +153,9 @@ fn commands() -> Vec<&'static str> {
 
 /// Report the first line where two documents part, rather than both in full.
 ///
-/// A save of a busy tower is a few hundred lines. Printed twice, side by side,
-/// the one line that matters is unfindable — and the whole reason this test
-/// exists is to *name* the field nobody carried.
+/// A save of a busy tower is a few hundred lines; printed twice the one line
+/// that matters is unfindable, and the point is to *name* the field nobody
+/// carried.
 fn same(left_sim: &Sim, right_sim: &Sim, note: &str) {
     let (left, right) = (
         left_sim.snapshot().to_toml().unwrap(),
@@ -231,21 +207,16 @@ fn without_rolls(sim: &Sim) -> String {
 
 /// A long game loads back long, thresholds and all.
 ///
-/// # The defect this exists for
-///
-/// **`Sim::restored` would have shipped installing the unpaced curve.** It calls
+/// `Sim::restored` would have shipped installing the unpaced curve: it calls
 /// `bare`, which applies `Progression::default()`, and `save::restore` never
-/// touches `Progression` at all — so a game begun at any length would have
-/// re-opened with every threshold back where it was authored: crossings
-/// re-announced, rooms opened that should not be, concentration jumping.
+/// touches `Progression` — so a game begun at any length would re-open with
+/// every threshold back where it was authored, crossings re-announced and rooms
+/// opened that should not be.
 ///
-/// **No lint would have caught it.** `every_resource_the_world_holds_is_one_the
-/// _save_knows_about` does cover resources and does list `Length`, but what it
-/// asserts is that a resource is *declared* in the document — never that
-/// `restore` puts it back. A world rebuilt at the wrong length passes it green.
-///
-/// So the assertion is the *curve*, not the field: reading `length` back would
-/// only prove the `serde` round-trip, which was never in doubt.
+/// No lint would have caught it: the resource lint asserts a resource is
+/// *declared* in the document, never that `restore` puts it back. So the
+/// assertion is the *curve*, not the field — reading `length` back would only
+/// prove the `serde` round-trip, which was never in doubt.
 #[test]
 fn a_long_game_comes_back_long() {
     use orbs_sim::content::Length;
@@ -284,12 +255,11 @@ fn a_loaded_tower_keeps_running_the_same_world() {
         let mut lived = a_busy_tower(seed);
         let save = lived.snapshot();
 
-        // **Through the text, which is the path a player takes.** Loading from
-        // the in-memory `Save` skips `to_toml` and `from_toml` entirely — so a
-        // field lost on parse and re-added on print would compare equal, the
-        // version gate would guard a route no test took, and `MazeSave.walls`
-        // (the one multi-line string, where TOML trims a newline after `"""`)
-        // would never be read back at all.
+        // Through the text, which is the path a player takes. Loading the
+        // in-memory `Save` skips `to_toml`/`from_toml`, so a field lost on parse
+        // and re-added on print would compare equal, the version gate would
+        // guard a route no test took, and `MazeSave.walls` — the one multi-line
+        // string, where TOML trims a newline after `"""` — would never be read.
         let text = save.to_toml().expect("a save renders");
         let read = Save::from_toml(&text).expect("a save reads back");
         let mut loaded = Sim::restored(&read);
@@ -303,9 +273,9 @@ fn a_loaded_tower_keeps_running_the_same_world() {
         for tick in 0..LOCKSTEP {
             lived.step();
             loaded.step();
-            // Compared every fifty ticks rather than every one: the assertion
-            // renders two whole documents, and the divergences this is looking
-            // for persist rather than flickering.
+            // Every fifty ticks rather than every one: the assertion renders two
+            // whole documents, and these divergences persist rather than
+            // flicker.
             if tick % 50 == 0 {
                 same(
                     &loaded,
@@ -322,9 +292,8 @@ fn a_loaded_tower_keeps_running_the_same_world() {
 
 /// The clock, the rolls, and the work in flight all resume rather than restart.
 ///
-/// The lockstep test above would catch each of these, but it would report them
-/// as *"the two worlds parted"* — which says a save is broken without saying
-/// which half. These say which half.
+/// The lockstep test above catches each of these but reports *"the two worlds
+/// parted"*, which says a save is broken without saying which half.
 #[test]
 fn what_a_save_carries_is_still_true_after_it_is_loaded() {
     let lived = a_busy_tower(3);
@@ -361,11 +330,10 @@ fn what_a_save_carries_is_still_true_after_it_is_loaded() {
 
 /// Two routes to one world, and the same bytes out of both.
 ///
-/// **A determinism check, not a completeness one** — see the file header. Both
-/// sides run the same `capture` over a world that was never restored, so this
-/// cannot see a field the save omits. What it *does* see is the world itself
-/// diverging: `(seed, submissions)` is `session.rs`'s stated replay contract and
-/// had no consumer at all until now.
+/// A determinism check, not a completeness one — see the file header. Both sides
+/// `capture` a world that was never restored, so this cannot see a field the
+/// save omits. What it does see is the world diverging: `(seed, submissions)` is
+/// `session.rs`'s stated replay contract and had no consumer until now.
 #[test]
 fn two_routes_to_one_world_write_the_same_save() {
     for seed in SEEDS {
@@ -396,15 +364,12 @@ fn two_routes_to_one_world_write_the_same_save() {
 
 /// A line the augury read replays from what it decided, not from what was typed.
 ///
-/// **The property the whole augury rests on.** A trained model is not part of
-/// the determinism contract — the same sentence on a different GPU, driver or
-/// backend need not produce the same spans — so the model runs exactly once,
-/// while the player is there to see the echo, and the canonical command it
-/// settled on is what the journal carries.
-///
-/// This replays with **no augury in the process at all**, which is the point: if
-/// `Submission::Divined` re-read the player's words, this test could only be
-/// written by constructing a model, and it would pass or fail by hardware.
+/// The property the whole augury rests on. A trained model is not part of the
+/// determinism contract — the same sentence on a different GPU or backend need
+/// not produce the same spans — so it runs exactly once, while the player is
+/// there to see the echo, and the journal carries the command it settled on.
+/// This replays with no augury in the process at all: if `Submission::Divined`
+/// re-read the player's words, the test would pass or fail by hardware.
 #[test]
 fn a_divined_line_replays_from_the_echo_and_never_from_the_words() {
     for seed in SEEDS {
@@ -500,13 +465,11 @@ fn a_save_from_a_future_format_is_refused_rather_than_misread() {
 
 /// ...and so is one from an earlier build.
 ///
-/// **The direction this did not check**, and the lens rework is why it matters:
-/// `WardSave` lost seven fields and `shift` changed vocabulary, and serde drops
-/// what it no longer knows without a word. A format-1 save therefore opened
-/// straight into the redesigned ward and resumed a reading whose answers were
-/// scored by a codemaker that no longer exists — a tower that loads, looks
-/// right, and is quietly wrong, which is exactly what the `Ahead` arm above
-/// refuses in the other direction.
+/// The direction this did not check. `WardSave` lost seven fields and `shift`
+/// changed vocabulary, and serde drops what it no longer knows without a word —
+/// so a format-1 save opened straight into the redesigned ward and resumed a
+/// reading scored by a codemaker that no longer exists: a tower that loads,
+/// looks right, and is quietly wrong.
 #[test]
 fn a_save_from_an_earlier_format_is_refused_rather_than_misread() {
     let sim = Sim::new(0);
@@ -543,18 +506,16 @@ fn a_corrupt_save_is_an_error_rather_than_a_crash() {
 
 /// The builder reaches every state it claims to.
 ///
-/// **Without this the whole file is theatre.** Every assertion above compares
-/// two documents, and two documents describing a world where nothing is
-/// happening agree perfectly. `bind` refusing for want of experience, a `probe`
-/// resolving to something else, a dev spell that is not on the shelf — each
-/// would leave the round-trip green and the coverage nil, which is exactly the
-/// failure §19 records `tests/agrees.rs` being rewritten to avoid: *"they would
-/// both pass with this crate's entire harness deleted."*
+/// Without this the whole file is theatre: every assertion above compares two
+/// documents, and two documents describing a world where nothing happens agree
+/// perfectly. `bind` refusing for want of experience, a dev spell not on the
+/// shelf — each leaves the round-trip green and the coverage nil, the failure
+/// §19 records `tests/agrees.rs` being rewritten to avoid: *"they would both
+/// pass with this crate's entire harness deleted."*
 #[test]
 fn the_test_world_actually_holds_everything_it_is_meant_to() {
-    // **Every seed, not one.** The maze is generated, so a bearing that is a
-    // wall on seed 3 is a corridor on seed 11 — checking one seed leaves the
-    // other three's coverage to luck.
+    // Every seed, not one: the maze is generated, so a bearing that is a wall on
+    // seed 3 is a corridor on seed 11 and one seed leaves coverage to luck.
     for seed in SEEDS {
         let save = a_busy_tower(seed).snapshot();
         let has = |what: &str, found: bool| {
@@ -590,10 +551,10 @@ fn the_test_world_actually_holds_everything_it_is_meant_to() {
                 .count()
                 > 1,
         );
-        // **The barrier, down from whole.** `integrity` is a resource rather
-        // than a node, so nothing above can see it — and a save carrying every
-        // node and not this one would pass every other test in this file and
-        // hand the player back a tower in better repair than they left.
+        // The barrier, down from whole. `integrity` is a resource rather than a
+        // node, so nothing above sees it — a save carrying every node and not
+        // this one would pass every other test here and hand the player back a
+        // tower in better repair than they left.
         has(
             "worn barrier",
             save.progress
@@ -605,10 +566,10 @@ fn the_test_world_actually_holds_everything_it_is_meant_to() {
             save.nodes.iter().any(|n| n.working.is_some()),
         );
 
-        // **A byproduct, not merely stock.** `any(stock.is_some())` was true of
-        // a tower nobody had touched — the dispensary ships three endless piles
-        // — so it asserted that the game exists. What a grind actually leaves is
-        // a *counted* pile, and that is the thing a save has to carry.
+        // A byproduct, not merely stock. `any(stock.is_some())` was true of an
+        // untouched tower — the dispensary ships three endless piles — so it
+        // asserted the game exists. A grind leaves a *counted* pile, and that is
+        // the thing a save has to carry.
         has(
             "counted stock",
             save.nodes
@@ -639,13 +600,12 @@ fn the_test_world_actually_holds_everything_it_is_meant_to() {
         has("press history", ward.history.len() > 1);
 
         // A socket dialled off the opening figure. `socket_marks` said this
-        // directly and went with the ratchet that needed it, so what a save
-        // carries now is where the aperture ended up — and `Ward::new` opens it
-        // on the first four sigils, fixed, precisely so this comparison means
-        // something.
+        // directly and went with the ratchet that needed it, so a save now
+        // carries where the aperture ended up — and `Ward::new` opens it on the
+        // first four sigils, fixed, so this comparison means something.
         has("dialled socket", ward.aperture != [0, 1, 2, 3]);
 
-        // **The record tail, checked for content rather than length.** `!is_empty`
+        // The record tail, checked for content rather than length: `!is_empty`
         // was true of `Sim::new` alone, because `tower::report` writes the boot
         // card. What a save has to carry is what the *player* did.
         has(
@@ -673,39 +633,23 @@ fn the_test_world_actually_holds_everything_it_is_meant_to() {
 
 /// Nothing in the world is a component or resource the save has never heard of.
 ///
-/// # Why this is a lint and not a comment
+/// A snapshot save has one fatal failure mode and it is silent: a component
+/// nobody remembers to serialise. Every test above still passes — the two worlds
+/// agree because neither has the field — and the player finds out when their
+/// fire goes out on load. So this walks what the world is *made of* and fails by
+/// name against a table, as `every_material_has_a_home_a_move_can_reach` does.
 ///
-/// A snapshot save has exactly one fatal failure mode, and it is silent: a
-/// component added in a later phase that nobody remembers to serialise. Every
-/// test above still passes — the round-trip round-trips what it carries, and the
-/// two worlds agree because neither of them has the field. The player finds out
-/// when their fire goes out on load.
+/// It sees only components present at that instant. Twelve are conditional — a
+/// `Ward` exists while a reading is open, a `Quickened` inside a window — so it
+/// is exactly as strong as the world it is pointed at, which is why that is
+/// [`a_busy_tower`]. It narrows the hole; it does not close it.
 ///
-/// So this walks what the world is actually *made of* and fails **by name**
-/// against a table. Adding a component and forgetting the save breaks the build
-/// with the type's own name in the message, which is the same instrument
-/// `every_material_has_a_home_a_move_can_reach` and
-/// `every_glyph_the_rail_draws_is_in_the_code_page` already are.
-///
-/// # What it cannot see
-///
-/// Only components that are **present at that instant**. Twelve of them are
-/// conditional — a `Ward` exists while a reading is open, a `Quickened` inside a
-/// window — so the lint is exactly as strong as the world it is pointed at.
-/// That is why it is pointed at [`a_busy_tower`], the same builder the lockstep
-/// test uses and the one
-/// `the_test_world_actually_holds_everything_it_is_meant_to` guards. It narrows
-/// the hole; it does not close it.
-///
-/// # Why `type_id` and not `name`
-///
-/// `ComponentInfo::name` returns a `DebugName`, which without `bevy_utils`'s
-/// `debug` feature is the literal string `"<Enable the debug feature to see the
-/// name>"` — and `crates/orbs/Cargo.toml` builds Bevy with `default-features =
-/// false` and no `debug`. So the *matching* is on `type_id`, which is always
-/// there; `name` is used only for the failure message, and `orbs-sim` takes that
-/// feature as a **dev-dependency** so the message carries a real path under
-/// `cargo test` without reaching the shipped binary.
+/// `type_id` rather than `name`: `ComponentInfo::name` returns a `DebugName`,
+/// which without `bevy_utils`'s `debug` feature is the literal `"<Enable the
+/// debug feature to see the name>"`, and Bevy is built here with no `debug`.
+/// `name` is only for the failure message, and `orbs-sim` takes that feature as
+/// a dev-dependency so it carries a real path under `cargo test` without
+/// reaching the shipped binary.
 #[test]
 fn every_component_the_world_holds_is_one_the_save_knows_about() {
     use std::any::TypeId;
@@ -754,37 +698,34 @@ fn every_component_the_world_holds_is_one_the_save_knows_about() {
         // The tree's shape, rebuilt from every node's path.
         (TypeId::of::<bevy_ecs::hierarchy::ChildOf>(), "ChildOf"),
         (TypeId::of::<bevy_ecs::hierarchy::Children>(), "Children"),
-        // Whether the room this node stands in has been opened. Derived from
-        // `Opened`, which *is* carried, and rewritten wholesale by `tower::seal`
-        // at every construction and every restore — so a document carrying it
-        // would be a second copy of one fact, able to disagree with the set it
-        // came from. It exists only because the two calm-layer sabotage systems
-        // are `Query`s and a query cannot walk to a node's room and read a
-        // resource.
+        // Whether this node's room has been opened. Derived from `Opened`, which
+        // *is* carried, and rewritten wholesale by `tower::seal` at every
+        // construction and restore — so carrying it would be a second copy of
+        // one fact able to disagree with its source. It exists only because the
+        // two calm-layer sabotage systems are `Query`s, and a query cannot walk
+        // to a node's room and read a resource.
         (TypeId::of::<orbs_sim::tower::Sealed>(), "Sealed"),
     ];
 
     let known: std::collections::HashSet<TypeId> =
         carried.iter().chain(&excused).map(|(id, _)| *id).collect();
 
-    // **Both worlds, because the reach of this lint is the reach of the world it
-    // is pointed at.** Some components are mutually exclusive — an athanor
-    // cannot be lit and banked at once — so one fixture cannot hold everything,
-    // and the caveat below is narrowed by looking at two rather than restated.
+    // Both worlds, because this lint's reach is its world's. Some components are
+    // mutually exclusive — an athanor cannot be lit and banked at once — so one
+    // fixture cannot hold everything.
     let busy = a_busy_tower(3);
     let odd = a_tower_in_the_odd_states(3);
-    // **And a sealed one**, because `Sealed` is the one node component neither
-    // of the two above can ever hold: both build with `Sim::new`, so the lint
-    // was blind to a whole component the phase that added it introduced. A third
-    // world is the cheapest way to keep the lint's reach equal to the game's.
+    // And a sealed one, because `Sealed` is the one node component neither of
+    // the two above can hold: both build with `Sim::new`, so the lint was blind
+    // to a whole component. A third world is the cheapest way to keep its reach
+    // equal to the game's.
     let shut = Sim::sealed(3);
 
-    // **Only archetypes that are nodes.** Bevy 0.19 stores every resource on an
-    // entity of its own, so an unfiltered archetype walk meets all thirty-odd of
-    // them as "components" — and a resource is not a thing a node can be made
-    // of. `NodeId` is on every node and on nothing else, which makes it the
-    // filter, and it makes the question the lint asks precise: *what can a node
-    // be made of that the save has never heard of?*
+    // Only archetypes that are nodes. Bevy 0.19 stores every resource on an
+    // entity of its own, so an unfiltered walk meets all thirty-odd of them as
+    // "components". `NodeId` is on every node and nothing else, which makes it
+    // the filter and the question precise: *what can a node be made of that the
+    // save has never heard of?*
     let mut strangers: Vec<String> = Vec::new();
     for sim in [&busy, &odd, &shut] {
         let world = sim.world();
@@ -824,10 +765,8 @@ fn every_component_the_world_holds_is_one_the_save_knows_about() {
 }
 /// Print a real save, so a person can read one.
 ///
-/// **This is the See-it line for §15's promise**, and it is `#[ignore]`d rather
-/// than asserted because the claim is *"saves are readable and editable"* — a
-/// judgement only eyes make. `the_document_is_text_and_it_reads_back` above
-/// checks the things a test can check; this is how you check the rest.
+/// The See-it line for §15's promise, `#[ignore]`d rather than asserted because
+/// *"saves are readable and editable"* is a judgement only eyes make.
 ///
 /// ```bash
 /// cargo test -p orbs-sim --test persistence -- --ignored show_a_save --nocapture
@@ -843,23 +782,17 @@ fn show_a_save() {
 
 /// Nothing in the world is a *resource* the save has never heard of.
 ///
-/// # Why this is separate from the component lint
+/// Separate from the component lint because it was missing, and the gap cost a
+/// real defect: `Choices` — the numbered disambiguation prompt — is a resource
+/// surviving across ticks, and was not in the document, so a save taken with a
+/// prompt open reloaded with the question still on the transcript and the answer
+/// no longer resolving. §15's dead end, through the affordance built to remove
+/// one. See `an_open_question_survives_a_reload`.
 ///
-/// Because it was missing, and the gap cost a real defect. `Choices` — the
-/// numbered disambiguation prompt — is a resource, survives across ticks until
-/// it is answered, and was not in the document: save with a prompt open, reload,
-/// and the question was still on the transcript while the answer no longer
-/// resolved. §15's dead end, arriving through the affordance built to remove
-/// one. The component lint could never have seen it, and it is carried now —
-/// see `an_open_question_survives_a_reload`.
-///
-/// # Why it matches on names rather than `TypeId`
-///
-/// Most of these types are private to their module and cannot be named from an
-/// integration test at all, so there is no `TypeId::of::<T>()` to compare
-/// against. The `bevy_ecs` `debug` feature — a dev-dependency, for exactly this
-/// — makes `ComponentInfo::name` a real path, and a rename then forces a
-/// conscious update here, which is what a lint is for.
+/// It matches on names rather than `TypeId` because most of these types are
+/// private to their module and cannot be named from an integration test. The
+/// `bevy_ecs` `debug` feature — a dev-dependency, for exactly this — makes
+/// `ComponentInfo::name` a real path, so a rename forces a conscious update.
 #[test]
 fn every_resource_the_world_holds_is_one_the_save_knows_about() {
     // In the document.
@@ -874,11 +807,10 @@ fn every_resource_the_world_holds_is_one_the_save_knows_about() {
         // more: it is the only number that can *fall*, so a restore that lost it
         // would hand back standing the player had already spent or been docked.
         "orbs_sim::tower::renown::Renown",
-        // What renown has already been *spent* on, and what the tower is
-        // stocked in. The allowance was paid for in standing, so losing it to a
-        // quit would be losing the renown; and stores are a rate that a reload
-        // cannot re-derive, because what they measure is a history of makings
-        // rather than anything the world still holds.
+        // What renown has been *spent* on, and what the tower is stocked in. The
+        // allowance was paid for in standing, so losing it to a quit is losing
+        // the renown; and stores measure a history of makings, which a reload
+        // cannot re-derive from anything the world still holds.
         "orbs_sim::tower::siege::standing::Petitioned",
         "orbs_sim::tower::stores::Stores",
         "orbs_sim::tower::erosion::Integrity",
@@ -894,12 +826,11 @@ fn every_resource_the_world_holds_is_one_the_save_knows_about() {
         // because a replay has to know which start it is rebuilding.
         "orbs_sim::tower::opened::Sealing",
         // How long the game is, in `[world]` for `Sealing`'s reason and a
-        // stronger one: the length is applied to `Progression` at construction
-        // and the world then holds only its *result*, so a save that lost it
-        // would reopen every threshold at the curve as authored. That is the one
-        // this lint's docs are careful about — it checks that a resource is
-        // *declared*, never that `restore` puts it back, and `Sim::restored`
-        // rebuilding the world at the wrong length would still have passed here.
+        // stronger one: length is applied to `Progression` at construction and
+        // the world holds only its *result*, so a save that lost it would reopen
+        // every threshold at the curve as authored. This lint checks a resource
+        // is *declared*, never that `restore` puts it back, so that case would
+        // still have passed here.
         "orbs_sim::content::length::Length",
         "orbs_sim::session::Choices",
         // §8.1's per-surface rationing. It travels because a cooldown a player
@@ -912,7 +843,7 @@ fn every_resource_the_world_holds_is_one_the_save_knows_about() {
     ];
 
     // Not in the document. Each line is a decision; none of them is a shrug.
-    const EXCUSED: [(&str, &str); 18] = [
+    const EXCUSED: [(&str, &str); 19] = [
         (
             "orbs_sim::session::Scrollback",
             "a bounded tail travels; the arena does not",
@@ -943,6 +874,11 @@ fn every_resource_the_world_holds_is_one_the_save_knows_about() {
             "spun out inside Sim::step's own loop; always nought between ticks",
         ),
         ("orbs_sim::content::prose::Prose", "content, compiled in"),
+        (
+            "orbs_sim::content::manual::Manual",
+            "content, compiled in — the manual a player reads, which is the \
+             same for every tower",
+        ),
         ("orbs_sim::content::recipe::Recipes", "content, compiled in"),
         ("orbs_sim::content::fuel::Fuels", "content, compiled in"),
         (
@@ -996,35 +932,30 @@ fn every_resource_the_world_holds_is_one_the_save_knows_about() {
 
 /// A renamed node keeps its place among its siblings.
 ///
-/// # The defect this pins
-///
 /// `sabotage::substitute` renames a reagent pile in place — `sage` becomes
 /// `sage-` — so on the next load its saved path matches nothing the raised tower
 /// has. Before the fix it was *spawned* and appended to the end of the
 /// dispensary while the raised `sage` was swept, and the pile changed slot.
 ///
-/// That is not cosmetic. `tower::node` opens by saying anything a player can see
-/// must come from walking `Children` in insertion order, because §6 resolves
-/// noun ties to whichever was registered first — so a reload silently changed
-/// which noun an ambiguous phrase resolved to, and the two worlds never
-/// re-converged.
+/// Not cosmetic: §6 resolves noun ties to whichever was registered first, and
+/// `tower::node` requires anything a player can see to come from walking
+/// `Children` in insertion order — so a reload silently changed what an
+/// ambiguous phrase resolved to, and the two worlds never re-converged.
 ///
 /// `debug_swap` is the tester's shortcut for the ambient system, which fires at
-/// one swap an hour and would otherwise need ~900 ticks of stepping to reach.
+/// one swap an hour.
 #[test]
 fn a_renamed_node_keeps_its_place_among_its_siblings() {
     for seed in SEEDS {
         let mut lived = a_busy_tower(seed);
 
-        // **Stepped to a real ambient swap, not `debug_swap`.** That word takes
-        // the alphabetically-first endless pile, which is `charcoal` — and
-        // charcoal is **last** in the dispensary's `Children` order, so
-        // re-appending it lands it in the slot it already had and the defect is
-        // invisible. It is also the pile the ambient system exempts, because a
-        // swap that takes the fire stops every heated stage in the tower.
-        //
-        // The first version of this test used it and passed with the fix
-        // removed, which is the whole failure mode this file exists to refuse.
+        // Stepped to a real ambient swap, not `debug_swap`. That word takes the
+        // alphabetically-first endless pile, `charcoal`, which is last in the
+        // dispensary's `Children` order — so re-appending lands it in the slot
+        // it already had and the defect is invisible. It is also the pile the
+        // ambient system exempts, because a swap that takes the fire stops every
+        // heated stage. The first version of this test used it and passed with
+        // the fix removed.
         let swapped = (0..6000).find_map(|_| {
             lived.step();
             lived
@@ -1066,21 +997,16 @@ fn a_renamed_node_keeps_its_place_among_its_siblings() {
 
 /// An open numbered question can still be answered after a reload.
 ///
-/// # The dead end this pins
-///
 /// §6 has the orb number its readings when several score alike, and `session`'s
-/// own doc says why that needs somewhere to live: *"without somewhere to hold the
-/// list the question is rhetorical — the prompt appears, the digit resolves
-/// against the verb vocabulary as a miss, and the player is in a **dead end**.
-/// §15's gate calls the dead-end metric more important than the raw resolution
-/// rate."*
+/// own doc says why that needs somewhere to live: *"without somewhere to hold
+/// the list the question is rhetorical — the prompt appears, the digit resolves
+/// against the verb vocabulary as a miss, and the player is in a dead end."*
 ///
-/// A save that dropped `Choices` recreated that dead end exactly: the question
-/// was still on the transcript, and the answer no longer resolved. The save
-/// carries the **line**, not the readings, and asks again on the way in.
+/// A save that dropped `Choices` recreated that exactly. The save carries the
+/// *line*, not the readings, and asks again on the way in.
 ///
-/// `purge` is the ambiguity fixture the codebase already keeps for this — §19
-/// records `brew` losing that role when `recall`'s slot changed, and three tests
+/// `purge` is the ambiguity fixture the codebase keeps for this — §19 records
+/// `brew` losing that role when `recall`'s slot changed, and three tests
 /// silently asserting nothing as a result.
 #[test]
 fn an_open_question_survives_a_reload() {
@@ -1125,16 +1051,14 @@ fn an_open_question_survives_a_reload() {
 
 /// A hostile but well-formed save is refused a panic, not just a parse error.
 ///
-/// `a_corrupt_save_is_an_error_rather_than_a_crash` only feeds rubbish to
-/// `from_toml`, which is the easy half — the parser rejects it and nothing else
-/// runs. The half that matters is a document that **parses** and then goes
-/// through `Sim::restored`, because that is where an index or an `unwrap` would
-/// be, and §15 says in as many words that a player may edit this file.
+/// `a_corrupt_save_is_an_error_rather_than_a_crash` feeds rubbish to `from_toml`
+/// and the parser rejects it. The half that matters is a document that *parses*
+/// and then goes through `Sim::restored`, where an index or an `unwrap` would
+/// be, and §15 says a player may edit this file.
 ///
 /// The ward case is not hypothetical: `Ward::seat` range-checks a sigil on the
-/// way in, so live play cannot seat one past the end — but `press` indexes
-/// `sigil_marks` directly, so a hand-edited aperture panicked on the next
-/// `probe` rather than on the way in.
+/// way in, but `press` indexes `sigil_marks` directly, so a hand-edited aperture
+/// panicked on the next `probe` rather than on the way in.
 #[test]
 fn a_hostile_but_well_formed_save_does_not_panic() {
     let text = a_busy_tower(3)
@@ -1179,11 +1103,10 @@ fn a_hostile_but_well_formed_save_does_not_panic() {
 
 /// A spell whose text moved while it was not running lets go, and says so.
 ///
-/// The one branch in `adopt` that a happy-path round-trip can never reach: the
+/// The one branch in `adopt` a happy-path round-trip cannot reach: the
 /// fingerprint is recomputed on load and, when it disagrees, the run ends rather
-/// than resuming into a program its position does not belong to. §8's failure
-/// taxonomy is *"scripts always log and never halt"*, so it has to be said out
-/// loud — halting quietly is the one thing that rule forbids.
+/// than resuming into a program its position does not belong to. §8's taxonomy
+/// is *"scripts always log and never halt"*, so it has to be said out loud.
 #[test]
 fn a_spell_whose_text_moved_under_it_lets_go() {
     let save = a_busy_tower(3).snapshot();
@@ -1229,25 +1152,21 @@ fn a_spell_whose_text_moved_under_it_lets_go() {
 
 /// A stream longer than the tail still puts a spell's cursor back where it was.
 ///
-/// # The case no fixture reaches by accident
-///
-/// The record tail is capped, and every save in every other test here is well
-/// under the cap — so `Records::resume` is only ever called with a `dropped` of
-/// nought, and the arithmetic that turns a spell's cursor back into an index
-/// (`spell::run`'s `seen.saturating_sub(dropped)`) is never exercised against a
+/// The record tail is capped and every other save here is well under it, so
+/// `Records::resume` is only ever called with a `dropped` of nought and
+/// `spell::run`'s `seen.saturating_sub(dropped)` is never exercised against a
 /// truncated stream. A real player passes the cap in about twelve minutes.
 ///
 /// What must hold: `sequence` comes back exactly, `dropped` reports the gap, and
-/// a spell that was watching the stream carries on rather than going blind.
+/// a spell watching the stream carries on rather than going blind.
 #[test]
 fn a_truncated_record_tail_keeps_the_sequence_it_sat_at_the_end_of() {
     let mut lived = a_busy_tower(3);
 
-    // **Typed at, rather than left to tick.** Waiting for the world to emit
-    // 1,200 records on its own does not work: a release build has no bound spell
-    // to lap (the dev shelf is `cfg(debug_assertions)`), so the stream sat at 73
+    // Typed at, rather than left to tick. A release build has no bound spell to
+    // lap (the dev shelf is `cfg(debug_assertions)`), so the stream sat at 73
     // records after twenty thousand ticks. A command is what makes records — the
-    // echo, the answer — so this is both faster and true in either profile.
+    // echo, the answer — so this is faster and true in either profile.
     while lived.scrollback().records().sequence() < 1_200 {
         lived.submit("status");
         lived.step();
@@ -1290,19 +1209,15 @@ fn a_truncated_record_tail_keeps_the_sequence_it_sat_at_the_end_of() {
 
 /// The fields the fixture leaves empty, filled and round-tripped.
 ///
-/// # Why they need a test of their own
+/// Every other assertion here is `snapshot(a) == snapshot(b)`, and a field empty
+/// in both worlds compares equal whether or not the save carries it — so
+/// `progress.learned` could be deleted from the document outright and this file
+/// would stay green, because it is `[]` in the fixture.
 ///
-/// Every other assertion here is `snapshot(a) == snapshot(b)`, and a field that
-/// is empty in both worlds compares equal whether or not the save carries it. So
-/// `progress.learned` could be deleted from the document outright and the rest of
-/// this file would stay green — it is `[]` in the fixture, because a secret is
-/// found by solving wards for hours.
-///
-/// `progress.taken`, `progress.reached` and `progress.opened` are the same
-/// shape and are covered elsewhere: `tests/progression.rs` takes a fork node
-/// and replays it, `tests/sealed.rs` restores a sealed tower and a document
-/// without `opened`, and `tests/grants.rs` restores a node held above its
-/// fork's total.
+/// `progress.taken`, `progress.reached` and `progress.opened` are covered
+/// elsewhere: `tests/progression.rs` replays a fork node, `tests/sealed.rs`
+/// restores a sealed tower and a document without `opened`, and
+/// `tests/grants.rs` restores a node held above its fork's total.
 #[test]
 #[cfg(debug_assertions)]
 fn the_fields_the_fixture_leaves_empty_still_travel() {
@@ -1331,13 +1246,11 @@ fn the_fields_the_fixture_leaves_empty_still_travel() {
 
 /// Each random stream resumes at its own position, not at some other stream's.
 ///
-/// Five of the eight are still at word nought in any short session — only
-/// `Threat`, `Archive` and `Lens` have drawn — so a save that wrote the eight
-/// positions in the wrong order, or read them back permuted, would round-trip
-/// perfectly and pass every other test in this file.
-///
-/// This gives every stream a distinct position first, then permutes two of them
-/// in the document and requires the world to notice.
+/// Five of the eight are still at word nought in any short session, so a save
+/// that wrote the positions in the wrong order or read them back permuted would
+/// round-trip perfectly and pass every other test here. This gives every stream
+/// a distinct position, then permutes two in the document and requires the world
+/// to notice.
 #[test]
 fn the_stream_positions_are_not_interchangeable() {
     let sim = a_busy_tower(3);
@@ -1361,12 +1274,12 @@ fn the_stream_positions_are_not_interchangeable() {
     let mut straight = Sim::restored(&save);
     let mut crossed = Sim::restored(&permuted);
 
-    // **Compared with `[rng]` struck out, and that is the whole care here.** The
-    // permuted positions are *in* the document, so comparing the documents whole
-    // would differ on the `[rng]` table alone — the test would pass with the
-    // positions never reaching a stream at all, which is precisely the vacuous
-    // shape this file exists to refuse. What must differ is the **world**: two
-    // streams crossed means a different log poisoned and a different ward rolled.
+    // Compared with `[rng]` struck out, which is the whole care here: the
+    // permuted positions are *in* the document, so comparing them whole would
+    // differ on the `[rng]` table alone and pass with the positions never
+    // reaching a stream — the vacuous shape this file exists to refuse. What
+    // must differ is the world: two streams crossed means a different log
+    // poisoned and a different ward rolled.
     straight.step_n(900);
     crossed.step_n(900);
     assert_ne!(
@@ -1379,17 +1292,12 @@ fn the_stream_positions_are_not_interchangeable() {
 
 /// A world in the states [`a_busy_tower`] cannot reach.
 ///
-/// # Why a second world rather than a longer first
-///
-/// Some of these are mutually exclusive with what the busy tower holds. `damp`
-/// requires `Burning` and removes it, so an athanor cannot be lit and banked at
-/// once; a spell-driven run and a player-driven one compete for the single
-/// production slot. Contorting one fixture to hold everything would have made it
-/// hold each thing less convincingly.
-///
-/// The completeness lint runs over **both**, because its reach is exactly its
-/// world's — that is the caveat it carries, and this is the honest way to narrow
-/// it rather than restate it.
+/// A second world rather than a longer first, because some of these are mutually
+/// exclusive with what the busy tower holds: `damp` requires `Burning` and
+/// removes it, and a spell-driven run competes with a player-driven one for the
+/// single production slot. Contorting one fixture to hold everything would
+/// make it hold each thing less convincingly, so the completeness lint runs
+/// over both.
 fn a_tower_in_the_odd_states(seed: u64) -> Sim {
     let mut sim = Sim::new(seed);
     let mut lines = vec![
@@ -1405,15 +1313,14 @@ fn a_tower_in_the_odd_states(seed: u64) -> Sim {
         lines.push("debug_swap");
     }
     lines.extend([
-        // **`stop athanor`, not `damp`.** Damping has no word of its own — it is
-        // what stopping the fire *does*, which is `pipeline`'s own note: "what
-        // makes `stop athanor` at the end of a script loop worth writing". A
-        // bare `damp` is ambiguous and `damp athanor` fuzzy-matches `purge`,
-        // which is how the first version of this fixture ended up scouring.
+        // `stop athanor`, not `damp`. Damping has no word of its own — it is
+        // what stopping the fire *does*. A bare `damp` is ambiguous and `damp
+        // athanor` fuzzy-matches `purge`, which is how the first version of this
+        // fixture ended up scouring.
         "stop athanor",
-        // A scour, caught in flight: `PURGE_TICKS` is 4 and this costs one.
-        // **An instrument, not a log** — purging a log un-poisons it on the spot
-        // and takes no triage slot, so there is nothing in flight to carry.
+        // A scour, caught in flight: `PURGE_TICKS` is 4 and this costs one. An
+        // instrument, not a log — purging a log un-poisons it on the spot and
+        // takes no triage slot, so there is nothing in flight to carry.
         "purge alembic",
     ]);
 
@@ -1426,17 +1333,14 @@ fn a_tower_in_the_odd_states(seed: u64) -> Sim {
 
 /// A charmed tool round-trips, and a lapsed charm is not written at all.
 ///
-/// **Placed through `world_mut` rather than through a verb**, because the forge
-/// that lays one does not exist yet — this is the step that adds the component
-/// and the save fields, and carrying them untested until the verb arrives is
-/// exactly the *"written symmetrically in `capture` and `adopt`, and checked by
-/// nothing"* blind spot the test below was written to close. The escape hatch is
-/// for setup between steps, which is what this is.
+/// Placed through `world_mut` rather than a verb, because the forge that lays
+/// one does not exist yet: carrying the component and save fields untested until
+/// the verb arrives is the *"written symmetrically in `capture` and `adopt`, and
+/// checked by nothing"* blind spot the test below closes.
 ///
-/// The liveness half is the one that matters: nothing removes a lapsed charm —
-/// an interval has no expiry system — so a bare walk would write a dead row per
-/// charm per node for the rest of the save's life, which is precisely what
-/// `Quickened` did for a whole phase before this one.
+/// The liveness half matters most: nothing removes a lapsed charm, so a bare
+/// walk would write a dead row per charm per node for the rest of the save's
+/// life — which is what `Quickened` did for a whole phase.
 #[test]
 fn a_charm_travels_and_a_lapsed_one_is_left_behind() {
     use orbs_sim::tower::{Charm, Charmed, charm::Kind};
@@ -1492,10 +1396,9 @@ fn a_charm_travels_and_a_lapsed_one_is_left_behind() {
 
 /// The fields the busy tower never reaches, round-tripped.
 ///
-/// Four of them were carried on faith: written symmetrically in `capture` and
-/// `adopt`, and checked by nothing, because no test world ever held one. That is
-/// the completeness lint's stated blind spot arriving in practice rather than in
-/// a doc comment.
+/// Four were carried on faith: written symmetrically in `capture` and `adopt`
+/// and checked by nothing, because no test world held one — the completeness
+/// lint's stated blind spot arriving in practice.
 #[test]
 fn the_odd_states_travel_too() {
     for seed in SEEDS {
@@ -1543,13 +1446,13 @@ fn the_odd_states_travel_too() {
     }
 }
 
-/// A spell suspended **inside a part** comes back inside it.
+/// A spell suspended inside a part comes back inside it.
 ///
-/// §8 requires in-flight state to be serialisable, and a call stack is the newest
-/// thing that is. A save carrying `pc` and `loops` but not the descents beneath
-/// them would restore a spell that had forgotten who called it — and the failure
-/// is quiet: it would run to the end of the part and stop, which looks exactly
-/// like a spell that finished.
+/// §8 requires in-flight state to be serialisable, and a call stack is the
+/// newest thing that is. A save carrying `pc` and `loops` but not the descents
+/// beneath them restores a spell that has forgotten who called it, and the
+/// failure is quiet: it runs to the end of the part and stops, which looks like
+/// a spell that finished.
 #[test]
 fn a_spell_inside_a_part_comes_back_inside_it() {
     let mut lived = Sim::new(11);
@@ -1602,11 +1505,11 @@ fn a_spell_inside_a_part_comes_back_inside_it() {
 
 #[test]
 fn a_suspended_caller_brings_its_own_bindings_back() {
-    // **The field a scoped store added to the save.** A part opens with only
-    // its parameters, so the caller's bindings ride on the [`Descent`] — and a
-    // save taken mid-call that dropped them would restore a spell whose caller
-    // resumes having forgotten everything it had bound. §8 requires in-flight
-    // state to be serialisable at *every* tick boundary, and a call is one.
+    // The field a scoped store added to the save. A part opens with only its
+    // parameters, so the caller's bindings ride on the [`Descent`] — and a save
+    // taken mid-call that dropped them restores a caller that has forgotten
+    // everything it bound. §8 requires in-flight state to be serialisable at
+    // *every* tick boundary, and a call is one.
     let mut lived = Sim::new(11);
     lived.submit("attend laboratory");
     lived.step();
@@ -1662,19 +1565,18 @@ fn a_suspended_caller_brings_its_own_bindings_back() {
 
 /// The `format = N` line this build writes.
 ///
-/// **Derived, never a literal.** These three tests pinned `"format = 6"` and the
-/// siege's rename took the format to 7 — so `replacen` matched nothing, the save
-/// stayed current and valid, and two tests asserting a *refusal* passed by
-/// asserting nothing. A fixture that edits a document has to track the document.
+/// Derived, never a literal: these tests pinned `"format = 6"` and the siege's
+/// rename took the format to 7, so `replacen` matched nothing and two tests
+/// asserting a *refusal* passed by asserting nothing.
 fn stamped() -> String {
     format!("format = {}", orbs_sim::save::FORMAT)
 }
 
-/// **An older save is migrated where migration is honest.**
+/// An older save is migrated where migration is honest.
 ///
 /// Three of the last four format bumps were pure `RngStream::COUNT` increases,
-/// and a stream a save has never heard of is exactly a stream at position
-/// nought — so refusing those was refusing a tower for a number going up.
+/// and a stream a save has never heard of is a stream at position nought — so
+/// refusing those was refusing a tower for a number going up.
 #[test]
 fn a_save_from_an_older_format_still_opens() {
     let sim = a_busy_tower(3);
@@ -1704,13 +1606,13 @@ fn a_save_from_an_older_format_still_opens() {
     assert!(restored.tick().get() > 0, "a migrated save did not run");
 }
 
-/// **A renamed node is migrated by path**, which is the first *content* change
-/// the migration handles rather than refuses.
+/// A renamed node is migrated by path — the first *content* change the migration
+/// handles rather than refuses.
 ///
 /// `/tower/bailey/host` became `/tower/bailey/enemy` at format 7, because §9b's
 /// remote hosts are a planned content type and the word would have meant *a
-/// machine you break into* and *the army at your wall* in one vocabulary. A node
-/// is addressed by path, so the rename is a string rewrite and exact.
+/// machine you break into* and *the army at your wall* at once. A node is
+/// addressed by path, so the rename is an exact string rewrite.
 #[test]
 fn a_save_that_names_the_old_besieging_army_still_opens() {
     let sim = a_busy_tower(3);
@@ -1751,7 +1653,7 @@ fn a_save_that_names_the_old_besieging_army_still_opens() {
     );
 }
 
-/// **A tower from the chant loses the chant's nodes**, and the circle comes back
+/// A tower from the chant loses the chant's nodes, and the circle comes back
 /// empty rather than haunted.
 ///
 /// A format-11 document carries four syllables as `Role::Reading` places, and a
@@ -1759,16 +1661,13 @@ fn a_save_that_names_the_old_besieging_army_still_opens() {
 /// circle. `restore` re-spawns any path the tower lacks — a reading whose parent
 /// is gone lands at the filesystem root — and a leftover `remaining` would make
 /// `if the circle is empty` false for ever. The rows here are the four shapes
-/// that could survive: a syllable, a reading under one, a reading under a
-/// syllable that is itself absent, and a reading under the circle.
+/// that could survive.
 ///
-/// **Shaped like format 11, not like today with the version changed.** It was
-/// built from a current tower, which already held the circle's glyphs and
-/// humours and a waiting beast — so its last `summon` called that beast in
-/// rather than drawing one, and neither the glyphs being raised into an older
-/// tower nor its `chant` table being ignored was ever exercised. The document
-/// here has no glyph, no humour and no beast, and a figure mid-song on the
-/// circle in the shape `ChantSave` wrote.
+/// Shaped like format 11, not like today with the version changed: built from a
+/// current tower it held the circle's glyphs, humours and a waiting beast, so
+/// its last `summon` called that beast in rather than drawing one, and neither
+/// the glyphs being raised into an older tower nor its `chant` table being
+/// ignored was exercised. This document has no glyph, humour or beast.
 #[test]
 fn a_save_from_the_chant_drops_its_nodes_and_the_circle_is_empty() {
     let mut sim = Sim::new(3);
@@ -1825,7 +1724,7 @@ fn a_save_from_the_chant_drops_its_nodes_and_the_circle_is_empty() {
         .to_toml()
         .expect("a save renders")
         .replacen(&stamped(), "format = 11", 1);
-    // **The figure itself**, on the circle, as `ChantSave` wrote it: a chart, a
+    // The figure itself, on the circle, as `ChantSave` wrote it: a chart, a
     // place in it, what was sung and how far the syllable had travelled.
     let separator = "\n[[node]]\n";
     let chunks: Vec<String> = rendered
@@ -1872,7 +1771,7 @@ fn a_save_from_the_chant_drops_its_nodes_and_the_circle_is_empty() {
         "the empty circle publishes a temper",
     );
 
-    // **Drawn, not called**, and into glyphs the older tower never had — the
+    // Drawn, not called, and into glyphs the older tower never had — the
     // circle's places were raised by this build and survived the load.
     restored.submit("summon");
     restored.step();
@@ -1893,7 +1792,7 @@ fn a_save_from_the_chant_drops_its_nodes_and_the_circle_is_empty() {
     );
 }
 
-/// **A save whose *meaning* moved is still refused**, which is the category that
+/// A save whose *meaning* moved is still refused, which is the category that
 /// matters: the ward rework changed what a scored reading is, so a format-1
 /// document cannot be stated in the current model at all.
 #[test]

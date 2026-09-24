@@ -11,14 +11,12 @@
 //! which means the economy and the focus system are the same system rather than
 //! two bolted together."*
 //!
-//! # One production slot
-//!
-//! §11.5 starts the player at **multiplex capacity 1**, and §9's fourth
-//! invariant reserves that slot for an in-flight manual action for its whole
-//! duration. So brewing occupies the tower, not merely the laboratory: start a
-//! brew and you are not also deciphering. That is the trade the whole focus track
-//! is built on, and giving each domain its own slot would delete it while being
-//! *more* code — a counter per domain where the design needs one.
+//! One production slot: §11.5 starts the player at multiplex capacity 1, and
+//! §9's fourth invariant reserves that slot for an in-flight manual action for
+//! its whole duration. So brewing occupies the tower rather than the laboratory
+//! — start a brew and you are not also deciphering. That is the trade the focus
+//! track is built on, and a slot per domain would delete it while being more
+//! code.
 //!
 //! | Module | What |
 //! |---|---|

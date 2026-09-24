@@ -12,18 +12,12 @@
 //! recipe out of your own shelves; you steal it from somebody who already had
 //! it, which is what a broken ward is for.
 //!
-//! # The chance climbs, and resets
+//! The chance climbs and resets: flat would let a player be forty solves in
+//! with nothing to show, certainty would make the lottery a queue. It rises
+//! with every fruitless solve and drops to nothing the moment one lands.
 //!
-//! A flat chance would mean a player could be forty solves in with nothing to
-//! show; a certainty would make the lottery a queue. It starts small and rises
-//! with every solve that finds nothing, so bad luck is bounded — and it resets
-//! the moment something lands, so good luck is not compounding.
-//!
-//! # It retires when there is nothing left
-//!
-//! Three secrets ship. The roll stops once all three are known, rather than
-//! rolling for ever against an empty pool — a domain that keeps promising
-//! something it cannot deliver is worse than one that stops.
+//! It retires once all three shipped secrets are known, rather than promising
+//! something it cannot deliver.
 
 use std::collections::BTreeSet;
 
@@ -35,11 +29,10 @@ use crate::rng::{RngStream, Rngs};
 
 /// What the player has learned to make, beyond what they started knowing.
 ///
-/// **Player state, not content.** `Recipes` stays immutable — it is loaded once
-/// and never hot-reloaded, because a recipe reaches a decision and swapping one
-/// mid-session would break replay from `(seed, submissions)`. This is the
-/// mutable half, and it is reproducible from that same pair: a discovery is
-/// rolled from a seeded stream on a deterministic tick.
+/// Player state, not content: `Recipes` stays immutable because a recipe
+/// reaches a decision and swapping one mid-session would break replay. This is
+/// the mutable half, still reproducible from `(seed, submissions)` — a
+/// discovery is rolled from a seeded stream on a deterministic tick.
 #[derive(Resource, Debug, Default, Clone)]
 pub struct Learned {
     known: BTreeSet<String>,
@@ -55,40 +48,37 @@ const STEP: u32 = 4;
 
 /// Where the chance reaches certainty.
 ///
-/// `4 + 4 × 24` is 100, so the **25th** solve after a discovery cannot fail.
-/// The mean interval is about six.
+/// `4 + 4 × 24` is 100, so the 25th solve after a discovery cannot fail. The
+/// mean interval is about six.
 ///
-/// Public because it is a *promise* rather than an implementation detail — a
-/// player is owed a bound on bad luck, and the tests below are what hold it.
+/// Public because it is a promise: a player is owed a bound on bad luck, and
+/// the tests below hold it.
 pub const CERTAIN: u32 = 24;
 
 impl Learned {
     /// Whether the player can make this.
     ///
-    /// **A name no recipe marks secret is always known.** The set holds only
-    /// what has been *found*, so an ordinary output needs no entry and the save
-    /// carries three strings rather than forty.
+    /// A name no recipe marks secret is always known: the set holds only what
+    /// has been *found*, so the save carries three strings rather than forty.
     #[must_use]
     pub fn knows(&self, recipes: &Recipes, name: &str) -> bool {
         !recipes.is_secret(name) || self.known.contains(name)
     }
 
-    /// Every secret recipe found so far, by name, in **alphabetical** order.
+    /// Every secret recipe found so far, by name, in alphabetical order.
     ///
-    /// **Not the same order as [`found`](Self::found)**, which walks
-    /// `recipes.toml` — `dreaming, mending, vigour` here against `mending,
-    /// dreaming, vigour` there. This is a `BTreeSet` and that is deliberate: a
-    /// save's bytes must not depend on insertion order, or two routes to one
-    /// world would write different files. Anything a *player* reads wants
-    /// `found`; this is for the save.
+    /// Not [`found`](Self::found)'s order, which is `recipes.toml`'s. A
+    /// `BTreeSet` because a save's bytes must not depend on insertion order, or
+    /// two routes to one world write different files. Anything a player reads
+    /// wants `found`; this is for the save.
     pub fn known(&self) -> impl Iterator<Item = &str> {
         self.known.iter().map(String::as_str)
     }
 
     /// Put a found set back, for a save.
     ///
-    /// **Not `discover`**, which rolls: a restore reads what was found rather
-    /// than finding it again, so `RngStream::Lens` does not move.
+    /// Not `discover`, which rolls: a restore reads what was found rather than
+    /// finding it again, so `RngStream::Lens` does not move.
     pub(crate) fn restore(&mut self, known: impl IntoIterator<Item = String>, since: u32) {
         self.known = known.into_iter().collect();
         self.since = since;
@@ -100,14 +90,12 @@ impl Learned {
         self.since
     }
 
-    /// Everything found so far, **in `recipes.toml`'s own order**.
+    /// Everything found so far, in `recipes.toml`'s own order.
     ///
-    /// Ordered against the content rather than by the `BTreeSet` it is stored in,
-    /// which sorts alphabetically — so this returned `dreaming, mending, vigour`
-    /// while the reveal sequence is `mending, dreaming, vigour`. The file's order
-    /// is load-bearing everywhere else in this module (`discover` and `learn`
-    /// both take the first unfound one), so an accessor answering in a different
-    /// order is a trap for its first caller.
+    /// Ordered against the content rather than the `BTreeSet` it is stored in.
+    /// The file's order is load-bearing in this module — `discover` and `learn`
+    /// both take the first unfound one — so an accessor answering
+    /// alphabetically is a trap for its first caller.
     #[must_use]
     pub fn found<'a>(&self, recipes: &'a Recipes) -> Vec<&'a str> {
         recipes
@@ -120,9 +108,8 @@ impl Learned {
 
 /// Roll for a discovery, and return what was found.
 ///
-/// **Called once per broken seal**, and it is the only thing that advances the
-/// counter — so a player who never scrys never gets closer, and one who
-/// automates the lens gets there at a rate they can feel.
+/// Called once per broken seal, and the only thing that advances the counter,
+/// so a player who never scrys never gets closer.
 pub fn discover(world: &mut World) -> Option<String> {
     let pool: Vec<String> = {
         let recipes = world.resource::<Recipes>();
@@ -135,9 +122,8 @@ pub fn discover(world: &mut World) -> Option<String> {
             .collect()
     };
 
-    // **Retired rather than rolled against nothing.** The counter stops too, so
-    // a save made after the last discovery does not carry a number that means
-    // nothing.
+    // Retired rather than rolled against nothing. The counter stops too, so a
+    // save made after the last discovery carries no meaningless number.
     if pool.is_empty() {
         return None;
     }
@@ -155,10 +141,8 @@ pub fn discover(world: &mut World) -> Option<String> {
             return None;
         }
 
-        // **The file's order, not a uniform draw.** `recipes.toml`'s order is
-        // the designer's recommendation (§19 says so of `recall`'s primary
-        // route), so the reveal sequence is authored rather than left to a die
-        // — and it is deterministic, which a replay needs.
+        // The file's order, not a uniform draw: the reveal sequence is
+        // authored (§19), and deterministic, which a replay needs.
         let found = pool.into_iter().next()?;
         learned.known.insert(found.clone());
         learned.since = 0;
@@ -171,13 +155,12 @@ pub fn discover(world: &mut World) -> Option<String> {
 
 /// Learn a secret outright, for a tester's `debug_learn`.
 ///
-/// **Not a second discovery path.** It writes the same set `discover` writes and
-/// resets the same counter, so a tower reached this way and one reached by
-/// probing are the same tower — which is the property that makes a See-it line
-/// worth anything. What it skips is only the roll.
+/// Not a second discovery path: it writes the same set and resets the same
+/// counter, skipping only the roll, so a tower reached this way and one reached
+/// by probing are the same tower.
 ///
-/// `None` means *the next one in the file's order*, which is the order the lens
-/// itself reveals them in.
+/// `None` means the next one in the file's order, which is the order the lens
+/// reveals them in.
 #[must_use]
 pub fn learn(world: &mut World, wanted: Option<&str>) -> Option<String> {
     let found = {
@@ -188,9 +171,8 @@ pub fn learn(world: &mut World, wanted: Option<&str>) -> Option<String> {
             .into_iter()
             .filter(|name| !learned.known.contains(*name));
         match wanted {
-            // A name that is not a secret, or one already known, is refused —
-            // both are states the game cannot reach, and testing from one is
-            // testing the tool.
+            // A name that is not a secret, or one already known, is refused:
+            // both are states the game cannot reach.
             Some(wanted) => unfound.find(|name| *name == wanted).map(str::to_owned),
             None => unfound.next().map(str::to_owned),
         }
@@ -203,7 +185,7 @@ pub fn learn(world: &mut World, wanted: Option<&str>) -> Option<String> {
         learned.since = 0;
     }
     // Counted as a find, so a tower reached this way and one reached by probing
-    // are the same tower — which is the property that makes it worth anything.
+    // are the same tower.
     super::note(world, super::SECRET);
     Some(found)
 }
@@ -239,9 +221,9 @@ mod tests {
 
     #[test]
     fn what_has_been_found_reads_in_the_files_order() {
-        // The order is load-bearing — `discover` and `learn` both take the first
-        // unfound secret — so an accessor answering alphabetically would put
-        // `dreaming` before `mending` and contradict the sequence a player met.
+        // `discover` and `learn` both take the first unfound secret, so an
+        // accessor answering alphabetically would put `dreaming` before
+        // `mending` and contradict the sequence a player met.
         let mut sim = Sim::new(1);
         assert!(learn(sim.world_mut(), None).is_some());
         assert!(learn(sim.world_mut(), None).is_some());
@@ -276,9 +258,8 @@ mod tests {
 
     #[test]
     fn the_interval_averages_near_six() {
-        // The number the curve was chosen for. A player should feel a discovery
-        // is *due* rather than owed, which is what a mean of six inside a bound
-        // of twenty-five buys.
+        // The number the curve was chosen for: a discovery should feel *due*
+        // rather than owed.
         let mut total = 0u32;
         let mut runs = 0u32;
         for seed in 0..40u64 {

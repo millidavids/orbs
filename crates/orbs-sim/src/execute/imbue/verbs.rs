@@ -1,10 +1,8 @@
 //! The forge's three words.
 //!
 //! `imbue` opens a lattice, `snap` turns a column, `anneal` lets it fall. Only
-//! the last of the three advances the world or holds the tower's one production
-//! slot, which is §10's scarcity for this domain — *"the buff's own lifetime,
-//! **and the slot**"* — and the reason enchanting competes with brewing where
-//! the last four domains did not.
+//! `anneal` advances the world or holds the tower's one production slot —
+//! §10's scarcity here, and why enchanting competes with brewing.
 
 use bevy_ecs::prelude::*;
 
@@ -20,10 +18,8 @@ use super::shared::{besieged, fixture, say};
 
 /// `imbue <tool> <charm>` — open a lattice.
 ///
-/// **Instant, and it costs nothing.** What costs is `anneal`: §11.5 is *"cost is
-/// the resource, never progress"*, so opening a lattice you then walk away from
-/// must be free or the domain would charge for looking, which §5.1 forbids
-/// outright.
+/// Instant and free; `anneal` is what costs. §11.5 is *"cost is the resource,
+/// never progress"*, and charging for looking is what §5.1 forbids.
 pub(in crate::execute) fn imbue(world: &mut World, intent: &Intent) {
     let Some(lattice) = fixture(world) else {
         say(world, Verb::Imbue, "forge_nowhere", &[], Role::Cost);
@@ -39,10 +35,9 @@ pub(in crate::execute) fn imbue(world: &mut World, intent: &Intent) {
         say(world, Verb::Imbue, "forge_unopened", &[], Role::Cost);
         return;
     };
-    // **The leaf, for every sentence below.** A resolved place arrives as its
-    // full path, and prose echoing it would read *"the glyphs rise for
-    // /tower/forge/hurried"* — the tower's internals in a line meant for a
-    // player. The bailey records the same trap.
+    // The leaf, for every sentence below: a resolved place arrives as a full
+    // path, and prose echoing it shows a player the tower's internals. The
+    // bailey records the same trap.
     let charm_word = crate::parser::leaf(charm_word).to_owned();
     let Some(kind) = Kind::from_word(&charm_word) else {
         say(
@@ -54,10 +49,8 @@ pub(in crate::execute) fn imbue(world: &mut World, intent: &Intent) {
         );
         return;
     };
-    // **A charm the tower has not earned refuses in voice** (§11.5). The forge
-    // opens knowing `hurried`; the rest come with the mastery lines — the
-    // forge's own for its second charm, and the room a charm blesses for the
-    // others.
+    // A charm the tower has not earned refuses in voice (§11.5). The forge
+    // opens knowing `hurried`; the rest come with the mastery lines.
     if !world
         .resource::<tower::Opened>()
         .has(&tower::charm_key(kind.word()))
@@ -72,10 +65,9 @@ pub(in crate::execute) fn imbue(world: &mut World, intent: &Intent) {
         return;
     }
 
-    // **A tool anywhere in the tower**, which is this domain's one widening of
-    // §7. Smaller than it looks: an instrument is a `NounKind::Place` and
-    // `tower::scene` already registers every place from everywhere, so the
-    // resolved argument arrives here as a full path and only has to be found.
+    // A tool anywhere in the tower — this domain's one widening of §7, and a
+    // small one: an instrument is a `NounKind::Place`, which `tower::scene`
+    // already registers from everywhere, so it arrives resolved.
     let tool = tool.to_owned();
     let Some(target) = tower::find_by_path(world, &tool) else {
         say(
@@ -87,9 +79,9 @@ pub(in crate::execute) fn imbue(world: &mut World, intent: &Intent) {
         );
         return;
     };
-    // **A charm holds to a tool, never to a reading or a pile.** Without this a
-    // player could imbue the hem, or a sage, and get a charm that no read site
-    // will ever ask about — a silent nothing, which is the one answer §6 forbids.
+    // A charm holds to a tool, never to a reading or a pile — otherwise imbuing
+    // the hem yields a charm no read site asks about, the silent nothing §6
+    // forbids.
     if !holds_a_charm(world, target) {
         say(
             world,
@@ -101,10 +93,9 @@ pub(in crate::execute) fn imbue(world: &mut World, intent: &Intent) {
         return;
     }
 
-    // **One draw, here rather than in a system**, which is `defend`'s rule:
-    // `RngStream::Forge` advances when the player asks for a lattice and never
-    // on a tick nobody asked for, so any future forge system can be appended to
-    // the schedule without shifting a replay.
+    // One draw here rather than in a system, which is `defend`'s rule:
+    // `RngStream::Forge` advances only when a player asks, so a later forge
+    // system can join the schedule without shifting a replay.
     let drawn = {
         let mut rngs = world.resource_mut::<crate::rng::Rngs>();
         let bits: u64 = rand::Rng::random(rngs.stream(crate::rng::RngStream::Forge));
@@ -132,8 +123,8 @@ pub(in crate::execute) fn imbue(world: &mut World, intent: &Intent) {
 /// What a charm costs this tower: the authored price, less the Ley Line's
 /// `thrift`, never below one.
 ///
-/// **One function for both sites** — the price `imbue` quotes and the price
-/// `anneal` takes — so the forge cannot quote one number and charge another.
+/// One function for both sites, so the forge cannot quote one number and
+/// charge another.
 fn priced(world: &World, kind: Kind, besieged: bool) -> u32 {
     let asked = world
         .resource::<crate::content::Charms>()
@@ -159,9 +150,8 @@ fn holds_a_charm(world: &World, node: Entity) -> bool {
 
 /// `snap <column>` — turn one glyph and its neighbours.
 ///
-/// Instant and free, like `pledge`'s choosing half: what a settle costs is the
-/// commitment, and charging for arranging the board would make a player pay to
-/// change their mind.
+/// Instant and free, like `pledge`'s choosing half — charging to arrange the
+/// board would make a player pay to change their mind.
 pub(in crate::execute) fn snap(world: &mut World, intent: &Intent) {
     let Some(lattice) = fixture(world) else {
         say(world, Verb::Snap, "forge_nowhere", &[], Role::Cost);
@@ -202,9 +192,9 @@ pub(in crate::execute) fn snap(world: &mut World, intent: &Intent) {
 
 /// `anneal` — let the lattice fall, and set the charm if every glyph holds.
 ///
-/// **The operation.** It takes the tower's one production slot for as long as
-/// the charm's `takes`, and it spends quintessence whether or not the lattice
-/// lights — which is what prices guessing and makes deducing worth the thought.
+/// The operation: it holds the tower's one production slot for the charm's
+/// `takes`, and spends quintessence whether or not the lattice lights — which
+/// is what prices guessing.
 pub(in crate::execute) fn anneal(world: &mut World) {
     let Some(lattice) = fixture(world) else {
         say(world, Verb::Anneal, "forge_nowhere", &[], Role::Cost);
@@ -233,12 +223,10 @@ pub(in crate::execute) fn anneal(world: &mut World) {
             world,
             Verb::Anneal,
             "forge_short",
-            // **`quantity`, not `state`** — `forge_short` reads *"…and you hold
-            // {quantity}"*, so the wrong key left the refusal printing a literal
-            // `{quantity}` at a player. This is the sentence that prices the
-            // whole domain: `pledge`'s equivalent one room over records that a
-            // refusal without its two numbers is *"a refusal a player cannot
-            // plan around — and planning around it is the mechanic"*.
+            // `quantity`, not `state` — `forge_short` reads *"…and you hold
+            // {quantity}"*, and the wrong key printed that literal at a
+            // player. A refusal without its two numbers cannot be planned
+            // around, and planning around it is the mechanic.
             &[
                 ("name", &binding.kind),
                 ("kind", &cost.to_string()),
@@ -250,22 +238,13 @@ pub(in crate::execute) fn anneal(world: &mut World) {
     }
     world.resource_mut::<tower::Quintessence>().spend(cost);
 
-    // **The fall takes time, and the tower's one slot with it.**
+    // The fall takes time, and the tower's one slot with it. This resolved
+    // instantly for a whole step, so `Charm::takes` was dead and §10's scarcity
+    // for the domain did not exist at all.
     //
-    // This resolved instantly for a whole step, and `Charm::takes` was dead:
-    // `forge.toml` documented it as *"ticks of the tower's one production
-    // slot"*, `Verb::Anneal::is_operation` claimed *"maintaining a charm is
-    // meant to compete with making things"*, the panel drew *"a gauge over the
-    // settle in flight"* and ROADMAP's exit said the same — and every one of
-    // them was false. A charm cost quintessence and no time at all, so §10's
-    // scarcity for this domain — *"the buff's own lifetime, **and the slot**"* —
-    // simply did not exist.
-    //
-    // **The outcome is decided when the work lands, not here.** A lattice that
-    // resolved at once and then held the slot would be a charm you already had
-    // being paid for afterwards. It falls, and what it leaves is read at
-    // `land::finish` — which is where the *"the lattice begins to fall"* line
-    // was always meant to go, and why it had been authored and never used.
+    // The outcome is decided when the work lands, not here: a lattice that
+    // resolved at once and then held the slot would be a charm you already had,
+    // being paid for afterwards.
     let Some(subject) = world.get::<tower::NodeId>(lattice).copied() else {
         return;
     };
@@ -294,9 +273,9 @@ pub(in crate::execute) fn anneal(world: &mut World) {
 
 /// What a fall leaves, once it has taken its time.
 ///
-/// Called from `land::finish` when an `anneal` completes, which is the press's
-/// and the audit's arrangement: work that makes no material, and whose sentence
-/// depends on what it found.
+/// Called from `land::finish` when an `anneal` completes, like the press and
+/// the audit: work that makes no material, whose sentence depends on what it
+/// found.
 pub(crate) fn land(world: &mut World, lattice: Entity) {
     let Some(binding) = world.get::<Binding>(lattice).cloned() else {
         return;
@@ -311,17 +290,11 @@ pub(crate) fn land(world: &mut World, lattice: Entity) {
     if lit {
         lay(world, &binding, kind);
         world.entity_mut(lattice).remove::<Binding>();
-        // **A fall that lights earns; one that springs back does not.**
-        //
+        // A fall that lights earns; one that springs back does not.
         // `land::finish` credits in the generic branch this one `continue`s
-        // past, so without this the forge paid nothing at all and
-        // `orbs-balance` read it as `0.0000/tick` — indistinguishable from a
-        // domain that is broken, which is how the first sweep of the `imbuing`
-        // policy reported it.
-        //
-        // Only on success, and that is the whole argument for the eight-rung
-        // table in one number: a spell that reads the residue earns every fall,
-        // and `tending_blindly` earns one in eight.
+        // past, so without this the forge paid nothing and `orbs-balance` read
+        // it as `0.0000/tick`. Only on success: a spell that reads the residue
+        // earns every fall, `tending_blindly` one in eight.
         let earned = tower::worth(world, charm::LATTICE);
         tower::done(world, &tower::Work::at(charm::LATTICE), earned);
         publish(world, lattice);
@@ -345,10 +318,9 @@ pub(crate) fn land(world: &mut World, lattice: Entity) {
         world,
         Verb::Anneal,
         "forge_failed",
-        // `forge_failed` reads *"…that cost {quantity}"*, and this is the
-        // commonest line in the domain — a player guessing the lattice sees it
-        // on nearly every attempt, so a literal `{quantity}` was on screen more
-        // than any other sentence the forge says.
+        // `forge_failed` reads *"…that cost {quantity}"*, and it is the
+        // commonest line in the domain — a wrong key put that literal on screen
+        // more than any other sentence the forge says.
         &[("quantity", &spent)],
         Role::Cost,
     );

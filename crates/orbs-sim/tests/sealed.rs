@@ -1,9 +1,9 @@
 //! A fresh game is a laboratory and nothing else, and the rest is earned
 //! (DESIGN.md §11.5, Phase 10).
 //!
-//! **Driven through real runs**, as `tests/progression.rs` is: there is no
-//! public way to hand the sim a deed, so a station is reached the way a player
-//! reaches it, and the door that opens is the door the player finds open.
+//! Driven through real runs, as `tests/progression.rs` is: there is no public
+//! way to hand the sim a deed, so a station is reached the way a player reaches
+//! it, and the door that opens is the door the player finds open.
 
 use orbs_render::{FieldName, Value};
 use orbs_sim::Sim;
@@ -78,8 +78,8 @@ fn a_shut_room_refuses_from_every_door() {
     );
     assert_ne!(sim.location(), "/tower/archive", "the player walked in");
 
-    // **By a path that is not the room's name**, which is why the gate asks
-    // the node rather than the name.
+    // By a path that is not the room's name, which is why the gate asks the node
+    // rather than the name.
     run(&mut sim, &["attend stacks", "attend /tower/archive/stacks"]);
     assert!(
         !sim.location().contains("archive"),
@@ -173,11 +173,10 @@ fn brewing_a_clarity_opens_the_archive_and_says_so_once() {
 
 #[test]
 fn the_ley_line_opens_the_two_rooms_no_deed_reaches() {
-    // **The grimoire and the forge hang off the tower's line, not a room's.**
-    // Passing a step *is* the grant, so nothing had to be written down — but a
+    // The grimoire and the forge hang off the tower's line, not a room's.
+    // Passing a step is the grant, so nothing had to be written down — but a
     // room is a set the world holds, and with nothing applying a station's
-    // `opens` both rooms stayed shut for ever in the only tower a player ever
-    // gets, taking the forge line's charm with them.
+    // `opens` both rooms stayed shut for ever in the only tower a player gets.
     let mut sim = Sim::sealed(1);
     assert!(!sim.is_open("grimoire"));
     assert!(!sim.is_open("forge"));
@@ -208,12 +207,11 @@ fn the_ley_line_opens_the_two_rooms_no_deed_reaches() {
 
 #[test]
 fn a_sealed_tower_and_the_same_tower_reloaded_carry_the_same_marks() {
-    // **`Sealed` is derived, so no document compares it** — which is what let a
-    // built tower and its own reload disagree about four nodes. `seal` marks the
-    // tree that exists when it runs, and a fresh tower publishes the pylon's
-    // integrity and each die's price *after* raising while a restore seals
-    // last. Two worlds that must be identical, differing in the component two
-    // sabotage queries read with a `Without` filter.
+    // `Sealed` is derived, so no document compares it — which let a built tower
+    // and its own reload disagree about four nodes. `seal` marks the tree that
+    // exists when it runs, and a fresh tower publishes the pylon's integrity and
+    // each die's price after raising while a restore seals last. Two worlds that
+    // must be identical, differing in a component two sabotage queries filter on.
     let sim = Sim::sealed(11);
     let restored = Sim::restored(&sim.snapshot());
     assert_eq!(
@@ -283,12 +281,11 @@ fn a_document_whose_line_outran_its_rooms_catches_up_on_load_and_says_nothing() 
 #[cfg(debug_assertions)]
 #[test]
 fn a_document_that_reached_a_station_without_its_opening_catches_up_too() {
-    // **A mastery station's `opens` lands on exactly one tick, ever**: `advance`
-    // skips anything already in `Reached`, so a document that holds the station
-    // and not the thing it opened would never open it — the tally is long past
-    // what the deed asks, and the walk goes straight by. The ley line's
-    // catching-up needed a twin, and the reasoning that said otherwise was
-    // wrong about the code.
+    // A mastery station's `opens` lands on exactly one tick, ever: `advance`
+    // skips anything already in `Reached`, so a document holding the station and
+    // not the thing it opened would never open it — the tally is long past what
+    // the deed asks and the walk goes straight by. The ley line's catching-up
+    // needed a twin.
     let mut sim = Sim::sealed(1);
     brew_a_clarity(&mut sim);
     let mut save = sim.snapshot();
@@ -306,12 +303,11 @@ fn a_document_that_reached_a_station_without_its_opening_catches_up_too() {
 
 #[test]
 fn a_capability_no_station_gates_outlives_a_document_that_never_named_it() {
-    // **The authoritative-save failure, arriving through capabilities.** A
-    // charm, a gated product or an eighth room that this build ships *ungated*
-    // cannot be named by a document written before it existed — and replacing
-    // the set outright shut it for the life of every save, with no station able
-    // to open it. Unioned with `Opened::start` instead, which is that set's own
-    // rule.
+    // The authoritative-save failure, arriving through capabilities: a charm, a
+    // gated product or an eighth room this build ships ungated cannot be named
+    // by a document written before it existed, and replacing the set outright
+    // shut it for the life of every save with no station able to open it.
+    // Unioned with `Opened::start` instead, which is that set's own rule.
     let sim = Sim::sealed(1);
     let mut save = sim.snapshot();
     save.progress.opened = Some(Vec::new());

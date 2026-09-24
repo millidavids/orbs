@@ -1,22 +1,21 @@
 //! The glyph repertoire: code page 437.
 //!
-//! DESIGN.md §4 fixes the font as a CP437-style bitmap at 8×16, and §13 splits
-//! the two frontends: the Bevy build draws from an embedded CP437 atlas, the
-//! terminal build uses the user's font and the Unicode U+2500 box-drawing block.
+//! §4 fixes the font as a CP437-style bitmap at 8×16, and §13 splits the two
+//! frontends: the Bevy build draws from an embedded CP437 atlas, the terminal
+//! build uses the user's font and the U+2500 box-drawing block.
 //!
-//! The split this crate makes is between **repertoire** and **encoding**:
+//! The split this crate makes is between repertoire and encoding:
 //!
-//! - The *repertoire* — which glyphs may appear at all — belongs here, because
+//! - The repertoire — which glyphs may appear at all — belongs here, because
 //!   `orbs-render` decides what appears. It is the intersection of what both
-//!   frontends can draw, and a [`crate::Frame`] must never contain anything
-//!   outside it.
-//! - The *encoding* belongs to the frontend. A [`crate::Cell`] holds a Unicode
+//!   frontends can draw, and a [`crate::Frame`] must never hold anything else.
+//! - The encoding belongs to the frontend. A [`crate::Cell`] holds a Unicode
 //!   `char`; the Bevy build turns that into an atlas index with
 //!   [`cp437_index`], and the terminal build writes the `char` out directly.
 //!
-//! Storing the codepage index instead would have forced the terminal frontend to
-//! own a reverse table, and storing arbitrary Unicode would have let prose reach
-//! the atlas with no glyph behind it.
+//! Storing the codepage index would have forced the terminal frontend to own a
+//! reverse table, and storing arbitrary Unicode would have let prose reach the
+//! atlas with no glyph behind it.
 
 /// Code page 437 in index order, as Unicode scalars.
 ///

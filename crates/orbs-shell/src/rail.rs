@@ -5,32 +5,19 @@
 //! the five rows at the rail's foot, which are the ones §15 made playability
 //! gates and the ones §9 requires be readable.
 //!
-//! # It says what the domain's own pane would, in fewer words
+//! Rule 2 lets a frontend decide only *how* a cell is drawn, so every fact comes
+//! from [`Sim::briefs`] and `orbs-tui` draws the same rail from the same
+//! `Vec<Brief>`. Layout and glyph are decided here and nothing else.
 //!
-//! Rule 2 lets a frontend decide only *how* a cell is drawn, so every fact here
-//! comes from [`Sim::briefs`] rather than from anything this module works out —
-//! `orbs-tui` draws the same rail from the same `Vec<Brief>`. What is decided
-//! here is layout and glyph, and nothing else.
+//! Six boxes — the rooms you *work in*, since the grimoire left `DOMAINS` (§19)
+//! — and five are dark in a fresh game. A shut room is a dim dotted row with no
+//! name, which says *there is more* without saying what; naming them would spend
+//! §11's discovery loop. An open room's state row ends in the percentage to its
+//! next mastery station.
 //!
-//! # Five of the six are dark in a fresh game, and that is the point
-//!
-//! The rail draws the rooms you **work in** — six of them, since the grimoire
-//! left `DOMAINS` (§19) — and the player starts with one (Phase 10). A shut room
-//! draws as a dim dotted row with no name: six slots with five dark says *there
-//! is more* without saying what, which is the foreshadowing §11's discovery loop
-//! wants and which naming them would spend. An open room's state row ends in the
-//! percentage to its next mastery station.
-//!
-//! §10 names *seven* domains and that is not this list: spellcraft is a kind of
-//! play rather than a room you tend, and the bailey is a room you fight in
-//! rather than tend. Neither has a box.
-//!
-//! # Each box is ruled off from the next
-//!
-//! A box's content is one to four rows, so consecutive domains ran together in a
-//! column of whitespace and which line belonged to which room was left to the
-//! reader. A horizontal rule closes every box but the last, whose boundary is the
-//! foot's own rule. Both are silent — structure writes cells and no speech.
+//! A horizontal rule closes every box but the last, whose boundary is the foot's
+//! own rule: a box is one to four rows, so without it consecutive domains ran
+//! together in a column of whitespace. Both are silent.
 
 use orbs_render::{Frame, Pos, Rect, Span, Style};
 use orbs_sim::Sim;
@@ -40,21 +27,18 @@ use super::screen::Screen;
 
 /// A domain with something to say, and a domain with something wrong.
 ///
-/// **Glyphs, not colours.** §14 forbids meaning that lives only in hue, and a
-/// rail is exactly where that rule is easiest to break — a red border and a
-/// green exclamation are the obvious design and are invisible to a third of the
-/// reasons §14 exists. The accent carries the same fact a second time, which is
-/// what an accent is for.
+/// Glyphs, not colours: §14 forbids meaning that lives only in hue, and a red
+/// border with a green exclamation is the obvious design. The accent carries
+/// the same fact a second time, which is what an accent is for.
 const NEWS: &str = "!";
 /// A fault. `‼` is CP437 0x13, and reads as trouble at one glyph.
 const FAULT: &str = "‼";
 
 /// A spell is running here.
 ///
-/// **`►` is CP437 0x10; `▸` is not in the page at all and drew as `?`.** So the
-/// row that says a room is automated said the orb did not know what was there —
-/// the worst possible reading of it, in the pane whose whole job is *at a glance*.
-/// The same defect the board's `▪` had (§19), found the same way: by looking.
+/// `►` is CP437 0x10; `▸` is not in the page and drew as `?`, so the row saying
+/// a room is automated said the orb did not know what was there. The board's
+/// `▪` defect (§19), found the same way: by looking.
 const RUNNING: char = '►';
 
 /// Draw the rail, if the layout found room for it.
@@ -78,15 +62,13 @@ pub fn paint(
     let mut painter = frame.painter(at);
     painter.border(at, Some("tower"), Style::DIM);
 
-    // **Handed in from `Panel`, never asked from the sim here.** `Sim::briefs`
-    // walks every room and runs `instruments_in` per room; called from a painter
-    // that is a 60 Hz sweep over 1 Hz data, which is the allocation `Panel`
-    // exists to stop and says so in its own doc.
+    // Handed in from `Panel`, never asked from the sim here: `Sim::briefs` walks
+    // every room and runs `instruments_in` per room, which is a 60 Hz sweep over
+    // 1 Hz data — the allocation `Panel` exists to stop.
     for (index, (brief, slot)) in briefs.iter().zip(boxes).enumerate() {
-        // **The rule belongs to the box above the boundary, and the last box has
-        // none.** `lay_rail` hands out contiguous slots, so the foot begins on the
-        // row after the seventh box ends — and the foot opens with a rule of its
-        // own. A seventh rule here would draw two in adjacent rows.
+        // The rule belongs to the box above the boundary and the last box has
+        // none: the foot begins on the row after the last box and opens with a
+        // rule of its own, so a rule here would draw two in adjacent rows.
         let ruled = index + 1 < boxes.len();
         domain(&mut painter, brief, *slot, ruled);
     }
@@ -103,14 +85,11 @@ fn domain(painter: &mut orbs_render::Painter<'_>, brief: &Brief, at: Rect, ruled
         return;
     }
 
-    // Where content must stop. Without a rule that is the box's own bottom; with
-    // one it is the rule's row, so every `row >=` guard below asks this rather
-    // than `at.bottom()`.
-    //
-    // Silent, like the border and the foot's rule: §19's frame rule is that
-    // structure writes cells and no speech, and a reader hearing a horizontal
-    // rule read out between every pair of rooms would get box-drawing noise where the
-    // sighted player gets separation for free.
+    // Where content must stop: the box's bottom, or the rule's row when there is
+    // one, which is why every `row >=` guard below asks this rather than
+    // `at.bottom()`. Silent like the border, because structure writes cells and
+    // no speech (§19) — a reader hearing a rule between every pair of rooms
+    // gets box-drawing noise where a sighted player gets separation free.
     let floor = if ruled && at.rows > 1 {
         let row = at.bottom().saturating_sub(1);
         painter.rule(Pos::new(at.col, row), at.cols, Style::DIM);
@@ -120,14 +99,11 @@ fn domain(painter: &mut orbs_render::Painter<'_>, brief: &Brief, at: Rect, ruled
     };
 
     if !brief.built {
-        // **A rule, and no name.** Drawn rather than skipped so the seven slots
-        // keep fixed positions — a box that appeared and pushed the others down
-        // would make the rail unreadable at the one moment it has news.
-        //
-        // `glyphs` rather than `span`, so it is **silent**: §19's frame rule is
-        // that structure writes cells and no speech, and a reader being read
-        // fourteen middle dots four times is the noisiest possible way to say
-        // *there is nothing here yet*.
+        // A rule and no name, drawn rather than skipped so the slots keep fixed
+        // positions: a box appearing and pushing the others down would make the
+        // rail unreadable at the one moment it has news. `glyphs` rather than
+        // `span` keeps it silent — fourteen middle dots read out four times is
+        // the noisiest way to say *there is nothing here yet*.
         painter.glyphs(at.origin(), &"·".repeat(usize::from(at.cols)), Style::DIM);
         return;
     }
@@ -146,12 +122,10 @@ fn domain(painter: &mut orbs_render::Painter<'_>, brief: &Brief, at: Rect, ruled
     // The name, with its mark pushed to the right edge so a glance down the rail
     // finds every mark in one column.
     //
-    // **`chars().count()`, never `len()`.** `‼` is one column and three bytes, so
-    // a byte count padded a fault two columns short of the edge while `!` — one
-    // byte — landed exactly on it. Faults and news then appeared in *different*
-    // columns, breaking the one property this arithmetic exists for. The test
-    // below measured the mark correctly all along, which is why it could not
-    // catch it.
+    // `chars().count()`, never `len()`: `‼` is one column and three bytes, so a
+    // byte count padded a fault two columns short of the edge while one-byte `!`
+    // landed on it — putting faults and news in different columns, which is the
+    // one property this arithmetic exists for.
     let width = usize::from(at.cols);
     let wide = mark.chars().count();
     let name = truncate(brief.name, width.saturating_sub(wide));
@@ -170,10 +144,10 @@ fn domain(painter: &mut orbs_render::Painter<'_>, brief: &Brief, at: Rect, ruled
         Pos::new(at.col, row),
         &Span::new(&state).with_style(Style::DIM),
     );
-    // **The percentage to the room's next mastery station, on the state row's
-    // right edge** (§11.5). There is no spare row: `MIN_RAIL_BOX` is name,
-    // state, detail, spell and the rule, and a sixth would be dropped exactly
-    // when a room is busy *and* automated — the state the rail exists to show.
+    // The percentage to the room's next mastery station, on the state row's
+    // right edge (§11.5). There is no spare row: `MIN_RAIL_BOX` is name, state,
+    // detail, spell and the rule, and a sixth would be dropped exactly when a
+    // room is busy and automated — the state the rail exists to show.
     // Drawn with `glyphs`, so it is silent: §14's rule for progress is
     // *completion only*, and the station reaching is what gets said.
     if let Some(progress) = brief.mastery {
@@ -221,18 +195,14 @@ fn domain(painter: &mut orbs_render::Painter<'_>, brief: &Brief, at: Rect, ruled
 
 /// The spell row: what is running here, and how much more of it there is.
 ///
-/// **`+n` says there is more running here than this line can name.** A box holds
-/// one spell row and a room can hold several spells — and, since `alongside`,
-/// several cursors of one spell. [`Brief::running`] counts *cursors* for that
-/// reason: from here the two are the same fact, and one number true of both
-/// beats two suffixes a player has to tell apart at a glance. `status` lists
-/// them by name, which is the standing split between the glance and the answer.
+/// `+n` says there is more running here than this line can name.
+/// [`Brief::running`] counts *cursors*, because from here a second `invoke` and
+/// an `alongside` fork are the same fact. `status` lists them by name — the
+/// standing split between the glance and the answer.
 ///
-/// **The name is truncated and the suffix never is.** Cutting the whole string
-/// to width would drop `+2` off exactly the rooms busy enough to have earned it
-/// — a marker that vanishes when it matters, which is §19's sanctum rail defect
-/// in a third costume. So the count is measured out of the budget first and the
-/// name gets what is left.
+/// The name is truncated and the suffix never is: cutting the whole string to
+/// width would drop `+2` off exactly the rooms busy enough to have earned it, a
+/// marker that vanishes when it matters (§19).
 fn casting(spell: &str, running: usize, width: usize) -> String {
     let more = running.saturating_sub(1);
     let extra = if more > 0 {
@@ -246,12 +216,10 @@ fn casting(spell: &str, running: usize, width: usize) -> String {
 
 /// The readings the telemetry pane used to carry.
 ///
-/// **These five and no more.** `tick` is the only visible proof the sim runs,
-/// `held` is §8's *"surfaced in `status` and in the sidebar"*, `scale` against a
-/// fixed `grid` is §19's whole change in two rows, and `focus` is §9's setting.
-/// Everything else the pane had — `seed`, `queued`, `logged` — is already in
-/// `status`, and `status` is where it belongs: it is the full answer, and this is
-/// the glance.
+/// These five and no more: `tick` is the only visible proof the sim runs, `held`
+/// is §8's sidebar requirement, `scale` against a fixed `grid` is §19's change
+/// in two rows, and `focus` is §9's setting. Everything else the pane had is
+/// already in `status`, which is the full answer where this is the glance.
 fn readings(painter: &mut orbs_render::Painter<'_>, sim: &Sim, screen: &Screen, at: Rect) {
     if at.is_empty() {
         return;
@@ -259,10 +227,9 @@ fn readings(painter: &mut orbs_render::Painter<'_>, sim: &Sim, screen: &Screen, 
     let held = sim.concentration();
     let rows = [
         format!("tick  {}", sim.tick().get()),
-        // **Absent until the orb has been taught to hold one** — §8 is explicit
-        // that concentration 0 is the starting state and not an exhaustion, so a
-        // row reading `held 0 of 0` would spend a line saying nothing for the
-        // first two minutes of the game.
+        // Absent until the orb can hold one: §8 makes concentration 0 the
+        // starting state rather than an exhaustion, so `held 0 of 0` would
+        // spend a line saying nothing for the game's first two minutes.
         if held > 0 {
             format!("held  {} of {held}", sim.bound().len())
         } else {
@@ -299,20 +266,11 @@ const fn focus(screen: &Screen) -> &'static str {
 
 /// What a domain is doing, in the panel's own vocabulary.
 ///
-/// **[`State::label`] for nine of the ten, and one deliberate difference.**
-///
-/// This used to be a hand-written second copy of all ten arms, under a comment
-/// claiming *"the same words the instrument panel prints, so the rail and the
-/// pane cannot describe one room two ways"* — and they already did: `Empty` read
-/// `idle` here and `empty` there, so an untouched laboratory was `idle` on the
-/// rail and `empty` in the pane and to a screen reader.
-///
-/// The word is kept, because the two surfaces are describing different subjects.
-/// The panel labels an **instrument**, and an instrument with nothing in it is
-/// *empty*. The rail labels a **room** — `Brief::state` is what its busiest
-/// instrument is doing — and a room is not empty, it is idle. What was wrong was
-/// writing the other nine out again beside it, which is what let the difference
-/// become accidental instead of stated.
+/// [`State::label`] for nine of the ten, and one deliberate difference — which
+/// was a hand-written copy of all ten arms claiming there was none. The panel
+/// labels an *instrument*, and one with nothing in it is empty; the rail labels
+/// a *room*, and a room is idle. Writing the other nine out beside it is what
+/// let that difference become accidental rather than stated.
 const fn word(state: State) -> &'static str {
     match state {
         State::Empty => "idle",
@@ -322,18 +280,14 @@ const fn word(state: State) -> &'static str {
 
 /// Cut a word to fit, rather than letting it run into the border.
 ///
-/// §19's frame rule is that **truncation is visual only** — the linear stream
-/// still carries the full text, so a narrow rail is a visual constraint and never
-/// an informational one.
+/// Truncation is visual only (§19): the linear stream still carries the full
+/// text, so a narrow rail is never an informational constraint.
 fn truncate(text: &str, width: usize) -> &str {
-    // **`orbs_render::arriving`, which the instrument panel one file over has
-    // been calling all along.** This was a third hand-rolled char-safe cut in
-    // the workspace, and `char_index` — the helper `arriving` is built on —
-    // exists precisely because two private copies of that idiom in different
-    // crates desynchronised Tab completion once already.
-    //
-    // It also allocated: a `String` per call, four calls a box, seven boxes,
-    // every frame, for text that changes at 1 Hz.
+    // `orbs_render::arriving`, which the instrument panel has been calling all
+    // along. This was a third hand-rolled char-safe cut, and two private copies
+    // of that idiom in different crates desynchronised Tab completion once
+    // already. It also allocated a `String` per call, four calls a box, every
+    // frame, for text that changes at 1 Hz.
     orbs_render::arriving(text, u32::try_from(width).unwrap_or(u32::MAX))
 }
 
@@ -342,21 +296,15 @@ mod tests {
     use super::*;
     use orbs_render::RAIL_COLS;
 
-    /// **The rail divides itself into `MAX_PANES` slots and fills them from
-    /// `DOMAINS`, and nothing but this test holds the two numbers together.**
+    /// Nothing but this test holds `MAX_PANES` and `DOMAINS` together, and they
+    /// must live in different crates: rule 1 forbids `orbs-render` from reaching
+    /// into the sim, so the layout cannot read the list it lays out. This crate
+    /// is the only one that sees both.
     ///
-    /// They are in different crates and must be: rule 1 forbids `orbs-render`
-    /// from reaching into the sim, so the layout cannot read the list it is
-    /// laying out. This crate is the only one that sees both.
-    ///
-    /// It exists because they did drift. The grimoire left `DOMAINS` and
-    /// `MAX_PANES` stayed at seven, so `lay_rail` cut the column into sevenths,
-    /// `paint` zipped six briefs against them, and the leftover slot drew as a
-    /// five-row hole between `sanctum` and the readings. The same phantom made
-    /// `fits_rail` demand room for a box that does not exist, which dropped the
-    /// rail entirely between 39 and 43 rows — the range `scripts/tui.sh start
-    /// 177 38` puts a terminal player in. Neither failed a test and neither
-    /// failed to compile.
+    /// They did drift. The grimoire left `DOMAINS` while `MAX_PANES` stayed at
+    /// seven, so the leftover slot drew as a five-row hole and `fits_rail`
+    /// demanded room for a box that does not exist — dropping the rail entirely
+    /// between 39 and 43 rows. Neither compiled wrong nor failed a test.
     #[test]
     fn the_rail_has_exactly_one_box_per_domain() {
         assert_eq!(
@@ -392,13 +340,10 @@ mod tests {
         }
     }
 
-    /// **The count survives the cut, and the name gives way to it.**
-    ///
-    /// The rail said `►tending` whether one spell ran in a room or three — a
-    /// second `invoke` was invisible, and after `alongside` so was a fork. The
-    /// suffix is what fixed that, and it would have fixed nothing if truncation
-    /// could eat it: the rooms that earn a `+2` are the ones with the longest
-    /// names running in them.
+    /// The count survives the cut and the name gives way to it. The rail said
+    /// `►tending` whether one spell ran in a room or three, and the suffix that
+    /// fixed it would fix nothing if truncation could eat it — the rooms that
+    /// earn a `+2` are the ones with the longest names running in them.
     #[test]
     fn the_count_of_what_else_is_running_survives_the_width() {
         let width = usize::from(RAIL_COLS) - 2;
@@ -428,15 +373,11 @@ mod tests {
 
     #[test]
     fn every_glyph_the_rail_draws_is_in_the_code_page() {
-        // **The check `▸` needed and did not have.** It is U+25B8, is not in CP437,
-        // and so drew as `?` — the row saying a room is automated instead read as
-        // the orb not knowing what was there. Nothing failed: `is_renderable` is
-        // called on authored *prose*, and these are Rust literals in a painter.
-        //
-        // Listed rather than derived, because a painter's glyphs are exactly the
-        // strings on the other side of these constants — adding one and not adding
-        // it here is the failure this cannot catch, and a lint that scanned the
-        // source would be a different tool.
+        // The check `▸` needed and did not have: U+25B8 is not in CP437 and drew
+        // as `?`. Nothing failed, because `is_renderable` is called on authored
+        // *prose* and these are Rust literals in a painter. Listed rather than
+        // derived — a glyph added and not added here is the failure this cannot
+        // catch, and a source-scanning lint is a different tool.
         let drawn = [RUNNING, '·', '─'];
         for glyph in drawn {
             assert!(

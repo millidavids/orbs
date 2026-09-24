@@ -3,17 +3,14 @@
 //! The model is [`tower::audit`]; this is the half that
 //! takes the production slot and says what it found.
 //!
-//! # It is Production-class, which is the whole price
+//! It is Production-class, which is the whole price. §8.1: *"`verify --all` is
+//! Production-class, and its duration scales with the tower."* So it goes
+//! through [`tower::begin`] and answers to `CAPACITY` — an audit means you are
+//! not brewing.
 //!
-//! §8.1: *"`verify --all` is Production-class, and its duration scales with the
-//! tower."* So it goes through [`tower::begin`] and answers to `CAPACITY` — an
-//! audit means you are not brewing, which is §5.0's *"repairing the rats
-//! occupies the laboratory pane for its duration, during which you are not
-//! brewing"* applied to the one command that would otherwise be free.
-//!
-//! **Not the triage slot**, which is where `purge` runs. A scour is the answer
-//! to a problem you have already found; an audit is the looking, and §8.1 prices
-//! the looking against the making on purpose.
+//! Not the triage slot, where `purge` runs: a scour answers a problem you have
+//! already found, an audit is the looking, and §8.1 prices the looking against
+//! the making on purpose.
 
 use bevy_ecs::prelude::*;
 use orbs_render::{FieldName, RecordKind, Role};
@@ -30,11 +27,9 @@ const TOWER: &str = "/tower";
 pub(super) fn sweep(world: &mut World) {
     let ticks = audit::ticks_for(held(world), world.resource::<Scrollback>().records().len());
 
-    // **`/tower`, not `tower::root`.** That one is the *filesystem* root and is
-    // deliberately nameless (`build::raise`: *"a root without a `Name`
-    // contributes nothing and the paths stay `/tower/laboratory`"*), so hanging
-    // the run there made `work_busy` read *"the  is busy verifying"* — a refusal
-    // naming nothing, which is the one thing that sentence exists to avoid.
+    // `/tower`, not `tower::root`: that one is the filesystem root and is
+    // deliberately nameless, so hanging the run there made `work_busy` read
+    // *"the  is busy verifying"* — a refusal naming nothing.
     let Some(at) = tower::find_by_path(world, TOWER) else {
         return;
     };
@@ -42,10 +37,9 @@ pub(super) fn sweep(world: &mut World) {
         return;
     };
 
-    // **The tower node holds the run**, because the audit is of the tower rather
+    // The tower node holds the run, because the audit is of the tower rather
     // than of any instrument. `in_flight` queries `Working` wherever it sits, so
-    // this counts against the same tower-wide pool a grind does — which is the
-    // contention §8.1 is buying.
+    // this counts against the same pool a grind does — §8.1's contention.
     if !tower::begin(world, at, Verb::Verify, id, ticks) {
         return;
     }
@@ -66,13 +60,13 @@ pub(super) fn sweep(world: &mut World) {
 
 /// Report what a finished audit found — `land::finish`'s fourth kind of work.
 ///
-/// **A press is the third and this is the fourth**, for the same reason: it
-/// makes no material, so `transmute` is wrong, and what it says depends on what
-/// it found, so the generic completion sentence is wrong too.
+/// A press is the third and this the fourth, for the same reason: it makes no
+/// material, so `transmute` is wrong, and what it says depends on what it found,
+/// so the generic completion sentence is too.
 ///
-/// It **names what is tampered**, which is §8.1's design rule — *"the skill is
-/// knowing which surface to inspect, not deciphering an obscure clue"* — so once
-/// the audit has been paid for, the answer is the thing itself.
+/// It names what is tampered, per §8.1 — *"the skill is knowing which surface to
+/// inspect, not deciphering an obscure clue"* — so once the audit is paid for,
+/// the answer is the thing itself.
 pub fn land_sweep(world: &mut World) {
     let found = tampered(world);
     let message = if found.is_empty() {
@@ -106,15 +100,15 @@ pub fn land_sweep(world: &mut World) {
 
 /// Say that a surface is still cooling, and how long is left.
 ///
-/// **A refusal that names the wait**, never a silent no: §6 forbids a bare
-/// error, and a player told only *"not yet"* would have no way to plan the one
-/// decision this cooldown exists to create.
+/// A refusal that names the wait, never a silent no: §6 forbids a bare error,
+/// and a player told only *"not yet"* cannot plan the decision this cooldown
+/// exists to create.
 ///
-/// **The surface rides `Kind`, and `State` is reserved for a verdict.** That is
-/// rule 4 rather than tidiness: `verify`'s answer is `sound` or `tampered`, and
-/// a refusal writing `log` into the same field makes the two indistinguishable
-/// to `sift`, to the §14 stream and to any test counting verdicts — which is how
-/// this was found, by a test that counted two answers where one had been given.
+/// The surface rides `Kind` and `State` is reserved for a verdict — rule 4
+/// rather than tidiness. `verify`'s answer is `sound` or `tampered`, and a
+/// refusal writing `log` into the same field makes the two indistinguishable to
+/// `sift`, to the §14 stream and to any test counting verdicts, which is how
+/// this was found.
 pub(super) fn say_cooling(world: &mut World, surface: Surface, left: u64) {
     let message = world.resource::<Prose>().line(
         "verify_cooling",
@@ -139,10 +133,9 @@ fn held(world: &mut World) -> usize {
 
 /// Everything in the tower that is currently lying, by name.
 ///
-/// **Sorted, and by name rather than by entity.** An ECS query has no order
-/// worth relying on, and a report whose rows moved between two runs of one seed
-/// would fail the lockstep test that pins a snapshot as a complete description —
-/// the same rule `sabotage::drift` follows when it picks a target.
+/// Sorted, by name rather than entity: an ECS query has no order worth relying
+/// on, and a report whose rows moved between two runs of one seed would fail the
+/// lockstep test. `sabotage::drift` follows the same rule picking a target.
 fn tampered(world: &mut World) -> Vec<String> {
     let mut found: Vec<String> = world
         .query::<(Entity, &tower::Name)>()

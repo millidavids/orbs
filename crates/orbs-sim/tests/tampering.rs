@@ -41,20 +41,16 @@ fn fields(sim: &Sim, wanted: FieldName) -> Vec<String> {
         .collect()
 }
 
-/// Step until the **ambient** swap fires, and answer with what it renamed.
+/// Step until the *ambient* swap fires, and answer with what it renamed.
 ///
-/// # Why not `debug_swap`
+/// Not `debug_swap`, because that word is `cfg(debug_assertions)` — under
+/// `cargo test --release` it is an unresolvable line, so nothing is swapped and
+/// the assertions below fail against a tower where no sabotage happened. Three
+/// tests here were dead in that profile.
 ///
-/// Because that word is `cfg(debug_assertions)`, so under `cargo test --release`
-/// it is an ordinary unresolvable line: nothing is swapped, and the assertions
-/// below fail against a tower where no sabotage ever happened. Three tests in
-/// this file were dead in that profile.
-///
-/// And because the shortcut is not the surface. CLAUDE.md is explicit that
-/// *"`debug_swap` is the tester's shortcut, and the **ambient** half is what
-/// breaks"* — three defects shipped with every See-it line green because only
-/// the shortcut had ever been exercised. Waiting for the real roll costs a few
-/// thousand ticks, which is under a second, and tests the thing that ships.
+/// And because the shortcut is not the surface: three defects shipped with every
+/// See-it line green because only the shortcut had been exercised. Waiting for
+/// the real roll costs a few thousand ticks, under a second.
 ///
 /// The two differ in what they take: `debug_swap` takes the alphabetically-first
 /// endless pile, which is the charcoal, and the ambient system **exempts fuel**
@@ -63,10 +59,9 @@ fn fields(sim: &Sim, wanted: FieldName) -> Vec<String> {
 fn wait_for_a_swap(sim: &mut Sim) -> String {
     for _ in 0..20_000 {
         sim.step();
-        // **Asked of the world, not of the transcript.** `fields` reads the
-        // record stream, which only names a pile once something has surveyed
-        // it — so a helper that watched *that* would wait for ever on a tower
-        // nobody had looked at. The save document is the world itself.
+        // Asked of the world, not of the transcript: `fields` reads the record
+        // stream, which names a pile only once something has surveyed it, so a
+        // helper watching that would wait for ever on a tower nobody looked at.
         if let Some(was) = sim
             .snapshot()
             .nodes
@@ -85,9 +80,9 @@ fn a_swapped_reagent_is_both_visible_and_verifiable() {
     run(&mut sim, "attend laboratory");
     wait_for_a_swap(&mut sim);
 
-    // **Channel one: it is on screen.** `survey` lists the shelf and one pile is
-    // not what it was — the structural signature §8.1 asks for, perceptible to a
-    // player who looks and carried by the *name* rather than by a colour.
+    // Channel one: it is on screen. `survey` lists the shelf and one pile is not
+    // what it was — §8.1's structural signature, carried by the *name* rather
+    // than by a colour.
     run(&mut sim, "survey dispensary");
     let listed = fields(&sim, FieldName::Name);
     assert!(
@@ -95,7 +90,7 @@ fn a_swapped_reagent_is_both_visible_and_verifiable() {
         "nothing on the shelf reads as substituted: {listed:?}",
     );
 
-    // **Channel two: one command finds it, and names it.** §5.1's one-command
+    // Channel two: one command finds it and names it — §5.1's one-command
     // diagnosis, and §8.1's rule that the skill is knowing which surface to
     // inspect rather than deciphering a clue once you have.
     run(&mut sim, "verify dispensary");
@@ -138,18 +133,16 @@ fn a_sound_shelf_still_reads_sound() {
 
 #[test]
 fn a_substitution_stops_a_spell_that_named_the_reagent() {
-    // **§8.1's stated tell**: *"substituted entities fail ID check → `Referent
-    // missing`"*. This is what makes the world a surface worth inspecting — the
-    // sabotage is felt as a spell that stopped working, and finding out *why* is
-    // the thing scrying exists for.
-    // **The spell has to name the pile the swap really took**, or it passes while
-    // proving nothing. `debug_swap` made that easy by always taking the charcoal
-    // — and it is the one pile the *ambient* system can never take, because fuel
-    // is exempt. So the swap comes first here and the spell is written after,
-    // naming what was actually hit.
+    // §8.1's stated tell: *"substituted entities fail ID check → `Referent
+    // missing`"*. The sabotage is felt as a spell that stopped working, and
+    // finding out *why* is what scrying exists for.
     //
-    // That reverses the shape of the test and it is the honest way round: the
-    // orb learns a name is a lie by failing on it, and this now checks that with
+    // The spell has to name the pile the swap really took, or it passes while
+    // proving nothing. `debug_swap` always takes the charcoal, which is the one
+    // pile the ambient system can never take because fuel is exempt — so the
+    // swap comes first and the spell is written after, naming what was hit.
+    // That reverses the shape of the test and is the honest way round: the orb
+    // learns a name is a lie by failing on it, and this checks that with
     // whatever reagent the world chose rather than the one a door was known to
     // pick.
     let mut sim = Sim::new(1);
@@ -179,21 +172,18 @@ fn a_substitution_stops_a_spell_that_named_the_reagent() {
 
 #[test]
 fn the_swap_leaves_the_pile_where_it_was() {
-    // **Sabotage, not theft.** §5.1 keeps environmental damage in the calm layer
-    // and leaves *misdirection* as the thing to see through — and a swap that
-    // deleted the stock could not be recovered, compared, or verified against
-    // anything, which is the same argument §3 makes for a poisoned log being
-    // re-emitted rather than rewritten.
+    // Sabotage, not theft: §5.1 keeps environmental damage in the calm layer and
+    // leaves *misdirection* as the thing to see through, and a swap that deleted
+    // the stock could not be recovered or verified against anything — §3's
+    // argument for a poisoned log being re-emitted rather than rewritten.
     let mut sim = Sim::new(1);
     run(&mut sim, "attend laboratory");
     run(&mut sim, "survey dispensary");
     let before = fields(&sim, FieldName::Name).len();
 
-    // **The real swap, not the shortcut.** This one *passed* in release while
-    // asserting nothing: `debug_swap` was an unresolvable line, nothing was
-    // substituted, and `after > before` still held because a second `survey`
-    // lists the same shelf again. A test that goes green on a tower with no
-    // sabotage in it is the failure this file exists to catch.
+    // The real swap, not the shortcut: this one *passed* in release while
+    // asserting nothing, because `debug_swap` was an unresolvable line and
+    // `after > before` still held from a second `survey` listing the same shelf.
     wait_for_a_swap(&mut sim);
     run(&mut sim, "survey dispensary");
     let after = fields(&sim, FieldName::Name).len();
@@ -206,17 +196,17 @@ fn the_swap_leaves_the_pile_where_it_was() {
 
 #[test]
 fn a_lie_nobody_catches_settles_back_to_the_truth() {
-    // **The floor under an unattended tower**, and it is a fact about the *spell
-    // language* rather than a kindness. A spell names things with literals, so it
-    // can never say "purge whatever the dispensary is lying about" — it would have
+    // The floor under an unattended tower, and a fact about the *spell language*
+    // rather than a kindness: a spell names things with literals, so it can
+    // never say "purge whatever the dispensary is lying about" — it would have
     // to name `sage-`, a word nobody knew when the spell was written. So
-    // `verify` → `purge` is reachable only by a person reading the screen.
+    // `verify` → `purge` is reachable only by a person reading the screen, and
+    // without an expiry an automated tower is terminal rather than harassed:
+    // `orbs-balance` measured the grind loop falling from 0.100/tick to 0.058
+    // and staying there.
     //
-    // Without an expiry that made an automated tower terminal rather than
-    // harassed: `orbs-balance` measured the standing grind loop falling from
-    // 0.100/tick to 0.058 and staying there for the rest of the session.
-    // The **last** verdict, not any of them: the point of this test is that the
-    // second `verify` disagrees with the first, so `any` would pass on either.
+    // The *last* verdict, not any of them: the point is that the second `verify`
+    // disagrees with the first, so `any` would pass on either.
     fn verdict(sim: &Sim) -> Option<String> {
         fields(sim, FieldName::State)
             .into_iter()
@@ -225,12 +215,10 @@ fn a_lie_nobody_catches_settles_back_to_the_truth() {
 
     let mut sim = Sim::new(1);
     run(&mut sim, "attend laboratory");
-    // **The pile the ambient system actually took**, which is not the one
-    // `debug_swap` would have: that word takes the alphabetically-first endless
-    // pile and the ambient half *exempts fuel*, so charcoal is exactly what it
-    // will never choose. The old version asserted `charcoal` got its name back
-    // and would have been checking the wrong pile the moment it stopped using
-    // the shortcut.
+    // The pile the ambient system actually took, which is not `debug_swap`'s:
+    // that takes the alphabetically-first endless pile and the ambient half
+    // exempts fuel, so charcoal is what it will never choose. The old version
+    // asserted `charcoal` got its name back.
     let was = wait_for_a_swap(&mut sim);
     run(&mut sim, "verify dispensary");
     assert_eq!(
@@ -249,9 +237,9 @@ fn a_lie_nobody_catches_settles_back_to_the_truth() {
         "a lie nobody caught held for ever",
     );
 
-    // **And the pile is usable again, not merely un-poisoned.** Reporting `sound`
-    // while still carrying the lie would be the worse of the two bugs — a shelf
-    // that verifies clean and refuses every recipe that names it.
+    // And the pile is usable again, not merely un-poisoned: reporting `sound`
+    // while still carrying the lie is the worse bug — a shelf that verifies
+    // clean and refuses every recipe that names it.
     run(&mut sim, "survey dispensary");
     let names = fields(&sim, FieldName::Name);
     assert!(
@@ -262,14 +250,12 @@ fn a_lie_nobody_catches_settles_back_to_the_truth() {
 
 #[test]
 fn the_ambient_swap_never_takes_the_fire() {
-    // **Fuel is exempt, and `orbs-balance` is what found it.** A swap is honest
-    // because it costs the spell that named the reagent and nothing half-made —
-    // and charcoal is named by no recipe at all, it is the tower's power supply.
-    // Swapping it stops every heated stage in every domain at once.
-    //
-    // It shipped taking the alphabetically-first endless pile, which *is*
-    // `charcoal`, so the first swap of every session took the fire: clarity's rate
-    // fell from 0.140 to 0.074 on every seed, and the suite was green throughout.
+    // Fuel is exempt, and `orbs-balance` found it. A swap is honest because it
+    // costs the spell that named the reagent and nothing half-made, and charcoal
+    // is named by no recipe — it is the tower's power supply, so swapping it
+    // stops every heated stage in every domain at once. It shipped taking the
+    // alphabetically-first endless pile, which *is* `charcoal`, so clarity's
+    // rate fell from 0.140 to 0.074 on every seed with the suite green.
     //
     // Four hours across four seeds. `SWAP_INTERVAL` is one an hour, so this is
     // ~16 swaps' worth of rolls against a pool of two.

@@ -1,10 +1,8 @@
 //! `debug_spawn`, and the fact that it is not part of the game.
 //!
-//! **Not gated at the file level, deliberately.** Everything that exercises the
-//! word is `cfg(debug_assertions)`, but the last test is its complement: it runs
-//! under `cargo test --release` and asserts the door is *shut*. A file that
-//! compiled itself out of the build it most needed to check would leave the gate
-//! untested in the only configuration where it matters.
+//! Not gated at the file level: everything that exercises the word is
+//! `cfg(debug_assertions)`, but the last test is its complement and runs under
+//! `cargo test --release` to assert the door is shut.
 
 #[cfg(debug_assertions)]
 use orbs_render::{FieldName, Value};
@@ -35,18 +33,12 @@ fn messages(sim: &Sim) -> Vec<String> {
 
 /// What the place called `place` actually holds, by name.
 ///
-/// **Its children, not the scene.** `Scene::nouns` is everything *nameable* from
-/// where you stand, which includes a `Topic` for every reagent so `recall
-/// ground-sage` reads the manual — so a scene sweep says the shelf holds
-/// `ground-sage` before any has ever been ground. That is the same duplication
-/// that made `ground-sag` refuse as ambiguous with itself, wearing its other
-/// face: here it would have made two of these tests pass on nothing.
+/// Its children, not the scene: `Scene::nouns` includes a `Topic` for every
+/// reagent, so a scene sweep says the shelf holds `ground-sage` before any has
+/// ever been ground.
 ///
-/// **It takes a name now, and it used to find "the `Store`".** There was one, so
-/// "the shelf" was unambiguous; the archive has a `cabinet` since it needed
-/// somewhere to turn the lectern out into, and the search then returned
-/// whichever store the walk reached first — the *empty* one — and five tests
-/// failed at once on a helper rather than on the tool.
+/// By name, because the archive grew a `cabinet` — finding "the `Store`"
+/// returned whichever store the walk reached first.
 #[cfg(debug_assertions)]
 fn held_in(sim: &Sim, place: &str) -> Vec<String> {
     let world = sim.world();
@@ -95,10 +87,9 @@ fn a_reagent_asked_for_is_a_reagent_on_the_shelf() {
 #[cfg(debug_assertions)]
 #[test]
 fn what_is_spawned_is_the_same_thing_the_laboratory_makes() {
-    // **The test that makes the tool worth having.** A spawn that produced a
-    // node the instruments did not recognise would let a tester reach a state
-    // the game cannot, which is worse than no tool at all: the bug they then
-    // chase is one only their shortcut can produce.
+    // A spawn that produced a node the instruments did not recognise would let
+    // a tester reach a state the game cannot, and chase a bug only their
+    // shortcut can produce.
     let mut spawned = laboratory();
     spawned.submit("debug_spawn ground-sage");
     spawned.step();
@@ -122,23 +113,17 @@ fn what_is_spawned_is_the_same_thing_the_laboratory_makes() {
 #[cfg(debug_assertions)]
 #[test]
 fn a_spawned_potion_is_an_essence_like_a_distilled_one() {
-    // **The kind, not just the name.** §10.1 makes a finished potion an
-    // `Essence` — a *quality* the alembic yields — and everything else crafting
-    // stock. Spawning every name as a reagent would put `clarity` in the tower
-    // with the right word and the wrong kind: a thing no `distil` could have
-    // made, which is exactly the unreachable state the known-names check exists
-    // to refuse, arriving through the check itself.
+    // The kind, not just the name. §10.1 makes a finished potion an `Essence`
+    // and everything else crafting stock, so spawning every name as a reagent
+    // would put a `clarity` in the tower that no `distil` could have made.
     let mut sim = laboratory();
     sim.submit("debug_spawn clarity");
     sim.step();
     sim.submit("debug_spawn ground-sage");
     sim.step();
 
-    // **The whole tower, because the claim is about the kind and not the room.**
-    // It used to read the first `Store` it found, which stopped working twice
-    // over: there are two stores now, and a potion no longer lives in either —
-    // `tower::home` sends finished work to the arsenal, which is the room it is
-    // for.
+    // The whole tower, because the claim is about the kind and not the room:
+    // `tower::home` sends finished work to the arsenal, not to a store.
     let world = sim.world();
     let kinds: Vec<(String, orbs_sim::parser::NounKind)> = {
         let mut stack = vec![orbs_sim::tower::root(world)];
@@ -201,11 +186,9 @@ fn a_count_puts_that_many_on_the_shelf() {
 #[cfg(debug_assertions)]
 #[test]
 fn a_count_of_none_is_refused_rather_than_spawning_a_nought() {
-    // **A world state the game cannot otherwise reach, which is what this tool
-    // refuses to create.** `give` would spawn a node holding `Counted(0)`, and
-    // `take` documents the invariant that breaks: a pile reaching zero is
-    // despawned, so *is there any* stays the same question as *does a node
-    // exist*. A nought-node answers `has ash` yes for ever with nothing in it.
+    // `give` would spawn a node holding `Counted(0)`, breaking `take`'s
+    // invariant that a pile reaching zero is despawned — a nought-node answers
+    // `has ash` yes for ever with nothing in it.
     let mut sim = laboratory();
     sim.submit("debug_spawn ash 0");
     sim.step_n(2);
@@ -256,10 +239,8 @@ fn a_name_the_tower_does_not_have_is_refused_and_says_what_it_could_have_been() 
 #[cfg(debug_assertions)]
 #[test]
 fn it_reaches_the_dispensary_from_wherever_the_player_is_standing() {
-    // **The point of the tool is skipping the walk.** Requiring the tester to be
-    // in the laboratory first would put back part of the setup cost this exists
-    // to remove — and there is only one shelf in the tower, so there is nothing
-    // for "which one" to mean.
+    // The point of the tool is skipping the walk, and there is only one shelf
+    // in the tower, so there is nothing for "which one" to mean.
     let mut sim = Sim::new(1);
     sim.submit("attend archive");
     sim.step();
@@ -284,10 +265,9 @@ fn it_reaches_the_dispensary_from_wherever_the_player_is_standing() {
 #[cfg(debug_assertions)]
 #[test]
 fn it_lands_on_a_tick_boundary_like_every_other_effect() {
-    // **The property that keeps the tool from being a source of bugs.** A debug
-    // command that mutated the world from inside `submit` would land off a tick
-    // boundary, and the state it produced could not be reproduced from
-    // `(seed, submissions)` — so a session that used it would stop replaying.
+    // A debug command that mutated the world from inside `submit` would land
+    // off a tick boundary, so the state it produced could not be reproduced
+    // from `(seed, submissions)` and the session would stop replaying.
     let mut sim = laboratory();
     sim.submit("debug_spawn ground-sage");
     assert!(
@@ -324,14 +304,10 @@ fn a_session_that_used_it_still_replays() {
 #[cfg(debug_assertions)]
 #[test]
 fn the_word_is_not_part_of_the_game() {
-    // **What keeps a debug tool out of the game it is testing.** §6.1's tutorial
-    // lists the verbs that work and its most important metric is the dead-end
-    // rate; a word that only exists in some builds would be counted, offered,
-    // and then absent from the build a player has.
-    //
-    // Asserted against the vocabulary itself rather than against a list of
-    // places it must not appear, so a new surface built out of `Verb::ALL` is
-    // covered the day it is written.
+    // §6.1's tutorial lists the verbs that work, so a word that only exists in
+    // some builds would be offered and then absent from the build a player has.
+    // Asserted against the vocabulary itself, so a new surface built out of
+    // `Verb::ALL` is covered the day it is written.
     for verb in orbs_sim::parser::Verb::ALL {
         assert!(
             !verb.canonical().contains("debug"),
@@ -365,14 +341,10 @@ fn the_word_is_not_part_of_the_game() {
 #[cfg(not(debug_assertions))]
 #[test]
 fn the_word_does_nothing_in_a_release_build() {
-    // **The half of the gate that the gate cannot check.** Every test above is
-    // `cfg(debug_assertions)` and so is the feature, which means a release build
-    // runs none of them — and a door that is only ever tested from the side it
-    // opens on is a door nobody has tried the handle of.
-    //
-    // Run by `cargo test --release`. Four lines of prose still ship, because
-    // `prose.toml` is compiled in whole; what must not ship is anything that can
-    // act on them.
+    // Every test above is `cfg(debug_assertions)`, so a release build runs none
+    // of them and the door is only ever tried from the side it opens on. Run by
+    // `cargo test --release`. Four lines of prose still ship — `prose.toml` is
+    // compiled in whole — but nothing that can act on them does.
     let mut sim = Sim::new(1);
     sim.submit("attend laboratory");
     sim.step();

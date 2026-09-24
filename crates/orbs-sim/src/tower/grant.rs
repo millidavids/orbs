@@ -1,33 +1,19 @@
 //! What a Ley Line fork node grants, and how much (DESIGN.md §11.5, §19).
 //!
-//! # The id is the contract
+//! The id is the contract — *"ids are decisions, not prose"*. `<stem>_<n>`
+//! parses to a [`Grant`] with a tier, and every reader below sums the tiers the
+//! orb has taken. One parser, no second table to drift; `Progression::check`
+//! holds every authored node to it.
 //!
-//! `progression.toml` says *"ids are decisions, not prose"*: a fork node's id
-//! is what a taken node is stored as, what its sentence is keyed by, and — here
-//! — what it does. `<stem>_<n>` parses to a [`Grant`] with a tier, and every
-//! reader below sums the tiers of the nodes the orb has taken. One parser, no
-//! second table to drift; `Progression::check` holds every authored node to it.
+//! Craft is the orb: steps, the satchel, cursors, and `haste`. Provision is the
+//! tower's supplies. War is the wall and the dice.
 //!
-//! # Three lanes, and what each may touch
+//! A grant never duplicates a charm: the forge sells *temporary* instrument
+//! buffs, and a permanent copy here would delete the domain. `haste` is the
+//! orb's speed, not the tool's.
 //!
-//! **Craft** is the orb — steps, the satchel, cursors, and `haste`, which is
-//! struck invariant 3 landing *"as a thing you buy"*: a run a spell issued
-//! finishes sooner. **Provision** is the tower's supplies: fuel, the pool, what
-//! a siege pays, what a charm costs. **War** is the wall and the dice: an edge on
-//! every answering roll, the pool's floor under a worn wall, a troop's worth, a
-//! course's mending, how often the calm layer strikes.
-//!
-//! **A grant never duplicates a charm.** The forge sells *temporary* instrument
-//! buffs, and a permanent copy on this line would delete the domain — so
-//! nothing here makes an instrument faster or a run yield more. `haste` is
-//! narrower than `hurried` on purpose: it is the orb's speed, not the tool's.
-//!
-//! # Tiers add
-//!
-//! A player who takes `fuel_1` at one fork and `fuel_2` at a later one holds
-//! three tiers of fuel, and each reader multiplies its unit by the tiers held.
-//! Reading them as a maximum would refund the second choice in silence, which
-//! is `steps_<n>`'s rule and the reason it is the rule everywhere.
+//! Tiers add, so `fuel_1` and `fuel_2` are three tiers of fuel. Reading them as
+//! a maximum would refund the second choice in silence.
 
 use bevy_ecs::prelude::*;
 
@@ -35,10 +21,10 @@ use super::ley::Taken;
 
 /// Which kind of play a grant alters.
 ///
-/// The designer's own three: *"more resources vs better combat vs faster
-/// tools"*. The painter orders a fork's siblings by this, so the same lane is
-/// always in the same row, and `Progression::check` refuses a fork with two
-/// nodes in one lane — a choice is always between kinds of play.
+/// *"More resources vs better combat vs faster tools"*. The painter orders a
+/// fork's siblings by this so a lane is always in the same row, and
+/// `Progression::check` refuses a fork with two nodes in one lane — a choice is
+/// always between kinds of play.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Lane {
     /// More resources: fuel, the pool, what a siege pays, what a charm costs.
@@ -152,8 +138,8 @@ impl Grant {
 
 /// What `id` grants, or `None` for a word the orb cannot read.
 ///
-/// **One parser, and `Progression::check` holds every fork node to it** — a
-/// typo'd `satchel1` would otherwise be a node that draws and grants nothing.
+/// One parser, and `Progression::check` holds every fork node to it — a typo'd
+/// `satchel1` would otherwise draw and grant nothing.
 #[must_use]
 pub fn granted(id: &str) -> Option<Grant> {
     match id {
@@ -201,10 +187,9 @@ fn tiers_in(taken: &Taken, pick: impl Fn(Grant) -> Option<usize>) -> usize {
 
 /// The same, read off the world.
 ///
-/// **Nought before the resource exists**, which is `spell::budget`'s rule and
-/// for its reason: the quintessence ceiling is read while `Sim::bare` is still
-/// raising the tower, and a reader that panicked there would make the order
-/// resources are inserted in a load-bearing fact nobody can see.
+/// Nought before the resource exists, as in `spell::budget`: the ceiling is
+/// read while `Sim::bare` is still raising the tower, and panicking there would
+/// make resource insertion order a load-bearing fact nobody can see.
 fn tiers(world: &World, pick: impl Fn(Grant) -> Option<usize>) -> usize {
     world
         .get_resource::<Taken>()

@@ -45,10 +45,8 @@ fn a_bare_end_reaches_the_buffer_as_a_word() {
     if !available() {
         return;
     }
-    // **The trap that made a whole class of scenario impossible**: `tmux
-    // send-keys 'end'` sends the *End key*, and `end` closes every `repeat` and
-    // every `if` in the spell language. Typed literally it is a line like any
-    // other, and this is the assertion that it arrived as one.
+    // `tmux send-keys 'end'` sends the End key, and `end` closes every `repeat`
+    // and every `if` in the spell language. This asserts it arrived as a word.
     let game = Game::start();
     game.does("attend laboratory", "/tower/laboratory")
         .opens("scribe looping", "looping.spell in ");
@@ -84,9 +82,8 @@ fn a_count_survives_into_the_fair_copy() {
     if !available() {
         return;
     }
-    // **This used to print `if cabinet has fragment`** — the number silently
-    // swallowed with no fault raised, which is §19's *"the orb writes down a
-    // shorter command than it heard"* arriving through the one surface built to
+    // This used to print `if cabinet has fragment` — the number swallowed with
+    // no fault raised, which is §19 arriving through the one surface built to
     // catch it.
     let game = Game::start();
     game.does("attend archive", "/tower/archive")
@@ -106,10 +103,9 @@ fn the_buffer_writes_itself_out_a_beat_after_the_typing_stops() {
     if !available() {
         return;
     }
-    // **§19: there is no `save`.** The settle clock is measured off `Time`,
-    // which no dump ever advances — so this beat exists only in a live loop and
-    // is invisible to every other layer in the project. `quit` is the flush a
-    // dump has to use; here the point is that simply stopping is enough.
+    // There is no `save` (§19). The settle clock runs off `Time`, which no dump
+    // advances, so this beat exists only in a live loop. `quit` is the flush a
+    // dump must use; here, simply stopping is enough.
     let game = Game::start();
     game.does("attend laboratory", "/tower/laboratory")
         .opens("scribe settling", "settling.spell in ");
@@ -146,10 +142,9 @@ fn a_spells_own_records_go_to_the_log_and_not_the_pane() {
     if !available() {
         return;
     }
-    // `prompt.rs` draws *"what the player did, not what their spells did"* — a
-    // `repeat` loop would otherwise push the player's last line off screen in
-    // seconds. So a dump that casts a spell and looks at the transcript finds
-    // nothing and looks broken; the log is the same stream read another way.
+    // `prompt.rs` draws what the player did, not what their spells did — a
+    // `repeat` loop would push their last line off screen in seconds. The log
+    // is the same stream read another way.
     let game = Game::start();
     game.does("attend laboratory", "/tower/laboratory")
         .does("invoke first_light", "first_light.spell")
@@ -203,9 +198,9 @@ fn a_fault_latches_on_the_room_until_you_go_and_look() {
     if !available() {
         return;
     }
-    // A refused command is *not* a fault; the four that are come from
-    // `say_failure` at `Role::Danger`. `‼` is the mark, and going to look is
-    // the only thing that clears it.
+    // A refused command is not a fault; the four that are come from
+    // `say_failure` at `Role::Danger`. `‼` is the mark, and only going to look
+    // clears it.
     let game = Game::start();
     game.does("attend laboratory", "/tower/laboratory")
         .opens("scribe broken", "broken.spell in ");
@@ -228,7 +223,7 @@ fn the_guide_lists_the_language_and_the_rooms_own_verbs() {
         return;
     }
     // The pane is open by default — a guide nobody knows to ask for helps
-    // nobody — and the verbs are the **spell's** domain, not the player's.
+    // nobody — and the verbs are the spell's domain, not the player's.
     let game = Game::start();
     game.does("attend archive", "/tower/archive")
         .opens("scribe threading", "threading.spell in archive")
@@ -236,9 +231,9 @@ fn the_guide_lists_the_language_and_the_rooms_own_verbs() {
         .expect_drawn("here you can")
         .expect_drawn("follow");
 
-    // `guide` closes it, and opens it again. **`expect_off_screen`, not
-    // `expect_absent`** — the latter asks about the newest command block and the
-    // guide is a pane, so it would pass without looking.
+    // `guide` closes it and opens it again. `expect_off_screen` because
+    // `expect_absent` asks about the newest command block, not a pane, so it
+    // would pass without looking.
     game.type_raw("guide");
     game.expect_off_screen("the language");
     game.type_raw("guide");
@@ -252,15 +247,13 @@ fn a_word_a_spell_may_not_issue_is_not_in_the_guide() {
         return;
     }
     // `attend` passes `Scene::offers` and fails `may_issue`: a spell is written
-    // *for* a domain and does not walk. Listing it would teach a line the
-    // runner refuses, which is worse than a short list.
+    // for a domain and does not walk, so listing it would teach a refused line.
     let game = Game::start();
     game.does("attend laboratory", "/tower/laboratory")
         .opens("scribe morning", "morning.spell in laboratory")
         .expect_drawn("here you can")
-        // The listing has landed whole, so what is missing from it is now a
-        // fair question. `grind` proves we are reading the verbs and not an
-        // empty pane.
+        // `grind` proves we are reading the verbs and not an empty pane, which
+        // is what makes the absence below a fair question.
         .expect_drawn("grind")
         .expect_off_screen("attend");
 }
@@ -283,9 +276,8 @@ fn the_guide_answers_what_may_follow_where_the_caret_is() {
         .expect_drawn("idle")
         .expect_drawn("working");
 
-    // **`wait` is not `is`.** It stores a thing and resolves it against the
-    // record stream, so offering a state there would teach a line that waits
-    // for ever and latches a fault.
+    // `wait` is not `is`: it resolves against the record stream, so offering a
+    // state there would teach a line that waits for ever and latches a fault.
     game.press("Escape");
     game.type_raw("quit");
 }
@@ -312,21 +304,16 @@ fn tab_finishes_a_word_in_the_editor() {
     game.type_raw("quit");
 }
 
-/// **The guide, followed.** A player reads `recall apprentice` and types what it
+/// The guide, followed. A player reads `recall apprentice` and types what it
 /// shows; this is that walk, on a real keyboard.
 ///
-/// # Why this is the test the page needs
-///
-/// A tutorial is the one page in the game whose lines a player will *type*
-/// rather than read past, so the failure mode is not a stale sentence — it is a
+/// A tutorial's lines get typed rather than read past, so its failure mode is a
 /// dead end reached by doing exactly the right thing. `orbs-sim`'s
-/// `the_apprentice_only_shows_lines_the_room_can_run` holds that the example
-/// resolves in its room; nothing but this holds that the *order* works, and the
-/// order is the whole of what a listing of words cannot teach.
+/// `the_apprentice_only_shows_lines_the_room_can_run` holds that each example
+/// resolves in its room; only this holds that the order works.
 ///
 /// The path is the page's own five steps: find it from `help`, read it, scribe,
-/// edit, type the two lines it shows, escape, quit, invoke, and read the log it
-/// tells you to read.
+/// edit, type the two lines, escape, quit, invoke, read the log.
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn the_apprentice_guide_can_be_followed_from_help_to_a_working_spell() {
@@ -334,8 +321,8 @@ fn the_apprentice_guide_can_be_followed_from_help_to_a_working_spell() {
         return;
     }
     let game = Game::start();
-    // **Found from `help`, not typed from memory.** A reference nobody can find
-    // their way into is not one (§12), and this is the line that leads there.
+    // Found from `help`, not typed from memory: a reference nobody can find
+    // their way into is not one (§12).
     game.does("attend laboratory", "/tower/laboratory")
         .does("help", "the orb can be taught to do all of it");
 
@@ -352,16 +339,13 @@ fn the_apprentice_guide_can_be_followed_from_help_to_a_working_spell() {
     game.type_raw("grind sage");
     game.type_raw("empty mortar_and_pestle");
     game.press("Escape");
-    // **`closes_editor`, not a bare `quit`.** The save is queued for the next
-    // tick like every other effect, so an `invoke` sent straight after the word
-    // reaches a `morning.spell` that does not exist yet — and the name then goes
-    // *ambiguous* against the shelved dev spells rather than failing, which is
-    // §19's `invoke d6` trap arriving through a timing gap.
+    // `closes_editor`, not a bare `quit`: the save is queued for the next tick,
+    // so an `invoke` straight after reaches a `morning.spell` that does not
+    // exist yet and goes ambiguous against the dev spells (§19).
     game.closes_editor();
     game.does("invoke morning", "takes up morning.spell");
     game.meditates(20);
-    // The log rather than the pane, which is the other thing the page warns
-    // about and the one a player would otherwise read as the spell doing
-    // nothing.
+    // The log rather than the pane — the other thing the page warns about, and
+    // the one a player would otherwise read as the spell doing nothing.
     game.does("peruse laboratory.log", "yields ground-sage");
 }

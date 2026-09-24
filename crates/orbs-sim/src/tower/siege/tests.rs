@@ -1,10 +1,8 @@
 //! The siege's model, proved with no `World` at all (§5.1).
 //!
-//! **One file for the whole module, because most of these cross its seams.**
-//! `every_state_a_siege_reaches_obeys_every_rule` walks a real siege and asserts
-//! band invariants, reading arithmetic and completion together; splitting it per
-//! sibling would mean four copies of the same loop. `tests/besieging.rs` proves
-//! the *game* — the words, the schedule, the save.
+//! One file for the module: most of these cross its seams, and splitting them
+//! per sibling would mean four copies of the same loop. `tests/besieging.rs`
+//! proves the *game* — the words, the schedule, the save.
 
 use super::*;
 use crate::rng::Rngs;
@@ -16,10 +14,9 @@ fn rngs() -> Rngs {
 
 /// A pool deep enough that quintessence never binds.
 ///
-/// **Most of what is below is about bands, intents and rolls**, and a pool that
-/// ran dry mid-test would make those fail for a reason they are not about. The
-/// tests that *are* about the pool ask for a specific one, so the number here is
-/// a way of saying "not the subject" rather than a balance figure.
+/// Says "not the subject" rather than naming a balance figure — a pool that ran
+/// dry would fail these for a reason they are not about. The tests that *are*
+/// about the pool ask for a specific one.
 const AMPLE: u32 = 999;
 
 #[test]
@@ -33,9 +30,8 @@ fn a_siege_starts_with_the_contingent_the_king_assigns() {
 
 #[test]
 fn the_baseline_is_the_same_every_time_and_the_enemy_is_not() {
-    // The design rests on this: *"the wizard's base troops will be static"*,
-    // so the variables a player weighs are the enemy, the arsenal, and the
-    // dice — never a contingent that quietly changed.
+    // *"The wizard's base troops will be static"* — so what a player weighs is
+    // the enemy, the arsenal and the dice, never a contingent that shifted.
     let mut enemies = std::collections::BTreeSet::new();
     for seed in 0..40 {
         let siege = Siege::begin(&mut Rngs::from_seed(seed));
@@ -49,8 +45,7 @@ fn the_baseline_is_the_same_every_time_and_the_enemy_is_not() {
 fn a_round_advances_the_clock_and_nothing_else_does() {
     let mut rngs = rngs();
     let mut siege = Siege::begin(&mut rngs);
-    // Staging is free and moves no round — §5.0's "no per-command tick
-    // cost", which is what lets a player think.
+    // Staging is free and moves no round — §5.0's "no per-command tick cost".
     siege.stage("mending", Effect::Bonus(2));
     siege.reinforce(1);
     siege.heal(3);
@@ -61,16 +56,10 @@ fn a_round_advances_the_clock_and_nothing_else_does() {
 
 #[test]
 fn a_volley_draws_the_garrisons_dice_and_throws_them_away() {
-    // **The determinism trap this domain is most likely to fall into.** The
-    // garrison does not strike back on a volley, and the obvious way to
-    // write that is to skip its rolls — which would make the *number of
-    // draws* depend on the intent, silently reordering every later roll for
-    // any seed where a volley came up. §19 records the same shape in
-    // `drift`. So the rolls are drawn, then discarded.
-    //
-    // A volley and an advance genuinely consume *different* counts, because
-    // a volley sends fewer attackers — an earlier version of this test
-    // asserted they matched, which was a claim about the wrong thing.
+    // Skipping the garrison's rolls on a volley would make the draw count
+    // depend on the intent, reordering every later roll (§19 records the same
+    // shape in `drift`). So they are drawn, then discarded. Intents still
+    // consume *different* counts, because a volley sends fewer attackers.
     let mut siege = Siege::begin(&mut rngs());
     siege.intent = Intent::Volley;
 
@@ -82,9 +71,8 @@ fn a_volley_draws_the_garrisons_dice_and_throws_them_away() {
     assert!(round.answered.is_empty(), "a volley was answered");
     assert_eq!(round.dealt, 0, "a volley cost the enemy something");
 
-    // The same stream, advanced by hand through every draw the round should
-    // have taken: each attacker, each defender (drawn and discarded), and
-    // the intent for the next round.
+    // The same stream, advanced by hand: each attacker, each defender (drawn
+    // and discarded), and the intent for the next round.
     let mut counted = rngs();
     for _ in 0..(attackers + defenders) {
         Roll::new(Die::D20, AGAINST).resolve(&mut counted);
@@ -161,14 +149,11 @@ fn mending_never_raises_a_band_above_full() {
     assert_eq!(band.count, 3, "troops did not come back with the fight");
 }
 
-/// **A wounded band can actually be healed**, which it could not be.
+/// A wounded band can actually be healed, which it could not be.
 ///
-/// `mend` capped at `count * VIGOUR` and `wound` derives `count` down from
-/// `vigour`, so the cap *was* the band's current strength: a line at 14 of
-/// 18 could take back two points and no more, whatever it was given. It made
-/// `succour` nearly inert and the `mending` potion a third of what it read
-/// as — and the arsenal matrix test passed throughout, because the number
-/// did move, by one.
+/// `mend` capped at `count * VIGOUR`, which `wound` derives down — so the cap
+/// *was* the band's current strength and `succour` was nearly inert. The
+/// matrix test passed throughout, because the number did move, by one.
 #[test]
 fn a_wounded_band_takes_back_what_it_is_given() {
     let mustered = 6;
@@ -189,8 +174,7 @@ fn a_wounded_band_takes_back_what_it_is_given() {
 
 #[test]
 fn every_siege_ends_and_says_how() {
-    // A siege that could run for ever is a faucet that never closes, which
-    // is this domain's version of the failure mode `scrying` names.
+    // A siege that could run for ever is a faucet that never closes.
     for seed in 0..60 {
         let mut rngs = Rngs::from_seed(seed);
         let mut siege = Siege::begin(&mut rngs);
@@ -267,8 +251,7 @@ fn a_lost_siege_still_pays_and_a_won_one_pays_more() {
     assert_eq!(escrow(8, 100, Outcome::Held, 0), pool + pool / 2);
     // Lost at 60% keeps 60%.
     assert_eq!(escrow(8, 60, Outcome::Fallen, 0), (pool * 60) / 100);
-    // ...and bailing at nought still pays the floor, which is the whole
-    // point of having one.
+    // ...and bailing at nought still pays the floor.
     assert_eq!(
         escrow(8, 0, Outcome::Fallen, 0),
         (pool * ESCROW_FLOOR) / 100
@@ -287,10 +270,8 @@ fn a_lost_siege_still_pays_and_a_won_one_pays_more() {
 
 #[test]
 fn a_near_miss_costs_standing_but_less_than_a_collapse() {
-    // **The whole shape of the stake**: falling short costs, and how much
-    // depends on how far short. A collapse on the first round is a different
-    // kind of night from a wall carried at ninety percent, and the number has
-    // to say so.
+    // Falling short costs, and how much depends on how far short: a
+    // first-round collapse is not a wall carried at ninety percent.
     let full = 8 * RENOWN_PER_FOE;
     assert_eq!(
         renown_stake(8, 100, Outcome::Held),
@@ -316,15 +297,10 @@ fn a_near_miss_costs_standing_but_less_than_a_collapse() {
 
 #[test]
 fn a_defeat_that_nearly_won_still_costs_something() {
-    // **`div_ceil`, and why it is not a rounding nicety.** `arrived` is 5..=9,
-    // so the stake tops out at 63 and plain division by 100 truncates to
-    // *nought* for every completion above 80 — losing at ninety-nine percent
-    // would be free, which says the near-miss cost nothing at all. It should
-    // cost less. Never nothing.
-    // **The whole reachable range, not the opening one.** This swept 5..=9 —
-    // the band before standing lengthened the tail — so it stopped covering the
-    // sizes a famous tower actually meets, which are the ones with the largest
-    // stake and therefore the widest truncation window.
+    // `div_ceil`, not a rounding nicety: plain division by 100 truncates to
+    // nought above 80% completion, so losing at ninety-nine would be free. The
+    // sweep covers the whole reachable range, since the largest enemies have
+    // the widest truncation window.
     for arrived in FEWEST..=MOST {
         for completion in 81..100 {
             assert!(
@@ -337,16 +313,14 @@ fn a_defeat_that_nearly_won_still_costs_something() {
 
 #[test]
 fn the_stake_is_priced_at_the_rate_a_making_is() {
-    // The rate is derived rather than picked — `ESCROW_PER_FOE / RENOWN_PER` —
-    // so the two ways of earning standing cannot drift apart as separately
-    // authored numbers. This is what fails if someone moves one of them.
+    // Derived rather than picked, so the two ways of earning standing cannot
+    // drift apart. This is what fails if someone moves one of them.
     assert_eq!(
         RENOWN_PER_FOE,
         ESCROW_PER_FOE / crate::tower::renown::RENOWN_PER,
     );
-    // And it has to be big enough for a bad night to cost the first rank,
-    // which the shipped file puts at 25. At one per foe the most a defeat
-    // could ever take is nine, and the number would not fall.
+    // And big enough for a bad night to cost the first rank, which the shipped
+    // file puts at 25. At one per foe a defeat could take nine at most.
     assert!(
         renown_stake(9, 0, Outcome::Fallen) > 25,
         "a lost siege cannot cost even the first rank",
@@ -361,16 +335,12 @@ fn a_bigger_enemy_is_worth_more_so_abandoning_a_hard_one_is_never_the_play() {
     assert!(escrow(9, 50, Outcome::Fallen, 0) > escrow(5, 50, Outcome::Fallen, 0));
 }
 
-/// **Every state a siege can actually reach, checked against every rule.**
+/// Every state a siege can actually reach, checked against every rule.
 ///
-/// The `hurt` defect survived a green suite because the unit test that
-/// covered it hand-built a band the game cannot produce — `Band::new(4)`
-/// with `vigour = 8`, where the minimum at four troops is ten. A fixture
-/// that constructs an impossible world proves nothing about the real one.
-///
-/// So this walks real sieges from real seeds and asserts the invariants at
-/// **every intermediate state**, which is the only way a rule about worn
-/// bands can be checked without inventing one.
+/// The `hurt` defect survived a green suite because its unit test hand-built a
+/// band the game cannot produce — a fixture for an impossible world proves
+/// nothing about the real one. So this walks real seeds and asserts at every
+/// intermediate state.
 #[test]
 fn every_state_a_siege_reaches_obeys_every_rule() {
     for seed in 0..60 {
@@ -381,8 +351,7 @@ fn every_state_a_siege_reaches_obeys_every_rule() {
         loop {
             let where_ = format!("seed {seed}, round {rounds}: {siege:?}");
 
-            // A band's count is derived from its vigour and can never
-            // outrun it.
+            // A band's count derives from its vigour and cannot outrun it.
             for band in [siege.garrison, siege.enemy] {
                 assert!(
                     band.count <= band.vigour.div_ceil(VIGOUR),
@@ -416,8 +385,8 @@ fn every_state_a_siege_reaches_obeys_every_rule() {
                 siege.garrison.count > 0 && siege.enemy.count >= siege.garrison.count * 2,
                 "outnumbered disagrees with the counts — {where_}",
             );
-            // **A routed side is neither few nor hurt**, or a decision tree
-            // keeps pouring potions into nobody.
+            // A routed side is neither few nor hurt, or a decision tree keeps
+            // pouring potions into nobody.
             if siege.garrison.routed() {
                 assert!(
                     !siege.few() && !siege.hurt(),
@@ -440,11 +409,9 @@ fn every_state_a_siege_reaches_obeys_every_rule() {
     }
 }
 
-/// **`hurt` is reachable while the line is still standing**, which is the
-/// whole of what the defect broke: measured against the *current* count it
-/// implied `count < 3`, where `few` also fires and shadows it in an
-/// `else if` ladder — so the `quaff` rung was dead and `siege.toml`'s
-/// healing entries were unreachable.
+/// `hurt` is reachable while the line is still standing. Measured against the
+/// *current* count it implied `count < 3`, where `few` fires and shadows it in
+/// an `else if` ladder — so the `quaff` rung was dead code.
 #[test]
 fn a_worn_but_standing_garrison_reads_hurt_without_reading_few() {
     let mut found = false;
@@ -469,11 +436,10 @@ fn a_worn_but_standing_garrison_reads_hurt_without_reading_few() {
     );
 }
 
-/// **The decision, in one test: spending is finite and declining is free.**
+/// The decision in one test: spending is finite and declining is free.
 ///
-/// The pool is the **tower's** now, so this file keeps its own — which is the
-/// point of `pledge` taking it: the model stays `World`-free and the whole
-/// arithmetic is provable with no `Sim` at all.
+/// The pool is the tower's, so this file keeps its own — `pledge` takes it, so
+/// the model stays `World`-free and the arithmetic needs no `Sim`.
 #[test]
 fn pledging_spends_the_pool_and_declining_costs_nothing() {
     let mut siege = Siege::begin(&mut rngs());
@@ -523,12 +489,11 @@ fn a_spent_die_and_an_unaffordable_one_refuse_differently() {
     );
 }
 
-/// **The dice come back each round and what paid for them does not.**
+/// The dice come back each round and what paid for them does not.
 ///
-/// The pool no longer lives on the siege, so what this holds is the half that is
-/// still the model's: `resolve` returns every die to the coffer and touches no
-/// resource at all. What the tower does with its quintessence between rounds is
-/// `execute::defend`'s, and `tests/besieging.rs` is where that is proved.
+/// The pool does not live on the siege, so this holds only the model's half:
+/// `resolve` returns every die and touches no resource. The tower's
+/// quintessence is `execute::defend`'s, proved in `tests/besieging.rs`.
 #[test]
 fn the_dice_come_back_each_round() {
     let mut rngs = rngs();

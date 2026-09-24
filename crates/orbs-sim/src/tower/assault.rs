@@ -8,39 +8,20 @@
 //! | Surfaces | Environmental only — never scripts, schedules or logs | All four (§8.1) |
 //! | Response | Repair occupies a pane | Diagnose and repair under pressure |
 //!
-//! **Adversarial aberrations are siege-only**, which is what makes Phase A
-//! genuinely safe (pillar 4) and what makes the four-surface model the siege's
-//! signature rather than the tower's. `sabotage::drift` and
-//! `sabotage::substitution` are the calm layer and are untouched by this module;
-//! nothing here runs unless a siege is being fought.
+//! Adversarial aberrations are siege-only, which is what makes Phase A safe
+//! (pillar 4). `sabotage::drift` and `sabotage::substitution` are the calm
+//! layer and are untouched here; nothing in this module runs outside a siege.
 //!
-//! # This is the premise, and it is the last clause of it
+//! This is the premise's last clause. The two surfaces added here reach a
+//! *script* — its text and its clock — so the intervention loop is debugging,
+//! which is what makes scrying load-bearing. `verify` is the diagnosis, and
+//! *which surface do I inspect first* is §5.1's binding constraint.
 //!
-//! CLAUDE.md: *"you progress by writing scripts that teach the orb to do your
-//! work. **Sieges then test everything you automated — because the enemy attacks
-//! the automation.**"* Six domains produce and, until now, nothing consumed. The
-//! two surfaces this module adds are the ones that reach a *script*: its text,
-//! and its clock.
+//! Telegraphed: the round that sabotages says so without saying **what** it
+//! touched, so the look that finds the lie is the decision the cooldown prices.
 //!
-//! So the intervention loop is **debugging**, which is what makes the scrying
-//! domain load-bearing rather than flavour — and why the §8.1 audit was built
-//! first. `verify` is the diagnosis, and *which surface do I inspect first* is
-//! the binding constraint §5.1 names by name.
-//!
-//! # It is telegraphed, like everything else the enemy does
-//!
-//! A round announces its intent before it acts, and so does this: the round that
-//! sabotages *says so on the transcript* without saying **what** it touched.
-//! That is the whole shape of the puzzle — you are told there is a lie and you
-//! spend a look finding it, which is the decision the cooldown prices.
-//!
-//! # One draw, unconditionally, before anything can return
-//!
-//! CLAUDE.md's determinism rule. The roll happens on every resolved round
-//! whether or not a siege is running hard enough to sabotage, and the *target*
-//! is chosen from the quotient of the roll that already fired — never from a
-//! second draw taken only when the first one succeeded, which is §19's `drift`
-//! defect.
+//! One draw, unconditionally, before anything can return. The target comes from
+//! that roll's quotient, never a second draw — §19's `drift` defect.
 
 use bevy_ecs::prelude::*;
 
@@ -50,19 +31,15 @@ use crate::rng::{RngStream, Rngs};
 
 /// How often a round sabotages something, as one chance in this many.
 ///
-/// **Not every round, deliberately.** §5.1 caps aberration arrival *"so repairs
-/// cannot spiral"*, and a siege that lied on every round would leave a player
-/// doing nothing but auditing — the failure mode where the *fight* becomes the
-/// thing you have no time for. One round in three is often enough that the
-/// player has to keep an eye on the tower and rare enough that they can still
-/// fight the siege in front of them.
+/// Not every round: §5.1 caps aberration arrival *"so repairs cannot spiral"*,
+/// and a siege that lied every round leaves the player auditing instead of
+/// fighting.
 pub const ODDS: u32 = 3;
 
 /// A bound spell whose schedule an enemy has retimed.
 ///
-/// **The subtlest of the four surfaces**, and the reason it is worth having: a
-/// retimed spell's *text* is perfect, so `peruse` shows exactly what the player
-/// wrote and reading it harder never finds anything. Only `verify` does.
+/// The subtlest of the four surfaces: a retimed spell's *text* is perfect, so
+/// `peruse` shows exactly what the player wrote and only `verify` finds it.
 #[derive(Component, Debug, Clone)]
 pub struct Retimed {
     /// How many extra ticks each of its steps now costs.
@@ -71,10 +48,9 @@ pub struct Retimed {
 
 /// A spell whose text an enemy has rewritten.
 ///
-/// **The true lines are kept**, which is `Substituted`'s rule and for its
-/// reason: a corruption that destroyed the player's own writing would be theft
-/// rather than sabotage, and §5.1 keeps *misdirection* as the thing scrying
-/// exists to see through. It also makes the repair a repair.
+/// The true lines are kept, as `Substituted` does: destroying the player's own
+/// writing would be theft rather than the misdirection §5.1 has scrying see
+/// through, and it is what makes the repair a repair.
 #[derive(Component, Debug, Clone)]
 pub struct Rewritten {
     /// What the player actually wrote.
@@ -95,10 +71,8 @@ pub enum Reached {
 
 /// Roll for sabotage, and do it. Called once per resolved round.
 ///
-/// **The draw is unconditional and happens first**, before any check that could
-/// return — CLAUDE.md's rule, and the one that keeps a replay valid whatever the
-/// tower happens to contain. The target is then chosen from the *quotient* of
-/// that same roll, so no second draw is ever taken.
+/// The draw is unconditional and comes first, before any check that could
+/// return, and the target is that roll's *quotient* rather than a second draw.
 pub fn strike(world: &mut World) -> Option<Reached> {
     let roll: u32 = {
         let mut rngs = world.resource_mut::<Rngs>();
@@ -109,15 +83,12 @@ pub fn strike(world: &mut World) -> Option<Reached> {
     if !roll.is_multiple_of(ODDS) {
         return None;
     }
-    // **The quotient chooses, never a second draw.** A draw taken only when the
-    // first one fired would make the stream depend on its own results, which is
-    // the defect §19 records in `drift` and the reason `substitution` picks its
-    // pile this way too.
+    // The quotient chooses, never a second draw (§19's `drift` defect), which
+    // is how `substitution` picks its pile too.
     let choice = roll / ODDS;
 
-    // **Sorted by name, never by entity.** An ECS query has no order worth
-    // relying on, and a siege whose sabotage moved between two runs of one seed
-    // would fail every replay test in the file.
+    // Sorted by name, never by entity: an ECS query has no order worth relying
+    // on, and sabotage that moved between two runs of one seed fails replay.
     let mut scripts: Vec<(Entity, String)> = world
         .query::<(Entity, &Name, &Held)>()
         .iter(world)
@@ -134,21 +105,17 @@ pub fn strike(world: &mut World) -> Option<Reached> {
     bound.sort_by(|a, b| a.1.cmp(&b.1));
     bound.retain(|(entity, _)| world.get::<Retimed>(*entity).is_none());
 
-    // **The clock first when there is anything bound**, because that is the
-    // surface that punishes automation — pillar 3, *"automation is progression,
-    // and automation is attack surface"*. A tower with nothing bound has nothing
-    // to retime, and falls back to the text.
+    // The clock first when anything is bound: it is the surface that punishes
+    // automation (pillar 3). A tower with nothing bound falls back to the text.
     if !bound.is_empty() {
         let (node, _) = bound[choice as usize % bound.len()];
-        // **A `shielded` spell is struck and holds.** Skipped *after* the
-        // choice, never filtered out of `bound` — filtering would change which
-        // spell the same roll reaches and move every seed's world; this spends
-        // the enemy's turn instead and leaves the arithmetic exactly as it was.
+        // A `shielded` spell is struck and holds. Skipped *after* the choice:
+        // filtering it out of `bound` would change which spell the same roll
+        // reaches and move every seed's world.
         if held(world, node) {
             return None;
         }
-        // The drag is derived from the same roll for the third time, so this
-        // whole function takes exactly one draw.
+        // From the same roll again, so this function takes exactly one draw.
         let drag = u64::from(choice % 3) + 1;
         world.entity_mut(node).insert(Retimed { drag });
         super::poison(world, node);
@@ -169,19 +136,16 @@ pub fn strike(world: &mut World) -> Option<Reached> {
 
 /// Whether a live `shielded` charm is holding this node.
 ///
-/// **The clock, never `With<Charmed>`.** A charm is an interval with no expiry
-/// system, so a lapsed one is still a present component — a component test would
-/// shield a spell for ever after its first charm, which is the one shape this
-/// whole feature must not have.
+/// The clock, never `With<Charmed>`: a charm is an interval with no expiry
+/// system, so a component test would shield a spell for ever after its first.
 fn held(world: &World, node: Entity) -> bool {
     super::charmed(world, node, super::charm::Kind::Shielded)
 }
 
 /// Corrupt one line of a spell, keeping what it said.
 ///
-/// **One line, not the file.** A spell rewritten wholesale is a spell the player
-/// throws away and writes again, which is not a puzzle; one line changed is a
-/// thing they have to *find*, which is what `peruse` and `interpret` are for.
+/// One line, not the file: a spell rewritten wholesale is one the player throws
+/// away, while one line changed is one they have to *find*.
 fn rewrite(world: &mut World, node: Entity) {
     let Some(held) = world.get::<Held>(node).cloned() else {
         return;
@@ -189,9 +153,8 @@ fn rewrite(world: &mut World, node: Entity) {
     if held.0.is_empty() {
         return;
     }
-    // **Only lines with something to misdirect**, walked from the tick's
-    // position. No draw here: the tick is already part of the replayed state,
-    // and a second draw would be the defect this module's header warns about.
+    // Only lines with something to misdirect, walked from the tick's position.
+    // No draw: the tick is already replayed state.
     let candidates: Vec<usize> = (0..held.0.len())
         .filter(|at| corruptible(&held.0[*at]))
         .collect();
@@ -202,43 +165,21 @@ fn rewrite(world: &mut World, node: Entity) {
     let at = candidates[from % candidates.len()];
 
     let mut lines = held.0.clone();
-    // **The last *word*, not the line**, and this is the whole of what makes it
-    // sabotage rather than vandalism. `claimed` appends a sigil so the resolver
-    // will *not* fold the name back — applied to a whole line it produced
-    // `repeat 3-` and `end-`, which the parser cannot read at all: the line
-    // faults at `Role::Danger`, latches `‼` on the rail, and an unclosed block
-    // stops the whole spell compiling. This module's own header says *"a line
-    // the orb cannot read at all would fault loudly and give the game away"*,
-    // and the first version did exactly that.
-    //
-    // A corrupted **argument** is the shape wanted: `grind sage` becomes `grind
-    // sage-`, which parses, runs, and quietly does nothing — the misdirection
-    // §5.1 keeps scrying for.
+    // The last *word*, not the line: that is what makes it sabotage rather than
+    // vandalism. Whole-line corruption produced `repeat 3-` and `end-`, which
+    // fault at `Role::Danger` and give the game away; `grind sage-` parses,
+    // runs, and quietly does nothing.
     lines[at] = corrupt(&lines[at]);
 
-    // **Both, and the corrupted line copied verbatim into the reading.**
-    // `spell::compile` reads `Read`, so corrupting only `Held` would leave the
-    // sabotage visible to `peruse` and invisible to the runner — the player
-    // would see a broken line while the orb ran the clean one, and `purge` would
-    // repair nothing. That is CLAUDE.md's premise clause switched off: *sieges
-    // test everything you automated because the enemy attacks the automation.*
+    // Both, since `spell::compile` reads `Read`: corrupting only `Held` would
+    // show a broken line while the orb ran the clean one, with `purge`
+    // repairing nothing. Copied rather than re-read, because this runs inside
+    // `step` where rules 1 and 3 apply.
     //
-    // Copied rather than re-read, because there is no reader here and could not
-    // be: this runs inside `step`, where rule 1 bars the model and rule 3 bars
-    // anything that would make a replay depend on it. A verbatim copy is exactly
-    // what the game did before readings existed, when `Held` was what compiled.
-    //
-    // **That one line of the reading, and no other.** The first version wrote
-    // the whole corrupted text into `Read`, which threw away the orb's reading
-    // of every line the enemy never touched: a spell the reader had made
-    // runnable went back to its player's loose words, most of which the orb
-    // cannot run. The reading from before the strike is what `Rewritten` keeps,
-    // so a repair puts back what ran rather than only what was typed.
-    //
-    // The reader's name stays on it. The struck line is keyed by its corrupted
-    // text, so a later save by that reader keeps the lie exactly as a save kept
-    // it before readings existed — and a reader that re-reads it still meets
-    // the sigil, which the resolver was built never to fold back.
+    // That one line of the reading and no other — writing the whole corrupted
+    // text into `Read` threw away the orb's reading of every untouched line, so
+    // a repair put back what was typed rather than what ran. The reader's name
+    // stays on it, and the struck line is keyed by its corrupted text.
     let reading = world.get::<super::Read>(node).map_or_else(
         || super::Read::verbatim(&held.0),
         |read| read.aligned(&held.0),
@@ -257,19 +198,13 @@ fn rewrite(world: &mut World, node: Entity) {
 
 /// Append the substitution sigil to a line's last word.
 ///
-/// **Lines with no argument are left alone**, which is why the caller walks to
-/// one rather than taking whatever the tick names: a bare `probe`, an `end` or
-/// an `else` has nothing to misdirect, and suffixing the keyword breaks the
-/// parse instead of the meaning.
-/// **The line is kept and only its last word is replaced.** It was rebuilt with
-/// `words.join(" ")`, which reflows it — `    grind    sage` came back as
-/// `    grind sage-`, so the enemy changed the player's *formatting* as well as
-/// one word. §19 is careful that the orb never rewrites a spell's text, and a
-/// whitespace change `verify` cannot explain is noise on top of the one-word lie
-/// this surface is supposed to be.
+/// Lines with no argument are left alone: suffixing a bare `probe`, `end` or
+/// `else` breaks the parse instead of the meaning.
 ///
-/// Splitting at the last word's own offset keeps everything before it byte for
-/// byte, indentation and interior spacing alike.
+/// Split at the last word's own offset, so everything before it survives byte
+/// for byte. `words.join(" ")` reflowed the line — `    grind    sage` came
+/// back as `    grind sage-` — which is the player's formatting changed on top
+/// of the one-word lie.
 fn corrupt(line: &str) -> String {
     let mut words = line.split_whitespace();
     let Some(last) = words.next_back() else {
@@ -278,9 +213,8 @@ fn corrupt(line: &str) -> String {
     if words.next().is_none() {
         return line.to_owned();
     }
-    // **After the early returns**, because `claimed` allocates and the two
-    // returns above discard it — the lie was being built for lines that were
-    // never going to be corrupted.
+    // After the early returns, because `claimed` allocates and the two returns
+    // above discard it.
     let lie = super::sabotage::claimed(last);
     let Some(at) = line.rfind(last) else {
         return line.to_owned();
@@ -290,32 +224,19 @@ fn corrupt(line: &str) -> String {
 
 /// Whether a line has an argument worth corrupting.
 ///
-/// A control word on its own — `end`, `else`, `repeat` with a count — has
-/// nothing to misdirect. Suffixing it breaks the *parse*, which is loud, and the
-/// point of this surface is a lie that runs.
+/// A corrupted line must parse, run and quietly do nothing; a lie the player is
+/// told about is not misdirection, and a control word on its own has nothing to
+/// misdirect anyway.
 ///
-/// # Three more shapes, and they were breaking spells rather than lying to them
+/// Word count and a trailing digit were not enough — `part look()-` printed
+/// three complaints, `is idle-` skipped the whole guarded block — so the last
+/// word is also refused when it is:
 ///
-/// The first two guards were the *word count* and a *trailing digit*, which let
-/// through every line whose last word happens to be grammar. Measured by running
-/// it: `part look()` became `part look()-` and invoking printed three
-/// complaints — a `part` that wants a name, an `end` with nothing open, and a
-/// call naming no part — so one lie produced an unclosed block and a dead call.
-/// `if the mortar is idle` became `is idle-` and the whole guarded block was
-/// skipped with *"that question means nothing"*.
-///
-/// Both are the failure this module's own header forbids: a corrupted line must
-/// **parse, run, and quietly do nothing**, because *"a line the orb cannot read
-/// at all would fault loudly and give the game away"*. A lie the player is told
-/// about is not misdirection.
-///
-/// So the last word is refused when it is:
-///
-/// - **a state** — `is idle-` is unreadable, and `SpellState::WORDS` is asked
-///   rather than a copy of it, so a ninth spelling cannot drift out of this;
-/// - **bracketed** — a `part` heading or a call, where the brackets *are* the
-///   notation and suffixing one loses the name that matches definition to call;
-/// - **a set** — `for each way-` binds a cursor over nothing, so the body never
+/// - a state — asked of `SpellState::WORDS` rather than copied, so a ninth
+///   spelling cannot drift out of this;
+/// - bracketed — the brackets *are* the notation, and suffixing one loses the
+///   name matching definition to call;
+/// - a set — `for each way-` binds a cursor over nothing, so the body never
 ///   runs at all rather than running against a lie.
 fn corruptible(line: &str) -> bool {
     let words: Vec<&str> = line.split_whitespace().collect();
@@ -327,9 +248,8 @@ fn corruptible(line: &str) -> bool {
     if last.chars().all(|c| c.is_ascii_digit()) {
         return false;
     }
-    // `for each way` — the set is the word before the last, so this is asked of
-    // `particle()` rather than of the literal, which is what stops it drifting
-    // if the grammar ever fixes a second follower.
+    // `for each way` — the set is the word before the last. Asked of
+    // `particle()` rather than the literal.
     if crate::parser::SpellWord::For.particle() == Some(words[words.len() - 2]) {
         return false;
     }
@@ -338,20 +258,15 @@ fn corruptible(line: &str) -> bool {
 
 /// Give a rewritten spell its own words back.
 ///
-/// The mirror of `sabotage::restore`, and it is what makes notice → `verify` →
-/// `purge` a repair loop here as well.
+/// The mirror of `sabotage::restore`, which makes notice → `verify` → `purge` a
+/// repair loop here too.
 pub fn unwrite(world: &mut World, node: Entity) -> bool {
     let Some(Rewritten { was, read }) = world.get::<Rewritten>(node).cloned() else {
         return false;
     };
-    // **The reading goes back with the text, and it is the one that ran.**
-    // `rewrite` corrupted both, so restoring one would leave the tower running
-    // the enemy's line for ever while `peruse` showed the player their own.
-    //
-    // It went back verbatim, with a note that a repaired spell compiled its
-    // player's words *"until the next save re-reads them"* — and no save did,
-    // because every line's text matched what the verbatim copy was keyed by.
-    // The reading from before the strike needs no reader to put back.
+    // The reading goes back with the text: `rewrite` corrupted both, so
+    // restoring one leaves the tower running the enemy's line while `peruse`
+    // shows the player their own.
     world.entity_mut(node).insert(Held(was));
     world.entity_mut(node).insert(read);
     world.entity_mut(node).remove::<Rewritten>();
@@ -372,17 +287,11 @@ mod tests {
     use super::*;
     use crate::Sim;
 
-    /// **Every line the enemy is allowed to touch must still parse.**
+    /// Every line the enemy is allowed to touch must still parse.
     ///
-    /// This is the module's headline claim — a corrupted line *"parses, runs,
-    /// and quietly does nothing"* — and nothing asserted it. The guard was a
-    /// word count and a trailing digit, which let through `part look()` and
-    /// `if the mortar is idle`; both were verified breaking a real spell into
-    /// three complaints rather than misdirecting it.
-    ///
-    /// Asked of every line of every **shipped** solver, so a spell added to
-    /// `dev_spells.toml` in a shape the guard has not met fails here rather than
-    /// in a player's siege.
+    /// Asked of every line of every shipped solver, so a spell added to
+    /// `dev_spells.toml` in an unmet shape fails here rather than in a player's
+    /// siege. The old guard let through `part look()` and `is idle`.
     #[test]
     fn a_line_the_enemy_may_corrupt_still_reads_as_a_line() {
         let spells = crate::content::Spells::builtin();
@@ -394,9 +303,8 @@ mod tests {
                     continue;
                 }
                 let lied = corrupt(line);
-                // A spell word still opens it, and the shape it needs still
-                // follows — which is what `part`, `for each` and `is <state>`
-                // each stopped being true of.
+                // A spell word still opens it — which `part`, `for each` and
+                // `is <state>` broke.
                 let before = crate::parser::spell_word(line);
                 let after = crate::parser::spell_word(&lied);
                 if before != after {
@@ -415,7 +323,7 @@ mod tests {
         );
     }
 
-    /// **The lie is one word, and the player's own spacing survives it.**
+    /// The lie is one word, and the player's own spacing survives it.
     #[test]
     fn corrupting_a_line_keeps_every_character_before_its_last_word() {
         let line = "    grind    sage";
@@ -443,17 +351,17 @@ mod tests {
                 "{line:?} would be corrupted, and it does not survive it",
             );
         }
-        // ...and the ordinary case still is corruptible, or the guard has eaten
-        // the surface rather than narrowed it.
+        // ...and the ordinary case still is, or the guard ate the surface
+        // rather than narrowing it.
         assert!(corruptible("grind sage"));
         assert!(corruptible("haul wellspring barrier"));
     }
 
     #[test]
     fn the_calm_layer_is_never_touched() {
-        // **Pillar 4, asserted.** §5.1: *"the enemy never touches scripts,
-        // schedules, or logs in the calm layer."* Nothing here runs on a tick;
-        // it runs on a resolved round, and `hold` is the only caller.
+        // Pillar 4: *"the enemy never touches scripts, schedules, or logs in
+        // the calm layer."* Nothing here runs on a tick — only on a resolved
+        // round, and `hold` is the only caller.
         let mut sim = Sim::new(11);
         sim.step_n(2000);
         let world = sim.world();
@@ -474,8 +382,7 @@ mod tests {
 
     #[test]
     fn a_rewritten_spell_keeps_what_it_said() {
-        // Misdirection, not theft — the rule `substitute` records and the reason
-        // the repair loop is a loop.
+        // Misdirection, not theft, which is what makes the repair loop a loop.
         let mut sim = Sim::new(11);
         sim.submit("attend archive");
         sim.step();
@@ -499,11 +406,8 @@ mod tests {
             "the player's own words were not kept",
         );
 
-        // **The sabotage must reach the program, not only the file.**
-        // `spell::compile` reads `Read`, so a rewrite that touched `Held` alone
-        // would leave the player seeing a broken line while the orb ran the
-        // clean one — the premise clause switched off, and `purge` repairing
-        // nothing. This is the assertion that keeps the two together.
+        // The sabotage must reach the program, not only the file: touching
+        // `Held` alone shows a broken line while the orb runs the clean one.
         assert_eq!(
             crate::tower::spell::source(sim.world(), node),
             after,
@@ -525,10 +429,8 @@ mod tests {
 
     #[test]
     fn a_strike_corrupts_one_line_of_the_reading_and_a_repair_restores_all_of_it() {
-        // **The orb's reading of every other line survives the strike.** The
-        // first version wrote the whole corrupted text into `Read`, so a spell
-        // the reader had made runnable went back to its player's loose words —
-        // and the repair put back the words, not what had run.
+        // Writing the whole corrupted text into `Read` sent a runnable spell
+        // back to its player's loose words, and the repair put those back.
         let mut sim = Sim::new(11);
         let typed: Vec<String> = ["work the sage down", "hang on ten ticks", "grind sage"]
             .into_iter()
@@ -579,8 +481,8 @@ mod tests {
 
     #[test]
     fn only_one_line_is_touched() {
-        // A spell rewritten wholesale is one the player throws away; one line
-        // changed is one they have to find.
+        // Wholesale is a spell the player throws away; one line is one they
+        // have to find.
         let mut sim = Sim::new(11);
         sim.submit("attend archive");
         sim.step();
@@ -610,13 +512,9 @@ mod dragging {
 
     #[test]
     fn a_retimed_spell_loses_ticks_at_the_shipped_budget() {
-        // **The test that hid the defect asked with an allowance of 4.** The
-        // shipped `SCRIPT_BUDGET` is 1, where `allowance - drag` floored at one
-        // returns one for every drag — so the surface announced itself, cost an
-        // audit and a purge, and changed nothing.
-        //
-        // Asking with **1** is the whole point: a drag has to cost something at
-        // the budget the game actually runs at.
+        // Asked with an allowance of 4, this hid the defect: at the shipped
+        // `SCRIPT_BUDGET` of 1, `allowance - drag` floored at one returns one
+        // for every drag, so the surface cost an audit and changed nothing.
         let mut sim = Sim::new(11);
         sim.submit("attend laboratory");
         sim.step();

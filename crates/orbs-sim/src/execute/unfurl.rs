@@ -1,27 +1,19 @@
 //! Reading back through what the orb has said.
 //!
-//! # A verb for a key that already worked
+//! A verb for a key that already worked. `PageUp` has scrolled the transcript
+//! since the transcript existed and nothing said so: the border advertises `PgDn
+//! newest` only once you are already scrolled back, so the affordance announced
+//! itself exclusively to players who had found it. In a game with no mouse and
+//! no menus, a key nobody can discover is a key nobody has.
 //!
-//! `PageUp` has scrolled the transcript since the transcript existed, and
-//! nothing ever said so: the border advertises `PgDn newest` only once you are
-//! *already* scrolled back, so the affordance announced itself exclusively to
-//! players who had found it. In a game with no mouse and no menus, a key nobody
-//! can discover is a key nobody has.
+//! So the way in is a word, and using it once puts the keys on screen — the part
+//! that survives after the player stops needing the word.
 //!
-//! So the way in is a word, like everything else here. Using it once puts the
-//! keys on screen, which is the part that survives after the player stops
-//! needing the word.
-//!
-//! # What the sim owns, and what it does not
-//!
-//! Only the *decision*. Where the transcript is scrolled to is frontend state
-//! and always was — it is a fact about a pane, and rule 2 keeps panes out of
-//! this crate entirely. What `unfurl` does here is ask, exactly as `scribe`
-//! asks for the editor, and the frontend takes the request.
-//!
-//! That also keeps it out of the sim's determinism: reading is not a world
-//! event. `(seed, submissions)` replays identically whether or not anyone
-//! scrolled, because nothing here touches the world.
+//! The sim owns only the decision. Where the transcript is scrolled to is a fact
+//! about a pane, and rule 2 keeps panes out of this crate; `unfurl` asks,
+//! exactly as `scribe` asks for the editor, and the frontend takes the request.
+//! That also keeps it out of determinism — reading is not a world event, so
+//! `(seed, submissions)` replays identically whether or not anyone scrolled.
 
 use bevy_ecs::prelude::*;
 use orbs_render::{FieldName, RecordKind, Role};
@@ -32,9 +24,9 @@ use crate::session::Scrollback;
 
 /// A request to hand the transcript the keyboard.
 ///
-/// **Taken rather than read**, for the reason `Opening` gives: `unfurl` asks
-/// once, and a frontend polling a persistent flag would re-enter reading mode
-/// every frame — including the frame after the player pressed Escape to leave.
+/// Taken rather than read, for `Opening`'s reason: `unfurl` asks once, and a
+/// frontend polling a persistent flag would re-enter reading mode every frame,
+/// including the frame after the player pressed Escape to leave.
 #[derive(Resource, Debug, Default, Clone, Copy)]
 pub struct Unfurling(bool);
 

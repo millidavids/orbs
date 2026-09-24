@@ -10,7 +10,7 @@
 //! the report over them: by shape and by style, the betrayals apart, every miss
 //! with *why*, and the whole scripts written through a real tower.
 //!
-//! **Inference only**, so it needs no GPU and no `train` feature.
+//! Inference only, so it needs no GPU and no `train` feature.
 //!
 //! `--scribe` and `--reader` put weights other than the shipped ones on trial,
 //! each a path without its `.bin`, and `--scores` prints only the numbers — one
@@ -70,9 +70,9 @@ fn main() {
             "\n    {:>6.1}%   every line    {passed:>4} of {total}",
             percent(passed, total)
         );
-        // **By style as well as by shape**, because a style is what a player
-        // has and a shape is what the orb has. *"Contractions read 40%"* is a
-        // finding; *"`if` reads 70%"* hides it.
+        // By style as well as by shape: a style is what a player has, a shape
+        // what the orb has. *"Contractions read 40%"* is a finding;
+        // *"`if` reads 70%"* hides it.
         println!("\n  by style\n");
     }
     for style in TRIAL_STYLES {
@@ -90,9 +90,9 @@ fn main() {
         }
     }
 
-    // **Apart, and zero is the only acceptable count.** A miss leaves a spell
-    // that faults where the player can see it; a betrayal runs one that means
-    // the opposite of what was written, with nobody watching.
+    // Counted apart, and zero is the only acceptable count: a miss leaves a
+    // spell that faults where the player can see it, a betrayal runs one that
+    // means the opposite of what was written.
     let betrayed: Vec<&(&Trial, Option<String>)> = read
         .iter()
         .filter(|(trial, got)| trial.betrayed_by(got.as_deref()))
@@ -144,10 +144,9 @@ fn main() {
 /// Every script written through a real tower's `write_spell_reading`, compiled
 /// from what it stored, and checked against the room.
 ///
-/// **The path a player's save takes**, not a loop over `reading`: the per-line
+/// The path a player's save takes, not a loop over `reading`: the per-line
 /// cache, the blank-and-comment rule and the byte-exact file all sit between
-/// the editor and the program, and a report that skipped them would be
-/// measuring something no player runs.
+/// the editor and the program.
 fn scripts(trials: &Trials, scribe: &Scribe<NdArray<f32>>) {
     println!("\n  whole spells, written through a tower\n");
     for script in trials.scripts() {

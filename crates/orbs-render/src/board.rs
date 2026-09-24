@@ -1,29 +1,18 @@
 //! The ward as a sheet of paper — what a code-breaker keeps beside them.
 //!
 //! Every press, with what it answered, and the aperture as it stands. Drawn
-//! beside the transcript whenever a reading is open, which is what makes a bound
-//! solver watchable — the same rule the archive's map follows, and for the same
-//! reason: **the picture is not gated on a word**, because watching and doing are
-//! different activities.
+//! beside the transcript whenever a reading is open and never gated on a word —
+//! the archive map's rule, because watching and doing are different activities.
 //!
-//! # It carries nothing the readings lack
+//! It carries nothing the readings lack (rule 2). Every row is one press's
+//! answer, which `probe` already said and `survey prism` will say again — §19's
+//! test, *"a player with squared paper could have drawn it themselves"*. What it
+//! adds is history: five presses the transcript has scrolled past, side by side.
+//! It infers nothing, because `tower::ward` infers nothing.
 //!
-//! Rule 2's line, and the maze's fog is the precedent: every row here is one
-//! press's answer, which `probe` already said in the transcript and `survey
-//! prism` will say again. A player with squared paper could keep this themselves,
-//! which is the test §19 applies to the map — *"a player with squared paper could
-//! have drawn it themselves"*.
-//!
-//! What it adds is **history**, and only history. Five presses are five lines the
-//! transcript has already scrolled past; a sheet holds them side by side, which
-//! is the whole of what makes deduction possible without a notepad. It infers
-//! nothing, because the sim it reads from infers nothing (`tower::ward`).
-//!
-//! # Glyphs, never colour alone
-//!
-//! §14 forbids meaning that lives only in hue. Each sigil is a distinct CP437
-//! glyph and the tint is enrichment on top, so the board survives greyscale and
-//! survives a dump — which is where it will mostly be looked at.
+//! §14 forbids meaning that lives only in hue, so each sigil is a distinct CP437
+//! glyph and the tint is enrichment on top — the board survives greyscale and a
+//! dump, which is where it will mostly be looked at.
 
 use crate::geometry::Rect;
 use crate::style::{Style, Tint};
@@ -46,34 +35,33 @@ pub struct Board {
     pub attempts: Vec<Attempt>,
     /// What the next press will send.
     ///
-    /// **A sigil may repeat here.** The ward draws four of six with repeats
-    /// allowed — 1296 codes — so two sockets holding the same glyph is an
-    /// ordinary figure rather than a bug in the painter.
+    /// A sigil may repeat: the ward draws four of six with repeats allowed —
+    /// 1296 codes — so two sockets holding the same glyph is an ordinary figure
+    /// rather than a bug in the painter.
     pub aperture: [usize; 4],
     // `settled` and `marks` are gone. The first said which sockets the *orb* had
     // proved, which is the one thing Mastermind never tells you; the second was
     // a per-sigil tally the player can keep themselves. §19 records the change.
     /// What the sockets are called, left to right.
     ///
-    /// **Handed in by the sim, not held here.** `dial second borax` names a socket
-    /// by word, so a sheet whose columns are unlabelled is one a player has to
-    /// count along before they can type — and the words are content
-    /// (`tower::ward::SOCKETS`), which rule 6 keeps out of a painter.
+    /// Handed in by the sim: `dial second borax` names a socket by word, so
+    /// unlabelled columns are ones a player counts along before typing — and the
+    /// words are content (`tower::ward::SOCKETS`), which rule 6 keeps out of a
+    /// painter.
     pub sockets: [&'static str; 4],
     /// What the sigils are called, in [`SIGILS`] order.
     ///
     /// The legend's half of the same problem, and the worse half: without it the
-    /// board shows `♦` and the player has no way to learn that is `pewter` except
-    /// by reading it off the transcript.
+    /// board shows `♦` and nothing says that is `pewter`.
     pub sigils: [&'static str; 6],
 }
 
 /// A sigil's glyph.
 ///
-/// **Six distinct shapes**, so the board reads in greyscale and in a dump. Each
-/// is verified against [`cp437::is_renderable`](crate::cp437::is_renderable); a
-/// seventh sigil would need a seventh glyph and the compiler will not say so,
-/// which is what the test below is for.
+/// Six distinct shapes, so the board reads in greyscale and in a dump. The test
+/// below checks each against
+/// [`cp437::is_renderable`](crate::cp437::is_renderable), because a seventh
+/// sigil's missing glyph is not something the compiler will say.
 pub const SIGILS: [char; 6] = ['☼', '○', '♂', '♀', '♦', '♠'];
 
 /// A sigil's tint, in the same order.
@@ -89,35 +77,31 @@ pub const TINTS: [Tint; 6] = [
     Tint::Red,
 ];
 
-// `HELD` (`■`) and `LOOSE` (`·`) drew the settle marks under the aperture. They
-// are gone with the mechanic: the orb no longer decides that a socket is right,
-// so there is nothing to mark. §19 records why — the marks were the orb
-// answering *"is this position correct?"*, which is the one question Mastermind
-// never answers.
+// `HELD` (`■`) and `LOOSE` (`·`) drew the settle marks under the aperture, gone
+// with the mechanic: they were the orb answering *"is this position correct?"*,
+// the one question Mastermind never answers (§19).
 //
-// Worth keeping the note that cost something to learn: `■` is CP437 0xFE, and
-// `▪` — the obvious choice — is **not** in the repertoire. The next glyph added
-// to this file should be checked the same way.
+// Keeping what they cost to learn: `■` is CP437 0xFE, and `▪` — the obvious
+// choice — is not in the repertoire. Check the next glyph added here the same
+// way.
 
 /// The pegs an answer is drawn with.
 ///
-/// `•` is CP437 0x07 and `○` is 0x09 — the filled one for a sigil in its own
-/// socket, the hollow one for a sigil in the wrong socket. `●` is **not** in
-/// CP437 and was the obvious first choice.
+/// `•` (CP437 0x07) for a sigil in its own socket, `○` (0x09) for one in the
+/// wrong socket. `●` was the obvious first choice and is not in CP437.
 const ALIGNED: char = '•';
 const ASTRAY: char = '○';
 
 /// Cells the left gutter takes: a press number, right-aligned, then a space.
 ///
-/// `u16` throughout, like every other measurement in this crate — the row builders
-/// take `usize::from` where they need to index, which is a widening and cannot
-/// truncate. Declaring these `usize` and casting the total the other way is what
-/// `cast_possible_truncation` correctly objects to.
+/// `u16` like every other measurement in this crate. Row builders widen with
+/// `usize::from` where they index; declaring these `usize` and casting the total
+/// back is what `cast_possible_truncation` correctly objects to.
 const GUTTER: u16 = 3;
 
 /// Cells one socket's column takes, name included.
 ///
-/// `second` and `fourth` are the longest socket words at six, and one cell of gap
+/// `second` and `fourth` are the longest socket words at six, and a cell of gap
 /// keeps two glyphs from reading as a pair.
 const SOCKET: u16 = 7;
 
@@ -127,38 +111,31 @@ const PEG: u16 = 2;
 impl Board {
     /// Columns the board wants.
     ///
-    /// # It was ten, and ten was unreadable
+    /// It was ten — `☼○♂♀  ••○ ` in a pane 104 wide — and unreadable: nothing
+    /// said which column was which socket, so a player counted along before
+    /// typing `dial second borax`, and nothing said which sigil `♦` was.
     ///
-    /// The first sheet packed four glyphs, two spaces and four pegs into ten
-    /// cells — `☼○♂♀  ••○ ` — in a pane 104 wide. Correct, compact, and a wall of
-    /// symbols: nothing said which column was which socket, so a player had to
-    /// count along before they could type `dial second borax`, and nothing said
-    /// which sigil `♦` was at all.
-    ///
-    /// Fixed at 39, because every row is the same shape — which is what lets a
-    /// reader compare two presses by looking down a column, and is the whole
-    /// reason a sheet beats scrollback.
+    /// Fixed at 39, because every row being the same shape is what lets a reader
+    /// compare two presses down a column, which is why a sheet beats scrollback.
     pub const COLS: u16 = GUTTER + SOCKET * 4 + PEG * 4;
 
     /// The most presses a sheet shows at once.
     ///
-    /// **A cap, because a sheet with no cap disappears.** `Ward::history` grows
-    /// once per press and the writable spell averages 11.9 with a worst of 21 —
-    /// past the pane's height the whole picture was refused, so it vanished with
-    /// no explanation part-way through exactly the long solve it exists to make
-    /// watchable.
+    /// A cap, because an uncapped sheet disappears: `split` refuses a picture
+    /// taller than the pane, so it vanished with no explanation part-way through
+    /// the long solve it exists to make watchable. The writable spell averages
+    /// 11.9 presses with a worst of 21.
     ///
-    /// Twelve is what a deducing player ever needs to see: the worst hand-played
-    /// solve over all 1296 codes is nine presses, so a person's whole reading
-    /// fits with room to spare. Beyond that the older rows are the spell's, and
-    /// they are in `lens.log` — a sheet is a working surface, not an archive.
+    /// Twelve covers a person: the worst hand-played solve over all 1296 codes
+    /// is nine. Older rows are the spell's and live in `lens.log` — a sheet is a
+    /// working surface, not an archive.
     pub const SHOWN: usize = 12;
 
     /// The presses the sheet draws: the most recent [`SHOWN`](Self::SHOWN).
     ///
-    /// **The recent end, not the first.** What a deduction needs is what has
-    /// happened lately, and a sheet that showed the opening twelve presses of a
-    /// fifty-press walk would be a sheet frozen at the beginning.
+    /// The recent end, not the first: deduction needs what happened lately, and
+    /// a sheet showing the opening twelve of a fifty-press walk is frozen at the
+    /// beginning.
     #[must_use]
     pub fn showing(&self) -> &[Attempt] {
         self.showing_capped(Self::SHOWN)
@@ -166,12 +143,11 @@ impl Board {
 
     /// The most recent `cap` presses, for a pane with less room than `SHOWN`.
     ///
-    /// **A shorter window, not a lost comparison.** `split` refuses the sheet
-    /// whole rather than clipping it, on the argument that *"a sheet showing
-    /// four of six presses has lost the two a player was about to compare"* —
-    /// which is right about columns and wrong about rows, because [`SHOWN`] has
-    /// always made this a window on the recent end anyway. Ten of fifty-one is
-    /// the same kind of view as twelve of fifty-one.
+    /// A shorter window, not a lost comparison. `split`'s argument for refusing
+    /// whole — *"a sheet showing four of six presses has lost the two a player
+    /// was about to compare"* — is right about columns and wrong about rows,
+    /// because [`SHOWN`] already makes this a window on the recent end. Ten of
+    /// fifty-one is the same kind of view as twelve of fifty-one.
     ///
     /// [`SHOWN`]: Self::SHOWN
     #[must_use]
@@ -251,9 +227,8 @@ impl Board {
         }
         let body = index - Self::HEAD;
         if usize::from(body) < count {
-            // **Numbered from the whole history, not from the sheet.** A capped
-            // sheet shows the last twelve of fifty-one presses, and numbering those
-            // `1..12` would say the solve had just begun.
+            // Numbered from the whole history: the last twelve of fifty-one
+            // presses numbered `1..12` would say the solve had just begun.
             let first = self.attempts.len().saturating_sub(count);
             let at = usize::from(body);
             return Some(Self::attempt_row(shown.get(at)?, first + at + 1));
@@ -289,9 +264,8 @@ impl Board {
             row.extend(sigil_cell(sigil));
         }
 
-        // **Pegs, not numbers**, and the count is the length of a run rather
-        // than a digit — which is what makes two rows comparable at a glance
-        // instead of read one at a time.
+        // Pegs, not numbers: a run's length is comparable at a glance where a
+        // digit has to be read.
         for slot in 0..4u32 {
             let (glyph, style) = if slot < attempt.aligned {
                 (ALIGNED, Style::SUCCESS)
@@ -307,24 +281,19 @@ impl Board {
     }
 
     fn aperture_row(&self) -> Vec<(char, Style, Option<Tint>)> {
-        // `→` is CP437 0x1A. It marks the row that has not been pressed yet, which
-        // is the one distinction the sheet's shape cannot make on its own now that
-        // the rows above it are numbered.
+        // `→` is CP437 0x1A. It marks the row not yet pressed — the one
+        // distinction the sheet's shape cannot make now that the rows above it
+        // are numbered.
         let mut row = text(" → ", Style::NORMAL);
         for sigil in self.aperture {
             row.extend(sigil_cell(sigil));
         }
 
-        // **No settle marks any more.** Four `■`/`·` cells used to sit under the
-        // pegs saying which sockets the orb had proved correct — which is the
-        // one thing Mastermind never tells you, and the reason the whole domain
-        // was rebuilt (§19). The aperture row is now just what the next press
-        // will send.
-        //
-        // **Padded to the full width all the same**, exactly as the legend rows
-        // are: every row being the same shape is what lets a reader compare two
-        // presses by looking down a column, and it is what the peg column's
-        // cells were incidentally providing here.
+        // No settle marks: the four `■`/`·` cells said which sockets the orb had
+        // proved, the one thing Mastermind never tells you, and the reason the
+        // domain was rebuilt (§19). Padded to the full width all the same, like
+        // the legend rows — every row being the same shape is what lets a reader
+        // compare two presses down a column.
         row.resize(usize::from(Self::COLS), (' ', Style::NORMAL, None));
         row
     }
@@ -356,9 +325,9 @@ impl Board {
 
     /// Where the board goes inside `area`, or `None` if it will not fit.
     ///
-    /// **Refuses rather than truncating**, which is the map's rule: a ward drawn
-    /// short is not a smaller ward, it is a wrong one — a row missing its pegs
-    /// says a press answered nothing.
+    /// Refuses rather than truncating, the map's rule: a ward drawn short is a
+    /// wrong ward, not a smaller one — a row missing its pegs says a press
+    /// answered nothing.
     #[must_use]
     pub fn viewport(&self, area: Rect) -> Option<Rect> {
         let (cols, rows) = self.size();
@@ -378,8 +347,8 @@ fn blank() -> Vec<(char, Style, Option<Tint>)> {
 
 /// One sigil, centred in its socket's column.
 ///
-/// Centred rather than left-aligned so the glyph sits under the middle of the name
-/// above it — which is what makes a column read as a column.
+/// Centred rather than left-aligned so the glyph sits under the middle of the
+/// name above it, which is what makes a column read as a column.
 fn sigil_cell(sigil: usize) -> Vec<(char, Style, Option<Tint>)> {
     let glyph = SIGILS.get(sigil).copied().unwrap_or('?');
     let tint = TINTS.get(sigil).copied();
@@ -464,10 +433,9 @@ mod tests {
 
     #[test]
     fn every_row_is_exactly_as_wide_as_the_board_says() {
-        // **The property the whole sheet rests on.** Rows are compared by looking
-        // down a column, so one row a cell short shifts every peg beneath it and
-        // silently makes two presses look alike. A `centred` that rounded the other
-        // way, or a legend name a character longer, breaks exactly this.
+        // Rows are compared down a column, so one row a cell short shifts every
+        // peg beneath it and silently makes two presses look alike. A `centred`
+        // that rounded the other way breaks exactly this.
         let board = board();
         for index in 0..usize::from(board.rows()) {
             let row = board
@@ -529,9 +497,8 @@ mod tests {
 
     #[test]
     fn the_legend_names_every_sigil_beside_its_glyph() {
-        // **The half a bare board could not teach at all.** `♦` is `pewter` and
-        // nothing on screen said so, so a player could read the sheet perfectly and
-        // still not know what to type.
+        // `♦` is `pewter` and nothing else on screen says so — a player could
+        // read the sheet perfectly and still not know what to type.
         let board = board();
         let legend = format!(
             "{}{}",
@@ -561,12 +528,11 @@ mod tests {
 
     #[test]
     fn a_long_walk_still_has_a_sheet() {
-        // **The failure this cap exists for.** `split` refuses whole rather than
-        // clipping, so an uncapped sheet vanished with no explanation once the
-        // presses outgrew the pane — part-way through the long solve the picture
-        // is *for*. The writable spell averages 11.9 presses and its worst over
-        // the 1296 codes is 21; the fifty-one below is headroom, and it was the
-        // measured worst under the rules the domain used to have.
+        // `split` refuses whole rather than clipping, so an uncapped sheet
+        // vanished once the presses outgrew the pane — part-way through the long
+        // solve the picture is *for*. The writable spell averages 11.9 presses
+        // with a worst of 21 over the 1296 codes; the fifty-one below is
+        // headroom, and was the measured worst under the domain's older rules.
         let mut board = board();
         board.attempts = (0..51)
             .map(|n| Attempt {
@@ -593,8 +559,8 @@ mod tests {
             last.contains("• •"),
             "the last row is not the newest press: {last:?}",
         );
-        // **Numbered from the history, not from the sheet.** Numbering the last
-        // twelve of fifty-one `1..12` would say the solve had just begun.
+        // Numbered from the history: the last twelve of fifty-one as `1..12`
+        // would say the solve had just begun.
         assert!(
             last.starts_with("51 "),
             "the sheet renumbered a capped history: {last:?}",

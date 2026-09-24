@@ -17,21 +17,24 @@ use orbs_shell::Screen;
 /// Both modes grant identical capacity, panes, information and synergies (§9);
 /// only the rendering differs.
 ///
-/// **It no longer changes the glyph size**, and that is the one thing this
-/// change cost. Deep focus used to drop a fidelity tier as well as re-dividing
-/// the panes, roughly doubling the cells; with one grid there is no tier to
-/// drop, so `F4` is purely `tiling::deep` against `tiling::wide`. §19 records
-/// what that owes back — §9 sold Wide focus as the large-text mode, and the
-/// affordance that replaces it is a font-scale setting, not this key.
+/// It no longer changes the glyph size, which is the one thing that cost. Deep
+/// focus used to drop a fidelity tier as well as re-dividing the panes; with one
+/// grid there is no tier to drop, so `F4` is purely `tiling::deep` against
+/// `tiling::wide`. §19 records the debt — §9 sold Wide focus as the large-text
+/// mode, and what replaces it is a font-scale setting, not this key.
 pub(crate) fn cycle_mode(mut screen: ResMut<Screen>) {
     screen.mode = screen.flipped();
     info!(
         "focus {:?} -> grid {}x{}",
         screen.mode, GRID.cols, GRID.rows
     );
+    // One setting seen twice — see `crt::plugin::cycle`. §9 makes the mode a
+    // *setting* rather than a heuristic in as many words, and a setting that
+    // does not survive a relaunch is a heuristic with extra steps.
+    super::remember_setting(super::FOCUS, screen.mode.word());
 }
 
-/// The camera every frontend screen is drawn through — **and the letterbox**.
+/// The camera every frontend screen is drawn through, and the letterbox.
 pub(crate) fn spawn_camera(mut commands: Commands) {
     // The CRT is a property of the camera it curves (§4).
     //
@@ -46,7 +49,7 @@ pub(crate) fn spawn_camera(mut commands: Commands) {
     // that "the symptom went away in my measurement" is not a diagnosis.
     commands.spawn((
         Camera2d,
-        // **This one line is the 4:3 letterbox.** `AutoMin` shows at least this
+        // This one line is the 4:3 letterbox. `AutoMin` shows at least this
         // much world in the window's own aspect and centres it on
         // `viewport_origin`, which defaults to the middle — so the picture is
         // scaled by `min(W/960, H/720)`, centred, with bars on whichever axis
@@ -66,23 +69,21 @@ pub(crate) fn spawn_camera(mut commands: Commands) {
             ..OrthographicProjection::default_2d()
         }),
         Msaa::Off,
-        // **Seeded from the environment**, so the tube's state is reachable
-        // without a keypress. `F3` still cycles it; this is what lets a See-it
-        // line capture the one property §14's accommodation turns on — that
-        // turning the tube *off* does not turn the accommodation off with it.
-        // `ORBS_CAPTURE` presses no keys, so without this that property could
-        // only ever be checked by a person, and it is the property most worth
-        // checking automatically. Phase 13's settings screen replaces it.
+        // Seeded from the environment, so the tube's state is reachable without
+        // a keypress. `F3` still cycles it; this lets a See-it line capture the
+        // property §14 turns on — that turning the tube off does not turn the
+        // accommodation off with it. `ORBS_CAPTURE` presses no keys, so without
+        // this only a person could ever check it.
         crate::crt::seeded(),
     ));
 }
 
 /// Note the window's size whenever it changes.
 ///
-/// **It no longer recomputes anything.** The grid is fixed and the projection
+/// It no longer recomputes anything. The grid is fixed and the projection
 /// letterboxes itself, so all this does is keep [`Screen::window`] current for
 /// the two things that still read physical pixels: the CRT's cell size, which
-/// keeps the scanlines landing on real pixels, and [`Screen::is_hostable`].
+/// keeps the scanlines on real pixels, and [`Screen::is_hostable`].
 pub(crate) fn track_window(
     window: Option<Single<&Window, With<PrimaryWindow>>>,
     mut screen: ResMut<Screen>,
@@ -93,8 +94,21 @@ pub(crate) fn track_window(
 
     // The mode is a setting, so a resize must not silently undo the player's
     // choice — it is carried through rather than re-derived.
-    let chosen = (screen.window != (0, 0)).then_some(screen.mode);
-    let next = Screen::for_window((window.physical_width(), window.physical_height()), chosen);
+    //
+    // Unconditionally, and that is the fix. This asked
+    // `(screen.window != (0, 0)).then_some(screen.mode)`, using the absent
+    // window as a stand-in for *"has a mode been chosen?"*. The two stopped
+    // meaning the same thing when `Screen::default` learned to read the
+    // persisted `focus`: it sets a real mode and leaves `window` at `(0, 0)`, so
+    // this system, running in `Startup`, threw the setting away on frame one.
+    // Set `focus deep`, quit, relaunch: Wide. A `Screen` always has a mode now.
+    //
+    // `screen.rs`'s own test cannot reach this: a test binary never calls
+    // `settings::keep()`, so the read is always empty there.
+    let next = Screen::for_window(
+        (window.physical_width(), window.physical_height()),
+        Some(screen.mode),
+    );
     if next == *screen {
         return;
     }
@@ -118,6 +132,51 @@ pub(crate) fn track_window(
             next.scale(),
             orbs_render::PICTURE.0,
             orbs_render::PICTURE.1,
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_window_arriving_does_not_replace_the_mode_the_screen_already_holds() {
+        // The shipped defect, as its own rule: `track_window` derived *"has a
+        // mode been chosen?"* from `window != (0, 0)`, and the two stopped
+        // meaning the same thing when `Screen::default` learned to read the
+        // persisted `focus`. Running in `Startup`, the first window threw the
+        // setting away.
+        //
+        // Stated against `Screen::for_window` rather than the system, which
+        // wants a `Window` entity, and because the rule is the whole of what was
+        // wrong: a mode in hand is carried, never re-derived.
+        for mode in orbs_render::DisplayMode::ALL {
+            let held = Screen {
+                mode,
+                ..Screen::default()
+            };
+            let next = Screen::for_window((2880, 1620), Some(held.mode));
+            assert_eq!(
+                next.mode, mode,
+                "a window arriving replaced {mode:?} with {:?}",
+                next.mode,
+            );
+        }
+    }
+
+    #[test]
+    fn a_screen_with_no_window_yet_still_carries_a_mode() {
+        // The other half: the sentinel is gone, so `Screen::default` has to be
+        // a complete answer on its own. It is — `mode` falls back to `Wide`
+        // when nothing is remembered, which is what §9 says this frontend opens
+        // in.
+        let fresh = Screen::default();
+        assert_eq!(fresh.window, (0, 0), "a fresh screen claims a window");
+        assert_eq!(
+            fresh.mode,
+            orbs_render::DisplayMode::Wide,
+            "with no setting kept, the default is not what §9 says",
         );
     }
 }

@@ -8,9 +8,9 @@ fn a_course_is_drawn_and_the_board_appears_beside_the_transcript() {
     if !available() {
         return;
     }
-    // **The board is not gated on a word**, which is the map's rule and the
-    // sheet's: it draws whenever a course is standing, because watching a bound
-    // solver and solving it yourself are different activities.
+    // The board is not gated on a word — the map's rule and the sheet's: it
+    // draws whenever a course is standing, because watching a bound solver and
+    // solving it yourself are different activities.
     let game = Game::start();
     game.does("attend sanctum", "/tower/sanctum")
         .does("muster", "well up in the wellspring")
@@ -57,10 +57,10 @@ fn the_rail_says_how_the_barrier_stands_from_another_room() {
     if !available() {
         return;
     }
-    // **The one meter in the tower that counts up.** Every other rail detail is
-    // work remaining; this is a thing you want more of, so `detail_of` prints
-    // the value — and it must be there when the barrier is *whole*, which is
-    // exactly where the `left > 0` gate would have silenced it.
+    // The one meter in the tower that counts up. Every other rail detail is work
+    // remaining; this is a thing you want more of, so `detail_of` prints the
+    // value — and it must be there when the barrier is whole, which is exactly
+    // where a `left > 0` gate would have silenced it.
     let game = Game::seeded(QUIET);
     game.does("attend laboratory", "/tower/laboratory")
         .expect_drawn("sanctum")
@@ -77,12 +77,11 @@ fn the_barrier_fades_while_the_player_works() {
     // visible on the reading and is the whole reason this room is one you come
     // back to.
     //
-    // **A bound, not the exact number.** This asserted the literal `80`, which
-    // is only true while the tick count is in 600..629 — about 27 ticks of
-    // slack, and every second of tmux latency before the last command spends
-    // one. On a loaded machine the reading is 79 and the substring never
-    // arrives, so the scenario hangs to its timeout rather than failing. What
-    // the test is for is that the reading *moved*, and that is what it now says.
+    // A bound, not the exact number. This asserted the literal `80`, true only
+    // while the tick count is in 600..629 — 27 ticks of slack, and every second
+    // of tmux latency spends one. On a loaded machine the reading is 79, the
+    // substring never arrives, and the scenario hangs to its timeout rather than
+    // failing. What the test is for is that the reading moved.
     let game = Game::seeded(QUIET);
     game.does("attend sanctum", "/tower/sanctum")
         .does("survey pylon", "integrity")

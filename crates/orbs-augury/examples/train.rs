@@ -11,44 +11,32 @@
 //! cargo run --release -p orbs-augury --example train --features train -- --seed 7 --out target/seeds/try/reader-7
 //! ```
 //!
-//! # One seed, and a flag for the others
+//! A run is seeded so it can be repeated, and it is one run, so it cannot say
+//! whether a change beat the seed or the seed beat the change — `--seed` and
+//! `--out` are what `scripts/seeds.sh` drives to find out. Given neither it
+//! starts from seed 181 and writes over the shipped weights, which are chosen
+//! from a `seeds.sh` run and copied into place rather than trained here.
 //!
-//! A run is seeded, so it can be repeated; it is one run, so it cannot say
-//! whether a change beat the seed or the seed beat the change. `--seed` and
-//! `--out` are what `scripts/seeds.sh` drives to find out. A run given neither
-//! starts from seed 181 and writes over the shipped weights — which are chosen
-//! from a `seeds.sh` run and copied into place, not trained there.
-//!
-//! **An example rather than a test**, because it needs a GPU and minutes, and
+//! An example rather than a test, because it needs a GPU and minutes and
 //! `cargo test --workspace` must run on a machine with neither.
 //!
-//! # Two registers, one trainer
-//!
-//! `--spells` trains the reader for `.spell` files instead of the one for the
-//! prompt. Everything below is shared — the loop, the weighting, the selection
-//! rule, the scoring — because the two ask the identical question of an
-//! identical sentence over a different set of answers. What differs is gathered
+//! `--spells` trains the reader for `.spell` files instead of the prompt's.
+//! Everything else is shared, because the two ask an identical question of an
+//! identical sentence over a different set of answers; what differs is gathered
 //! in [`Corpus`], and a second trainer would be the two-expressions-of-one-rule
-//! defect §19 records more often than any other.
+//! defect (§19).
 //!
-//! # What it learns from
+//! It learns from `content/phrasings.toml` and `content/spellings.toml` expanded
+//! over the content tables, and nothing else: no pretrained weights, no
+//! pretrained embeddings, no downloaded tokenizer, no other model's outputs
+//! (§19, *the augury*). The vocabulary comes from the game's own tables, so no
+//! artefact here has provenance outside this repository.
 //!
-//! `content/phrasings.toml` and `content/spellings.toml`, expanded over
-//! everything the content tables name — and nothing else. No pretrained weights,
-//! no pretrained embeddings, no downloaded tokenizer, no other model's outputs
-//! (DESIGN.md §19, *the augury*). The vocabulary is assembled from the game's
-//! own tables, so there is no artefact here whose provenance is anywhere but
-//! this repository.
-//!
-//! # What the numbers mean
-//!
-//! **Holdout accuracy is the only one worth reading.** The corpus is what the
-//! reader is shown; scoring on it says the optimiser worked, not that anything
-//! was learned. `holdout` is taught to nothing, here as everywhere.
-//!
-//! Tagging is scored over **real words only** — a five-word sentence sits in a
-//! thirty-two row buffer, and counting padding would report seven-eighths of a
-//! score for predicting nothing.
+//! Holdout accuracy is the only number worth reading — the corpus is what the
+//! reader is shown, so scoring on it says the optimiser worked rather than that
+//! anything was learned. Tagging is scored over real words only, since a
+//! five-word sentence sits in a thirty-two row buffer and counting padding would
+//! report seven-eighths for predicting nothing.
 
 use burn::backend::{Autodiff, NdArray, Wgpu};
 use burn::module::AutodiffModule;
@@ -68,9 +56,9 @@ const SEED: u64 = 0x0B5;
 
 fn main() {
     let epochs = numbered("--epochs").unwrap_or(30);
-    // **Refused rather than defaulted.** A mistyped seed that fell back to the
-    // default would make three "different" seeds one seed three times, and the
-    // spread they measured would be the hardware's alone.
+    // Refused rather than defaulted: a mistyped seed falling back to the default
+    // makes three "different" seeds one seed three times, and the spread they
+    // measure is the hardware's alone.
     let seed = match argument("--seed") {
         Some(seed) => seed.parse().expect("--seed takes a whole number"),
         None => SEED,
@@ -121,10 +109,9 @@ fn main() {
 
 /// The narrowest and widest a computed weight may be.
 ///
-/// **Raw inverse frequency is unusable here.** The rarest verb has a handful of
+/// Raw inverse frequency is unusable here: the rarest verb has a handful of
 /// examples against the commonest's thousands, so its unclamped weight is in the
-/// hundreds and one such sentence in a batch dominates every gradient it touches
-/// — the loss stops being about reading and starts being about that verb.
+/// hundreds and one such sentence dominates every gradient it touches.
 const WEIGHT: std::ops::RangeInclusive<f32> = 0.25..=4.0;
 
 /// How much each class's mistakes count, by how rare the class is.
@@ -181,12 +168,10 @@ fn run<B: burn::tensor::backend::AutodiffBackend>(
 ) {
     let (corpus, holdout, refused) = (&all.learn, &all.holdout, &all.refused);
     let classes = register.classes();
-    // **Seeded, and it was not.** The comment below claimed two runs produce the
+    // Seeded, and it was not: the comment below claimed two runs produce the
     // same weights while the *initialisation* was left to chance, so two runs of
-    // the same architecture reached 72.5% and 84.7% and there was no way to tell
-    // an improvement from a lucky start. In a project whose central claim is
-    // bit-identical reproducibility that is the one place it should never have
-    // been missing.
+    // one architecture reached 72.5% and 84.7% with no way to tell an
+    // improvement from a lucky start.
     B::seed(device, seed);
     let mut reader: Reader<B> = ReaderConfig::new(vocabulary.rows())
         .with_classes(classes)
@@ -194,10 +179,9 @@ fn run<B: burn::tensor::backend::AutodiffBackend>(
         .init(device);
     let mut optimiser = AdamConfig::new().init();
 
-    // **Both heads are weighted against what the corpus actually holds**, and
-    // both numbers are computed rather than written down — a constant here would
-    // be a second expression of a fact the corpus already states, which is the
-    // defect §19 keeps paying for.
+    // Both heads are weighted against what the corpus actually holds, and both
+    // numbers are computed rather than written down — a constant here would be a
+    // second expression of a fact the corpus already states.
     let verbs = verb_weights(corpus, classes);
     let refusing = refusal_weight(corpus);
     println!(
@@ -206,43 +190,37 @@ fn run<B: burn::tensor::backend::AutodiffBackend>(
         verbs.iter().copied().fold(0.0, f32::max),
     );
 
-    // **Inverse frequency, because template expansion is not usage.** A verb's
-    // share of the corpus is the product of its slot cardinalities and the
-    // number of ways it was written down, and only the second of those is a
-    // fact about language. Without this the head learns the expansion as a
-    // prior. Clamped, because a rare verb weighted by raw inverse frequency
-    // would swamp every gradient it appears in.
+    // Inverse frequency, because template expansion is not usage: a verb's share
+    // of the corpus is its slot cardinalities times the ways it was written
+    // down, and only the second is a fact about language. Without this the head
+    // learns the expansion as a prior. Clamped, per `WEIGHT`.
     let verb_loss = CrossEntropyLossConfig::new()
         .with_weights(Some(verbs))
         .init(device);
-    // **The refusal head needs the same treatment for the same reason**, and it
-    // is where the effect was first measured: at 34:1 a head that always says
-    // *"yes, a command"* scores 97.1%, so refusal errors barely register and the
-    // boundary drifts wherever the other gradients leave it. That, and not a
-    // shared softmax, is what made refusal accuracy swing forty points between
-    // adjacent epochs — splitting the heads apart changed nothing, which is how
-    // the real cause was found. Class 0 is *asks for nothing*.
+    // The refusal head needs the same treatment, and is where the effect was
+    // first measured: at 34:1 a head that always says *"yes, a command"* scores
+    // 97.1%, so refusal errors barely register and the boundary drifts wherever
+    // the other gradients leave it. That, not a shared softmax, is what swung
+    // refusal accuracy forty points between epochs — splitting the heads apart
+    // changed nothing, which is how the cause was found. Class 0 is *asks for
+    // nothing*.
     let command_loss = CrossEntropyLossConfig::new()
         .with_weights(Some(vec![refusing, 1.0]))
         .init(device);
     let tag_loss = CrossEntropyLossConfig::new().init(device);
 
-    // **Shuffled by a fixed rule, not by a clock.** Two runs of this file should
-    // produce the same weights: the game's whole architecture rests on being
-    // able to reproduce a result, and a trainer seeded from the time of day
-    // would be the one place that stopped being true.
-    //
-    // **By the seed as well as the epoch**, because a run's luck is where its
-    // weights start *and* the order it meets the corpus in. A `--seed` that
-    // moved only the first would measure half the noise `scripts/seeds.sh` is
-    // there to measure.
+    // Shuffled by a fixed rule, not by a clock: two runs of this file should
+    // produce the same weights, and a trainer seeded from the time of day would
+    // be the one place that stopped being true. By the seed as well as the
+    // epoch, because a run's luck is where its weights start *and* the order it
+    // meets the corpus in — moving only the first measures half the noise
+    // `scripts/seeds.sh` is there for.
     let mut order: Vec<usize> = (0..corpus.len()).collect();
 
-    // **The best pass, not the last one.** Holdout accuracy on this corpus
-    // swings by thirty points between epochs while the training loss falls
-    // steadily — the reader memorises the sentence *shapes* long before it stops
-    // improving at reading them. Saving whatever the final epoch happened to
-    // hold shipped 24% where an earlier pass had reached 55%.
+    // The best pass, not the last: holdout accuracy swings thirty points between
+    // epochs while the training loss falls steadily, because the reader
+    // memorises the sentence *shapes* long before it stops improving at reading
+    // them. Saving the final epoch shipped 24% where an earlier pass hit 55%.
     let mut best = 0.0f32;
     let mut kept = reader.clone();
 
@@ -255,11 +233,10 @@ fn run<B: burn::tensor::backend::AutodiffBackend>(
         let mut batches = 0usize;
 
         for chunk in order.chunks(BATCH) {
-            // **Commands first, then the sentences that ask for nothing.** The
-            // verb head must not be trained on a refusal: it has no right verb,
-            // so any target given is noise. Sorting puts the commands in a
-            // contiguous prefix, which a slice can take — the alternative is
-            // gathering scattered rows, and this costs one partition.
+            // Commands first, then the sentences that ask for nothing: the verb
+            // head must not be trained on a refusal, which has no right verb, so
+            // any target is noise. Sorting puts the commands in a contiguous
+            // prefix a slice can take, for the cost of one partition.
             let mut samples: Vec<Sample> = chunk.iter().map(|at| corpus[*at].clone()).collect();
             samples.sort_by_key(|sample| !sample.is_command());
             let commands = samples.iter().filter(|s| s.is_command()).count();
@@ -299,13 +276,12 @@ fn run<B: burn::tensor::backend::AutodiffBackend>(
         // agreed there was nothing being asked for.
         let refusals = score(&valid, refused, &device.clone()).commands;
 
-        // **All three, because any two of them was an incomplete criterion and
-        // each time it showed.** Keeping on verbs alone missed that
-        // slot-to-verb conditioning dropped refusals 91.1% → 82.5%; keeping on
-        // verbs and refusals missed that the spell register's *tagging* swings
-        // 88–94% between passes, and a spell reading is assembled out of the
-        // spans, so a pass that names the right statement and mis-tags one word
-        // of it produces `let tool be refer alembic` and counts as a win here.
+        // All three, because any two was an incomplete criterion and it showed
+        // each time. Verbs alone missed slot-to-verb conditioning dropping
+        // refusals 91.1% → 82.5%; verbs and refusals missed the spell register's
+        // tagging swinging 88–94%, and a spell reading is assembled out of the
+        // spans — so a pass that names the right statement and mis-tags one word
+        // produces `let tool be refer alembic` and counts as a win.
         //
         // §15 weighs the dead-end rate above the raw resolution rate, so they
         // are averaged rather than one preferred.
@@ -354,12 +330,11 @@ fn score<B: Backend>(reader: &Reader<B>, holdout: &[Sample], device: &B::Device)
         let reading = reader.forward(batch.tokens.clone(), batch.pad.clone());
         let [rows, width, _] = reading.tags.dims();
 
-        // **Counted on the device, not on the host.** Reading tensors back as
-        // `Vec<i32>` and zipping them is where the first version of this metric
-        // went wrong: `into_vec` is typed, the type was wrong for `argmax`'s
-        // output, and `unwrap_or_default()` turned that error into an empty
-        // vector. Tagging accuracy read a flat **0.0%** for twelve epochs and
-        // looked like a model that had learned nothing.
+        // Counted on the device, not on the host. Reading tensors back as
+        // `Vec<i32>` is where the first version went wrong: `into_vec` is typed,
+        // the type was wrong for `argmax`'s output, and `unwrap_or_default()`
+        // turned that into an empty vector — so tagging accuracy read a flat
+        // 0.0% for twelve epochs and looked like a model that learned nothing.
         let verbs = reading
             .verb
             .argmax(1)

@@ -31,8 +31,8 @@ pub fn weights(flag: &str, shipped: &str) -> String {
 
 /// Say there is nothing to measure.
 ///
-/// **Under `--scores` that is a failure**, because an empty score file would
-/// average into a run's mean as a reader that read nothing at all.
+/// Under `--scores` that is a failure, because an empty score file would average
+/// into a run's mean as a reader that read nothing at all.
 pub fn missing(scores: bool, what: &str, train: &str) {
     if scores {
         eprintln!("no {what} to measure — `{train}`");

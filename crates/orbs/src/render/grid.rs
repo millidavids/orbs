@@ -6,32 +6,24 @@
 //! material driven by a cell-index texture."*
 //!
 //! This is the first of those. Every visible cell contributes four vertices to
-//! one mesh, so the whole screen is **one draw call** regardless of grid size.
+//! one mesh, so the whole screen is one draw call regardless of grid size.
 //!
-//! # Where the buffers live
+//! The buffers live in the mesh and nowhere else: each attribute's `Vec` is
+//! taken out, refilled and handed back, so a steady-state frame allocates
+//! nothing. An earlier version kept a parallel `GridBuffers` and cloned it into
+//! the mesh every frame — ~900 kB at the 120×45 grid, defeating the reuse it was
+//! written for, and invisible to the reuse test because that inspected only the
+//! staging copy.
 //!
-//! In the mesh, and nowhere else. Each attribute's `Vec` is taken out, refilled,
-//! and handed back, so a steady-state frame allocates nothing. An earlier version
-//! kept a parallel `GridBuffers` and *cloned* it into the mesh every frame —
-//! ~900 kB of allocation at the 120×45 grid, which defeated the reuse it was
-//! written for, and which the reuse test could not see because it only inspected
-//! the staging copy.
-//!
-//! # Why no custom shader
-//!
-//! Each vertex carries its own colour, and Bevy's stock `ColorMaterial`
-//! multiplies the sampled texel by it. With the atlas storing white RGB and
-//! coverage in alpha ([`super::atlas`]), `(1,1,1,coverage) * (r,g,b,1)` is
-//! exactly "this glyph, in this cell's colour" — with no WGSL of our own. The
-//! CRT port (§4) adds a post-process pass later; that is a separate stage and
-//! does not change this one.
-//!
-//! # Coordinates
+//! No custom shader: each vertex carries its own colour and Bevy's stock
+//! `ColorMaterial` multiplies the sampled texel by it. With the atlas storing
+//! white RGB and coverage in alpha ([`super::atlas`]), `(1,1,1,coverage) *
+//! (r,g,b,1)` is exactly "this glyph, in this cell's colour". The CRT port (§4)
+//! adds a post-process pass later, which is a separate stage.
 //!
 //! The grid is centred on the origin with cell `(0, 0)` at the top left, because
 //! `orbs-render` counts rows downward and Bevy's 2D camera has +Y up. Cell size
-//! is an integer number of pixels (§4), so glyphs land on whole pixels and the
-//! bitmap stays crisp.
+//! is an integer number of pixels (§4), so glyphs land on whole pixels.
 
 use bevy::asset::RenderAssetUsages;
 use bevy::mesh::{Indices, PrimitiveTopology, VertexAttributeValues};
@@ -132,13 +124,11 @@ impl Geometry {
 ///
 /// `showing` is the caret's blink phase — see [`Blink`](super::blink::Blink).
 ///
-/// # One world unit is one **virtual** pixel
-///
-/// A cell is always 8×16 units, whatever the window. Fitting that to real pixels
-/// is the camera's job — `ScalingMode::AutoMin`, set in `shell::screen`'s
-/// `spawn_camera`, letterboxes the whole picture — so there is no scale factor
-/// here at all. This used to take one, back when the grid was derived from the
-/// window and the cell had to be grown to match.
+/// One world unit is one virtual pixel: a cell is always 8×16 units, whatever
+/// the window. Fitting that to real pixels is the camera's job —
+/// `ScalingMode::AutoMin`, set in `shell::screen`'s `spawn_camera` — so there is
+/// no scale factor here. This used to take one, when the grid was derived from
+/// the window and the cell had to grow to match.
 pub(crate) fn build(frame: &Frame, theme: &Phosphor, showing: bool, mesh: &mut Mesh) {
     let mut geometry = Geometry::reclaim(mesh);
 
@@ -266,10 +256,10 @@ pub(crate) fn build(frame: &Frame, theme: &Phosphor, showing: bool, mesh: &mut M
             atlas::uv(index, orbs_render::Presentation::Plain),
         );
 
-        // **Reverse video.** The caret used to sit one past the end of the line,
+        // Reverse video. The caret used to sit one past the end of the line,
         // always on a blank, so a solid block was fine. It can sit mid-line now,
-        // and a block drawn over a character hides the character — blinking it in
-        // and out, in the one place the player is looking.
+        // and a block over a character hides it — blinking it in and out, in the
+        // one place the player is looking.
         //
         // So the glyph underneath is redrawn on top of the block in the tube's
         // own black, which is what a terminal does and what the `CARET` comment
@@ -296,13 +286,12 @@ pub(crate) fn build(frame: &Frame, theme: &Phosphor, showing: bool, mesh: &mut M
 
 /// The mesh the grid starts with, before anything has been drawn.
 ///
-/// **Not zero-vertex.** Bevy 0.19's slab allocator answers a zero-length vertex
+/// Not zero-vertex: Bevy 0.19's slab allocator answers a zero-length vertex
 /// buffer with `use-after-free: attempted to copy element data for an
-/// unallocated key`, and until the boot sequence existed nothing ever held an
-/// empty screen long enough for one to reach the GPU — the first frame always
-/// had the tower's report on it. It carries one degenerate triangle instead:
-/// three coincident vertices at the origin, fully transparent, which rasterises
-/// to no pixels and keeps the buffer allocated.
+/// unallocated key`, and until the boot sequence existed nothing held an empty
+/// screen long enough for one to reach the GPU. It carries one degenerate
+/// triangle instead — three coincident transparent vertices at the origin, which
+/// rasterises to no pixels and keeps the buffer allocated.
 ///
 /// See `render::plugin::rasterise` for the other half — a blank screen must not
 /// rebuild the mesh at all, or this happens sixty times a second.
@@ -491,10 +480,10 @@ mod tests {
 
     #[test]
     fn a_cell_is_always_one_bitmap_cell_of_world() {
-        // The mesh is emitted in **virtual** pixels and the camera scales it, so
-        // there is no scale factor here to get wrong. This used to assert that
-        // an integer scale multiplied the cell exactly; the property that
-        // replaced it is that the cell never changes at all.
+        // The mesh is emitted in virtual pixels and the camera scales it, so
+        // there is no scale factor to get wrong. This used to assert an integer
+        // scale multiplied the cell exactly; now it asserts the cell never
+        // changes at all.
         let positions = positions(&built(&frame_with("a", 4, 1)));
         let width = positions[1][0] - positions[0][0];
         let height = positions[0][1] - positions[2][1];
@@ -561,9 +550,9 @@ mod tests {
     /// kind — an allocation per cell, a per-glyph lookup — not to certify a
     /// frame budget.
     ///
-    /// **The worst case is now a constant.** It used to be whatever grid the
-    /// largest plausible window produced — 160×45 — and is now
-    /// [`orbs_render::GRID`] itself, because no window makes it any bigger.
+    /// The worst case is a constant now. It used to be whatever grid the largest
+    /// plausible window produced — 160×45 — and is [`orbs_render::GRID`] itself,
+    /// because no window makes it any bigger.
     #[test]
     fn rebuilding_the_worst_case_grid_is_not_a_frame_cost() {
         let grid = orbs_render::GRID;

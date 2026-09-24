@@ -1,10 +1,9 @@
 //! The menagerie's circle, driven through the real parser and the real schedule.
 //!
-//! `tower::circle`'s proofs walk every beast the table can draw and prove the
-//! model; these prove the *game* — that the words resolve, the readings publish,
-//! a call costs the tower nothing, a hold pays what `progression.toml` says, and
-//! the shipped search holds a beast through `invoke` rather than in a Rust copy
-//! of its loop.
+//! `tower::circle`'s proofs are about the model; these are about the game — the
+//! words resolve, the readings publish, a call costs nothing, a hold pays what
+//! `progression.toml` says, and the shipped search runs through `invoke` rather
+//! than a Rust copy of its loop.
 
 use orbs_render::{FieldName, Value};
 use orbs_sim::Sim;
@@ -84,15 +83,14 @@ fn limn_names_a_humour_or_steps_to_the_next() {
     assert_eq!(standing(&sim, "keystone").as_deref(), Some("eschew"));
     assert!(ever_said(&sim, "keystone is limned eschew"));
 
-    // **Humour first is the same limn** — no word is both, so a player who
-    // thinks of the humour first may type it first.
+    // Humour first is the same limn — no word is both, so a player who thinks
+    // of the humour first may type it first.
     run(&mut sim, "limn oppose sunwise");
     assert_eq!(standing(&sim, "sunwise").as_deref(), Some("oppose"));
 }
 
-/// **A limn republishes its own glyph and nothing else.** The temper and the other
-/// two glyphs have not moved, and a bound search limns hundreds of times a beast:
-/// re-raising all four readings each time said three of them again with new ids.
+/// A limn republishes its own glyph and nothing else: a bound search limns
+/// hundreds of times a beast, and re-raising all four said three again.
 #[test]
 fn a_limn_leaves_every_other_reading_where_it_stood() {
     let mut sim = at_the_circle(3);
@@ -132,14 +130,13 @@ fn limn_refuses_in_voice_and_names_the_way_forward() {
     run(&mut sim, "limn keystone sunwise");
     assert!(ever_said(&sim, "is not a humour"), "{:?}", said(&sim));
 
-    // **A humour the orb cannot read is asked about, never dropped.** Bare
-    // `limn keystone` steps the glyph, so dropping the word ran a different
-    // command and spoiled the circle a player was reasoning about.
+    // A humour the orb cannot read is asked about, never dropped: bare `limn
+    // keystone` steps the glyph, so dropping the word spoiled the circle.
     run(&mut sim, "limn keystone xyzzy");
     assert_eq!(standing(&sim, "keystone").as_deref(), Some("yoke"));
     assert!(!ever_said(&sim, "keystone is limned"), "{:?}", said(&sim));
 
-    // **The word that is wrong is the one named**: a humour first, then a place
+    // The word that is wrong is the one named: a humour first, then a place
     // that is no glyph.
     run(&mut sim, "limn heed laboratory");
     assert!(
@@ -169,11 +166,9 @@ fn a_wrong_call_balks_and_pays_nothing() {
     assert!(!board.balking().is_empty(), "a balk marked no rows");
 }
 
-/// **A call is never spent on a guess.** `summon` takes no argument and resolves
-/// in any menagerie, so it is what a reader falls back to when a sentence defeats
-/// it — *"cycle the widdershins"* came back as a call against par with nothing
-/// limned. A divined `summon` still draws a beast, which is free; it does not
-/// call one in, and the same word typed does.
+/// A call is never spent on a guess. `summon` takes no argument, so a reader
+/// falls back to it — *"cycle the widdershins"* came back as a call against par.
+/// A divined `summon` still draws, which is free; typed, it calls one in.
 #[test]
 fn a_divined_summon_draws_but_never_spends_a_call() {
     let mut sim = at_the_circle(3);
@@ -249,9 +244,8 @@ fn a_hold_past_par_pays_three_troops_and_three_quarters() {
     );
 }
 
-/// **A hold says what reached a shelf.** With no arsenal to keep them, the
-/// sentence counted four troops that went nowhere — the record lying about the
-/// world, and the player unable to tell the hold had been lost.
+/// A hold says what reached a shelf. With no arsenal the sentence counted four
+/// troops that went nowhere, so the record lied about the world.
 #[test]
 #[cfg(debug_assertions)]
 fn a_hold_with_no_arsenal_does_not_announce_troops() {
@@ -278,15 +272,14 @@ fn stop_lets_the_beast_go_and_the_circle_agrees() {
 
     assert!(ever_said(&sim, "slips away unheld"), "{:?}", said(&sim));
     assert!(sim.circle().is_none());
-    // **Both halves**, which is the disagreement the pylon's arm records: the
-    // verb said stopped and the reading said still working.
+    // Both halves, which is the disagreement the pylon's arm records: the verb
+    // said stopped and the reading said still working.
     assert!(!sim.holds_reading("menagerie", "circle", "fervour"));
     assert!(!ever_said(&sim, "not working"), "{:?}", said(&sim));
 }
 
-/// **Neither word takes the production slot** — §19 records this exemption
-/// being forgotten for the sanctum. A spell's `summon` queued behind a brew would
-/// wait on a slot it never uses.
+/// Neither word takes the production slot — the exemption §19 records being
+/// forgotten for the sanctum.
 #[test]
 #[cfg(debug_assertions)]
 fn summoning_takes_no_production_slot() {
@@ -328,16 +321,14 @@ fn summoning_takes_no_production_slot() {
     assert!(sim.holds_reading("menagerie", "keystone", "heed"));
 }
 
-/// **What the domain is for**, and the shape of bug it would ship with: a
-/// world-reading step resolved through where the *player* stands answers about
-/// the wrong room, and fails only when automation is doing what automation is
-/// for (§19, `0.5.7`).
+/// What the domain is for: a world-reading step resolved through where the
+/// player stands answers about the wrong room, and fails only under automation
+/// (§19, `0.5.7`).
 #[test]
 #[cfg(debug_assertions)]
 fn a_bound_search_holds_beasts_while_the_player_stands_elsewhere() {
     let mut sim = at_the_circle(3);
-    // **Earned, not granted.** Two holds within par are sixteen, which is what
-    // a slot costs.
+    // Earned, not granted: two holds within par are sixteen, what a slot costs.
     for _ in 0..2 {
         run(&mut sim, "summon");
         run(&mut sim, "debug_circle");
@@ -372,10 +363,9 @@ fn ticks_to_hold(sim: &mut Sim, spell: &str) -> u64 {
     panic!("the search held nothing in 2000 ticks: {:?}", said(sim));
 }
 
-/// **The pair, and either half alone passes against a spell that never works.**
-/// The search holds at one step a tick — every room automates from the first —
-/// and a second step is worth something real here: fewer ticks to the same
-/// beast.
+/// The pair, since either half alone passes against a spell that never works:
+/// the search holds at one step a tick, and a second step buys fewer ticks to
+/// the same beast.
 #[test]
 #[cfg(debug_assertions)]
 fn the_search_holds_at_one_step_and_sooner_at_two() {
@@ -392,14 +382,9 @@ fn the_search_holds_at_one_step_and_sooner_at_two() {
     );
 }
 
-/// **`winnowing` through the engine, on beasts from every rung it has.** The
-/// model's proofs walk every beast through a Rust copy of its loop; this casts
-/// the real spell, so a ladder rung that never matches — a misspelt reading, a
-/// part that never returns — is caught where a copy would agree with itself.
-///
-/// Each rung holds its beast without one refusal, since every `limn` in the
-/// spell is guarded. **A seed is found for every lit-row count** rather than
-/// hoping a range of seeds reaches them, so *every rung* is true by construction.
+/// `winnowing` through the engine, on beasts from every rung. The model's
+/// proofs use a Rust copy of the loop, which would agree with itself. A seed is
+/// found for every lit-row count, so every rung is covered.
 #[test]
 fn the_winnowing_search_holds_on_every_rung() {
     let mut rungs = std::collections::BTreeMap::new();
@@ -430,11 +415,9 @@ fn the_winnowing_search_holds_on_every_rung() {
     }
 }
 
-/// **Both searches hold a beast drawn with every turned mask there is**, through
-/// the engine. A turned wire is part of the beast, not of the limning, so neither
-/// spell had to change — and this is where that is proven with the real spells
-/// rather than their Rust copies: a seed is found for each of the nine masks, and
-/// each spell holds that seed's first beast without a refusal.
+/// Both searches hold a beast under every turned mask, through the engine. A
+/// turned wire is part of the beast, not of the limning, so neither spell had
+/// to change; a seed is found for each of the nine masks.
 #[test]
 fn both_searches_hold_a_beast_under_every_turned_mask() {
     let mut masks = std::collections::BTreeMap::new();
@@ -466,10 +449,8 @@ fn both_searches_hold_a_beast_under_every_turned_mask() {
     }
 }
 
-/// **Across two dozen beasts it takes fewer ticks than `taming` on the same
-/// ones**, which is the whole of what the spell claims. Not per beast: a beast
-/// on the rung with every keystone can sit early in `taming`'s order and late in
-/// this one's.
+/// Across two dozen beasts, fewer ticks than `taming`. Not per beast: one rung
+/// can sit early in `taming`'s order and late in this one's.
 #[test]
 fn the_winnowing_search_holds_sooner_than_taming() {
     let (mut winnowed, mut tamed) = (0, 0);
@@ -498,10 +479,8 @@ fn a_beast_saved_mid_search_comes_back_the_same() {
     assert_eq!(restored.circle(), board, "the beast came back different");
 }
 
-/// **A beast refused on load takes its readings with it.** The beast travels as a
-/// component and its readings as nodes, so a hand-edited temper no circle
-/// answers restored the readings and not the beast — `survey keystone` named a
-/// humour with nothing waiting, and `is empty` was false.
+/// A beast refused on load takes its readings with it: the beast travels as a
+/// component and its readings as nodes, so one once restored without the other.
 #[test]
 fn a_beast_refused_on_load_leaves_no_readings_behind() {
     let mut sim = at_the_circle(5);
@@ -541,9 +520,8 @@ fn the_same_seed_draws_the_same_beast() {
     assert_eq!(a.circle(), b.circle());
 }
 
-/// Every word `circle::readings` declares is one some state actually publishes
-/// — the forge's lint, one room over. A declared reading nothing raises is a
-/// word a spell can write and never see answered.
+/// The forge's lint, one room over: a declared reading nothing raises is a word
+/// a spell can write and never see answered.
 #[test]
 fn every_reading_the_domain_declares_is_one_some_state_reaches() {
     let mut sim = at_the_circle(3);

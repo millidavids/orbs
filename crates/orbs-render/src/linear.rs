@@ -1,25 +1,20 @@
 //! Linearisation — the screen-reader view of a frame.
 //!
-//! DESIGN.md §14 makes this architectural rather than optional: *"linearised
-//! representation for panes, tables, and progress bars; eldritch messages logged
-//! and carrying authored linear variants; echo tagged as metadata."* It is built
-//! now because it is the part that cannot be retrofitted — reading the cell grid
-//! back row by row yields box-drawing characters and column-aligned fragments,
-//! not sentences, and no amount of later cleverness recovers the structure that
-//! was never recorded.
+//! §14 makes this architectural: *"linearised representation for panes, tables,
+//! and progress bars; eldritch messages logged and carrying authored linear
+//! variants; echo tagged as metadata."* Built now because it cannot be
+//! retrofitted — reading the cell grid back row by row yields box-drawing
+//! characters and column-aligned fragments, and nothing later recovers structure
+//! that was never recorded.
 //!
-//! The stream is captured on every frame regardless of whether a screen reader
-//! is attached. Making it conditional would mean the path is exercised only by
-//! the players least able to report that it broke; capturing always costs a few
-//! kilobytes of memcpy per frame into a reused arena, and means every test sees
-//! it.
+//! Captured every frame whether or not a screen reader is attached. Making it
+//! conditional would exercise the path only for the players least able to report
+//! that it broke; capturing always costs a few kilobytes of memcpy into a reused
+//! arena, and means every test sees it.
 //!
-//! # Storage
-//!
-//! One `String` arena plus a `Vec` of ranges, both cleared and refilled each
-//! frame. A frame at the largest supported grid holds a few hundred utterances,
-//! so a `String` per node would be a few hundred allocations at 60 Hz for no
-//! reason.
+//! Stored as one `String` arena plus a `Vec` of ranges, cleared and refilled
+//! each frame. A frame holds a few hundred utterances, so a `String` per node
+//! would be a few hundred allocations at 60 Hz.
 
 use crate::record::Outcome;
 use crate::style::Role;
@@ -51,25 +46,24 @@ pub enum UtteranceKind {
     /// What the orb thinks they are about to type.
     ///
     /// The inline suggestion after the caret, and the candidates Tab offers.
-    /// **Spoken, not silent** — the half-typed line is spoken, and §19's
+    /// Spoken, not silent — the half-typed line is spoken, and §19's
     /// Frame-boundary rule is that a visual constraint must not become an
-    /// informational one, so a suggestion a sighted player can see and a reader
-    /// cannot would be exactly that. Its own kind so verbosity can drop it:
+    /// informational one, which a suggestion a sighted player can see and a
+    /// reader cannot would be. Its own kind so verbosity can drop it:
     /// re-offered every keystroke, it is the most repetitive thing on screen.
     Hint,
     /// A reference the player asked to have open — the scribing guide.
     ///
-    /// **Its own kind for `Hint`'s reason, one step further.** A guide is
-    /// *content*, so §14 requires it to reach a reader: a definition a sighted
-    /// player can see and a listener cannot is precisely the visual constraint
-    /// becoming an informational one. But it is also a **standing reference**
-    /// rather than an answer to anything, and the stream is rebuilt from nothing
-    /// on every frame (`Speech::clear`) — so there is no "say it once" to reach
-    /// for, and without a kind of its own a reader would be read the whole
-    /// vocabulary continuously.
+    /// Its own kind for `Hint`'s reason, one step further. A guide is content,
+    /// so §14 requires it to reach a reader — a definition a sighted player can
+    /// see and a listener cannot is the visual constraint becoming an
+    /// informational one. But it is a standing reference rather than an answer,
+    /// and the stream is rebuilt from nothing every frame, so there is no "say
+    /// it once" and without its own kind a reader hears the whole vocabulary
+    /// continuously.
     ///
-    /// So it is spoken, tagged, and droppable — the same bargain `Hint` strikes,
-    /// and the only one the speech model actually offers.
+    /// So it is spoken, tagged and droppable — `Hint`'s bargain, and the only
+    /// one the speech model offers.
     Guide,
     /// A duration-action finishing.
     ///

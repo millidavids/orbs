@@ -21,14 +21,11 @@ fn mentioned(sim: &Sim, needle: &str) -> bool {
     said(sim).iter().any(|line| line.contains(needle))
 }
 
-/// A sim with `lines` saved as `name`, ready to invoke.
-/// A sim with `lines` saved as a **laboratory** spell, ready to invoke.
+/// A sim with `lines` saved as a *laboratory* spell, ready to invoke.
 ///
-/// **Standing in the laboratory first is not decoration.** A spell takes its
-/// domain from where it is written, and `Sim::new` stands at `/tower` — which is
-/// not a domain, so every laboratory line would be flagged unreadable and the
-/// spell would run doing nothing at all. Several tests here would then pass
-/// while proving nothing.
+/// A spell takes its domain from where it is written, and `Sim::new` stands at
+/// `/tower`, which is not one — so every laboratory line would be flagged
+/// unreadable and several tests here would pass proving nothing.
 fn with_spell(name: &str, lines: &[&str]) -> Sim {
     let mut sim = Sim::new(1);
     sim.submit("attend laboratory");
@@ -41,12 +38,9 @@ fn with_spell(name: &str, lines: &[&str]) -> Sim {
 
 #[test]
 fn a_guard_is_asked_before_the_first_pass_and_not_only_after_it() {
-    // **The difference between a guard and a do-while**, and Autonauts' rule:
-    // `repeat until <already true>` runs **zero** times. The first pass is where
-    // a spell does damage, so a guard that cannot prevent it is not a guard.
-    //
-    // The mortar is idle to begin with, so `until … is idle` holds on entry and
-    // the grind never happens.
+    // A guard, not a do-while: `repeat until <already true>` runs zero times.
+    // The mortar is idle to begin with, so the guard holds on entry and the
+    // grind never happens.
     let mut sim = with_spell(
         "check",
         &["repeat until the mortar is idle", "grind sage", "end"],
@@ -62,10 +56,8 @@ fn a_guard_is_asked_before_the_first_pass_and_not_only_after_it() {
 
 #[test]
 fn a_guard_stops_the_loop_when_the_body_makes_it_true() {
-    // And the other half: asked again at the end of each pass, so a loop whose
-    // body satisfies its own guard runs **once** and finishes — rather than for
-    // ever, which is what an unbounded `repeat` would have done here and is
-    // exactly the guessed-bound problem `until` exists to remove.
+    // The other half: asked again at the end of each pass, so a loop whose body
+    // satisfies its own guard runs once and finishes.
     let mut sim = with_spell(
         "check",
         &["repeat until the mortar is working", "grind sage", "end"],
@@ -90,11 +82,9 @@ fn a_guard_stops_the_loop_when_the_body_makes_it_true() {
 
 #[test]
 fn a_guard_that_cannot_be_answered_stops_the_loop_rather_than_spinning() {
-    // **The opposite of `if`'s rule, deliberately.** An `if` whose question
-    // cannot be read declines to act, which is safe. A `repeat` that declined to
-    // *stop* would run for ever on a question nobody can answer — §19's "a spell
-    // that has stopped describing the world it runs in", left running instead of
-    // caught. `mortr` names no place, so `holds` has no answer at all.
+    // The opposite of `if`'s rule: an unreadable `if` declines to act, but a
+    // `repeat` that declined to *stop* would run for ever (§19). `mortr` names
+    // no place, so `holds` has no answer at all.
     let mut sim = with_spell(
         "check",
         &["repeat until the mortr is working", "grind sage", "end"],
@@ -110,11 +100,9 @@ fn a_guard_that_cannot_be_answered_stops_the_loop_rather_than_spinning() {
 
 #[test]
 fn a_spell_runs_the_laboratory_and_leaves_a_product() {
-    // **The test the whole item turns on, and it asserts a *product* rather
-    // than a completion.** The failure this exists to catch looks exactly like
-    // success: `invoke` runs, every line executes, records appear — and the
-    // spell makes nothing, because each stage siphoned an instrument whose run
-    // had not finished. A test that checked "the script ran" would pass.
+    // Asserts a product, not a completion: the failure looks like success —
+    // every line executes and the spell makes nothing, because each stage
+    // siphoned an instrument whose run had not finished.
     let mut sim = with_spell(
         "brewing",
         &["kindle charcoal", "grind sage", "empty mortar_and_pestle"],
@@ -123,10 +111,8 @@ fn a_spell_runs_the_laboratory_and_leaves_a_product() {
     sim.submit("invoke brewing");
     sim.step_n(60);
 
-    // **Named, not counted.** This asked whether the scene held "a reagent that
-    // is not sage" — which the dispensary answers for free with `rock-salt` and
-    // `charcoal`, so it passed whether or not the spell had done anything at
-    // all. A test for a product has to name the product.
+    // Named, not counted: "a reagent that is not sage" is answered for free by
+    // the dispensary's `rock-salt`, so it passed either way.
     sim.submit("attend dispensary");
     sim.step();
     let shelved: Vec<&str> = sim
@@ -144,10 +130,9 @@ fn a_spell_runs_the_laboratory_and_leaves_a_product() {
 
 #[test]
 fn a_spell_waits_for_the_instrument_rather_than_being_refused() {
-    // A script reaching a busy instrument is not making a mistake — it is the
-    // next line of a recipe arriving before the last one finished. Running it
-    // through the refusal path would emit one complaint per tick for the whole
-    // duration of a run that is going perfectly.
+    // A script reaching a busy instrument is the next line of a recipe arriving
+    // early, not a mistake. The refusal path would complain once per tick for
+    // the whole of a run that is going fine.
     let mut sim = with_spell(
         "brewing",
         &[
@@ -174,16 +159,10 @@ fn a_spell_waits_for_the_instrument_rather_than_being_refused() {
 
 #[test]
 fn no_instruction_in_a_spell_is_ever_refused_for_being_busy() {
-    // **Found by looking, not by testing.** The predicate originally asked
-    // "does this verb start work", which `siphon` does not — so a spell that
-    // ground and then siphoned was told *"the mortar_and_pestle is still at
-    // work"*, as though the player had typed the line. `move`, `empty` and
-    // `purge` were the same shape of hole.
-    //
-    // The question is **"would this be refused"**. Asserting on the refusal
-    // *prose* rather than on the verb list is what makes this survive a new
-    // verb: any future command that refuses on a busy instrument fails here
-    // until the predicate learns about it.
+    // The predicate asked "does this verb start work", which `siphon` does not,
+    // so a spell that ground then siphoned was refused. The question is "would
+    // this be refused" — asserted on the refusal prose rather than a verb list,
+    // so a new refusing verb fails here until the predicate learns it.
     let mut sim = with_spell(
         "brewing",
         &[
@@ -213,14 +192,8 @@ fn no_instruction_in_a_spell_is_ever_refused_for_being_busy() {
 
 #[test]
 fn an_endless_spell_can_be_called_off() {
-    // **The player's way back out, and it did not exist.** `stop` took a
-    // `Place`, a spell is a `Script`, so `stop loop` never resolved to the thing
-    // it named — and nothing but running out of program removes `Running`, which
-    // an unbounded `repeat` never does. A player who wrote one had a spell
-    // working the laboratory for ever with no way to reach it.
-    //
-    // The budget bounds a *tick*, which is what stops the game hanging. It does
-    // nothing at all about the session.
+    // `stop` took a `Place` and a spell is a `Script`, so an unbounded `repeat`
+    // was unstoppable. The budget bounds a tick, not a session.
     let mut sim = with_spell("loop", &["repeat", "kindle charcoal", "end"]);
     sim.submit("invoke loop");
     sim.step_n(4);
@@ -243,9 +216,8 @@ fn an_endless_spell_can_be_called_off() {
 
 #[test]
 fn stop_edit_restart_picks_up_the_new_text() {
-    // **The loop a person actually works in**: cast it, see it do the wrong
-    // thing, call it off, change it, cast it again. Every step of that has to
-    // hold or the editor is a thing you write into once.
+    // The loop a person works in: cast, see it go wrong, call it off, change it,
+    // cast again. Every step has to hold or the editor is write-once.
     let mut sim = with_spell("brewing", &["kindle charcoal"]);
     sim.submit("invoke brewing");
     sim.step_n(2);
@@ -268,11 +240,9 @@ fn stop_edit_restart_picks_up_the_new_text() {
 
 #[test]
 fn editing_a_running_spell_does_not_change_the_run_in_flight() {
-    // §8: *"reloads queue to the next tick boundary, so a file cannot change
-    // under a script mid-execution."* The program is derived when the spell is
-    // **cast**, so saving over it is safe — and the running copy keeps doing
-    // what it was told. `scribe` says so, because a player who edits a running
-    // spell and sees nothing change has been silently ignored.
+    // §8: reloads queue to the next tick boundary, so a file cannot change under
+    // a script mid-execution. The program is derived at cast, so the running
+    // copy keeps its orders; `scribe` says so rather than seeming to ignore it.
     let mut sim = with_spell("loop", &["repeat", "kindle charcoal", "end"]);
     sim.submit("invoke loop");
     sim.step_n(2);
@@ -295,9 +265,8 @@ fn editing_a_running_spell_does_not_change_the_run_in_flight() {
 
 #[test]
 fn stopping_a_spell_does_not_stop_what_it_started() {
-    // Two different things to stop, and `stop` reaching both must not conflate
-    // them. Calling a spell off is walking away from it; the brew it began runs
-    // on, exactly as it would if you had typed the line by hand.
+    // Calling a spell off is walking away from it; the brew it began runs on,
+    // as it would if you had typed the line by hand.
     let mut sim = with_spell("brewing", &["kindle charcoal", "grind sage"]);
     sim.submit("invoke brewing");
     sim.step_n(2);
@@ -313,16 +282,12 @@ fn stopping_a_spell_does_not_stop_what_it_started() {
 
 #[test]
 fn a_spell_does_not_move_the_player() {
-    // **`attend` writes `Cwd`.** A spell containing one would otherwise teleport
-    // the player, change their prompt, and change what they can name — while
-    // they were standing somewhere else doing something else.
+    // `attend` writes `Cwd`, so a spell containing one would teleport the player
+    // and change what they can name from somewhere else.
     //
-    // **Bound, not invoked.** It used to invoke from the archive and assert the
-    // player stayed there — which now passes for a reason that is not this one:
-    // an invocation ends the moment its caster leaves (§19), so the spell would
-    // stop before it reached the `attend` and the test would prove nothing. A
-    // *held* spell is the one that runs while the player is elsewhere, so it is
-    // the one that could move them.
+    // Bound, not invoked: an invocation ends the moment its caster leaves (§19),
+    // so an invoked spell would stop before reaching the `attend`. A held spell
+    // is the one that runs while the player is elsewhere.
     let mut sim = with_spell("wander", &["attend laboratory", "survey"]);
     crate::tower::credit(sim.world_mut(), 16);
     sim.submit("bind wander");
@@ -388,16 +353,10 @@ fn a_spell_may_not_open_the_editor_or_pass_an_hour() {
 
 #[test]
 fn a_spell_may_not_end_the_session() {
-    // **The one that got away when `quit` was added.** It went into the
-    // vocabulary, `Verb::ALL`, `dispatch::execute` and the tower's own verb
-    // count; `may_issue` was the single place it was missed, so a spell could
-    // raise `Quitting` — `AppExit::Success` under Bevy, a raw-mode teardown in
-    // the terminal.
-    //
-    // The three verbs barred beside it are barred for *seizing the keyboard*.
-    // This one closes the game, and a **bound** spell re-casts every time it
-    // runs off the end — so it would end the session on the orb's clock, with
-    // nothing the player pressed able to intervene.
+    // `may_issue` was the one place `quit` was missed when it was added, so a
+    // spell could raise `Quitting`. The three verbs barred beside it seize the
+    // keyboard; this one closes the game — and a bound spell re-casts every time
+    // it runs off the end, so it would end the session on the orb's clock.
     let mut sim = with_spell("leaving", &["quit"]);
     sim.submit("invoke leaving");
     sim.step_n(6);
@@ -428,9 +387,8 @@ fn an_empty_or_unknown_spell_says_so_rather_than_running_nothing() {
 #[test]
 fn invoking_a_running_spell_twice_does_not_start_it_twice() {
     // Long enough to outlive one tick's `SCRIPT_BUDGET`, so the second `invoke`
-    // genuinely lands on a spell in flight. A shorter one finishes inside the
-    // first `step` and starting it again is then the *right* answer — which is
-    // what this test asserted by accident before.
+    // lands on a spell in flight. A shorter one finishes inside the first
+    // `step`, where starting it again is the right answer.
     let mut sim = with_spell(
         "slow",
         &[
@@ -456,10 +414,8 @@ fn invoking_a_running_spell_twice_does_not_start_it_twice() {
 
 #[test]
 fn a_spell_may_invoke_another_but_not_endlessly() {
-    // §8 permits it to a **call-depth limit of 3**, and argues why the execution
-    // budget alone is not a sufficient guard: exhausting it makes every
-    // instruction *Budget starved*, which logs at high verbosity only, so all
-    // automation would stop **silently**. Depth-limiting is loud.
+    // §8 permits it to a call-depth limit of 3: exhausting the execution budget
+    // instead logs at high verbosity only, so automation would stop silently.
     let mut sim = Sim::new(1);
     for (name, lines) in [
         ("one", vec!["invoke two"]),
@@ -489,22 +445,15 @@ fn a_spell_may_invoke_another_but_not_endlessly() {
 
 #[test]
 fn a_spell_spends_a_tick_a_line() {
-    // **The mechanic, not an implementation detail.** The budget was 4, which
-    // made a long spell and a tight one cost the same and left nothing for an
-    // efficient script to *be better at*. At one line per tick a wasted line is
-    // a wasted second of the tower's time, which is the whole reason to care
-    // how a spell is written.
-    //
-    // Asserted through `running_line`, which is what the editor's marker draws
-    // from: a budget that quietly went back to 4 would take the marker with it.
+    // The mechanic, not a detail: at a budget of 4 a long spell and a tight one
+    // cost the same, so there was nothing for an efficient script to be better
+    // at. Asserted through `running_line`, which the editor's marker draws from.
     let mut sim = with_spell("slow", &["survey", "survey", "survey", "survey"]);
     sim.submit("invoke slow");
     sim.step();
 
-    // `running_line` is where the orb goes **next**, and the tick that casts a
-    // spell already runs its first line — so a four-line spell stands on line 2
-    // here, and one further tick per line after that. At the old budget of 4 the
-    // whole thing would be over before this loop starts.
+    // `running_line` is where the orb goes next, and the casting tick already
+    // runs line 1 — so a four-line spell stands on line 2 here.
     for expected in 2..=4 {
         assert_eq!(
             sim.running_line("slow"),
@@ -523,12 +472,9 @@ fn a_spell_spends_a_tick_a_line() {
 
 #[test]
 fn saving_over_a_running_spell_changes_it_mid_flight() {
-    // The loop this whole surface exists for: you watch a spell go wrong, fix
-    // the line, and the next pass takes it — without stopping and recasting.
-    //
-    // The spell loops forever on purpose. A `repeat` with no count is the only
-    // shape that is still running by the time the edit lands, which is what
-    // makes the assertion about a *live* reload rather than about the next cast.
+    // Watch a spell go wrong, fix the line, and the next pass takes it — no stop
+    // and recast. The endless `repeat` is the only shape still running when the
+    // edit lands, so this is about a live reload rather than the next cast.
     let mut sim = with_spell("watch", &["repeat", "survey", "end"]);
     sim.submit("invoke watch");
     sim.step_n(6);
@@ -566,15 +512,10 @@ fn saving_over_a_running_spell_changes_it_mid_flight() {
 
 #[test]
 fn an_if_names_a_place_the_way_every_other_line_does() {
-    // **The bug this exists for looked like an inverted condition.** `holds`
-    // compares a place name exactly, and a control word's tail was the one thing
-    // the orb did not canonicalise — so `if mortar is empty` never found
-    // `mortar_and_pestle`, answered no on every pass, and took the `else` for
-    // ever. Reported from a screenshot; no test in the suite could see it,
-    // because `if` was only ever tested as a *parse*.
-    //
-    // Asserted on the branch that runs, not on the condition: a test that
-    // checked `holds` directly would have agreed with the bug.
+    // A control word's tail was the one thing the orb did not canonicalise, so
+    // `if mortar is empty` never found `mortar_and_pestle` and took the `else`
+    // for ever. Asserted on the branch that runs: a test checking `holds`
+    // directly would have agreed with the bug.
     let mut sim = with_spell(
         "probe",
         &[
@@ -600,8 +541,7 @@ fn an_if_names_a_place_the_way_every_other_line_does() {
     );
 
     // ...and the file still says what the player wrote. The resolution is the
-    // **program's**, made at cast; it used to be written into the spell, which
-    // taught the name at the cost of the file being the player's.
+    // program's, made at cast, not written back into the spell.
     assert_eq!(
         sim.spell("probe").as_deref().and_then(<[String]>::first),
         Some(&"if mortar is empty".to_owned()),
@@ -611,10 +551,9 @@ fn an_if_names_a_place_the_way_every_other_line_does() {
 
 #[test]
 fn a_question_about_nowhere_says_so_rather_than_answering_no() {
-    // §8's *Referent missing*, and **not the same as the answer being no** —
-    // which is the distinction the bug above turned on. A condition naming a
-    // place the tower does not have used to be indistinguishable from one that
-    // was simply false, so a spell could take the `else` for ever in silence.
+    // §8's *Referent missing*, which is not the same as the answer being no — a
+    // condition naming nowhere used to look exactly like a false one, so a spell
+    // took the `else` for ever in silence.
     let mut sim = with_spell("probe", &["if the gatehouse is empty", "grind sage", "end"]);
     sim.submit("invoke probe");
     sim.step_n(6);
@@ -652,19 +591,10 @@ fn both_shapes_of_question_reach_the_world() {
 
 #[test]
 fn no_line_a_spell_can_say_has_a_hole_in_it() {
-    // **A placeholder no emit site fills draws as itself**, which `prose.toml`
-    // documents as deliberate — *"visible on screen, so a typo is caught by
-    // looking"*. It works: `spell_gave_up` asked for `{source}` where
-    // `say_failure` supplies `{detail}`, and a player watching a spell give up
-    // read `waited too long on the {source}`.
-    //
-    // Looking caught it. This is so looking does not have to. Asserted over the
-    // **whole stream** rather than against a list of keys, because a list is the
-    // thing that goes stale — a new failure line with a new placeholder is
-    // covered here the day it is written.
-    //
-    // The spell drives every failure the runner has: a wait that never lands, a
-    // question about nowhere, a name that is not there, and a forbidden verb.
+    // An unfilled placeholder draws as itself: `spell_gave_up` asked for
+    // `{source}` where `say_failure` supplies `{detail}`. Asserted over the
+    // whole stream rather than a list of keys, so a new failure line is covered
+    // the day it is written. The spell drives every failure the runner has.
     let mut sim = with_spell(
         "broken",
         &[
@@ -696,17 +626,13 @@ fn no_line_a_spell_can_say_has_a_hole_in_it() {
 
 #[test]
 fn a_reagent_the_shelf_has_run_out_of_is_still_written_down() {
-    // **Reported as "`grind sage` is truncated to `grind` when I close and
-    // reopen the editor."** `quit` saves, so every visit re-canonicalised the
-    // file against whatever happened to be on the shelf — and §10.1's verbs take
-    // their reagent *optionally*, so with the sage spent `grind sage` resolved
-    // to bare `grind` and the orb wrote that down. Two different commands,
-    // swapped in silence, in a file the player had already finished writing.
+    // Every editor visit re-canonicalised the file against the shelf, and
+    // §10.1's verbs take their reagent optionally — so with the sage spent
+    // `grind sage` was written back as bare `grind`.
     let mut sim = Sim::new(1);
     sim.submit("attend laboratory");
     sim.step();
-    // Spend the sage: the **name** is still real, and nothing on the shelf
-    // answers it. That gap is the whole bug.
+    // Spend the sage: the name is still real, nothing on the shelf answers it.
     sim.submit("grind sage");
     sim.step_n(20);
 
@@ -722,12 +648,8 @@ fn a_reagent_the_shelf_has_run_out_of_is_still_written_down() {
 
 #[test]
 fn loose_phrasing_is_kept_in_the_file_and_understood_when_it_runs() {
-    // **Both halves, because the fix could have broken either.** The game's
-    // flagship plain-English phrasings — `make a potion of clarity`,
-    // `look around` — must still *run*, and they must no longer be **rewritten**
-    // into the file to do it. This asserted the rewrite until the file became
-    // the player's; what it asserts now is that giving that up cost the loose
-    // phrasing nothing.
+    // Both halves: plain-English phrasings must still run, and must no longer be
+    // rewritten into the file to do it.
     let mut sim = Sim::new(1);
     sim.submit("attend laboratory");
     sim.step();
@@ -752,14 +674,9 @@ fn loose_phrasing_is_kept_in_the_file_and_understood_when_it_runs() {
 
 #[test]
 fn saving_a_spell_says_nothing_at_all() {
-    // **Reported from a screenshot of sixteen identical lines.** The buffer
-    // writes itself out after every pause in the typing, so a sentence per save
-    // is a sentence every second or two — one editing session filled the
-    // transcript behind the modal with copies of `5 lines, written down`.
-    //
-    // Nothing was lost with it: a line the orb could not read is named
-    // individually, with its number, when the spell is cast — which the tests
-    // below this one hold to.
+    // The buffer autosaves after every pause in the typing, so a sentence per
+    // save filled the transcript with copies of `5 lines, written down`.
+    // Nothing was lost: an unreadable line is named, with its number, at cast.
     let mut sim = Sim::new(1);
     sim.submit("attend laboratory");
     sim.step();
@@ -786,16 +703,11 @@ fn saving_a_spell_says_nothing_at_all() {
 
 #[test]
 fn a_running_spell_says_it_reloaded_once_per_session_however_often_it_is_saved() {
-    // The one thing a save still says, and the reason it survived: editing a
-    // spell while it runs lands *now*, which is safe, invisible, and otherwise
-    // indistinguishable from being ignored.
-    //
-    // Once per session, though. The autosave fires on every pause, so a notice
-    // per write is the same noise this item removed, wearing a different
-    // sentence.
-    // Unbounded, so it is still running when the second session opens — a spell
-    // that had finished by then would report no reload for the honest reason,
-    // and the test would pass on the wrong evidence.
+    // The one thing a save still says: editing a running spell lands now, which
+    // is otherwise indistinguishable from being ignored. Once per session,
+    // though, or the autosave restores the noise this item removed.
+    // Unbounded, so it is still running when the second session opens — one that
+    // had finished would report no reload for the wrong reason.
     let looping: Vec<String> = ["repeat", "survey", "end"]
         .iter()
         .map(|line| (*line).to_owned())
@@ -830,17 +742,11 @@ fn a_running_spell_says_it_reloaded_once_per_session_however_often_it_is_saved()
 
 #[test]
 fn the_indentation_is_the_players_too() {
-    // **Reported from a screenshot**: `grind sage` flush with `repeat` while
-    // everything around it was indented, because the four branches that kept a
-    // line's words all wrote `line.trim()`. The orb re-indented what it rewrote
-    // and dropped the indent from what it did not, so the file disagreed with
-    // itself about where a line sat.
-    //
-    // Nothing re-indents now, which settles it in the other direction: the
-    // buffer indents as you type (`editor::reindent`), and what the buffer holds
-    // is what the file holds. This spell arrives through `write_spell` with no
-    // editor involved and with *deliberately unhelpful* layout, so the only way
-    // it can come back tidy is if something tidied it.
+    // The four branches that kept a line's words all wrote `line.trim()`, so the
+    // orb re-indented what it rewrote and dropped the indent from what it did
+    // not. Nothing re-indents now: the buffer indents as you type
+    // (`editor::reindent`). This spell arrives through `write_spell` with
+    // deliberately unhelpful layout, so tidy output means something tidied it.
     let mut sim = Sim::new(1);
     sim.submit("attend laboratory");
     sim.step();
@@ -863,9 +769,8 @@ fn the_indentation_is_the_players_too() {
 
 #[test]
 fn a_loop_over_a_base_reagent_never_runs_dry() {
-    // **§11.5's floor**: there is always something to do. The tower held one
-    // sage, so this exact spell ground once and then reported an empty mortar
-    // for ever — correct behaviour with nothing behind it.
+    // §11.5's floor: there is always something to do. The tower held one sage,
+    // so this spell ground once and then reported an empty mortar for ever.
     let mut sim = with_spell(
         "grinder",
         &[
@@ -894,17 +799,12 @@ fn a_loop_over_a_base_reagent_never_runs_dry() {
 
 #[test]
 fn the_sage_survives_being_ground_and_what_it_makes_does_not_stack_up_twice() {
-    // Two properties that broke together, and one covers for the other if you
-    // only check one.
+    // Two properties that broke together, and either covers for the other.
     //
-    // **The sage.** `move` took a unit, but charging an instrument was a second
-    // copy of the same three lines and re-parented the endless pile itself into
-    // the mortar — where the run spent it and `empty` swept it into the store.
-    // Testing `move` alone said everything was fine.
-    //
-    // **The pile.** `give` merges, so grinding twice adds to `ground-sage`
-    // rather than standing a second node beside it under the same name. That was
-    // wrong before counts existed too; counts merely made it visible.
+    // The sage: `move` took a unit, but charging an instrument was a second copy
+    // of the same three lines and re-parented the endless pile itself into the
+    // mortar. The pile: `give` merges, so grinding twice adds to `ground-sage`
+    // rather than standing a second node beside it under the same name.
     let mut sim = Sim::new(1);
     sim.submit("attend laboratory");
     sim.step();
@@ -917,10 +817,8 @@ fn the_sage_survives_being_ground_and_what_it_makes_does_not_stack_up_twice() {
     sim.submit("attend dispensary");
     sim.step();
 
-    // **Reagents only.** Every recipe output is also a manual `Topic`, nameable
-    // from anywhere — so a bare name count sees `ground-sage` twice however many
-    // are on the shelf, and this test failed for a reason that had nothing to do
-    // with what it is about.
+    // Reagents only: every recipe output is also a manual `Topic`, so a bare
+    // name count sees `ground-sage` twice however many are on the shelf.
     let shelf: Vec<&str> = sim
         .scene()
         .nouns()
@@ -941,17 +839,11 @@ fn the_sage_survives_being_ground_and_what_it_makes_does_not_stack_up_twice() {
 
 #[test]
 fn everything_a_spell_does_is_credited_to_it() {
-    // **What keeps the transcript readable.** A spell emits exactly what the
-    // same commands typed by hand emit, so a `repeat` loop pushed several
-    // records every few ticks and the player's own last line scrolled off in
-    // seconds. The pane draws what is *unattributed*; the log keeps everything,
-    // because a log is already a view over this one stream (§3, rule 4).
-    //
-    // Asserted over the whole stream rather than on one record: the sites a
-    // spell reaches are the ordinary ones, so this has to hold for records
-    // nobody thought about — including the instrument completions that land
-    // ticks later, in a different system, which is the case that was missed the
-    // first time.
+    // A spell emits what the same commands typed by hand emit, so a `repeat`
+    // loop scrolled the player's own last line off in seconds. The pane draws
+    // what is unattributed; the log keeps everything (§3, rule 4). Asserted over
+    // the whole stream, because a spell reaches the ordinary emit sites —
+    // including instrument completions landing ticks later, which was missed.
     let mut sim = with_spell(
         "grinder",
         &[
@@ -973,10 +865,9 @@ fn everything_a_spell_does_is_credited_to_it() {
         .records()
         .iter()
         .skip(before)
-        // **The player's own line stays**: the `invoke` they typed, its echo,
-        // and the orb answering that it has taken the spell up. Those are the
-        // command, not its output — and a filter that hid them would have made
-        // casting a spell look like nothing happened.
+        // The player's own line stays: the `invoke`, its echo, and the orb
+        // answering that it has taken the spell up. Those are the command, not
+        // its output.
         .filter(|record| {
             !matches!(
                 record.kind(),
@@ -1006,9 +897,8 @@ fn everything_a_spell_does_is_credited_to_it() {
 
 #[test]
 fn two_runs_from_one_seed_execute_a_spell_identically() {
-    // Rule 3. The runner orders spells by `NodeId` rather than by query order
-    // precisely so this holds — `tower::node` records archetype order as a bug
-    // that changes what a phrase resolves to with no test catching it.
+    // Rule 3. The runner orders spells by `NodeId` rather than query order —
+    // `tower::node` records archetype order as a bug no test catches.
     let run = || {
         let mut sim = with_spell(
             "brewing",
@@ -1028,9 +918,8 @@ fn two_runs_from_one_seed_execute_a_spell_identically() {
 
 #[test]
 fn a_spell_running_through_a_meditate_lands_where_it_would_have_watched() {
-    // §19 chose an interval over a countdown so hundreds of ticks inside one
-    // `step()` behave identically to being watched. A spell is the first thing
-    // that *acts* across that gap, so the property needs asserting again here.
+    // §19 chose an interval over a countdown so a skipped span behaves like a
+    // watched one. A spell is the first thing that acts across that gap.
     let spell = ["attend laboratory", "kindle charcoal", "grind sage"];
 
     let mut watched = with_spell("brewing", &spell);
@@ -1063,14 +952,10 @@ fn a_spell_running_through_a_meditate_lands_where_it_would_have_watched() {
 
 #[test]
 fn a_part_runs_where_it_is_called_and_not_where_it_is_written() {
-    // The whole of what a definition is. Reaching `part gathering()` in the
-    // ordinary top-to-bottom read must do **nothing** — a spell is read down the
-    // file and its parts are written among its lines — and the body runs only
-    // where `gathering()` says so.
-    //
-    // **The same file twice, with and without the call**, which is the whole
-    // claim and needs no ordering to read: the body is identical, so anything
-    // the uncalled one does is the definition running where it stands.
+    // Reaching `part gathering()` in the ordinary top-to-bottom read must do
+    // nothing; the body runs only where `gathering()` says so. The same file
+    // twice, with and without the call, so anything the uncalled one does is the
+    // definition running where it stands.
     let load = |lines: &[&str]| {
         let mut sim = with_spell("check", lines);
         sim.submit("invoke check");
@@ -1173,9 +1058,8 @@ fn a_call_inside_a_loop_keeps_the_loop_the_caller_was_in() {
 
 #[test]
 fn a_part_that_calls_itself_stops_and_says_so() {
-    // §8's taxonomy is titled *"scripts always log and never halt"*, so runaway
-    // recursion may not stop the spell **and** may not be silent. It is bounded
-    // at `MAX_PARTS`, reported by name, and the spell carries on past the call.
+    // §8: scripts always log and never halt, so runaway recursion may neither
+    // stop the spell nor be silent. Bounded at `MAX_PARTS`, reported by name.
     let mut sim = with_spell("check", &["part spiral()", "spiral()", "end", "spiral()"]);
     sim.submit("invoke check");
     sim.step_n(40);
@@ -1224,10 +1108,8 @@ fn a_part_does_what_the_names_in_its_brackets_say() {
 
 #[test]
 fn an_argument_is_what_the_caller_s_name_stands_for() {
-    // One level of resolution, at the call, in the **caller's** store — which is
-    // `substituted`'s rule everywhere else in the language. `holding` rests
-    // entirely on this: `between(wellspring, near)` hands over whatever `near`
-    // was bound to, and a literal stands for itself.
+    // One level of resolution, at the call, in the caller's store —
+    // `substituted`'s rule everywhere else. A literal stands for itself.
     let mut sim = with_spell(
         "check",
         &[
@@ -1250,13 +1132,9 @@ fn an_argument_is_what_the_caller_s_name_stands_for() {
 
 #[test]
 fn a_part_cannot_see_a_name_it_was_not_given() {
-    // **The scoping rule, from the side that proves it.** `herb` is bound in the
-    // caller and never passed, so inside the part it is not a variable at all —
-    // it resolves against the room, finds nothing called `herb`, and the line is
-    // reported missing rather than quietly grinding sage.
-    //
-    // Before parameters this test could not exist: one shared store meant the
-    // part read the caller's `herb` and this file worked.
+    // `herb` is bound in the caller and never passed, so inside the part it
+    // resolves against the room, finds nothing, and the line is reported missing
+    // rather than quietly grinding sage. One shared store made this file work.
     let mut sim = with_spell(
         "check",
         &[
@@ -1279,9 +1157,9 @@ fn a_part_cannot_see_a_name_it_was_not_given() {
 
 #[test]
 fn what_a_part_binds_does_not_outlive_it() {
-    // The other half of the same rule, and the one that makes an accumulator
-    // safe. The caller binds `herb` to sage, calls a part that binds its **own**
-    // `herb` to rock-salt, and grinds after the call — which must still be sage.
+    // The other half, and what makes an accumulator safe: the caller binds
+    // `herb` to sage, the part binds its own to rock-salt, and the grind after
+    // the call must still be sage.
     let mut sim = with_spell(
         "check",
         &[
@@ -1309,15 +1187,13 @@ fn what_a_part_binds_does_not_outlive_it() {
 
 #[test]
 fn a_for_each_inside_a_part_leaves_the_caller_s_cursor_alone() {
-    // **The stated cost of the shared store, now gone.** [`Descent`]'s own
-    // comment used to name this: *"`for each way` inside a part rebinds the
-    // caller's `way` if it had one"*. The caller walks a set, calls a part that
-    // walks the same set, and must come back to the member it was on.
+    // The stated cost of the shared store, now gone — [`Descent`]'s comment used
+    // to name it. The caller walks a set, calls a part that walks the same set,
+    // and must come back to the member it was on.
     //
-    // **In the lens rather than the archive**, deliberately: a `dial` always
-    // lands and names its socket, where `follow` is refused by a wall and says
-    // nothing about the way it did not take — so a maze would make the
-    // observation depend on the seed's geometry rather than on the scoping.
+    // In the lens rather than the archive: a `dial` always lands and names its
+    // socket, where `follow` is refused by a wall and says nothing, so a maze
+    // would make this depend on the seed's geometry.
     let mut sim = Sim::new(1);
     sim.submit("attend lens");
     sim.step();
@@ -1357,9 +1233,8 @@ fn a_for_each_inside_a_part_leaves_the_caller_s_cursor_alone() {
 
 #[test]
 fn a_call_that_hands_over_the_wrong_number_is_said_at_cast() {
-    // Beside `spell_no_such_part`, and for the same reason: it is a question
-    // about the file, so it is answered once when the spell is cast rather than
-    // on whichever tick the line is reached — possibly never.
+    // A question about the file, so it is answered once at cast rather than on
+    // whichever tick the line is reached — possibly never.
     let mut sim = with_spell(
         "check",
         &["part between(here, there)", "end", "between(wellspring)"],
@@ -1375,10 +1250,9 @@ fn a_call_that_hands_over_the_wrong_number_is_said_at_cast() {
 
 #[test]
 fn a_heading_that_names_one_thing_twice_sets_nothing_aside() {
-    // `part between(here, here)` would bind the second over the first and leave
-    // the caller's first argument unreachable — the quiet reinterpretation the
-    // parser refuses everywhere. Refused as an unreadable heading, so the body
-    // is not set aside under a name nothing can call.
+    // Binding the second over the first would leave the caller's first argument
+    // unreachable. Refused as an unreadable heading, so the body is not set
+    // aside under a name nothing can call.
     let mut sim = with_spell(
         "check",
         &["part between(here, here)", "end", "between(a, b)"],
@@ -1394,16 +1268,10 @@ fn a_heading_that_names_one_thing_twice_sets_nothing_aside() {
 
 #[test]
 fn the_painter_and_the_parser_agree_about_what_a_call_is() {
-    // **Two expressions of one rule, pinned against each other.** `lexeme` and
-    // `program` each decide independently whether a line is a call, and they
-    // disagreed: the painter claimed any one-word head with a bracket pair
-    // anywhere, so `move (sage) to mortar` drew magenta while the parser read it
-    // as an ordinary command. Nothing compared them, and the symptom was masked
-    // because a claimable line usually also faults — and a faulted line declines
-    // highlighting.
-    //
-    // Here rather than in `lexeme` because `call_of` is `pub(super)`: the rule
-    // is the language's, so the comparison belongs on this side of the wall.
+    // `lexeme` and `program` each decide independently whether a line is a call,
+    // and they disagreed: the painter claimed any one-word head with a bracket
+    // pair anywhere, so `move (sage) to mortar` drew magenta. Here rather than
+    // in `lexeme` because `call_of` is `pub(super)`.
     for line in [
         "gathering()",
         "between(wellspring, near)",
@@ -1417,8 +1285,7 @@ fn the_painter_and_the_parser_agree_about_what_a_call_is() {
             .iter()
             .any(|run| run.kind == orbs_render::Lexeme::Call);
         // A `part` heading carries a call-shaped tail and is not itself a call,
-        // which is the one place the two are allowed to differ — so it is asked
-        // of the *argument*, exactly as `read` asks it.
+        // so it is asked of the argument, exactly as `read` asks it.
         let text =
             crate::parser::spell_word(line).map_or(line, |_| crate::parser::spell_argument(line));
         let parsed = super::program::call_of(text).is_some();
@@ -1446,9 +1313,9 @@ fn a_call_to_a_part_nobody_wrote_is_said_at_cast() {
 
 #[test]
 fn the_budget_is_the_floor_until_the_weave_says_otherwise() {
-    // The wiring half of this item. Nothing is takeable, so `Taken` is empty and
-    // the answer is `SCRIPT_BUDGET` — what has to hold is that the number is
-    // *read* rather than compiled in, and that an untrained orb still gets one.
+    // Nothing is takeable, so `Taken` is empty and the answer is
+    // `SCRIPT_BUDGET`. What has to hold is that the number is read rather than
+    // compiled in, and that an untrained orb still gets one.
     let sim = Sim::new(1);
     assert_eq!(super::budget(sim.world()), super::SCRIPT_BUDGET);
     assert_eq!(
@@ -1464,15 +1331,9 @@ fn the_budget_is_the_floor_until_the_weave_says_otherwise() {
 
 #[test]
 fn a_forbidden_verb_is_refused_when_the_spell_is_cast() {
-    // **`may_issue` is a security boundary and it was answered too late.**
-    // `run_line` asks when the line is *reached* — which for a line inside a
-    // branch may be never, and for a bound spell may be hours after it was
-    // written. A scripted `meditate 3600` runs an hour of world time inside one
-    // `step()`, which its own doc calls a hazard; sitting in an untaken branch it
-    // said nothing at all.
-    //
-    // The guard the spell never takes is the point: `quartz` is not a laboratory
-    // reagent, so the body below never runs.
+    // `may_issue` is a security boundary and `run_line` asked it when the line
+    // was reached — which inside a branch may be never. The guard here is never
+    // taken: `quartz` is not a laboratory reagent, so the body never runs.
     let mut sim = with_spell(
         "risky",
         &[
@@ -1494,15 +1355,10 @@ fn a_forbidden_verb_is_refused_when_the_spell_is_cast() {
 
 #[test]
 fn the_cast_check_does_not_fire_on_a_line_that_makes_its_own_input() {
-    // **The reason a whole `Intent` cannot be frozen at cast.** A spell makes its
-    // own inputs, so `digest ground-sage` is written above the line that produces
-    // any — at cast the room has none and `analyse` drops the argument, which
-    // `interpret` shows by reading the line back as bare `digest`.
-    //
-    // The *verb* survives, because a verb is offered by the fixture standing in
-    // the room rather than by what is on the shelf. So the cast check may look at
-    // the verb and must say nothing about the arguments, and this is the test
-    // that keeps it that way: every pipeline spell in the game runs through here.
+    // Why a whole `Intent` cannot be frozen at cast: a spell makes its own
+    // inputs, so at cast the room has no `ground-sage` and `analyse` drops the
+    // argument. The verb survives, since a fixture in the room offers it — so
+    // the cast check may look at the verb and must say nothing about arguments.
     let mut sim = with_spell(
         "brewing",
         &[
@@ -1531,16 +1387,11 @@ fn the_cast_check_does_not_fire_on_a_line_that_makes_its_own_input() {
 
 #[test]
 fn a_spell_that_should_wait_still_waits_rather_than_being_refused() {
-    // **The regression this whole pass is scoped around.** `would_block` reads
-    // `Intent`'s arguments and filters them on `NounKind::Place`; anything that
-    // flattens an argument list loses the kind, `touches()` returns empty,
-    // `would_block` answers `None`, and every spell that used to wait starts
-    // being *refused* instead — with `waiting_since` never set, `PATIENCE` never
-    // tripped, and most of this file still green.
-    //
-    // So the shape is asserted from the outside: a spell whose second line wants
-    // the instrument its first line just started must **wait**, and must never
-    // see the refusal a player would get for typing the same thing.
+    // `would_block` filters `Intent`'s arguments on `NounKind::Place`, so
+    // anything that flattens an argument list loses the kind and every waiting
+    // spell starts being refused instead — with most of this file still green.
+    // Asserted from the outside: a spell whose second line wants the instrument
+    // its first just started must wait, and never see a refusal.
     let mut sim = with_spell("brewing", &["grind sage", "empty mortar_and_pestle"]);
     sim.submit("invoke brewing");
     sim.step_n(4);
@@ -1561,11 +1412,8 @@ fn a_spell_that_should_wait_still_waits_rather_than_being_refused() {
 
 #[test]
 fn a_part_is_not_reachable_from_another_spell() {
-    // **A spell is contained to a single `.spell` file** (§19). Cross-file part
-    // sharing was a planned item and is struck, so this holds the rule rather
-    // than leaving it as a property of how `program::tree` happens to be
-    // written — the failure it guards against is a spell silently running lines
-    // out of a file its own text does not contain.
+    // A spell is contained to a single `.spell` file (§19). Held here rather
+    // than left as a property of how `program::tree` happens to be written.
     let mut sim = with_spell("lender", &["part gathering()", "grind sage", "end"]);
     let borrower: Vec<String> = ["gathering()".to_owned()].into();
     sim.write_spell("borrower", &borrower);

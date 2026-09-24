@@ -4,27 +4,20 @@
 //! literals. DESIGN.md §12 budgets ~88k words, and a sentence spelled out at the
 //! call site is a sentence no writer can find.
 //!
-//! # What this is not
+//! Not a record formatter: records stay structured (rule 4), and `sift`, pipes
+//! and §14's linearisation all read fields rather than sentences. A line from
+//! here goes into [`FieldName::Message`](orbs_render::FieldName::Message)
+//! *alongside* the fields it was built from.
 //!
-//! It is **not** a record formatter. Records stay structured (rule 4) — `sift`,
-//! pipes and §14's linearisation all read fields, not sentences. A line from
-//! here goes into [`FieldName::Message`](orbs_render::FieldName::Message),
-//! *alongside* the fields it was built
-//! from, so a machine still reads the facts and a player reads the sentence.
+//! The sim parses content but never watches a file, because rule 8 forbids async
+//! here and rule 3 makes a frontend a caller rather than a host — and a watcher
+//! inside the sim would make every headless test touch the filesystem. So this
+//! crate parses a string and a frontend calls
+//! [`Sim::set_prose`](crate::Sim::set_prose) at a tick boundary.
 //!
-//! # Why the sim parses content but never watches a file
-//!
-//! Rule 8 forbids async here, and rule 3 makes a frontend a caller rather than a
-//! host. A watcher inside the sim would also make every headless test touch the
-//! filesystem. So this crate parses a string; a frontend owns the watcher and
-//! calls [`Sim::set_prose`](crate::Sim::set_prose) at a tick boundary.
-//!
-//! # Replay
-//!
-//! Swapping prose is **replay-safe**, because no line here reaches a decision —
-//! it is presentation over a record that was already built. Recipes are not, and
-//! when they arrive they need content versioned into the submission log; that is
-//! a deliberately separate problem from this one.
+//! Swapping prose is replay-safe, because no line here reaches a decision — it
+//! is presentation over a record already built. Recipes are not, and will need
+//! content versioned into the submission log.
 
 use std::collections::BTreeMap;
 
@@ -102,22 +95,14 @@ impl Prose {
 
     /// A line whose wording depends on how many, with `{count}` filled in.
     ///
-    /// # Why English needs this and a format string does not give it
+    /// A mastery deed's sentence sits beside a live `3 of 5` counter, so it says
+    /// the number — but `"{count} charms laid"` reads "1 charms laid", and six
+    /// of the twenty-five deeds ask for exactly one. A key that reads wrong in
+    /// the singular is authored twice, `key` and `key_one`; every other key
+    /// falls straight through.
     ///
-    /// A mastery deed's sentence is drawn beside a live `3 of 5` counter, so it
-    /// has to say the number rather than spell it — `"five potions brewed"` on a
-    /// track that now asks for eight is a sentence contradicting the number next
-    /// to it. But `"{count} charms laid"` reads **"1 charms laid"** the moment
-    /// the count is one, and six of the twenty-five deeds ask for exactly one.
-    ///
-    /// So a key that reads wrong in the singular is authored twice — `key` and
-    /// `key_one` — and this picks. Every other key stays one line, because
-    /// looking for `_one` and not finding it falls straight through.
-    ///
-    /// **Not a pluralisation rule.** English inflects more than the noun (*"the
-    /// stacks walked"* against *"3 walks of the stacks"*), and a rule that only
-    /// added an `s` would have to be undone by hand for half of them. Two
-    /// authored sentences are what rule 6 asks for anyway.
+    /// Not a pluralisation rule: English inflects more than the noun (*"the
+    /// stacks walked"* against *"3 walks of the stacks"*).
     #[must_use]
     pub fn counted(&self, key: &str, count: u32) -> String {
         self.line(
@@ -130,15 +115,12 @@ impl Prose {
     /// single one and `{key}_none` for nought, each when it is authored, and
     /// `key` otherwise.
     ///
-    /// **The singular rule, once.** [`counted`](Self::counted) fills `{count}`
-    /// and nothing else, and a line that names the things themselves — *"the
-    /// last call balked at row 4"* — needs only the choice of key. The circle's
-    /// painter chose it by hand, which was this rule's second copy.
+    /// The singular rule, once: [`counted`](Self::counted) fills `{count}` and
+    /// nothing else, so a line naming the things themselves needs only the key.
+    /// The circle's painter chose it by hand, which was this rule's second copy.
     ///
-    /// **`_none` for the line whose list would be empty**, which `_one` cannot
-    /// cover: *"the last call balked at rows "* with nothing after it, or *"0
-    /// rows balk"* over a circle that already holds. Only a key that authors it
-    /// changes; every other falls through as `_one` does.
+    /// `_none` covers what `_one` cannot: *"the last call balked at rows "* with
+    /// nothing after it. Only a key that authors it changes.
     #[must_use]
     pub fn counted_key(&self, key: &str, count: u64) -> String {
         let form = match count {
@@ -155,19 +137,14 @@ impl Prose {
 
     /// Every subject the manual can answer on, from the `recall_` keys.
     ///
-    /// Derived rather than listed, so authoring a manual entry in the content
-    /// file is all it takes to make the subject **nameable** — otherwise a
-    /// writer adds `recall_warding`, and the parser has never heard of it.
+    /// Derived rather than listed, so authoring a manual entry is all it takes
+    /// to make the subject nameable — otherwise a writer adds `recall_warding`
+    /// and the parser has never heard of it.
     ///
-    /// # The prefix is load-bearing, so templates do not share it
-    ///
-    /// This makes every key under the prefix a **parser noun**, which is a
-    /// strong thing for a content file to be able to do by accident. The route
-    /// templates were `grimoire_route`, `grimoire_step`, `grimoire_step_or` and
-    /// `grimoire_heat`, so the scene registered `route`, `step`, `step_or` and
-    /// `heat` as subjects a player could ask about and the manual could not
-    /// answer. They are `route_` now, and a template that wants a new name
-    /// should take any prefix but this one.
+    /// The prefix is load-bearing and templates must not share it: every key
+    /// under it becomes a parser noun. `grimoire_route`, `grimoire_step` and
+    /// friends registered `route`, `step` and `heat` as subjects the manual
+    /// could not answer; they are `route_` now.
     #[must_use]
     pub fn topics(&self) -> Vec<&str> {
         self.lines
@@ -233,11 +210,9 @@ mod tests {
 
     #[test]
     fn a_deed_that_asks_for_one_reads_as_one() {
-        // **The regression this exists for.** Fifteen mastery keys spelled their
-        // counts out in English and were changed to interpolate `{count}`, which
-        // was right for nine and wrong for six: *"1 charms laid"* is worse than
-        // the *"a charm laid"* it replaced. Every test stayed green — nothing
-        // asserts English — and a `dumps.sh` diff is what caught it.
+        // Fifteen mastery keys went from spelled-out counts to `{count}`, right
+        // for nine and wrong for six — *"1 charms laid"* for *"a charm laid"*.
+        // Nothing asserts English, so a `dumps.sh` diff caught it, not a test.
         let prose = Prose::builtin();
         assert_eq!(prose.counted("mastery_forge_1", 1), "a charm laid");
         assert_eq!(prose.counted("mastery_archive_1", 1), "the stacks walked");
@@ -245,8 +220,8 @@ mod tests {
         // ...and above one it is the plural, from the same key.
         assert_eq!(prose.counted("mastery_forge_1", 5), "5 charms laid");
 
-        // **`archive_2` can stop being one.** It sits second on its line, so a
-        // long game stretches it and the plural is then right.
+        // `archive_2` can stop being one: it sits second on its line, so a long
+        // game stretches it and the plural is then right.
         assert_eq!(prose.counted("mastery_archive_2", 1), "a scroll assembled");
         assert_eq!(prose.counted("mastery_archive_2", 2), "2 scrolls assembled");
 
@@ -255,10 +230,9 @@ mod tests {
         assert_eq!(prose.counted("mastery_laboratory_2", 1), "1 potions brewed");
     }
 
-    /// **One rule for the key, whether or not the count is in the sentence.** A
-    /// line naming the rows themselves picks its key the same way, and a key that
-    /// authors `_none` says something true of an empty list instead of trailing
-    /// off after *"rows"*.
+    /// One rule for the key, whether or not the count is in the sentence: a line
+    /// naming the rows picks its key the same way, and `_none` says something
+    /// true of an empty list instead of trailing off after *"rows"*.
     #[test]
     fn a_key_is_chosen_for_none_one_and_many_and_falls_through_when_unauthored() {
         let prose = Prose::builtin();
@@ -284,9 +258,9 @@ mod tests {
 
     #[test]
     fn every_deed_that_can_ask_for_one_has_a_singular() {
-        // **Derived from the content, not a list here.** A deed authored with no
-        // `times` asks for one, and one that reads `1 walks of the stacks` is a
-        // sentence nobody wrote. This is the check that the two files agree.
+        // Derived from the content, not a list here: a deed authored with no
+        // `times` asks for one, and `1 walks of the stacks` is a sentence
+        // nobody wrote.
         let prose = Prose::builtin();
         for stone in super::super::Progression::builtin().mastery() {
             if stone.done.times() != 1 {
@@ -318,12 +292,10 @@ mod tests {
 
     #[test]
     fn every_manual_subject_is_a_page_rather_than_a_template() {
-        // **The `recall_` prefix makes a key a parser noun**, so a *template*
-        // filed under it becomes a subject the manual answers with its own
-        // braces: `recall_road` shipped as a topic called `road`, and `recall
+        // The `recall_` prefix makes a key a parser noun, so a *template* filed
+        // under it becomes a subject answered with its own braces: `recall
         // road` printed `{name} line: {count} of {quantity} reached`. The route
-        // templates paid for this once already and were renamed; this is the
-        // lint that was missing, and it costs nothing.
+        // templates were renamed; this is the lint that was missing.
         let prose = Prose::builtin();
         for topic in prose.topics() {
             let page = prose.line(&format!("recall_{topic}"), &[]);
@@ -399,16 +371,37 @@ mod tests {
     #[test]
     fn every_authored_line_is_drawable() {
         // The grid draws CP437 and nothing else, so an em-dash arrives on screen
-        // as `?`. This is not hypothetical: the first draft of `work_busy` used
-        // one, and CLAUDE.md already records the same defect being found in
-        // DESIGN.md's own boot text. A writer typing a smart quote from a word
-        // processor should get a failing test, not a question mark in the tube.
+        // as `?` — the first draft of `work_busy` had one. A writer pasting a
+        // smart quote should get a failing test, not a `?` in the tube.
         let prose = Prose::builtin();
         for (key, template) in &prose.lines {
             assert_eq!(
                 orbs_render::cp437::first_unrenderable(template),
                 None,
                 "{key} has a glyph the grid cannot draw"
+            );
+        }
+    }
+
+    #[test]
+    fn every_settings_row_is_padded_to_the_same_width() {
+        // `menu_setting_row` puts `[value]` straight after this text, so a row
+        // one cell short puts a bracket out of line down the whole page —
+        // `voice` came out at 28 against everything else's 27, and it reads as
+        // a rendering bug rather than a typo in a string.
+        let prose = Prose::builtin();
+        let rows: Vec<(&String, usize)> = prose
+            .lines
+            .iter()
+            .filter(|(key, _)| key.starts_with("menu_set_"))
+            .map(|(key, template)| (key, template.chars().count()))
+            .collect();
+        assert!(rows.len() > 1, "no settings rows to measure");
+        let (first, width) = rows[0];
+        for (key, found) in &rows {
+            assert_eq!(
+                *found, width,
+                "{key} is {found} cells and {first} is {width}; the values will not line up",
             );
         }
     }

@@ -1,13 +1,11 @@
 //! What currently exists, and can therefore be named.
 //!
-//! DESIGN.md §6, step 2: fuzzy match against known vocabulary **and entities
-//! that currently exist**. That second half is what separates this from a
-//! command parser — `decoct clarity` resolves because clarity is a researched
-//! essence, and stops resolving the moment it is not.
+//! DESIGN.md §6, step 2: fuzzy match against known vocabulary and entities
+//! that currently exist. That second half separates this from a command parser
+//! — `decoct clarity` resolves only while clarity is a researched essence.
 //!
-//! The scene is passed in rather than read from the ECS world directly, so the
-//! parser stays testable against a handful of nouns instead of requiring a fully
-//! built tower. The Phase 0 domains will populate it from real entities.
+//! Passed in rather than read from the ECS world, so the parser stays testable
+//! against a handful of nouns rather than a fully built tower.
 
 use bevy_ecs::prelude::*;
 
@@ -34,21 +32,19 @@ pub struct NounMatch {
     pub score: u32,
     /// How many of the offered words the match actually used.
     ///
-    /// A phrase is tried whole *and* word by word, so a match can explain all
-    /// of what it was given or one word of it, at the same score — `laboratory`
-    /// names the place exactly whether it arrived alone or trailing four more
-    /// words. [`score`](Self::score) cannot tell those apart, and the augury's
-    /// router has to: one is a command, the other is a sentence with a command
-    /// at the front. See `Analysis::reads_outright`.
+    /// A phrase is tried whole and word by word, so two matches can score the
+    /// same while one explains everything and the other one word.
+    /// [`score`](Self::score) cannot tell a command from a sentence with a
+    /// command at the front; the augury's router must. See
+    /// `Analysis::reads_outright`.
     pub words: usize,
 }
 
 /// The nameable surface of the world at the moment of a parse.
 ///
-/// A `Resource` because it *is* world state: what the player can refer to is
-/// what the tower currently contains, which is why resolution is grounded in the
-/// world rather than in a fixed command table. It is never a `Component` — a
-/// type cannot derive both as of Bevy 0.19.
+/// A `Resource` because it is world state: what the player can refer to is what
+/// the tower contains, not a fixed command table. Never a `Component` — a type
+/// cannot derive both as of Bevy 0.19.
 #[derive(Resource, Debug, Default, Clone)]
 pub struct Scene {
     nouns: Vec<Noun>,
@@ -75,46 +71,27 @@ impl Scene {
 
     /// Offer a per-instrument verb, because its instrument is here.
     ///
-    /// **§7's rule, applied to verbs.** *"You can only name what is where you
-    /// are"* has always governed nouns; an instrument's own verb is the same
-    /// claim about the same thing said the other way round. `mix` means the
-    /// flask and rod, and there is no flask and rod in the archive — so the word
-    /// should not resolve there any more than `flask_and_rod` itself does.
-    ///
-    /// This is what keeps the vocabulary from growing without bound as §10's
-    /// five further domains land. Each coins the verbs its own tools need, and
-    /// none of them costs the others a possible misreading: the parser never
-    /// considers a warding verb while you are brewing.
+    /// §7's rule applied to verbs: `mix` means the flask and rod, and there is
+    /// no flask and rod in the archive. Keeps the vocabulary bounded as §10's
+    /// domains land — the parser never considers a warding verb while you brew.
     #[must_use]
     pub fn offering(mut self, verb: Verb) -> Self {
         self.operations.push(verb);
         self
     }
 
-    /// Teach the scene every substance the laboratory has a **word** for,
-    /// whether or not any is here.
+    /// Teach the scene every substance the laboratory has a word for, whether
+    /// or not any is here.
     ///
-    /// # What this buys, and why fuzzy matching needed a brake
+    /// Fuzzy matching exists for typos, and a typo is not a word. `ground-sage`
+    /// scores 819 against `ground-salt` and a 600 threshold, so with no sage on
+    /// the shelf `digest ground-sage` silently moved the salt — which §6 ranks
+    /// below a refusal.
     ///
-    /// Fuzzy matching exists for *typos*, and a typo is by definition not a
-    /// word. `ground-sage` and `ground-salt` differ by two characters in eleven,
-    /// which scores 819 against a 600 threshold — so with no ground-sage on the
-    /// shelf, `digest ground-sage` resolved to `digest ground-salt`, echoed it,
-    /// and moved the salt into the bath, which could then do nothing with it.
-    /// One candidate scored, so it won outright and ran at `Confidence::Clear`:
-    /// a silent wrong action, which §6 ranks below a refusal.
+    /// So a known substance only ever matches exactly. Typos still fuzz and
+    /// abbreviations still prefix; what stops is one real name read as another.
     ///
-    /// The rule this installs: **a phrase that is itself a known substance only
-    /// ever matches exactly.** Typos still fuzz — `ground-slat` is not a word,
-    /// so it still reaches `ground-salt` — and abbreviations still prefix, since
-    /// `ground-sa` is not a word either and remains an honest tie between the
-    /// two. What stops is one real name being read as a different real name.
-    ///
-    /// It is the live-parser half of a rule `spell::compile` already applied:
-    /// `fix` falls back to the recipe vocabulary precisely so a spell can tell
-    /// *"there is none here"* from *"you have mistyped something"*. The prompt
-    /// could not, and §19 records that the two halves disagreeing is how the
-    /// `has ground-slat` defect survived in the first place.
+    /// The live-parser half of a rule `spell::compile` already applied (§19).
     #[must_use]
     pub fn knowing(mut self, names: impl IntoIterator<Item = String>) -> Self {
         self.known.extend(names);
@@ -130,15 +107,13 @@ impl Scene {
 
     /// Whether a verb's fixture stands here.
     ///
-    /// Always true for a verb with no fixture — the core vocabulary goes
-    /// everywhere, because `attend`, `survey` and `peruse` are how you *reach* a
-    /// domain and gating them would lock the key inside the door.
+    /// Always true for a verb with no fixture: `attend`, `survey` and `peruse`
+    /// are how you reach a domain, so gating them would lock the key inside the
+    /// door.
     ///
-    /// **It asks [`Verb::anchor`], and it used to ask `Verb::is_operation`.** That
-    /// is the production-slot question, so every verb that took no slot was offered
-    /// in every room — `help` in the laboratory listed `research`, `follow` and
-    /// `wander`, none of which can do anything there. §19 records the two-word
-    /// version of that as a debt waiting on a mechanism; `anchor` is the mechanism.
+    /// Asks [`Verb::anchor`] rather than `Verb::is_operation`, which answered
+    /// the production-slot question and let `help` in the laboratory list
+    /// `research`, `follow` and `wander` (§19).
     #[must_use]
     pub fn offers(&self, verb: Verb) -> bool {
         verb.anchor()
@@ -160,24 +135,21 @@ impl Scene {
     /// `castle gates` reaches `gates` when nothing is called "castle gates".
     #[must_use]
     pub fn best_match(&self, kind: NounKind, words: &[&str]) -> Option<NounMatch> {
-        // Ties resolve to whichever noun was registered first, so the result
-        // never depends on iteration luck — which `candidates` preserves by
-        // sorting stably.
+        // Ties resolve to whichever noun was registered first, never to
+        // iteration luck; `candidates` preserves that by sorting stably.
         self.candidates(kind, words).into_iter().next()
     }
 
     /// Everything `words` could be naming, best first.
     ///
-    /// # Why the runner-up is worth keeping
-    ///
+    /// The runner-up is worth keeping because
     /// [`best_match`](Self::best_match) answers the prompt's question — *what
-    /// did they most likely mean* — and the player is standing there to see the
-    /// echo if it guessed wrong. A **spell** resolves its names with nobody
-    /// watching, so it needs the question this answers instead: *was there
-    /// anything else nearly as close?* With both products on the shelf, `ground`
-    /// is an equally good prefix of `ground-sage` and `ground-salt`, and picking
-    /// the first-registered one would be a coin flip deciding what a laboratory
-    /// does. See `spell::compile`.
+    /// did they most likely mean* — with the player standing there to see the
+    /// echo. A spell resolves its names with nobody watching, so it needs *was
+    /// there anything else nearly as close?* With both products on the shelf,
+    /// `ground` is an equally good prefix of `ground-sage` and `ground-salt`,
+    /// and taking the first-registered would be a coin flip deciding what a
+    /// laboratory does. See `spell::compile`.
     ///
     /// One entry per noun, at its best-scoring reading — the joined phrase and
     /// each individual word are all tried, so `castle gates` reaches `gates`
@@ -194,12 +166,10 @@ impl Scene {
             phrases.extend_from_slice(words);
         }
 
-        // **Asked once per phrase, not once per phrase per noun.** `is_known` is
-        // a scan of the known set and the answer cannot depend on which noun is
-        // being scored, so having it inside the loop below made one resolution
-        // O(nouns x known) — a few hundred by a few hundred, every command. The
-        // set doubled when every verb word joined it, which is what made the
-        // shape worth noticing.
+        // Asked once per phrase, not once per phrase per noun: `is_known` scans
+        // the known set and cannot depend on which noun is being scored, so
+        // inside the loop it made one resolution O(nouns x known) — a few
+        // hundred by a few hundred, every command.
         let known: Vec<bool> = phrases.iter().map(|phrase| self.is_known(phrase)).collect();
 
         let mut found: Vec<NounMatch> = Vec::new();
@@ -207,10 +177,10 @@ impl Scene {
             if !kind.accepts(noun.kind) {
                 continue;
             }
-            // **First-wins on a tie, which is what keeps `words` honest.** The
-            // joined phrase is `phrases[0]`, so preferring it means a match that
-            // explains everything it was given outranks one that explains a word
-            // of it at the same score. `max()` would have taken the last.
+            // First-wins on a tie, which keeps `words` honest: the joined phrase
+            // is `phrases[0]`, so a match explaining everything it was given
+            // outranks one explaining a word of it at the same score. `max()`
+            // would have taken the last.
             let mut best: Option<(u32, usize)> = None;
             for (index, (phrase, known)) in phrases.iter().zip(&known).enumerate() {
                 let score = score_against(noun, phrase);
@@ -218,14 +188,11 @@ impl Scene {
                 // real substance into a *different* real substance is how
                 // `digest ground-sage` came to digest ground-salt.
                 //
-                // **Unless it is abbreviating**, which is not fuzzing and is
-                // the affordance `knowing`'s own note preserves. The rule was
+                // Unless it is abbreviating, which is not fuzzing. The rule was
                 // written over substances, where no known word is a strict
-                // prefix of another, so the distinction never came up. It
-                // does the moment the known set holds every verb word:
-                // `check` is `verify`'s, and a spell called `check.spell`
-                // became unreachable by `invoke check` — a player's own file
-                // name losing to a word they never typed.
+                // prefix of another, so this never came up — until the known set
+                // held every verb word: `check` is `verify`'s, and a spell
+                // called `check.spell` became unreachable by `invoke check`.
                 let score = if score < fuzzy::EXACT && *known && !abbreviates(noun, phrase) {
                     0
                 } else {
@@ -247,7 +214,7 @@ impl Scene {
                 words: if index == 0 { words.len() } else { 1 },
             });
         }
-        // **Stable, so equal scores keep registration order** — the tie-break
+        // Stable, so equal scores keep registration order — the tie-break
         // `best_match` has always had, and the fact `compile` detects a tie by.
         found.sort_by_key(|found| std::cmp::Reverse(found.score));
         found
@@ -261,11 +228,10 @@ impl Scene {
 /// the place, not the path.
 /// Whether `phrase` is the start of what this noun is called.
 ///
-/// **The line between abbreviating and mistyping**, and the only reason
-/// `knowing` needs one: `check` starts `check.spell` and `walk` does not start
-/// `wall`. `fuzzy` draws it too — a prefix scores from `PREFIX_FLOOR` while a
-/// typo is scored by edit distance — but the two bands overlap at short lengths,
-/// so this asks the structural question rather than reading a number.
+/// The line between abbreviating and mistyping, and the only reason `knowing`
+/// needs one: `check` starts `check.spell` and `walk` does not start `wall`.
+/// `fuzzy` draws it too, but its bands overlap at short lengths, so this asks
+/// the structural question rather than reading a number.
 ///
 /// A [`NounKind::Place`] answers to its leaf as well, for the reason
 /// [`score_against`] gives.
@@ -273,14 +239,12 @@ fn abbreviates(noun: &Noun, phrase: &str) -> bool {
     let phrase = phrase.to_lowercase();
     let name = noun.name.to_lowercase();
 
-    // **Except the lie told about this very word.** §8.1's substitution renames
-    // a pile to its own name plus a struck sigil, so `sage-` is a strict
-    // extension of `sage` — and the rule below would read that as a player
-    // abbreviating, hand the pile back to the spell that named it, and leave the
-    // sabotage resolving at full confidence into nothing having happened. It is
-    // the counter-example to the premise this whole exemption was written on:
-    // *no known word is a strict prefix of another*. The swap is what makes one,
-    // and it makes one deliberately.
+    // Except the lie told about this very word. §8.1's substitution renames a
+    // pile to its own name plus a struck sigil, so `sage-` strictly extends
+    // `sage` — and the rule below would read that as abbreviating, hand the pile
+    // back to the spell that named it, and leave the sabotage resolving at full
+    // confidence into nothing. It is the deliberate counter-example to this
+    // exemption's premise that no known word is a strict prefix of another.
     //
     // Asked of `tower::sabotage` rather than spelled here, because a second copy
     // of the lie's shape is a rule that comes apart the next time it changes.
@@ -377,12 +341,11 @@ mod tests {
 
     #[test]
     fn a_known_name_does_not_abbreviate_the_lie_told_about_it() {
-        // **§8.1's substitution, defeated by the abbreviation exemption.** The
-        // swap renames a pile to `claimed(name)` — its own name plus a struck
-        // sigil — so the lie is a strict *extension* of the truth and reads as
-        // an abbreviation of it. `grind sage` then resolved to the very pile the
-        // swap had just renamed, at full confidence, and the sabotage amounted
-        // to nothing having happened.
+        // §8.1's substitution, defeated by the abbreviation exemption: the swap
+        // renames a pile to `claimed(name)` — its own name plus a struck sigil —
+        // so the lie strictly extends the truth and reads as an abbreviation of
+        // it. `grind sage` then resolved to the very pile the swap had renamed,
+        // at full confidence, and the sabotage amounted to nothing.
         //
         // Found by `tests/tampering.rs` waiting on the real ambient swap, which
         // is seed-scheduled; this asks the rule directly so the next change to

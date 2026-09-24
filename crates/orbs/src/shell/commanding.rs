@@ -5,9 +5,9 @@
 //! weave screen and the maze alike, which is why they are gathered rather than
 //! filed under whichever screen happens to be open.
 //!
-//! **The rules behind them are `orbs_shell::shortcuts`'s**, so the two builds
-//! cannot disagree about where `Tampered` sits in the register cycle or what the
-//! trace file is called.
+//! The rules behind them are `orbs_shell::shortcuts`'s, so the two builds cannot
+//! disagree about where `Tampered` sits in the register cycle or what the trace
+//! file is called.
 
 use bevy::prelude::*;
 
@@ -28,11 +28,10 @@ use orbs_shell::TRACE_PATH;
 pub(super) fn submit(
     mut lines: MessageReader<SubmittedMessage>,
     mut tower: ResMut<Tower>,
-    // **`Option`, because a shell can exist without a sim plugin.** Half the
-    // tests in this file build the shell alone to fire a real `KeyboardInput` at
-    // it, and a bare `Res` fails parameter validation there — which would make
-    // installing a reader break every test that never wanted one. Absent is the
-    // same as empty: no reader, and `submit` unchanged.
+    // `Option`, because a shell can exist without a sim plugin. Half the tests
+    // here build the shell alone to fire a real `KeyboardInput` at it, and a
+    // bare `Res` fails parameter validation there — so installing a reader would
+    // break every test that never wanted one. Absent is the same as empty.
     readers: Option<Res<crate::sim::Readers>>,
     mut scroll: ResMut<orbs_shell::Scroll>,
 ) {
@@ -60,7 +59,7 @@ pub(super) fn export_trace(tower: Res<Tower>) {
 /// Step the orb's tonal register.
 ///
 /// Type a command with the register on and the echo comes back in a different
-/// face; then `peruse orb.log` and the log lines come back **plain**, because §3
+/// face; then `peruse orb.log` and the log lines come back plain, because §3
 /// exempts the diagnostic surfaces from the eldritch treatment and only from
 /// that one. A sabotage tell is not exempt anywhere, which is the asymmetry the
 /// whole disjointness rule buys.
@@ -73,20 +72,19 @@ pub(super) fn quit(mut exit: MessageWriter<AppExit>) {
     exit.write(AppExit::Success);
 }
 
-/// Leave the orb, because the word was typed **and confirmed**.
+/// Leave the orb, because the word was typed and confirmed.
 ///
-/// **The sim asks first.** `quit` once puts the question, `quit` again answers
-/// it, and any other command answers *no* — so `Quitting::take` is only ever
-/// true for a decision the player made twice. `execute::quit` has why leaving is
-/// the one word in the game that asks: it cannot be undone, waited out or
-/// repeated away, and the tower is written on the way.
+/// The sim asks first: `quit` once puts the question, `quit` again answers it,
+/// and any other command answers *no*, so `Quitting::take` is only ever true for
+/// a decision made twice. `execute::quit` has why leaving is the one word that
+/// asks — it cannot be undone, waited out or repeated away.
 ///
 /// The take-once handshake beside `scribe`, `unfurl`, `weave`, `wander` and
 /// `menu`: the sim records the decision and the frontend decides what leaving
 /// *means*. Here it is an `AppExit`; in the terminal build it is raw mode being
 /// put back.
 pub(super) fn quit_requested(mut tower: ResMut<Tower>, mut exit: MessageWriter<AppExit>) {
-    // **Peeked before it is taken**, exactly as the other handshakes are.
+    // Peeked before it is taken, exactly as the other handshakes are.
     // `quitting` needs `&mut`, and reaching through `ResMut` for it stamps
     // `Tower`'s change tick — and this system's own run condition is
     // `resource_changed::<Tower>`, so from the first frame Tower changed it
@@ -110,12 +108,10 @@ mod tests {
     use super::*;
     use crate::sim::Readers;
 
-    /// **The seam a dump cannot reach.** `ORBS_DUMP` builds no `App`, so
-    /// everything `scripts/dumps.sh` proves about the reader it proves about
-    /// `Sim::submit_reading` — never about the message that carries a typed line
-    /// to it. The terminal build covers the other half by pressing real keys;
-    /// this is the Bevy half, and between them the chain from a keystroke to a
-    /// divined echo has no untested link.
+    /// The seam a dump cannot reach: `ORBS_DUMP` builds no `App`, so everything
+    /// `scripts/dumps.sh` proves about the reader it proves about
+    /// `Sim::submit_reading`, never about the message carrying a typed line to
+    /// it. The terminal build covers the other half by pressing real keys.
     #[test]
     fn a_submitted_line_reaches_the_reader() {
         let mut app = App::new();

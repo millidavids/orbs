@@ -1,23 +1,14 @@
 //! The forge's charms, driven through the real schedule.
 //!
-//! `tests/persistence.rs` proves a charm survives a save and `tower::charm`'s own
-//! tests prove the arithmetic. Neither asks the question this file does: **does a
-//! charm actually reach the number it is supposed to change**, through the same
-//! `Sim` a player drives?
+//! `tests/persistence.rs` proves a charm survives a save and `tower::charm`'s
+//! own tests prove the arithmetic. Neither asks whether a charm actually
+//! reaches the number it is supposed to change, through the same `Sim` a player
+//! drives — and a test that checks the component is present would pass against
+//! a composition that reaches no call site at all.
 //!
-//! That distinction is not pedantry here. The whole of Phase 9 is turning one
-//! `if` into a composition, and `tower::dice` says why it had to be: *"it works
-//! because there is exactly one source and one effect, and it does not
-//! generalise — a second source would need the call site to know about it."* A
-//! test that checks the component is present would pass against a composition
-//! that reaches no call site at all.
-//!
-//! # Charms are placed through `world_mut` until the forge exists
-//!
-//! `imbue` arrives with the room, two steps after the component. Waiting until
-//! then to test any of this is how a thing gets carried on faith — which is the
-//! blind spot `persistence.rs` records having hit once already. The escape hatch
-//! is documented for *"mutating the world between steps"*, which is exactly this.
+//! Charms are placed through `world_mut` until the forge exists: `imbue`
+//! arrives with the room, two steps after the component, and waiting until then
+//! is how a thing gets carried on faith.
 
 use orbs_sim::Sim;
 use orbs_sim::tower::{Charm, Charmed, charm::Kind};
@@ -65,8 +56,7 @@ fn mortar(sim: &Sim) -> bevy_ecs::entity::Entity {
 
 /// A grind is eight ticks; under `hurried` it is four.
 ///
-/// **The number, not the component.** This is the claim the whole composition
-/// exists to make good on, and it is measured at the meter — the same interval
+/// The number, not the component: measured at the meter — the interval
 /// `land::finish` compares against and the panel is drawn from — rather than by
 /// asking whether a `Charmed` is present.
 #[test]
@@ -95,11 +85,10 @@ fn a_charmed_tool_works_at_the_charmed_rate() {
 
 /// ...and it stops when the charm does.
 ///
-/// **Read when a run starts, like heat.** §10.1 checks the athanor at `begin`
-/// and lets the run finish even if the fire dies under it, and speed follows
-/// heat — so what has to lapse is the *next* run, not the one in flight. A test
-/// that only checked the charm was gone would pass against a `hastened` that had
-/// stopped reading charms entirely.
+/// Read when a run starts, like heat: §10.1 checks the athanor at `begin` and
+/// lets the run finish even if the fire dies, so what lapses is the *next* run.
+/// A test that only checked the charm was gone would pass against a `hastened`
+/// that had stopped reading charms entirely.
 #[test]
 fn a_lapsed_charm_stops_changing_the_number() {
     let mut sim = laboratory();
@@ -130,10 +119,9 @@ fn a_lapsed_charm_stops_changing_the_number() {
 
 /// A charm the tool does not hold changes nothing.
 ///
-/// **Absent is nought**, which is this tower's rule everywhere and is sharper
-/// than it looks: `watch::many_at` answers an absent reading with nought, so the
-/// failure mode of getting this wrong is a plausible number rather than an
-/// error. Every new read site gets this test.
+/// Absent is nought, this tower's rule everywhere: getting it wrong yields a
+/// plausible number rather than an error, so every new read site gets this
+/// test.
 #[test]
 fn a_charm_of_another_kind_changes_nothing() {
     let plain = {
@@ -158,10 +146,10 @@ fn a_charm_of_another_kind_changes_nothing() {
 
 /// Both sources reach one call site, which is the architecture in one test.
 ///
-/// A `quickening-scroll` sets `Quickened` on the **room**; a charm sits on one
-/// **tool**. `tower::dice` predicted that a second source would need the call
-/// site to know about it — so the call site does not know, and this is what says
-/// so: the two produce the same number, and neither is stacked on the other.
+/// A `quickening-scroll` sets `Quickened` on the *room*; a charm sits on one
+/// *tool*. `tower::dice` predicted a second source would need the call site to
+/// know about it — it does not: the two produce the same number and neither is
+/// stacked on the other.
 #[cfg(debug_assertions)]
 #[test]
 fn a_scroll_and_a_charm_reach_the_same_rate() {
@@ -208,33 +196,26 @@ fn a_scroll_and_a_charm_reach_the_same_rate() {
     assert_eq!(by_both, by_charm, "two sources stacked into a quartering");
 }
 
-/// **The forge replays, through a fall that fails and a charm it cannot pay
-/// for.**
+/// The forge replays, through a fall that fails and a charm it cannot pay for.
 ///
-/// Determinism is the one risk in this phase with no partial failure mode: a
-/// divergent replay still looks like a working game, and it would make the
-/// balance harness, offline catch-up and every regression test unsound at once.
+/// Determinism has no partial failure mode: a divergent replay still looks like
+/// a working game while making the balance harness, offline catch-up and every
+/// regression test unsound. The forge is where it would land — `imbue` is the
+/// only thing in the domain that draws.
 ///
-/// The forge is where it would land, because `imbue` is the only thing in the
-/// domain that draws — one number from `RngStream::Forge` per lattice. So this
-/// drives a session that opens several lattices, fails falls, and runs the pool
-/// dry, then replays the whole thing from its own submissions.
-///
-/// **A run that never hits the refusal tests the path that did not change.** The
-/// assertion below is what makes sure it does.
+/// A run that never hits the refusal tests the path that did not change, which
+/// the assertion below guards against.
 #[cfg(debug_assertions)]
 #[test]
 fn a_forge_session_replays_through_a_failed_fall_and_an_empty_pool() {
     let script = {
         let mut script = vec!["attend forge".to_owned()];
-        // Six or more apiece against a ceiling of 24, with a failed fall costing
-        // the same as a good one — so the pool runs out partway through and the
-        // rest are refused.
+        // Six or more apiece against a ceiling of 24, with a failed fall
+        // costing the same as a good one, so the pool runs out partway through.
         //
-        // **A `meditate` between the falls, because a fall takes the slot.**
-        // Without it every anneal after the first bounces off the busy lock and
-        // the pool never drains — which is what this test read as *the refusal
-        // path is unreachable* when the slot became real.
+        // A `meditate` between the falls, because a fall takes the slot:
+        // without it every anneal after the first bounces off the busy lock and
+        // the pool never drains.
         for _ in 0..8 {
             script.push("imbue mortar_and_pestle hurried".to_owned());
             script.push("snap belt".to_owned());
@@ -287,9 +268,8 @@ fn a_forge_session_replays_through_a_failed_fall_and_an_empty_pool() {
 
 /// A `fruitful` tool yields twice, and never doubles what it throws away.
 ///
-/// **The second half is the one worth asserting.** A charm that doubled the
-/// husks would double the *scouring* — the opposite of a boon, and a defect a
-/// test that only counted the output would never see.
+/// The second half is the one worth asserting: a charm that doubled the husks
+/// would double the *scouring*, which a test counting only the output misses.
 #[cfg(debug_assertions)]
 #[test]
 fn a_fruitful_tool_yields_twice_and_leaves_no_more_behind() {
@@ -342,16 +322,13 @@ fn a_bountiful_stacks_pays_twice() {
                 .kind(orbs_sim::parser::NounKind::Place)
                 .find("stacks")
                 .expect("the archive has stacks");
-            // **Longer than the walk**, which the first version was not: a maze
-            // takes thousands of ticks and a five-thousand-tick charm lapsed
-            // before the fragment landed, so the test read as *the charm does
-            // nothing* when it was really *the charm ended first*.
+            // Longer than the walk: a maze takes thousands of ticks, and a
+            // five-thousand-tick charm lapsed before the fragment landed.
             lay(&mut sim, stacks, Kind::Bountiful, 100_000);
         }
-        // **A solver, not a blind walk.** Four bearings tried in a fixed order
-        // is not a maze algorithm — it cycles at any junction where two ways
-        // read alike, which is §19's *"the solver that was never a solver"*.
-        // `roaming` is shipped and solves this seed.
+        // A solver, not a blind walk: four bearings in a fixed order cycles at
+        // any junction where two ways read alike (§19). `roaming` is shipped
+        // and solves this seed.
         sim.submit("invoke roaming");
         sim.step();
         for _ in 0..3 {
@@ -379,10 +356,9 @@ fn a_bountiful_stacks_pays_twice() {
 
 /// A charm on one tool does not reach another.
 ///
-/// **The containment claim**, and it is not obvious: `charmed` walks *up* to the
-/// domain as well as asking the node, because a `quickening-scroll` hangs its
-/// state on the room. So a charm laid on one instrument must not be found on its
-/// neighbour — which is what this asks and what a domain-wide lookup would fail.
+/// `charmed` walks *up* to the domain as well as asking the node, because a
+/// `quickening-scroll` hangs its state on the room — so a charm laid on one
+/// instrument must not be found on its neighbour.
 #[cfg(debug_assertions)]
 #[test]
 fn a_charm_on_one_tool_does_not_reach_its_neighbour() {

@@ -1,18 +1,17 @@
 //! The siege, beside the transcript (DESIGN.md §5.1, `tower::siege`).
 //!
-//! The sanctum board's shape, one room over, and it follows the same three
-//! rules. **It is not gated on a word**: it draws whenever a siege is running,
-//! which is what makes a bound decision tree watchable — watching and fighting
-//! are different activities and only one of them owns the keyboard. There is no
-//! full-pane mode, because unlike a maze there is nothing to walk: a siege is
-//! fought from the prompt with `deploy`, `quaff` and `hold`.
+//! The sanctum board's shape, one room over, following the same three rules. Not
+//! gated on a word: it draws whenever a siege is running, which is what makes a
+//! bound decision tree watchable. There is no full-pane mode, because unlike a
+//! maze there is nothing to walk — a siege is fought from the prompt with
+//! `deploy`, `quaff` and `hold`.
 //!
-//! **Columns, never rows**, and it splits *after* the instrument panel. §19
-//! records getting that order backwards once.
+//! Columns, never rows, splitting after the instrument panel. §19 records
+//! getting that order backwards once.
 //!
-//! It **refuses rather than truncating**. Half a siege board is worse than none:
-//! a picture missing one of its two bands shows a comparison with one side of it
-//! absent, and the whole domain is that comparison.
+//! It refuses rather than truncating. Half a siege board is worse than none: a
+//! picture missing one of its two bands shows a comparison with one side absent,
+//! and the whole domain is that comparison.
 
 use orbs_render::{Painter, Pos, Rampart, Rect, Role, Style, UtteranceKind, Wash};
 use orbs_sim::content::Prose;
@@ -53,10 +52,10 @@ pub fn paint(painter: &mut Painter<'_>, at: Rect, siege: &Rampart, prose: &Prose
         Style::DIM,
     );
 
-    // **The four areas, above the bands.** They are what the turn is *for*, and
-    // the bands are the consequence — so the thing being decided reads first.
-    // An empty row is the most important one on the board: three dice against
-    // four areas means one is always dark.
+    // The four areas, above the bands: they are what the turn is for and the
+    // bands are the consequence, so the thing being decided reads first. An
+    // empty row is the most important one on the board — three dice against four
+    // areas means one is always dark.
     for (offset, area) in siege.areas.iter().enumerate() {
         let Ok(offset) = u16::try_from(offset) else {
             break;
@@ -65,9 +64,9 @@ pub fn paint(painter: &mut Painter<'_>, at: Rect, siege: &Rampart, prose: &Prose
         painter.glyphs(
             Pos::new(inside.col, inside.row + row),
             &truncate(&siege.area_row(area), cols),
-            // **Dim when it is moot**, which is the one place this board says
-            // *do not* rather than *here is what is*. Weight rather than hue, so
-            // it survives a dump and a greyscale tube (§14).
+            // Dim when it is moot — the one place this board says *do not*
+            // rather than *here is what is*. Weight rather than hue, so it
+            // survives a dump and a greyscale tube (§14).
             if area.moot { Style::DIM } else { Style::NORMAL },
         );
     }
@@ -107,9 +106,9 @@ fn band(
     side: &orbs_render::SiegeSide,
 ) {
     let at = Pos::new(inside.col, inside.row + row);
-    // **`glyphs`, so the picture is silent**, and the summary below says what it
-    // means. A reader hearing forty cells of block and shade read out gets
-    // box-drawing noise, which is what §19's frame rule exists to prevent.
+    // `glyphs`, so the picture is silent and the summary below says what it
+    // means. A reader hearing forty cells of block and shade gets box-drawing
+    // noise, which is what §19's frame rule exists to prevent.
     painter.glyphs(
         at,
         &truncate(&siege.row(side), usize::from(inside.cols)),
@@ -133,10 +132,9 @@ fn truncate(line: &str, cols: usize) -> String {
 
 /// What the board says, for a reader.
 ///
-/// **Spoken once as a summary, never cell by cell**, which is every other
-/// board's rule. What a reader needs from a siege is who is standing, what is
-/// coming, and what the odds are — the per-roll detail is already in the log,
-/// where it was said as a sentence.
+/// Spoken once as a summary, never cell by cell — every other board's rule.
+/// What a reader needs from a siege is who is standing, what is coming and what
+/// the odds are; the per-roll detail is already in the log as a sentence.
 fn speak(painter: &mut Painter<'_>, siege: &Rampart, prose: &Prose) {
     painter.announce(
         UtteranceKind::Progress,
@@ -209,7 +207,7 @@ mod tests {
 
     #[test]
     fn a_siege_takes_columns_and_never_rows() {
-        // **Columns, never rows** — the rule §19 records getting backwards once.
+        // Columns, never rows — the rule §19 records getting backwards once.
         // Taking rows under a `Top` panel leaves the deep-focus floor a five-row
         // transcript.
         let whole = area(120, 45);

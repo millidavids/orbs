@@ -1,23 +1,13 @@
 //! Records become cells here — and nowhere else.
 //!
-//! This module is the whole claim of architectural rule 4 made concrete:
-//! *presentation is a view over the record*. Nothing here adds information. A
-//! table decides widths, alignment, and which columns to show; it cannot invent
-//! a value, and it cannot suppress one from the screen-reader stream, because
-//! the linear form comes from [`Record::speak`] rather than from anything drawn.
+//! Architectural rule 4 made concrete: a table decides widths and columns and
+//! cannot invent a value or suppress one from the screen-reader stream, because
+//! the linear form comes from [`Record::speak`] rather than from anything drawn
+//! — the same rule [`Painter::span`] follows.
 //!
-//! Three consequences fall out rather than being implemented:
-//!
-//! - **Linearised tables are correct by construction** (§14). Every row speaks
-//!   `label: value` because the labels live on the record, so a view physically
-//!   cannot forget them or reorder them away from their values.
-//! - **A truncated column costs a sighted player and nobody else.** The row's
-//!   speech is built before any width is applied, so a narrow pane is a visual
-//!   constraint and never an informational one — the same rule
-//!   [`Painter::span`] follows.
-//! - **A missing field draws as a gap.** §8.1 names malformed record boundaries
-//!   as a structural sabotage signature; a record short a field leaves a hole in
-//!   its row without any special case being written for it.
+//! So linearised tables are correct by construction (§14), a truncated column
+//! costs a sighted player and nobody else, and a record short a field leaves a
+//! hole in its row — §8.1's sabotage signature — with no special case for it.
 
 use crate::geometry::{Pos, Rect};
 use crate::paint::Painter;
@@ -95,26 +85,21 @@ impl<'a> RecordView<'a> {
     /// Draw only the first `cells` characters of everything after record
     /// `after`, as if it were arriving over a wire.
     ///
-    /// Records before `after` are drawn whole; from there on the budget runs out
-    /// mid-line and the rest of the run is blank. **Rows are unaffected** — a
-    /// record still occupies exactly the height it will occupy when it finishes,
-    /// so nothing below it moves as it arrives. A reveal that reflowed the pane
-    /// would fight the caller's own arithmetic for which records fit.
+    /// Records before `after` are drawn whole; from there on the budget runs
+    /// out mid-line and the rest of the run is blank. Rows are unaffected — a
+    /// record occupies the height it will occupy when it finishes, so nothing
+    /// below it moves as it arrives, and a reveal that reflowed the pane would
+    /// fight the caller's own arithmetic for which records fit.
     ///
-    /// # It costs the sim nothing, and must not
+    /// It costs the sim nothing, and must not. Waiting on output is meant to be
+    /// a reason to automate; as a *modelled* cost the balance harness would
+    /// have to simulate typewriter delays, offline catch-up would owe animation
+    /// time, and a player who turns the animation off for motion or attention
+    /// reasons would gain an advantage — §9's parity rule inverted, a setting
+    /// become a difficulty choice.
     ///
-    /// This is presentation: the records are all already there, and a caller
-    /// that never calls this sees the finished screen. The reason that matters
-    /// is that waiting on output is meant to be a reason to automate, and the
-    /// moment it were a *modelled* cost the balance harness would have to
-    /// simulate typewriter delays, offline catch-up would owe animation time,
-    /// and a player who turns the animation off for motion or attention reasons
-    /// would gain a competitive advantage — the inversion of §9's parity rule,
-    /// where a setting must never become a difficulty choice.
-    ///
-    /// Speech is unaffected in a different way: a record announces only once it
-    /// is **whole**, so a listener hears complete records in stream order and
-    /// never half of one.
+    /// A record announces only once it is whole, so a listener hears complete
+    /// records in stream order and never half of one.
     #[must_use]
     pub const fn revealing(self, after: usize, cells: u32) -> Self {
         Self {
@@ -137,13 +122,12 @@ impl<'a> RecordView<'a> {
 
     /// The command-line surface: a marker, then the line.
     ///
-    /// [`RecordView::lines`] is not sufficient here. Every record the parser
-    /// emits carries one canonical command form, so through a line view an
-    /// unresolved input draws as a column of bare words and `meditate` draws as
-    /// `meditate count` — neither of which is the prompt DESIGN.md §6 describes.
+    /// [`RecordView::lines`] is not sufficient: every record the parser emits
+    /// carries one canonical command form, so through a line view an unresolved
+    /// input draws as a column of bare words and `meditate` as `meditate count`
+    /// — neither the prompt DESIGN.md §6 describes.
     ///
-    /// This view draws two extra channels, both derived from the record and
-    /// neither of them prose:
+    /// Two extra channels, both derived from the record and neither prose:
     ///
     /// - the [`Record::marker`] glyph, so a suggestion cannot be mistaken for
     ///   the command that will run;
@@ -166,10 +150,10 @@ impl<'a> RecordView<'a> {
     /// Rows `records` would need at `cols` wide, without drawing anything.
     ///
     /// A line view is no longer one row per record — a listing packs across the
-    /// pane — so a caller that wants the *newest* records has to ask rather than
-    /// count. Before this existed the transcript assumed one row each, and every
-    /// packed listing left that many blank rows at the bottom of the pane while
-    /// dropping the same number of records off the top.
+    /// pane — so a caller wanting the *newest* records has to ask rather than
+    /// count. The transcript assumed one row each, and every packed listing
+    /// left that many blank rows at the bottom while dropping as many off the
+    /// top.
     ///
     /// Unbounded in the record count, so a caller holding a long stream should
     /// pass a window rather than the whole of it.
@@ -194,15 +178,14 @@ impl<'a> RecordView<'a> {
             let Some(record) = rest.next() else { break };
             // The blank row `draw_lines` puts before each command but the first.
             // Measured here too, or the caller's "which records fit" arithmetic
-            // disagrees with what is drawn and the pane scrolls by a row a frame.
+            // disagrees with the draw and the pane scrolls by a row a frame.
             if opens_with_a_gap(record.kind()) && !first {
                 rows = rows.saturating_add(1);
             }
             first = false;
-            // Only ever planned at a run's first record. A run that declines
-            // declines for its whole length, and re-asking at each of its records
-            // would walk the remainder every time — quadratic in the run, on a
-            // path that runs per frame.
+            // Planned at a run's first record only. A run that declines
+            // declines for its whole length, and re-asking at each record would
+            // walk the remainder every time — quadratic, on a per-frame path.
             if at_run_start
                 && record.kind().tiles()
                 && let Some(plan) = Tiling::plan(cols, indent, run)
@@ -396,9 +379,8 @@ fn draw_lines<'r>(
 
         // The sub-area is what is *left* of the pane, not the pane moved down.
         // `Rect { row, ..area }` keeps the full row count, so `bottom()` slides
-        // with the run and a listing starting partway down draws past the pane —
-        // where `Painter` clips the cells but not the speech, and a reader hears
-        // rows nobody can see.
+        // with the run and a listing starting partway down draws past the pane,
+        // where `Painter` clips the cells but not the speech.
         let remaining = Rect {
             row,
             rows: area.bottom().saturating_sub(row),
@@ -420,11 +402,10 @@ fn draw_lines<'r>(
             }
             continue;
         }
-        // **Planned once per run, at its first record.** The same rule
-        // `Tiling::plan` follows and for the same reason: re-measuring the
-        // remainder at every record is quadratic in the run, on a path that
-        // runs per frame. A run that is not a run of readings plans `None` and
-        // stays `None` until a record of another kind ends it.
+        // Planned once per run, at its first record — the rule `Tiling::plan`
+        // follows and for the same reason: re-measuring the remainder at every
+        // record is quadratic, on a path that runs per frame. A run that is not
+        // readings plans `None` and stays `None` until another kind ends it.
         if record.kind() == RecordKind::Status {
             if readings.is_none() && at_readings_start {
                 readings = Readings::plan(std::iter::once(record).chain(rest.clone()));
@@ -439,8 +420,7 @@ fn draw_lines<'r>(
 
         // A blank row before each command but the first, so one exchange does
         // not run into the next. The transcript is a wall of short lines and the
-        // prompt is the only thing separating them; without this, reading back
-        // three commands means finding the prompts by eye.
+        // prompt the only thing separating them.
         //
         // Drawn rather than spoken: §14's stream is whole records in order, and
         // an utterance for "nothing" is noise a listener cannot skip.
@@ -456,34 +436,26 @@ fn draw_lines<'r>(
         // Content only: an annotation drawn as text would put an internal token
         // — `"resolved survey"` — on screen for a player to read.
         //
-        // **The brackets are the view's, not the record's.** A section carries
-        // the bare word so `sift reagent` finds it and a screen reader hears a
-        // heading rather than punctuation; `[reagent]` is how this surface draws
-        // one, and drawing is what a view is for (rule 4).
-        // **A listing keeps its `=` even when it is not tiled.** A run of one
-        // does not pack — and scrolling clips a run, so the last visible entry
-        // of a listing was stacking and coming out as `charcoal ∞` while the
-        // rows above it read `charcoal = ∞`. One entry of a table is still a row
-        // of that table. `drawn_form` is what `wrapped_rows` measures.
+        // A listing keeps its `=` even when it is not tiled. A run of one does
+        // not pack, and scrolling clips a run, so the last visible entry of a
+        // listing was stacking and coming out as `charcoal ∞` while the rows
+        // above read `charcoal = ∞`. One entry of a table is still a row of it.
+        // `drawn_form` is what `wrapped_rows` measures.
         drawn.push_str(&drawn_form(&record));
-        // **A run of readings gets its values in a column** — §19 asked for this
-        // outright: *"a status row wants its value column aligned with the one
-        // above it."* `tick 4` over `concentration 0` is two numbers in two
-        // places, and the whole reason to print six of them together is to be
-        // read down.
+        // A run of readings gets its values in a column — §19 asked for it
+        // outright. `tick 4` over `concentration 0` is two numbers in two
+        // places, and the reason to print six together is to be read down.
         //
-        // Leaders here and nowhere else in the transcript, because this is the
-        // one listing whose far column is **right**-aligned — which is the only
-        // shape a leader suits. Against a left-aligned column the run length is
-        // set by the near column's raggedness and the eye lands on the dots;
-        // that is why the verb listing takes a plain gap and this does not.
+        // Leaders here and nowhere else in the transcript, this being the one
+        // listing whose far column is right-aligned — the only shape a leader
+        // suits. Against a left-aligned column the run length is set by the
+        // near column's raggedness and the eye lands on the dots, which is why
+        // the verb listing takes a plain gap.
         //
-        // **The row count cannot change**, which is what makes this safe to do
-        // in the draw alone: a reading is one row before and after, and the
-        // padded form is refused outright if it would not fit on one. So
-        // `wrapped_rows` measuring the unpadded string still gets the right
-        // answer, and the height/draw agreement §19 keeps recording defects
-        // against is not touched.
+        // Safe to do in the draw alone because the row count cannot change: a
+        // reading is one row either way, and the padded form is refused if it
+        // would not fit on one. So `wrapped_rows` measuring the unpadded string
+        // still gets the right answer.
         if let Some(plan) = readings.as_ref() {
             let width = wrap_width(area.cols, lead_for(&record, prompt), record.kind());
             if let Some(aligned) = plan.row(&record, width) {
@@ -532,11 +504,11 @@ fn draw_lines<'r>(
         // Wrapped, not clipped — see `wrapped_rows`, which measures with the same
         // iterator so the two cannot disagree about the row cost.
         //
-        // **The whole record speaks once, on its first row.** §14's stream is
-        // whole records in stream order; a listener hearing one utterance per
-        // wrapped fragment would have to reassemble a sentence the screen shows
-        // whole, and would hear a *different number of things* depending on how
-        // wide the window happens to be. Continuations draw silently.
+        // The whole record speaks once, on its first row, and continuations
+        // draw silently. §14's stream is whole records in order; one utterance
+        // per wrapped fragment would make a listener reassemble a sentence the
+        // screen shows whole, and hear a different number of things depending
+        // on the window width.
         let width = wrap_width(area.cols, lead_for(&record, prompt), record.kind());
         let mut spoke = false;
         for fragment in crate::wrap::Wrap::new(visible, width) {
@@ -562,9 +534,9 @@ fn draw_lines<'r>(
                     span = span.with_outcome(outcome);
                 }
                 let drawn = painter.span(Pos::new(at, row), &span);
-                // **A heading is ruled off, on its own row.** Beside the words
-                // rather than under them, so the hierarchy costs no row on a
-                // page that already fills the floor exactly.
+                // A heading is ruled off beside the words rather than under
+                // them, so the hierarchy costs no row on a page that already
+                // fills the floor exactly.
                 //
                 // Drawn here rather than in `drawn_form` because a rule's length
                 // is the *pane's* and `drawn_form` returns a width-independent
@@ -574,7 +546,7 @@ fn draw_lines<'r>(
                 //
                 // Silent, like every rule in the game: a reader hearing a run of
                 // box-drawing between sections gets noise where a sighted player
-                // gets separation for free. The heading's own span already said
+                // gets separation for free, and the heading's span already said
                 // what the section is.
                 if record.kind() == RecordKind::Section {
                     let after = at.saturating_add(drawn).saturating_add(1);
@@ -587,9 +559,7 @@ fn draw_lines<'r>(
                 // `glyphs` rather than a `Span` with empty speech: an empty
                 // override means *no override*, so the span would announce its
                 // visible text and a listener would hear a prefix that grows
-                // every frame. §14's stream is whole records in stream order — a
-                // record announces when it finishes arriving, and stays silent
-                // until then.
+                // every frame. A record announces when it finishes arriving.
                 painter.glyphs(Pos::new(at, row), fragment, style);
             }
             spoke = true;
@@ -610,17 +580,16 @@ const fn indent_for(prompt: Option<&str>) -> u16 {
 
 /// Rows a record's drawn line takes once wrapped.
 ///
-/// **A line view wraps rather than clips.** It used to draw one row per record
-/// and cut whatever did not fit, which is silent data loss on the surface §14
-/// calls the game's primary output: a refusal naming two long reagents lost its
-/// verb, and `grimoire`'s own instructions — the one command whose entire job is
-/// telling a player what to type — lost the thing to type. A pane gives about 46
-/// cells once its border and §10.1's instrument panel are taken out, and
-/// `sage-tincture + ground-salt -> clarified-draught` is 47.
+/// A line view wraps rather than clips. Drawing one row per record and cutting
+/// the rest is silent data loss on the surface §14 calls the game's primary
+/// output: `grimoire`'s own instructions — the one command whose job is telling
+/// a player what to type — lost the thing to type. A pane gives about 46 cells
+/// once its border and §10.1's instrument panel are out, and `sage-tincture +
+/// ground-salt -> clarified-draught` is 47.
 ///
-/// Measured here and drawn by [`draw_lines`] from the same [`crate::Wrap`], so the two
-/// cannot disagree about how many rows a record costs — the failure that left the
-/// transcript with blank rows at the bottom while it dropped history off the top.
+/// Measured here and drawn by [`draw_lines`] from the same [`crate::Wrap`], so
+/// the two cannot disagree about how many rows a record costs — the failure
+/// that left blank rows at the bottom while dropping history off the top.
 fn wrapped_rows(record: &Record<'_>, cols: u16, prompt: Option<&str>) -> u16 {
     // The same three arguments the draw uses, so the measure cannot narrow a
     // record the draw sets wide.
@@ -628,13 +597,11 @@ fn wrapped_rows(record: &Record<'_>, cols: u16, prompt: Option<&str>) -> u16 {
     if width == 0 {
         return 1;
     }
-    // **Measured as it is drawn, not as `to_line` renders it.** `draw_lines`
-    // wraps a `Section` in `[…]` and binds a counted `Entry` with ` = `, each
-    // two cells wider than the plain join — so a row within two cells of the
-    // wrap point measured one row and drew two, and the binary search above
-    // picked a skip whose measured height fit while the drawn one overflowed,
-    // pushing the newest record off the bottom of the pane and out of §14's
-    // stream. Exactly the failure `wrapped_rows` was written to prevent.
+    // Measured as it is drawn, not as `to_line` renders it. `draw_lines` binds
+    // a counted `Entry` with ` = `, two cells wider than the plain join — so a
+    // row within two cells of the wrap point measured one row and drew two, and
+    // the binary search above picked a skip whose measured height fit while the
+    // drawn one overflowed, pushing the newest record out of §14's stream.
     let line = drawn_form(record);
     let rows = crate::wrap::Wrap::new(&line, width).count();
     u16::try_from(rows).unwrap_or(u16::MAX).max(1)
@@ -646,12 +613,10 @@ fn wrapped_rows(record: &Record<'_>, cols: u16, prompt: Option<&str>) -> u16 {
 /// characters — see [`wrapped_rows`].
 fn drawn_form(record: &Record<'_>) -> String {
     if record.kind() == RecordKind::Section {
-        // **The brackets are gone, and the rule replaced them.** `[reagent]`
-        // read as a config file — which is the whole complaint this pass
-        // answers — and brackets are a weak heading anyway: they say *this is
-        // set apart* without saying what it is set apart from. A rule to a
-        // fixed column says it, and costs no row because it is drawn beside the
-        // heading rather than under it. See `draw_lines`.
+        // The brackets are gone and the rule replaced them. `[reagent]` read as
+        // a config file, and brackets are a weak heading anyway: they say *this
+        // is set apart* without saying from what. A rule to a fixed column says
+        // it and costs no row, drawn beside the heading. See `draw_lines`.
         //
         // It stays the view's decision either way: the record carries the bare
         // word so `sift reagent` finds it and a reader hears a heading rather
@@ -665,32 +630,22 @@ fn drawn_form(record: &Record<'_>) -> String {
 
 /// `attend` + `place` → `attend <place>`, the form a listing shows a verb in.
 ///
-/// **Composed here, not in the sim.** A slot's brackets are a drawing decision
-/// exactly as `[reagent]` was (rule 4): the record carries `attend` and `place`
-/// as separate fields so `sift attend` finds one and a reader hears two labelled
-/// values, and this is how the surface draws them.
+/// Composed here, not in the sim: a slot's brackets are a drawing decision
+/// exactly as `[reagent]` was (rule 4), the record carrying `attend` and
+/// `place` as separate fields so `sift attend` finds one.
 ///
-/// The brackets are doing real work rather than decorating. Tiled bare, a
-/// two-word entry runs into its neighbour — `distil reagent  kindle reagent` —
-/// because the gap between entries is the same two spaces as the gap *inside*
-/// one. `>` terminates the cell, so the eye finds the boundary. It is also the
-/// spelling `recall scripting` already teaches for `repeat <count>`.
-/// **A shape that brackets its own slots is not bracketed again.** A verb's
-/// record carries one bare slot name (`attend` + `place`), so this supplies the
-/// pair; a *control word* carries a whole shape from `SpellWord::shape`, and
-/// those spell their own — `<name> be <place>`, `each <set>`, `<name>(...)`.
-/// Wrapping them drew `let <<name> be <place>>` and `wait <<thing>>`, the one
-/// double bracket in the game, three rows above `queue <name>` on the same page
-/// for the comparison.
+/// The brackets do real work. Tiled bare, a two-word entry runs into its
+/// neighbour — `distil reagent  kindle reagent` — because the gap between
+/// entries is the same two spaces as the gap *inside* one. `>` terminates the
+/// cell, and is the spelling `recall scripting` teaches for `repeat <count>`.
 ///
-/// **The test is "does it contain a `<`", not "is it wrapped in one".** Two of
-/// the shapes are neither — `each <set>` opens with a word and `<name>(...)`
-/// closes with a paren — so anything narrower leaves half of them doubled, which
-/// is how the first attempt at this went.
-///
-/// The rule above is preserved rather than excepted: a cell has to end in
-/// something the eye can find, or a tiled run reads as one entry. `>` does it,
-/// and so does `)`.
+/// A shape that brackets its own slots is not bracketed again. A *control word*
+/// carries a whole shape from `SpellWord::shape` and those spell their own, so
+/// wrapping them drew `let <<name> be <place>>`, the one double bracket in the
+/// game. The test is "does it contain a `<`", not "is it wrapped in one": two
+/// of the shapes are neither — `each <set>` opens with a word, `<name>(...)`
+/// closes with a paren — so anything narrower leaves half of them doubled. The
+/// rule above still holds, `)` terminating a cell as `>` does.
 fn signature_of(record: &Record<'_>) -> String {
     let mut out = String::new();
     if let Some(name) = record.field(FieldName::Name) {
@@ -729,34 +684,30 @@ fn all_described<'r>(run: impl Iterator<Item = Record<'r>>) -> bool {
 
 /// Whether a record of this kind opens with a blank row above it.
 ///
-/// **Two kinds, one rule, and it must be asked in both `height` and
-/// `draw_lines`.** A blank row is the cheapest separator a fixed grid has —
-/// stronger than an indent, cheaper than a rule, and the first thing to reach
-/// for before either. `Input` has had one since the transcript existed, so one
-/// exchange does not run into the next.
+/// Two kinds, one rule, and it must be asked in both `height` and `draw_lines`.
+/// A blank row is the cheapest separator a fixed grid has — stronger than an
+/// indent, cheaper than a rule. `Input` has had one since the transcript
+/// existed, so one exchange does not run into the next.
 ///
-/// `Section` earns the same for the same reason one level down: a ruled heading
-/// says *a new thing starts here*, and a heading pressed against the last row of
-/// the previous listing says it while looking like part of it. The rule and the
-/// gap answer different halves — the rule names the boundary, the gap gives the
-/// eye somewhere to land.
+/// `Section` earns the same one level down: a heading pressed against the last
+/// row of the previous listing says *a new thing starts here* while looking
+/// like part of it. The rule names the boundary, the gap gives the eye
+/// somewhere to land.
 ///
-/// **Not free, and worth saying what it costs.** The laboratory's page carries
-/// eight sections, so it is seven more rows on a page that is already longer than
-/// the 80×22 floor's nineteen — which stopped being an exact fit when the listing
-/// gained descriptions. §19 records that the fit is gone; this makes a scrolling
-/// page longer rather than breaking one that fitted.
+/// Not free: the laboratory's page carries eight sections, so it is seven more
+/// rows on a page already longer than the 80×22 floor's nineteen. §19 records
+/// that the fit is gone; this lengthens a scrolling page rather than breaking
+/// one that fitted.
 const fn opens_with_a_gap(kind: RecordKind) -> bool {
     matches!(kind, RecordKind::Input | RecordKind::Section)
 }
 
 /// The column a section's rule runs to, given the pane.
 ///
-/// **A fixed stop, not the pane edge, and this was measured rather than
-/// picked.** Drawn to the edge the rules were the strongest marks on screen and
-/// the content went to mush — the squint test's classic failure. Stopping every
-/// rule at the same column makes the headings read as a *set* and leaves the
-/// content dominant.
+/// A fixed stop rather than the pane edge, measured rather than picked. Drawn
+/// to the edge the rules were the strongest marks on screen and the content
+/// went to mush — the squint test's classic failure. One column for every rule
+/// makes the headings read as a set and leaves the content dominant.
 ///
 /// Never more than half the pane, so a narrow transcript does not end up mostly
 /// rule: 34 cells at the laboratory's 86, 31 at the 80x22 floor's 62.
@@ -768,23 +719,21 @@ const fn rule_stop(cols: u16) -> u16 {
 
 /// Cells before a record's own text begins.
 ///
-/// **Per record, because an `Input` starts after the whole prompt** and
-/// everything else after the marker. Measuring both at the marker width — which
-/// is what a single `indent` did — makes `height` believe a typed line has a
-/// dozen more cells than it draws into, so a long command measures one row and
-/// draws two. The pane then scrolls by a row a frame, which is the failure the
-/// tiling plan is shared to prevent and would have been reintroduced here.
+/// Per record, because an `Input` starts after the whole prompt and everything
+/// else after the marker. Measuring both at the marker width — what a single
+/// `indent` did — makes `height` believe a typed line has a dozen more cells
+/// than it draws into, so a long command measures one row and draws two and the
+/// pane scrolls by a row a frame.
 fn lead_for(record: &Record<'_>, prompt: Option<&str>) -> u16 {
     match prompt {
         None => 0,
         Some(prompt) if record.kind() == RecordKind::Input => {
             u16::try_from(prompt.chars().count()).unwrap_or(u16::MAX)
         }
-        // **A heading sits at the margin, so what follows reads as under it.**
-        // Every record took the same lead, which put `[what it does]` flush with
-        // its own body and made a manual page a wall of text rather than
-        // sections. Outdenting the heading is the same shape as indenting the
-        // content and costs no cells; `survey`'s `[place]` gets it too.
+        // A heading sits at the margin, so what follows reads as under it.
+        // Every record took the same lead, which put `[what it does]` flush
+        // with its own body and made a manual page a wall of text. Outdenting
+        // the heading is the same shape as indenting the content, and free.
         Some(_) if record.kind() == RecordKind::Section => 0,
         Some(_) => MARKER_WIDTH,
     }
@@ -799,22 +748,17 @@ fn lead_for(record: &Record<'_>, prompt: Option<&str>) -> u16 {
 /// part of the line above rather than as a new one.
 const fn wrap_width(cols: u16, lead: u16, kind: RecordKind) -> u16 {
     let available = cols.saturating_sub(lead).saturating_sub(CONTINUATION);
-    // **Prose takes a measure; everything else takes the pane.**
+    // Prose takes a measure; everything else takes the pane. A line past about
+    // seventy characters stops scanning and starts being *searched* — the eye
+    // loses its place on the return sweep, which is why typography puts the
+    // comfortable measure at 45-75. The transcript is 86 cells in the
+    // laboratory and 102 in the grimoire, 40% past the top of that range.
     //
-    // A line past about seventy characters stops scanning and starts being
-    // *searched*: the eye loses its place on the return sweep, which is why
-    // typography has put the comfortable measure at 45-75 characters since long
-    // before anyone had a terminal. The transcript is 86 cells in the laboratory
-    // and 102 in the grimoire, so the widest room was setting prose 40% past the
-    // top of that range.
-    //
-    // **Only `Message`.** The three diagnostic surfaces — a log, a script
-    // listing, a schedule — are `is_diagnostic` precisely because their job is
-    // *fidelity*: a `.spell` line wrapped at 68 inside an 86-cell pane would be
-    // a line the game had reformatted, on the one surface where what is on
-    // screen must be what is in the file. Listings are columns rather than
-    // sentences and have their own arithmetic. A `Section` never reaches this
-    // measure because no heading is nineteen characters, let alone sixty-eight.
+    // Only `Message`. The three diagnostic surfaces are `is_diagnostic` because
+    // their job is *fidelity*: a `.spell` line wrapped at 68 inside an 86-cell
+    // pane is a line the game reformatted, on the one surface where the screen
+    // must be the file. Listings are columns and have their own arithmetic, and
+    // no `Section` heading is sixty-eight characters.
     //
     // At the 80x22 floor the body is 62 cells, so this never binds there: it
     // narrows the wide rooms and leaves the tight one exactly as it was.
@@ -827,25 +771,19 @@ const fn wrap_width(cols: u16, lead: u16, kind: RecordKind) -> u16 {
 
 /// A run of readings, measured so their values share a column.
 ///
-/// # Why this is not `Tiling`, and not a widening of `tiles()`
+/// Not `Tiling` and not a widening of `tiles()`: a reading is a *sequence*,
+/// `tick` then `seed` then `experience`, while `RecordKind::tiles` is the
+/// unordered question and `only_unordered_rows_tile` pins it to `Entry` alone.
 ///
-/// A reading is a **sequence**: `tick` then `seed` then `experience`, in an
-/// order the emitter chose. `RecordKind::tiles` is the *unordered* question and
-/// `only_unordered_rows_tile` pins it to `Entry` alone, so widening it to reach
-/// this would say something false about what a `Status` row is.
+/// The shape test is strict because `RecordKind::Status` has five emit sites
+/// and only one is the `status` command. The cold-start report is a contiguous
+/// run of seven drawn at every launch and `verify` carries no quantity at all,
+/// so a plan that fired on those would put `cold start` and `ok` under a column
+/// headed by a number.
 ///
-/// # The shape test is strict, and every clause of it earns its place
-///
-/// `RecordKind::Status` has five emit sites and only one of them is the `status`
-/// command. The cold-start report is a **contiguous run of seven** drawn in the
-/// transcript at every launch — `orb` carries a tick and a state, each domain
-/// carries a state, `bound` carries neither — and `verify` carries a source and
-/// a state and no quantity at all. A plan that fired on those would put
-/// `cold start` and `ok` under a column headed by a number.
-///
-/// So: two or more records, every one of them carrying **exactly** a name and a
-/// numeric quantity. The boot report is mixed and fails on its first row; a
-/// `verify` is a run of one.
+/// So: two or more records, every one carrying exactly a name and a numeric
+/// quantity. The boot report is mixed and fails on its first row; a `verify` is
+/// a run of one.
 #[derive(Debug, Clone, Copy)]
 struct Readings {
     /// Cells the widest name takes.
@@ -897,8 +835,8 @@ impl Readings {
         amount.write(&mut value);
 
         // ` name ....... value `: one space either side of the leader so the
-        // dots never touch either, which is what `post.rs` already does and the
-        // whole reason a leader is legible at all.
+        // dots never touch either, as `post.rs` does and the reason a leader is
+        // legible at all.
         let dots = (self.name + 2 + 1).saturating_sub(name.chars().count() + 1);
         let mut out = name;
         out.push(' ');
@@ -927,9 +865,9 @@ const CONTINUATION: u16 = 2;
 /// How a run of [tiling](RecordKind::tiles) records packs across a pane.
 ///
 /// Split out from the drawing so [`RecordView::height`] and [`draw_tiled`]
-/// cannot disagree about it. They did not have to: a pane that measures one way
-/// and draws another leaves blank rows at the bottom while dropping history off
-/// the top, which is what the transcript did the first time this was looked at.
+/// cannot disagree: a pane that measures one way and draws another leaves blank
+/// rows at the bottom while dropping history off the top, which is what the
+/// transcript did the first time this was looked at.
 #[derive(Debug, Clone, Copy)]
 struct Tiling {
     indent: u16,
@@ -945,15 +883,14 @@ struct Tiling {
     named: Option<u16>,
     /// One entry per row, with what it does beside it.
     ///
-    /// **Tiling suits a set of single words and fails for phrases.** `survey`
-    /// lists names — `sage`, `alembic` — and packing them is right. `help` lists
-    /// *grammar*, and two words in a cell run into the two words in the next.
-    /// So a run whose records carry a description takes one row each and gets a
-    /// second column, and a run without one still tiles.
+    /// Tiling suits a set of single words and fails for phrases. `survey` lists
+    /// names and packing them is right; `help` lists *grammar*, and two words
+    /// in a cell run into the two in the next. So a run whose records carry a
+    /// description takes one row each and gets a second column.
     ///
-    /// It rides the tiling plan rather than being a second mechanism because
-    /// that plan exists *specifically* so `height` and `draw` cannot disagree
-    /// about a run — the property a parallel path would have to re-earn.
+    /// It rides the tiling plan rather than being a second mechanism, because
+    /// that plan exists so `height` and `draw` cannot disagree about a run —
+    /// the property a parallel path would have to re-earn.
     describing: bool,
 }
 
@@ -973,12 +910,10 @@ fn amount_of(record: &Record<'_>) -> Option<String> {
     name.write(&mut out);
     out.push_str(BINDS);
     amount.write(&mut out);
-    // **A listed thing may also be in a *state*, and it has to be drawn.** The
-    // arsenal says how well stocked the tower is in each row — `fresh`, `thin`,
-    // `spent` — and a column that reached the linear stream but never the pane
-    // is §14 backwards: the screen-reader user informed and the sighted player
-    // not. It rides after the amount because the amount is what the row is
-    // *about*, and the state is a note on it.
+    // A listed thing may also be in a *state*, and it has to be drawn: the
+    // arsenal says how well stocked the tower is in each row, and a column that
+    // reached the linear stream but never the pane is §14 backwards. It rides
+    // after the amount because the amount is what the row is *about*.
     if let Some(state) = record.field(FieldName::State) {
         out.push_str(STATES);
         state.write(&mut out);
@@ -1012,14 +947,12 @@ impl Tiling {
     /// The run ends at the first record that does not tile; `run` may continue
     /// past it.
     ///
-    /// # Why it can decline
-    ///
-    /// A tiled row has no room for a per-record [marker](Record::marker), and a
-    /// marker is information — the difference between a candidate and the
-    /// command that will run. Rather than drop it, a run carrying any marker
-    /// declines to tile and falls back to one record per line, where the marker
-    /// column exists. Nothing that reaches here today carries one; this is what
-    /// keeps that true by construction instead of by convention.
+    /// It declines because a tiled row has no room for a per-record
+    /// [marker](Record::marker), and a marker is information — the difference
+    /// between a candidate and the command that will run. A run carrying any
+    /// marker falls back to one record per line, where the marker column
+    /// exists. Nothing reaching here today carries one; this keeps that true by
+    /// construction rather than by convention.
     fn plan<'r>(
         cols: u16,
         indent: u16,
@@ -1030,17 +963,15 @@ impl Tiling {
             return None;
         }
 
-        // **Measured field by field, not as a rendered line.** A listing reads
-        // as `name = value`, and the `=` only lines up if every tile puts its
-        // name in a column of one width and its value in a column of another.
-        // Measuring the joined text gives one width for the pair, which packs
-        // them tightly and leaves the eye nothing to run down.
+        // Measured field by field, not as a rendered line: the `=` lines up
+        // only if every tile puts its name in a column of one width and its
+        // value in a column of another. Measuring the joined text gives one
+        // width for the pair, packing them with nothing to run the eye down.
         let (mut name_wide, mut value_wide, mut count) = (0usize, 0usize, 0usize);
-        // The whole rendered line, for the runs that are not `name = amount`.
-        // **Measuring only the name would set the stride too narrow for what is
-        // actually drawn**, and the tiles would overlap: the cold-launch verb
-        // listing came out as `attend plasurvey plaperuse filsift` — every entry
-        // truncated by its neighbour.
+        // The whole rendered line, for runs that are not `name = amount`.
+        // Measuring only the name sets the stride too narrow for what is drawn
+        // and the tiles overlap: the cold-launch verb listing came out as
+        // `attend plasurvey plaperuse filsift`.
         let mut line_wide = 0usize;
         let mut drawn = String::new();
         for record in run.clone().take_while(|record| record.kind().tiles()) {
@@ -1054,22 +985,18 @@ impl Tiling {
             drawn.clear();
             name.write(&mut drawn);
             name_wide = name_wide.max(drawn.chars().count());
-            // **An amount, specifically** — not "whatever the second field is".
-            // A cold launch lists the verbs as `stop place`, meaning *stop takes
-            // a place*, and binding those with an `=` turns a grammar into an
-            // assignment: `stop = place` says the two are the same thing.
-            //
+            // An amount specifically, not "whatever the second field is". A
+            // cold launch lists the verbs as `stop place`, meaning *stop takes
+            // a place*, and an `=` there turns a grammar into an assignment.
             // How many of something there are is the one relation `=` reads
-            // correctly, so that is the one it is used for. Everything else
-            // keeps the juxtaposition it had.
+            // correctly, so everything else keeps its juxtaposition.
             if let Some(value) = record.field(FieldName::Quantity) {
                 drawn.clear();
                 value.write(&mut drawn);
-                // **The state is measured with the value it follows**, because
-                // the draw writes them together — a stride set to the value
-                // alone would be short by the width of `spent` and the tiles
-                // would overlap, which is the `attend plasurvey` defect §19
-                // records arriving by a third door.
+                // The state is measured with the value it follows, because the
+                // draw writes them together: a stride set to the value alone is
+                // short by the width of `spent` and the tiles overlap — the
+                // `attend plasurvey` defect §19 records, by a third door.
                 if let Some(state) = record.field(FieldName::State) {
                     drawn.push_str(STATES);
                     state.write(&mut drawn);
@@ -1077,11 +1004,10 @@ impl Tiling {
                 value_wide = value_wide.max(drawn.chars().count());
             }
             drawn.clear();
-            // **`signature_of`, not `write_line`, and it must match the draw
-            // below exactly.** A tiled verb draws as `attend <place>`; measuring
-            // it as `attend place` would set the stride two cells short and the
-            // tiles would overlap — the `attend plasurvey plaperuse filsift`
-            // defect §19 already records, arriving by a different door.
+            // `signature_of`, not `write_line`, and it must match the draw
+            // below exactly: a tiled verb draws as `attend <place>`, so
+            // measuring it as `attend place` sets the stride two cells short
+            // and the tiles overlap.
             drawn.push_str(&signature_of(&record));
             line_wide = line_wide.max(drawn.chars().count());
             count += 1;
@@ -1091,9 +1017,9 @@ impl Tiling {
             return None;
         }
 
-        // **A described run: one per row, and the signature column pinned to the
-        // run's widest.** Planned here rather than anywhere else so the padding
-        // the draw applies is the padding the measure counted.
+        // A described run: one per row, the signature column pinned to the
+        // run's widest. Planned here so the padding the draw applies is the
+        // padding the measure counted.
         if all_described(run.clone()) {
             let signature = run
                 .take_while(|record| record.kind().tiles())
@@ -1120,10 +1046,9 @@ impl Tiling {
         let per_row = available / stride;
         // Nothing gained, and stacking keeps the fallback in one place.
         //
-        // **A tile never wraps.** `per_row` is a whole number of strides, and a
-        // stride is the widest entry in the run — so an entry either has its own
-        // column or the run stacks. There is no arithmetic here that can put
-        // half a name at the end of a line.
+        // A tile never wraps: `per_row` is a whole number of strides and a
+        // stride is the widest entry in the run, so an entry either has its own
+        // column or the run stacks.
         (per_row >= 2).then_some(Self {
             indent,
             stride,
@@ -1174,11 +1099,11 @@ fn draw_tiled<'r>(
             .saturating_add(indent)
             .saturating_add(to_cols(placed % usize::from(per_row)) * stride);
 
-        // **Padded to the run's name column**, so every `=` in the listing sits
-        // in the same place and the eye can run down it. Built as one string
-        // rather than drawn in three pieces because the reveal clips by
-        // character and speaks per record: splitting the tile would type the
-        // value before the name on a narrow pane, and say each entry twice.
+        // Padded to the run's name column, so every `=` sits in the same place
+        // and the eye can run down it. One string rather than three pieces
+        // because the reveal clips by character and speaks per record:
+        // splitting the tile would type the value before the name on a narrow
+        // pane, and say each entry twice.
         drawn.clear();
         let mut bound = false;
         if plan.describing {
@@ -1186,13 +1111,11 @@ fn draw_tiled<'r>(
             // Two spaces and no `=`: the second column is a sentence about the
             // first, not a value bound to it.
             //
-            // **No leader between them, and that is a rule rather than a
-            // preference.** A leader bridges to a *right-aligned* column, where
-            // the gap it spans is genuinely variable — which is why the boot
-            // card's `name ....... ok` works. Here the description column is
-            // left-aligned, so the run length is decided entirely by the
-            // signature column's raggedness: the shortest verb would take a
-            // dozen dots and the longest none at all, and the eye would land on
+            // No leader between them, and that is a rule. A leader bridges to a
+            // *right-aligned* column where the gap it spans is genuinely
+            // variable, which is why the boot card's `name ....... ok` works.
+            // Here the description column is left-aligned, so the run length
+            // follows the signature column's raggedness and the eye lands on
             // the dots instead of the words.
             drawn.push_str(&signature_of(&record));
             if let Some(named) = plan.named {
@@ -1204,11 +1127,10 @@ fn draw_tiled<'r>(
             if let Some(detail) = record.field(FieldName::Detail) {
                 detail.write(&mut drawn);
             }
-            // **`bound` stays false**, and it has to. It is what tells the draw
-            // below to overdraw a dim ` = ` at the name column — and there is no
-            // `=` in this form, so setting it stamped one over the first
-            // character of every description: `grind <reagent> = rush a reagent
-            // in the mortar`. Two spaces need no punctuation to recede.
+            // `bound` stays false: it tells the draw below to overdraw a dim
+            // ` = ` at the name column, and there is no `=` in this form, so
+            // setting it stamped one over the first character of every
+            // description. Two spaces need no punctuation to recede.
         } else {
             match plan.named {
                 Some(named) => {
@@ -1225,13 +1147,11 @@ fn draw_tiled<'r>(
                             drawn.push_str(BINDS);
                             value.write(&mut drawn);
                             bound = true;
-                            // **A listed thing may also be in a state.** The
-                            // arsenal says how well stocked the tower is in each
-                            // row — `fresh`, `thin`, `spent` — and this is the
-                            // path a *pane* takes; `amount_of` is the stacked
-                            // one. Drawing it in only one of the two left the
-                            // linear stream saying `state: thin` while the
-                            // screen said nothing, which is §14 backwards.
+                            // A listed thing may also be in a state. This is
+                            // the path a *pane* takes and `amount_of` the
+                            // stacked one; drawing it in only one of the two
+                            // left the linear stream saying `state: thin`
+                            // while the screen said nothing — §14 backwards.
                             if let Some(state) = record.field(FieldName::State) {
                                 drawn.push_str(STATES);
                                 state.write(&mut drawn);
@@ -1267,11 +1187,11 @@ fn draw_tiled<'r>(
                     .with_kind(record.kind().utterance())
                     .with_spoken(&speech),
             );
-            // The `=` is punctuation holding two facts apart, not a fact — so it
-            // recedes, and the name and the value it separates do not. Overdrawn
-            // rather than drawn as a third span: the span above already carried
-            // the whole tile into the linear stream, and a second one here would
-            // put ` = ` in it as an utterance of its own.
+            // The `=` is punctuation holding two facts apart, not a fact, so it
+            // recedes and what it separates does not. Overdrawn rather than a
+            // third span: the span above already carried the whole tile into
+            // the linear stream, and a second would put ` = ` in it as an
+            // utterance of its own.
             if let Some(named) = plan.named.filter(|_| bound) {
                 painter.glyphs(Pos::new(col.saturating_add(named), row), BINDS, Style::DIM);
             }

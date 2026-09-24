@@ -1,11 +1,9 @@
 //! The menagerie: a beast's temper, held by limning the circle, on a real keyboard.
 //!
-//! **Typed, like every room but the archive's walk.** The menagerie was the one
-//! real-time surface in the game while it was a chant; it is a logic puzzle now
-//! (§19), so what is worth playing here is what a dump cannot reach — the words
-//! resolving from a real prompt, the board appearing beside the transcript and
-//! moving when a call is answered, and a spell written at the keyboard doing the
-//! search.
+//! A logic puzzle now, not the chant it was (§19), so what is worth playing
+//! here is what a dump cannot reach: words resolving from a real prompt, the
+//! board moving when a call is answered, and a spell written at the keyboard
+//! doing the search.
 
 use crate::play::{Game, available};
 
@@ -15,9 +13,7 @@ fn a_beast_is_drawn_and_the_board_appears_beside_the_transcript() {
     if !available() {
         return;
     }
-    // **Not gated on a word**, which is every board's rule: it draws whenever a
-    // beast waits, because watching a bound search and limning it yourself are
-    // different activities.
+    // Not gated on a word, as no board is: it draws whenever a beast waits.
     let game = Game::start();
     game.does("attend menagerie", "/tower/menagerie")
         .does("summon", "gathers at the circle")
@@ -28,9 +24,9 @@ fn a_beast_is_drawn_and_the_board_appears_beside_the_transcript() {
         .expect_drawn("not yet called in");
 }
 
-/// **A turned wire reaches a real terminal as `~` on its sense's name.** Seed 181
-/// draws a beast whose sunwise glyph is given blood and breath turned over; the
-/// mark has to survive the redraw diff and the terminal's own rendering of `~`.
+/// A turned wire reaches a real terminal as `~` on its sense's name. Seed 181
+/// draws one, and the mark has to survive the redraw diff and the terminal's
+/// own rendering of `~`.
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn a_turned_wire_is_marked_on_the_board() {
@@ -43,8 +39,8 @@ fn a_turned_wire_is_marked_on_the_board() {
         .expect_drawn("blood, ~breath");
 }
 
-/// **A fresh game's first beast is lesser** — one glyph, four columns — and a
-/// dark glyph is refused in voice.
+/// A fresh game's first beast is lesser — one glyph, four columns — and a dark
+/// glyph is refused in voice.
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn a_sealed_games_first_beast_is_lesser() {
@@ -65,9 +61,8 @@ fn limning_and_calling_moves_the_board() {
     if !available() {
         return;
     }
-    // **The answer row is what a call draws**, and it is the half of the board a
-    // painter can get wrong — so the proof is that it appears, with a tally, the
-    // moment a call is answered.
+    // The answer row is the half of the board a painter can get wrong, so the
+    // proof is that it appears, with a tally, the moment a call is answered.
     let game = Game::start();
     game.does("attend menagerie", "/tower/menagerie")
         .does("summon", "gathers at the circle")
@@ -114,9 +109,8 @@ fn the_shipped_search_holds_a_beast_from_the_prompt() {
     if !available() {
         return;
     }
-    // **Invoked, not bound** — `bind` costs sixteen this fixture has not earned —
-    // and the evidence is in the log, never the pane: a spell's records go to
-    // `menagerie.log` (§19).
+    // Invoked, not bound — `bind` costs sixteen this fixture has not earned —
+    // and a spell's records go to `menagerie.log`, never the pane (§19).
     let game = Game::start();
     game.does("attend menagerie", "/tower/menagerie")
         .does("invoke taming", "takes up taming.spell");

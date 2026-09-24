@@ -1,12 +1,9 @@
 //! What a water bath looks like, working.
 //!
-//! # A vessel filling with tincture
-//!
-//! The balneum mariae sits over the athanor and digests gently (DESIGN.md
-//! §10.1), and what a gentle digestion *does* is draw something out of a reagent
-//! and into a liquid. So the bar is **the liquid in the vessel**: it starts as a
-//! shallow layer, rises as the extraction proceeds, and stands full until the
-//! tincture is taken.
+//! The balneum mariae digests gently over the athanor (DESIGN.md §10.1), drawing
+//! something out of a reagent and into a liquid — so the bar is *the liquid in
+//! the vessel*: a shallow layer that rises as the extraction proceeds and stands
+//! full until the tincture is taken.
 //!
 //! ```text
 //!   charged        working          ...later          ready
@@ -18,43 +15,25 @@
 //!    ██              ██               ██               ██
 //! ```
 //!
-//! **That the level is never zero is the whole reason it is drawn this way.** A
-//! bar reading *how far along* would draw a charged bath as an empty vessel,
-//! which is indistinguishable from an empty one — the invisible-state defect
-//! §10.1's panel exists to remove, reached from a new direction. The mortar
-//! solved the same problem the same way: its bar is what is in the bowl rather
-//! than how much has been done to it.
+//! The level is never zero, which is the whole reason it is drawn this way: a
+//! bar reading *how far along* draws a charged bath as an empty vessel, which is
+//! the invisible-state defect §10.1's panel exists to remove. The mortar solved
+//! it the same way.
 //!
-//! # All of the motion is in the colour
+//! All the motion is in the colour, and the glyph is always `█` from the floor
+//! to the surface — what moves is how hard each cell is rolling. That buys the
+//! value surviving with the colour thrown away (§14), no ambiguity on the one
+//! cell the reading is taken from, and legibility at one cell, which the panel's
+//! horizontal layout needs.
 //!
-//! **One glyph, never two.** Liquid is `█` from the floor of the vessel to its
-//! surface, at every fill and every phase; what moves is how hard each cell is
-//! rolling. Doing that in colour alone buys three things:
+//! How it moves lives in [`liquid`], shared with the flask, because two vessels
+//! must not say different things with the same picture. What is this
+//! instrument's own is that a bath *bubbles* only while the athanor is lit and
+//! shifts in place when it is not — so the fire going out is visible without a
+//! word being read. This module decides only *where the liquid is*.
 //!
-//! - **The value survives with the colour thrown away** (§14), and it does so
-//!   trivially rather than by argument — solid against blank is the strongest
-//!   join the alphabet has, the same one the fire's flame front is pinned to.
-//! - **Nothing is ambiguous at the boundary.** A glyph that meant *bubble* would
-//!   also have to mean *not quite full*, on the one cell the reading is taken
-//!   from.
-//! - **It is legible at one cell.** The panel's horizontal layout gives each
-//!   instrument a single row, and a picture whose motion is textural needs
-//!   height to read. This one does not.
-//!
-//! **How it moves lives in [`liquid`]**, shared with the flask,
-//! because two vessels must not say different things with the same picture.
-//! The distinction that module exists for is this instrument's: a bath
-//! **bubbles** only while the athanor is lit, and shifts in place when it is not
-//! — so the fire going out is visible on the bath without a word being read,
-//! which is §10.1's central timing decision made legible.
-//!
-//! This module decides only *where the liquid is*.
-//!
-//! # It is deterministic
-//!
-//! An integer hash of position and tick, never an RNG, so the same phase draws
-//! the same bath — which keeps `ORBS_DUMP` reproducible and keeps this out of
-//! `orbs-sim`'s seeded streams.
+//! Deterministic: an integer hash of position and tick, never an RNG, so
+//! `ORBS_DUMP` reproduces and this stays out of `orbs-sim`'s seeded streams.
 
 use crate::liquid;
 pub(crate) use crate::liquid::Motion;
@@ -107,44 +86,33 @@ pub struct Steep {
     pub spent: bool,
     /// Whether a run has settled something in the bottom of the vessel.
     ///
-    /// **Under the liquid, not instead of it.** Sediment drops out of a
-    /// digestion as it goes, so it is there while the bath works and still
-    /// there when it finishes — and it settles *within* the liquid, which is
-    /// what keeps the value boundary exactly where `filled_of` put it. A band
-    /// that displaced the liquid would move the reading by its own depth.
+    /// Under the liquid, not instead of it: sediment settles *within* the
+    /// liquid, which keeps the value boundary exactly where `filled_of` put it.
+    /// A band that displaced it would move the reading by its own depth.
     pub leavings: bool,
-    /// Whether bubbles **break** at the surface rather than merely reaching it.
+    /// Whether bubbles *break* at the surface rather than merely reaching it.
     ///
     /// The alembic's signature, and the only thing separating its picture from
     /// the balneum's. Distilling is a harder boil than a gentle digestion, so
     /// the topmost cell of liquid reaches the brightest step on the bubble beat
     /// — a break at the face.
     ///
-    /// **At the surface, and above it where above is up** — see
+    /// At the surface, and above it where above is up — see
     /// [`upward`](Self::upward).
     pub breaking: bool,
     /// Whether the bar runs upward, so that past the fill is *above* it.
     ///
-    /// # The one thing in this picture that depends on the layout
+    /// The one thing in this picture that depends on the layout. Bubbles
+    /// escaping into the air above the face were twice refused, because in the
+    /// horizontal layout *above* becomes rightward — putting the marks on the
+    /// row over the athanor's, whose sparks occupy that same region past its own
+    /// fill, so two adjacent rows carry sparse marks meaning different things.
     ///
-    /// Bubbles escaping into the air above the face were asked for, and were
-    /// twice refused before that: the panel has two layouts, and in the
-    /// horizontal one *above* becomes **rightward** — putting the marks on the
-    /// row directly over the athanor's, whose sparks and smoke occupy exactly
-    /// that region past *its* fill. Two adjacent rows, sparse marks past the
-    /// fill on both, meaning different things.
-    ///
-    /// In the **upward** layout that objection does not apply: each instrument
-    /// is a column, so the athanor's sparks are in the column *beside* the
-    /// alembic rather than the row below it, and the air above the alembic's
-    /// face is the alembic's own. So the bubbles are drawn there and nowhere
-    /// else, and the picture legitimately differs by orientation — because what
-    /// is *adjacent* to it differs by orientation, which is the only thing the
-    /// objection was ever about.
-    ///
-    /// The two orientations otherwise share every cell of this, which is the
-    /// property `cell` exists to keep. This is the exception, and it is one flag
-    /// wide.
+    /// Upward, each instrument is a column: the athanor's sparks are *beside*
+    /// the alembic and the air above its face is its own. The picture differs by
+    /// orientation because what is *adjacent* to it does, which is the whole of
+    /// the objection. Otherwise the two share every cell, which is the property
+    /// `cell` exists to keep.
     pub upward: bool,
 }
 
@@ -171,13 +139,12 @@ pub(crate) fn cell(lane: u16, step: u16, filled: u16, work: Steep) -> (char, Dep
         };
     }
 
-    // **Never nothing.** The meter reads zero for a charged bath — the sim
-    // reports no quantity for it at all — and a vessel drawn empty is
-    // indistinguishable from an empty one. See [`FLOOR`].
+    // Never nothing: the meter reads zero for a charged bath, and a vessel drawn
+    // empty is indistinguishable from an empty one. See [`FLOOR`].
     let level = filled.max(FLOOR);
     if step >= level {
-        // **The air above the face**, where a hard enough boil throws something
-        // into it. Only the alembic (`breaking`), only over a lit athanor
+        // The air above the face, where a hard enough boil throws something into
+        // it. Only the alembic (`breaking`), only over a lit athanor
         // (`Bubbling`), and only where above is up — see [`Steep::upward`].
         if work.breaking
             && work.upward
@@ -189,11 +156,8 @@ pub(crate) fn cell(lane: u16, step: u16, filled: u16, work: Steep) -> (char, Dep
         return (' ', Depiction::None);
     }
 
-    // **Settled waste, lying under the liquid.** Sediment drops out of a
-    // digestion as it goes, so it is there while the bath works and still there
-    // when it finishes — and it settles *within* the liquid rather than
-    // displacing it, which is what keeps the value boundary exactly where
-    // `filled_of` put it.
+    // Settled waste, lying under the liquid rather than displacing it, which is
+    // what keeps the value boundary exactly where `filled_of` put it.
     //
     // Only once the vessel has a floor *and* a body: in a bath one cell deep
     // there is no bottom to rest in, and a band that swallowed the whole reading
@@ -203,10 +167,9 @@ pub(crate) fn cell(lane: u16, step: u16, filled: u16, work: Steep) -> (char, Dep
     }
 
     let mut roil = liquid::roil(lane, step, work.phase, work.motion);
-    // **The break at the face.** The alembic distils, which is a harder boil
-    // than the balneum's digestion — so its topmost cell of liquid goes to the
-    // brightest step wherever a bubble reached it. Only while bubbling, which
-    // means only over a lit athanor; a still surface does not break.
+    // The break at the face: the alembic distils, a harder boil than a gentle
+    // digestion, so its topmost cell goes to the brightest step wherever a
+    // bubble reached it. Only while bubbling — a still surface does not break.
     if work.breaking && step + 1 == level && roil != crate::style::Roil::Still {
         roil = crate::style::Roil::Rolling;
     }
@@ -260,12 +223,10 @@ mod tests {
 
     #[test]
     fn a_charged_vessel_is_never_an_empty_one() {
-        // **The defect this picture is shaped around.** The sim reports no meter
-        // for a charged bath, so `stand_in` hands it `0/1` — and a bar reading
-        // *how far along* would draw nothing, which is exactly what an empty
-        // instrument looks like. "You cannot tell what state a thing is in
-        // without touching it" is the complaint §10.1's panel was built to
-        // answer, and drawing it that way would put it straight back.
+        // The defect this picture is shaped around: the sim reports no meter for
+        // a charged bath, so `stand_in` hands it `0/1`, and a bar reading *how
+        // far along* draws nothing — which is what an empty instrument looks
+        // like, and is the complaint §10.1's panel was built to answer.
         for phase in [0.0, 0.4, 7.3] {
             for motion in [Motion::Standing, Motion::Bubbling, Motion::Drifting] {
                 let work = Steep {
@@ -284,7 +245,7 @@ mod tests {
 
     #[test]
     fn a_charged_bath_is_perfectly_still() {
-        // **`Standing` only**, which is the state the rule was written about: an
+        // `Standing` only, which is the state the rule was written about: an
         // instrument that has not begun must not move, or a player waits for
         // something that has not started. A *finished* bath is a deliberate
         // exception — see `a_finished_bath_settles_rather_than_freezing`.
@@ -407,11 +368,11 @@ mod tests {
 
     #[test]
     fn a_bubble_never_touches_the_reading() {
-        // **§14, and the property the whole picture is pinned to.** The level is
-        // solid-against-blank; a mark that reached the face — or that was `█` —
-        // would put the value and the picture at odds on the one cell the value
-        // is read from. Swept over every fill, because a boundary bug is a bug
-        // at one fill and invisible at the rest.
+        // §14, and the property the whole picture is pinned to: the level is
+        // solid-against-blank, so a mark reaching the face — or one that was
+        // `█` — puts the value and the picture at odds on the one cell the value
+        // is read from. Swept over every fill, because a boundary bug shows at
+        // one fill and is invisible at the rest.
         for phase in sweep() {
             for filled in 1..16u16 {
                 for step in 0..16u16 {
@@ -479,17 +440,12 @@ mod tests {
 
     #[test]
     fn the_rising_face_can_never_overtake_a_bubble() {
-        // **What "the bubbles rise faster than the brew" means as a property.**
-        // The level climbs `bar / ticks` cells a tick and the bar grows with the
-        // window, so no recipe duration can outrun a bubble at every size — at
-        // the shipped ones it did not come close, and what that looks like is
-        // bubbles being swallowed by the liquid they just left.
-        //
-        // So the air is measured from the **face**: the same bubbles stand at
-        // the same heights above it whatever the level is, which means a rising
-        // level carries them rather than catching them. Asserted by holding the
-        // phase and moving the fill — if any of this were anchored in absolute
-        // space, these would differ.
+        // "The bubbles rise faster than the brew" as a property. A level that
+        // outran them looks like bubbles being swallowed by the liquid they just
+        // left, so the air is measured from the *face*: the same bubbles stand
+        // at the same heights above it whatever the level, and a rising level
+        // carries them rather than catching them. Asserted by holding the phase
+        // and moving the fill — anchored in absolute space these would differ.
         for phase in sweep() {
             let air = |filled: u16| -> Vec<char> {
                 (0..=crate::liquid::CARRY + 1)

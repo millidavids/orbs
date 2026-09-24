@@ -1,36 +1,18 @@
-//! How well stocked the tower is in a thing, measured as a **rate** (§11.5, §19).
+//! How well stocked the tower is in a thing, measured as a rate (§11.5, §19).
 //!
-//! # Why a rate, and not a timestamp, and not a count
+//! A rate, not a timestamp: §19 withdrew a perishable arsenal because a
+//! freshness clock keyed to *when one was last made* keeps a thousand potions
+//! fresh off one restock, cheaper than playing normally. Asking *how many have
+//! you made lately* instead makes one restock a rate of one, and holding a
+//! thousand worth what your current industry is worth. Total stock never enters
+//! the arithmetic, which is what lets this be built on `Stock` untouched — no
+//! per-unit batches, no save migration.
 //!
-//! §19 withdrew a perishable arsenal because `Stock::Counted(u32)` is *"one node
-//! per kind, with a count — not one node per unit"*, so a timer *"either keeps a
-//! thousand potions fresh off one restock — cheaper than playing normally — or
-//! makes new stock unusable."*
-//!
-//! **A freshness clock keyed to *when one was last made* is that first branch
-//! verbatim**, and a first draft of this feature was exactly that before the
-//! objection was read properly. One `made:warding` would refresh five hundred
-//! wardings, so a brew every twenty-five minutes would hold an unbounded hoard at
-//! full strength for less work than playing.
-//!
-//! **A rate defeats it without touching the primitive.** What is asked is not
-//! *when* did you last make one but *how many have you made lately* — so one
-//! restock is a rate of one, which is thin at best, and holding a thousand is
-//! worth exactly what your current industry is worth. **Total stock never enters
-//! the arithmetic**, which is the property that makes this buildable on `Stock`
-//! untouched: no per-unit batches, no rewrite, no save migration.
-//!
-//! # It does not decay while the game is closed, and that needs no code
-//!
-//! A tick is *"one real second while the window is open"*: the counter is
-//! restored verbatim from a save and there is no wall clock anywhere in the sim,
-//! because offline progression is a later phase. So a closed game advances
-//! nothing and the stores are as they were left.
-//!
-//! **And when offline progression lands, they will thin across an absence
-//! automatically** — catch-up advances the tick, and every expression below
-//! starts spanning the gap with nothing rewritten. Correct now, correct later,
-//! one arithmetic. That is deliberate rather than incidental.
+//! It does not decay while the game is closed, and that needs no code: a tick is
+//! one real second while the window is open, the counter is restored verbatim,
+//! and there is no wall clock in the sim. When offline progression lands,
+//! catch-up advances the tick and every expression below starts spanning the gap
+//! with nothing rewritten.
 
 use std::collections::BTreeMap;
 
@@ -58,9 +40,8 @@ const REMEMBERED: usize = FRESH_AT;
 
 /// How well stocked the tower is in one thing.
 ///
-/// **Three words, because the domain's readings are words.** `few`, `hurt` and
-/// `outnumbered` are how this game says a derived fact, and a spell asks for them
-/// by name — so a fraction here would be the odd one out and unaskable besides.
+/// Three words, because the domain's readings are words — `few`, `hurt`,
+/// `outnumbered` — and a spell asks for them by name. A fraction is unaskable.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Supply {
     /// Made often enough to be worth its full authored strength.
@@ -87,10 +68,9 @@ impl Supply {
 
     /// What `amount` of an authored effect is worth at this standing.
     ///
-    /// **Half, rounded down, and nothing at all when spent.** A magnitude that
-    /// halves to nought meets the existing *"a potion that would do nothing is
-    /// refused rather than drunk"* guard, which is the right answer and needs no
-    /// branch here.
+    /// Half, rounded down, nothing when spent. A magnitude that halves to nought
+    /// meets the existing "would do nothing, so it is refused" guard, so no
+    /// branch is needed here.
     #[must_use]
     pub const fn scale(self, amount: u32) -> u32 {
         match self {
@@ -100,12 +80,10 @@ impl Supply {
         }
     }
 
-    /// What a **signed** magnitude is worth at this standing.
+    /// What a *signed* magnitude is worth at this standing.
     ///
-    /// `Effect::Bonus` may be negative — a `disadvantage`-shaped penalty is
-    /// authored as one — so halving has to move it *toward nought* from either
-    /// side rather than toward negative infinity. A thin curse is a weaker
-    /// curse, not a worse one.
+    /// `Effect::Bonus` may be negative, so halving moves it toward nought from
+    /// either side: a thin curse is a weaker curse, not a worse one.
     #[must_use]
     pub const fn scale_signed(self, amount: i32) -> i32 {
         match self {
@@ -115,18 +93,12 @@ impl Supply {
         }
     }
 
-    /// Whether an effect carrying **no magnitude** still works at this standing.
+    /// Whether an effect carrying no magnitude still works at this standing.
     ///
-    /// **A boolean effect has no half, so it works until it does not.**
-    /// `advantage` is draw-twice-keep-the-best and `upgrade` is a bigger die;
-    /// neither can be diluted, so the only honest answers are *yes* and *no*.
-    ///
-    /// **They survive `Thin`, and a first pass had them dropping there.** Two
-    /// shipped spendables are `advantage`, and one making is a rate of one — so
-    /// dropping at thin meant **a player who brewed a single `haste` could never
-    /// use it**, which is the arsenal breaking a thing you made rather than
-    /// pricing how much you make. The matrix test that walks every authored row
-    /// caught it, which is what that test is for.
+    /// A boolean effect has no half — `advantage` is draw-twice, `upgrade` is a
+    /// bigger die — so the only answers are yes and no. They survive `Thin`:
+    /// one making is a rate of one, and dropping there meant a player who brewed
+    /// a single `haste` could never use it.
     #[must_use]
     pub const fn keeps_whole(self) -> bool {
         !matches!(self, Self::Spent)
@@ -187,9 +159,8 @@ impl Stores {
 
     /// Whether anything has ever been recorded.
     ///
-    /// **What tells a fresh tower from an old save.** A document written before
-    /// this existed says nothing, and reading that as *every store is spent*
-    /// would empty a returning player's arsenal — so `restore` stamps instead.
+    /// Tells a fresh tower from an old save: reading a pre-this document's
+    /// silence as *every store is spent* would empty a returning arsenal.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
@@ -221,8 +192,8 @@ pub fn supply_of(world: &World, named: &str) -> Supply {
 
 /// The set an arsenal item belongs to, so a spell can walk them.
 ///
-/// **Singular, because the word names the cursor as well as the set** — `for
-/// each store` binds `store`, and the body reads `if store has thin`.
+/// Singular, because the word names the cursor as well as the set: `for each
+/// store` binds `store`, and the body reads `if store has thin`.
 pub const STORE: &str = "store";
 
 /// The words an arsenal item answers `has` with.
@@ -233,20 +204,16 @@ pub fn readings() -> Vec<&'static str> {
 
 /// Keep every arsenal item's group and reading in step with its store.
 ///
-/// # Why this is a system and not a `publish` call
+/// A system, not a `publish` call: every other reading is republished by the
+/// thing that changed it, but a store changes because time passed, so the clock
+/// has to notice.
 ///
-/// Every other reading in the tower is republished by the thing that *changed*
-/// it — `defend::publish` after a round, `erode` after wear. A store has no such
-/// moment: it changes because **time passed**, and nothing else happened. So the
-/// clock is what has to notice, and this is the one place that does.
+/// It writes only when the word changes. Respawning a reading every tick would
+/// issue new `NodeId`s every tick, and §19 makes insertion order the parse — a
+/// live-watched hour and a `meditate`-collapsed one must issue identical ids.
 ///
-/// **It writes only when the word changes.** Despawning and respawning a reading
-/// every tick would issue new `NodeId`s every tick, and §19 makes insertion order
-/// *the parse* — a live-watched hour and a `meditate`-collapsed one must issue
-/// identical ids in identical order. Idle ticks touch nothing.
-///
-/// The group marker is idempotent and goes on regardless, which is what lets a
-/// spell walk an arsenal it has never surveyed.
+/// The group marker is idempotent and goes on regardless, so a spell can walk
+/// an arsenal it has never surveyed.
 pub fn stocktake(world: &mut World) {
     let Some(arsenal) = super::keep(world) else {
         return;
@@ -294,10 +261,9 @@ mod tests {
 
     #[test]
     fn one_restock_is_never_fresh_however_much_it_restocks() {
-        // **The hole this whole file exists to close.** §19 withdrew a
-        // perishable arsenal because a timer *"keeps a thousand potions fresh
-        // off one restock — cheaper than playing normally"*. A rate cannot: one
-        // making is one, whatever it stocked.
+        // The hole this file exists to close: §19 withdrew a perishable arsenal
+        // because a timer keeps a thousand potions fresh off one restock. A
+        // rate cannot — one making is one, whatever it stocked.
         let mut stores = Stores::default();
         stores.made("warding", 0);
         assert_eq!(stores.store("warding", 0), Supply::Thin);
@@ -306,9 +272,8 @@ mod tests {
 
     #[test]
     fn the_rate_is_what_reads_and_the_pile_is_never_asked_about() {
-        // Total stock does not appear in this file's arithmetic at all, which is
-        // what lets `Stock::Counted` stay exactly as it is. Three makings is
-        // fresh whether the shelf holds three or three hundred.
+        // Total stock never appears in this file's arithmetic, which is what
+        // lets `Stock::Counted` stay as it is.
         let mut stores = Stores::default();
         for at in 0..FRESH_AT as u64 {
             stores.made("warding", at);
@@ -323,13 +288,11 @@ mod tests {
             stores.made("warding", at);
         }
         assert_eq!(stores.store("warding", 0), Supply::Fresh);
-        // **Thinning is the middle of it, not the end.** The oldest makings fall
-        // out first, so a store passes through `Thin` on its way — which is what
-        // gives a player warning rather than a cliff.
+        // The oldest makings fall out first, so a store passes through `Thin`
+        // on its way and a player gets warning rather than a cliff.
         assert_eq!(stores.store("warding", WINDOW), Supply::Thin);
-        // ...and past the newest making's own window, it is out. `WINDOW + 1` is
-        // *not* far enough and a first draft of this test said it was: the last
-        // making was at tick 2, so it is still counted until 1,802.
+        // ...and past the newest making's own window it is out. `WINDOW + 1` is
+        // not far enough: the last making was at tick 2, counted until 1,802.
         assert_eq!(stores.store("warding", WINDOW + 10), Supply::Spent);
     }
 
@@ -357,9 +320,8 @@ mod tests {
 
     #[test]
     fn a_boolean_effect_has_no_half_so_it_works_until_it_does_not() {
-        // `advantage` is draw-twice; there is no halving it. **It survives
-        // `Thin`**, because one making is a rate of one — and dropping it there
-        // would mean a player who brewed a single `haste` could never use it.
+        // `advantage` is draw-twice; there is no halving it. It survives `Thin`
+        // because one making is a rate of one.
         assert!(Supply::Fresh.keeps_whole());
         assert!(Supply::Thin.keeps_whole());
         assert!(!Supply::Spent.keeps_whole());

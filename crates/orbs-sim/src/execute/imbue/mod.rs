@@ -6,10 +6,9 @@
 //! glyph holds. What a charm *does* once bound is `tower::charm`; what it costs
 //! is authored in `content/forge.toml`.
 //!
-//! # The seam is *when*, not *what*
-//!
-//! The bailey's split, and the same argument: one file per verb would put three
-//! copies of *find the lattice, refuse if there is none* in three places.
+//! The seam is *when*, not *what* — the bailey's split, on the same argument:
+//! one file per verb would put three copies of *find the lattice, refuse if
+//! there is none* in three places.
 //!
 //! | | |
 //! |---|---|

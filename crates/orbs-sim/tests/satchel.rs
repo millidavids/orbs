@@ -5,12 +5,10 @@
 //! that a consumer which has caught up with its producer waits rather than
 //! faulting.
 //!
-//! # What is worth proving here and nowhere else
-//!
-//! **The satchel is the one fixture that exists in every domain under one
-//! name.** That makes it the one place where *nameable* and *findable* can come
-//! apart room by room — §19 records paying for that twice already — so most of
-//! this file is asking the same question from different rooms.
+//! The satchel is the one fixture that exists in every domain under one name,
+//! which makes it the one place where *nameable* and *findable* can come apart
+//! room by room (§19, twice). So most of this file asks the same question from
+//! different rooms.
 
 use orbs_render::{FieldName, Value};
 // `Save` and the two helpers below belong to the debug-gated tests, which is
@@ -27,11 +25,10 @@ fn run(sim: &mut Sim, line: &str) {
 
 /// A tower standing in `room` with §8's channel bought.
 ///
-/// **`debug_take`, not three distillations.** `satchel_1` is a mastery node and
-/// the honest road to it is 24 experience — about two hundred ticks of the
-/// laboratory, in a file about the menagerie. That is the setup cost
-/// `debug_spawn` and `debug_learn` already exist to skip, and the shortcut grants
-/// the *real* node, so everything downstream sees what a played tower would.
+/// `debug_take`, not three distillations: `satchel_1` costs 24 experience, about
+/// two hundred ticks of the laboratory in a file about the menagerie. The
+/// shortcut grants the *real* node, so everything downstream sees what a played
+/// tower would.
 ///
 /// The gate itself is proved by
 /// [`the_channel_is_bought_at_the_loom`](the_channel_is_bought_at_the_loom),
@@ -66,10 +63,9 @@ fn last(sim: &Sim) -> String {
 
 /// Every `Name` field the tower has emitted, which is where `survey`'s rows are.
 ///
-/// **`survey` emits `TableRow`s, not `Message`s**, so [`said`] cannot see its
-/// answer at all — the diagnostic CLAUDE.md records costing three experiments in
-/// the menagerie, and `warding.rs` records two tests passing for the wrong
-/// reason against the same mistake.
+/// `survey` emits `TableRow`s, not `Message`s, so [`said`] cannot see its answer
+/// — the diagnostic CLAUDE.md records costing three experiments, and
+/// `warding.rs` records two tests passing for the wrong reason on it.
 #[cfg(debug_assertions)]
 fn listed(sim: &Sim) -> Vec<String> {
     sim.scrollback()
@@ -88,16 +84,12 @@ fn write(sim: &mut Sim, name: &str, lines: &[&str]) {
     sim.step();
 }
 
-/// **The channel is bought, and until it is the words say where to buy it.**
-///
-/// `queue` refuses in voice — `bind`'s shape, and for `bind`'s reason: a word
-/// that works and is not yet available is a different thing from a word that is
-/// broken. `pull` is a control word with nobody to answer, so its report is a
-/// complaint at cast, which is where `interpret` shows it.
-///
-/// The refusal names the **loom** rather than the satchel. Saying *"there is no
-/// satchel here"* would send a player looking round the room for a thing the
-/// progression tree holds.
+/// The channel is bought, and until it is the words say where to buy it.
+/// `queue` refuses in voice, which is `bind`'s shape and reason: a word that
+/// works and is not yet available is different from one that is broken. `pull`
+/// is a control word with nobody to answer, so its report is a complaint at
+/// cast. The refusal names the *loom* rather than the satchel, because *"there
+/// is no satchel here"* sends a player looking round the room.
 #[cfg(debug_assertions)]
 #[test]
 fn the_channel_is_bought_at_the_loom() {
@@ -135,9 +127,9 @@ fn a_queued_name_is_read_back_in_the_order_it_went_in() {
     }
     run(&mut sim, "survey satchel");
 
-    // **A name twice, and the order kept.** This is the whole reason the queue
-    // is a component rather than children plus `Stock`: a count would report
-    // `heed 2` and lose which came first.
+    // A name twice, and the order kept — the whole reason the queue is a
+    // component rather than children plus `Stock`, which would report `heed 2`
+    // and lose which came first.
     let rows = listed(&sim);
     let queued: Vec<&String> = rows
         .iter()
@@ -154,14 +146,11 @@ fn a_queued_name_is_read_back_in_the_order_it_went_in() {
     );
 }
 
-/// **Every domain has its own**, and naming one from another room reaches the
-/// local one or nothing.
-///
-/// The first See-it line written for this feature failed here: the scene
-/// registered all six satchels by path, §6's matcher accepts a last segment, and
-/// `satchel` therefore resolved to whichever was registered first — so `queue`
-/// filled the menagerie's and `survey satchel` read the *laboratory's* and
-/// reported it empty, one line apart.
+/// Every domain has its own, and naming one from another room reaches the local
+/// one or nothing. The first See-it line for this feature failed here: the scene
+/// registered all six by path, §6's matcher accepts a last segment, so `satchel`
+/// resolved to whichever was registered first — `queue` filled the menagerie's
+/// and `survey satchel` read the laboratory's, one line apart.
 #[cfg(debug_assertions)]
 #[test]
 fn each_room_has_its_own_satchel() {
@@ -227,12 +216,10 @@ fn a_spell_pulls_what_a_hand_queued_and_can_name_it() {
     );
 }
 
-/// **The two halves, and neither is a copy of the other.**
-///
-/// One spell queues and a second pulls, with nothing between them but the node —
-/// which is the whole of what §8 could not do before. Both run at once because
-/// `invoke` from inside a spell inserts a second `Running` and the caller does
-/// not block; the satchel is what gives them something to say to each other.
+/// The two halves, and neither is a copy of the other: one spell queues and a
+/// second pulls, with nothing between them but the node — which is what §8 could
+/// not do before. Both run at once because `invoke` from inside a spell inserts
+/// a second `Running` and the caller does not block.
 #[cfg(debug_assertions)]
 #[test]
 fn one_spell_hands_another_spell_a_name() {
@@ -262,14 +249,11 @@ fn one_spell_hands_another_spell_a_name() {
         "the pipeline did not run dry: {:?}",
         said(&sim),
     );
-    // **The consumer named all three**, which is the channel carrying content
-    // rather than merely emptying — a `pull` that bound nothing would drain the
-    // satchel just as thoroughly.
-    //
-    // Read off the *message*, not off `FieldName::Name`: a `survey` stamps its
-    // own verb there, so `listed` reports three `survey`s and never the word
-    // they surveyed. That is `warding.rs`'s two-tests-passing-for-the-wrong-
-    // reason again, and it is why this file keeps both readers.
+    // The consumer named all three, which is the channel carrying content rather
+    // than merely emptying — a `pull` that bound nothing would drain the satchel
+    // just as thoroughly. Read off the *message*, not `FieldName::Name`: a
+    // `survey` stamps its own verb there, so `listed` reports three `survey`s
+    // and never the word they surveyed.
     for word in ["heed", "yoke", "spurn"] {
         assert!(
             ever_said(&sim, word),
@@ -279,16 +263,13 @@ fn one_spell_hands_another_spell_a_name() {
     }
 }
 
-/// **A consumer caught up with its producer waits, and is not a fault.**
+/// A consumer caught up with its producer waits, and is not a fault. `wait`
+/// gives up after `PATIENCE` ticks at `Role::Danger`, latching `‼` on the rail;
+/// a `pull` must not, because a pipeline momentarily dry is its ordinary state
+/// and a fault light that fires then is one nobody reads.
 ///
-/// `wait` gives up after `PATIENCE` ticks at `Role::Danger`, which latches `‼`
-/// on the rail; a `pull` must not, because a pipeline momentarily dry is its
-/// ordinary state and a fault light that fires then is a fault light nobody
-/// reads. `bide`'s rule — *"a spell waiting for ever is a fault; a spell
-/// counting to three is doing what it was written to do."*
-///
-/// **400 ticks, against a `PATIENCE` of 120**, so the run is well past the point
-/// a `wait` would have given up.
+/// 400 ticks against a `PATIENCE` of 120, so the run is well past the point a
+/// `wait` would have given up.
 #[test]
 fn a_pull_on_an_empty_satchel_waits_without_latching_a_fault() {
     let mut sim = in_room("menagerie");
@@ -345,19 +326,15 @@ fn a_malformed_pull_is_refused_by_name() {
     assert!(ever_said(&sim, "pull wants a name"), "{:?}", said(&sim),);
 }
 
-/// **The shipped pair, cast for real** — `milling` invokes `ordering` and grinds
-/// what it left behind.
+/// The shipped pair, cast for real — `milling` invokes `ordering` and grinds
+/// what it left behind. A dev spell nobody casts is prose, and §19 records that
+/// costing a shipped `chanting.spell` that had stopped compiling while the gate
+/// stayed green.
 ///
-/// A dev spell nobody casts is prose, and §19 records exactly that costing this
-/// project a shipped `chanting.spell` that had stopped compiling while the whole
-/// gate stayed green. These two are the worked example of a channel between two
-/// spells, so they are cast here rather than admired in a TOML file.
-///
-/// **`bide 2` is the line under test as much as the pipeline is.** `advance`
+/// `bide 2` is the line under test as much as the pipeline is: `advance`
 /// snapshots the running list, so `ordering` starts on the tick *after* it is
-/// invoked — and the guard is `repeat until the satchel is empty`, which is true
-/// of an empty one. Without the pause the loop runs zero times and the spell
-/// ends having done nothing, silently. Three yields is what says it did not.
+/// invoked, and `repeat until the satchel is empty` is true of an empty one.
+/// Without the pause the loop runs zero times and the spell ends silently.
 #[cfg(debug_assertions)]
 #[test]
 fn the_shipped_pair_hands_a_work_list_between_two_spells() {
@@ -383,9 +360,9 @@ fn the_shipped_pair_hands_a_work_list_between_two_spells() {
     );
 }
 
-/// **What is waiting survives a save**, in order, which is `ChantSave`'s lesson:
-/// a component the world holds and the document does not is state that silently
-/// resets when a player comes back.
+/// What is waiting survives a save, in order — `ChantSave`'s lesson: a component
+/// the world holds and the document does not is state that silently resets when
+/// a player comes back.
 #[cfg(debug_assertions)]
 #[test]
 fn a_satchel_full_of_names_survives_a_save() {

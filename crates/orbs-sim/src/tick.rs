@@ -68,15 +68,12 @@ impl Tick {
 
 /// A span of seconds, as a person would say it.
 ///
-/// **Coarse on purpose.** The only caller is *"the orb was dark for …"*, and a
-/// player who left overnight wants *"9 hours"* rather than *"9 hours, 14 minutes
-/// and 3 seconds"*. §3's voice is plain and short, and a precise number here
-/// would also imply the game had been counting — which §5 is explicit it has
-/// not: nothing accrues while the window is closed.
+/// Coarse on purpose. The only caller is *"the orb was dark for …"*, and a
+/// precise figure would imply the game had been counting — §5 is explicit that
+/// nothing accrues while the window is closed.
 #[must_use]
 pub fn span(seconds: u64) -> String {
-    /// Singular where it should be. `1 hours` is the sort of thing that reads as
-    /// a machine talking, which §3 spends its whole budget avoiding.
+    /// Singular where it should be — `1 hours` reads as a machine talking.
     fn plural(n: u64, unit: &str) -> String {
         if n == 1 {
             format!("{n} {unit}")
@@ -117,9 +114,8 @@ mod tests {
         assert_eq!(span(9 * 3_600 + 847), "9 hours");
         assert_eq!(span(86_400), "1 day");
         assert_eq!(span(3 * 86_400), "3 days");
-        // Nought seconds is not an absence anyone noticed, and `away_for`
-        // filters it — but if one ever arrives here it must not say "0 seconds",
-        // which reads as a bug rather than as a moment.
+        // `away_for` filters nought, but if one arrives here it must not say
+        // "0 seconds", which reads as a bug rather than as a moment.
         assert_eq!(span(0), "1 second");
     }
 

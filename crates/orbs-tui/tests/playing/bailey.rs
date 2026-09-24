@@ -5,10 +5,9 @@
 //! beside the transcript, that a player can read what is coming and answer it,
 //! and that the whole thing can be fought start to finish by typing.
 //!
-//! **Step 3's See-it line is the one this domain is judged on.** If a
-//! hand-played siege is not worth doing, no spell will rescue it — so the
-//! scenario below fights one the way a person would rather than driving the
-//! model.
+//! Step 3's See-it line is what this domain is judged on: if a hand-played
+//! siege is not worth doing, no spell will rescue it — so the scenarios below
+//! fight one the way a person would rather than driving the model.
 
 use crate::play::{Game, QUIET, available};
 
@@ -22,9 +21,9 @@ fn a_siege_is_fought_by_typing_and_the_board_is_beside_you() {
     game.does("attend bailey", "/tower/bailey")
         .does("defend", "come up the road");
 
-    // **The board draws whenever a siege is running**, not when a word is typed
-    // — the rule the map, the sheet and the sanctum's board all follow, and what
-    // makes a bound decision tree watchable.
+    // The board draws whenever a siege is running, not when a word is typed —
+    // the map's rule, the sheet's and the sanctum's, and what makes a bound
+    // decision tree watchable.
     game.expect_drawn("rampart")
         .expect_drawn("garrison")
         .expect_drawn("enemy");
@@ -47,14 +46,10 @@ fn nothing_moves_while_you_read_the_board() {
         .does("defend", "come up the road");
 
     game.does("survey rampart", "turns");
-    // **Four ticks, not twenty.** `PATIENCE` is 20 *seconds* and the world runs
-    // at 1 Hz, so `wait_ticks(20)` has zero margin by construction — it can only
-    // pass on a machine idle enough to run the game at real time with no
-    // overhead, and it failed the moment the suite ran six tmux sessions at
-    // once. Every other scenario in the suite waits 2–4.
-    //
-    // The property does not need the length: nothing but `hold` advances a
-    // siege, so any interval with no `hold` in it proves the same thing.
+    // Four ticks, not twenty. `PATIENCE` is 20 *seconds* at 1 Hz, so
+    // `wait_ticks(20)` has no margin and failed the moment the suite ran six
+    // tmux sessions at once. The property does not need the length: nothing
+    // but `hold` advances a siege.
     game.wait_ticks(4);
     game.does("survey rampart", "turns");
 
@@ -88,9 +83,9 @@ fn a_siege_runs_beside_a_brewing_loop() {
     if !available() {
         return;
     }
-    // **§19's *"a domain stands alone"*, and the domain that needs it most.** A
-    // siege exists to test the automation, so a grind must keep working while
-    // one is fought — otherwise the enemy has nothing to attack.
+    // §19's *"a domain stands alone"*: a siege exists to test the automation,
+    // so a grind must keep working while one is fought — otherwise the enemy
+    // has nothing to attack.
     let game = Game::seeded(QUIET);
     game.does("attend bailey", "/tower/bailey")
         .does("defend", "come up the road")

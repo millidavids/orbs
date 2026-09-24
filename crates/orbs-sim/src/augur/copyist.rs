@@ -1,12 +1,9 @@
 //! A [`Scrivener`] built from a table, for the surfaces a model cannot reach.
 //!
-//! [`Fixture`](super::Fixture)'s sibling, and it exists for the same reason:
-//! `ORBS_DUMP` builds no `App`, `scripts/dumps.sh` captures surfaces as text, and
-//! a trained reader's weights are a gitignored build artefact that changes on
-//! every training run. A capture made against one could not be reproduced from a
-//! clean checkout, so the *fixed* reader is what a capture pins — and CLAUDE.md
-//! names the alternative precisely: *"a domain built without a block in it is one
-//! this instrument is blind to, and the blindness looks exactly like stability."*
+//! [`Fixture`](super::Fixture)'s sibling, and for the same reason: a trained
+//! reader's weights are a gitignored build artefact that changes on every
+//! training run, so a capture made against one could not be reproduced from a
+//! clean checkout. The *fixed* reader is what a capture pins.
 
 use super::Scrivener;
 
@@ -35,16 +32,14 @@ impl Copyist {
 
     /// The handful of loose lines the captures pin.
     ///
-    /// **Both registers, because that is the claim.** A command line and a
-    /// control line are different output spaces — `grind` is a verb and `if` is
-    /// not — and a fixture that only covered commands would let the harder half
+    /// Both registers: a command line and a control line are different output
+    /// spaces, and a fixture covering only commands would let the harder half
     /// ship untested.
     ///
     /// Each is a line the deterministic pipeline genuinely cannot read, so a
     /// capture using one exercises the scrivener rather than the parser.
-    /// `crush the sage` is deliberately **not** here: `crush` is a `grind`
-    /// synonym, so the matcher already reads it and a fixture claiming it would
-    /// take credit for work this feature did not do.
+    /// `crush the sage` is deliberately **not** here — `crush` is a `grind`
+    /// synonym the matcher already reads.
     #[must_use]
     pub fn worked() -> Self {
         Self::new()
@@ -89,8 +84,8 @@ mod tests {
             copyist.read("work the sage down").as_deref(),
             Some("grind sage"),
         );
-        // **Abstaining is the common answer**, and a fixture that guessed would
-        // be a worse instrument than none: a capture would then pin the guess.
+        // Abstaining is the common answer, and a fixture that guessed would be
+        // worse than none: a capture would then pin the guess.
         assert_eq!(copyist.read("grind sage"), None);
         assert_eq!(copyist.read("something else entirely"), None);
     }

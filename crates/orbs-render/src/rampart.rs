@@ -1,32 +1,11 @@
 //! Two bands across a wall — what a siege looks like (§5.1).
 //!
-//! Drawn beside the transcript whenever a siege is running, which is the rule
-//! the archive's map, the lens's sheet and the sanctum's board all follow: **the
-//! picture is not gated on a word**, because watching a bound decision tree
-//! fight one and fighting it yourself are different activities and only the
-//! second involves typing.
+//! Drawn beside the transcript whenever a siege runs; the picture is not gated
+//! on a word. Rule 2: every figure is one `survey` would give, and the odds sit
+//! beside each bar (§5.1).
 //!
-//! # It carries nothing the readings lack
-//!
-//! Rule 2's line. Every figure here is one the player could read off `survey
-//! garrison` and `survey enemy` — troops, vigour, the telegraphed intent, and the
-//! odds. What the picture adds is that both bands and what is coming are legible
-//! **at once**, which is what makes a position readable rather than arithmetic.
-//!
-//! # Strength is length, never colour
-//!
-//! §14 forbids meaning that lives only in hue, and the whole domain is a
-//! comparison of two quantities — so a band's strength is a *bar* whose length
-//! is its vigour, and it reads in greyscale and in a dump. The two tints are
-//! enrichment: they say which side you are looking at, which the labels already
-//! say.
-//!
-//! # The odds are on the board, before the commitment
-//!
-//! §5.1's fairness rule, drawn: *show the odds before the commitment and the
-//! roll after it.* The chance each side has to tell is printed beside its bar,
-//! so a player choosing whether to spend a potion is choosing under known risk.
-//! A surprise would not be a decision.
+//! Strength is a bar's *length*, never its hue — §14 forbids meaning that lives
+//! only in colour.
 
 use crate::style::{Tint, Wash};
 
@@ -39,8 +18,7 @@ pub const LOST: char = '\u{2591}';
 /// The rule between the two bands. CP437 0xC4.
 pub const GROUND: char = '\u{2500}';
 
-/// Yours. Blue, which the palette already reads as *ours* nowhere else — the
-/// point is only that the two sides differ, and the labels carry the identity.
+/// Yours. Blue only so the two sides differ; the labels carry the identity.
 pub const OURS: Tint = Tint::Blue;
 
 /// Theirs.
@@ -51,10 +29,8 @@ pub const THEIRS: Tint = Tint::Red;
 pub struct Side {
     /// What it is called — the word `survey` takes.
     ///
-    /// **Handed in by the sim, not held here.** `survey garrison` names a band
-    /// by word, so a board whose rows are unlabelled is one a player has to
-    /// guess at before they can type. The lens's sheet paid for this omission
-    /// once and the sanctum's board records it.
+    /// Handed in by the sim: an unlabelled row is one a player has to guess at
+    /// before they can type.
     pub name: &'static str,
     /// How many are standing.
     pub troops: u32,
@@ -75,37 +51,28 @@ pub struct Rampart {
     pub enemy: Side,
     /// How many rounds have resolved.
     ///
-    /// **Carried, so a caller has a real round identity.** `orbs-balance`'s
-    /// driver keyed "have I already spent this round" on `tally.len()` — the
-    /// byte length of a rendered prose line, which only changes when a digit
-    /// count does. Two consecutive rounds collided and the policy silently
-    /// stopped using its arsenal.
+    /// A real round identity: `orbs-balance` keyed that on `tally.len()` and
+    /// two rounds collided.
     pub turns: u32,
     /// What the enemy will do next, as a word.
     ///
-    /// **The whole of what telegraphing costs**, and the reason it is a `String`
-    /// rather than an enum: an intent is content, and `orbs-render` may not
-    /// depend on `orbs-sim`.
+    /// A `String` rather than an enum: an intent is content, and `orbs-render`
+    /// may not depend on `orbs-sim`.
     pub intent: String,
     /// The four places a die can be pledged, in the order they are drawn.
     ///
-    /// **The decision, drawn.** Three dice against four rows, so one is always
-    /// empty and the picture's job is to make *which one* obvious at a glance —
-    /// alongside what each is worth and which the coming intent will throw away.
+    /// Three dice against four rows, so one is always empty and the picture's
+    /// job is to make which one obvious.
     pub areas: Vec<Allocation>,
     /// The dice still in the coffer, each with what it costs to pledge.
     ///
-    /// **The cost travels with the die**, because `orbs-render` may never depend
-    /// on `orbs-sim` and the price is a sim fact — the same reason a band's name
-    /// is handed in rather than known here.
+    /// The cost travels with the die because the price is a sim fact and
+    /// `orbs-render` may not depend on `orbs-sim`.
     pub coffer: Vec<(String, u32)>,
     /// What is left to spend on dice this siege.
     pub quintessence: u32,
-    /// The line under the rule, already written.
-    ///
-    /// Handed in rather than composed here, for `Pylon::tally`'s reason: a
-    /// sentence built from literals in a painter is prose that cannot be
-    /// hot-reloaded and would be the only authored English in this crate.
+    /// The line under the rule, already written — prose built from literals in
+    /// a painter cannot be hot-reloaded.
     pub tally: String,
 }
 
@@ -118,9 +85,7 @@ pub struct Allocation {
     pub dice: Vec<String>,
     /// The least and most it could come to once rolled.
     ///
-    /// **The range, and it is the whole reason a die is a gamble rather than a
-    /// number.** §5.1 shows the odds before the commitment; this is that rule
-    /// carried from a roll to an allocation.
+    /// §5.1's odds-before-the-commitment, carried from a roll to an allocation.
     pub range: (u32, u32),
     /// Whether the coming intent will throw this away.
     pub moot: bool,
@@ -132,11 +97,8 @@ impl Rampart {
 
     /// The widest label, plus its gap — `garrison` is eight.
     ///
-    /// **`pub`, because two other crates need the bar's start column.**
-    /// `orbs-shell`'s painter and the `screens` example both tinted from a
-    /// hardcoded `+ 10`; widening this would have moved the text and left both
-    /// tints painting over the label, with every test still green —
-    /// `a_row_is_exactly_the_boards_width` measures the string, not the rect.
+    /// `pub` because two other crates need the bar's start column; both had a
+    /// hardcoded `+ 10`, which painted over the label when this widened.
     pub const LABEL: u16 = 10;
 
     /// Room for ` 18/18  55%`.
@@ -147,9 +109,8 @@ impl Rampart {
 
     /// A header naming what is coming, a row per side, the rule, and the tally.
     ///
-    /// **Fixed, and deliberately not sized to what is standing.** A board that
-    /// shrank as a band broke would move the rule every round, and the rule is
-    /// what a player reads position against — the sanctum's constraint exactly.
+    /// Fixed rather than sized to what is standing: a board that shrank as a
+    /// band broke would move the rule a player reads position against.
     #[must_use]
     pub const fn rows() -> u16 {
         // intent, blank, four areas, blank, enemy, rule, garrison, blank,
@@ -159,20 +120,11 @@ impl Rampart {
 
     /// What is still free to pledge, what each costs, and what is left to pay.
     ///
-    /// **Without it the player cannot see what they have left**, and the whole
-    /// decision is *which die goes where* — a board that shows the four
-    /// destinations and hides the three things going to them is half a picture.
+    /// The cost is the price of the decision — §5.1's odds before the
+    /// commitment, not only `survey d20`.
     ///
-    /// **The costs are on the board and not only in `survey d20`**, which is this
-    /// domain's headline rule rather than a nicety: *show the odds before the
-    /// commitment*, asserted three times in this file. Once a pledge costs
-    /// something, the cost **is** the price of the decision — a board that showed
-    /// the range and hid the price would be showing half the bargain.
-    ///
-    /// `coffer    d6 1  d8 2  d20 5          7` — each die with what it takes,
-    /// then what is left. A die held but unaffordable still draws, dimmed by the
-    /// arithmetic rather than by a style: you can see the `d20` and see that 5 is
-    /// more than the 3 you hold.
+    /// `coffer    d6 1  d8 2  d20 5          7`. A die held but unaffordable
+    /// still draws, dimmed by the arithmetic rather than by a style.
     #[must_use]
     pub fn coffer_row(&self) -> String {
         let dice = if self.coffer.is_empty() {
@@ -184,8 +136,8 @@ impl Rampart {
                 .collect::<Vec<_>>()
                 .join("  ")
         };
-        // **Right-aligned into the same column the bands end in**, so the pool
-        // reads down the board against the two strengths rather than floating.
+        // Right-aligned into the column the bands end in, so the pool reads
+        // down the board against the two strengths.
         let left = Self::figure(self.quintessence);
         format!(
             "{:<label$}{dice:<width$}{left:>4}",
@@ -200,11 +152,8 @@ impl Rampart {
 
     /// One area's row, as text.
     ///
-    /// `line     d20 d6      2 to 26   ` — the dice on it and what they could
-    /// come to. An empty area draws its name and a dash, because **an empty row
-    /// is the most important thing on this board**: with three dice and four
-    /// areas one is always dark, and the picture's job is to make which one
-    /// obvious.
+    /// `line     d20 d6      2 to 26   `. An empty area draws its name and a
+    /// dash: one row is always dark, and which one is the board's main fact.
     #[must_use]
     pub fn area_row(&self, area: &Allocation) -> String {
         let dice = if area.dice.is_empty() {
@@ -212,11 +161,8 @@ impl Rampart {
         } else {
             area.dice.join(" ")
         };
-        // **`moot` shows on an empty row too, and that is the point.** The
-        // warning exists to stop a pledge *before* it is made, so hiding it
-        // until something is already there would be advice arriving after the
-        // decision — §5.1's odds-before-the-commitment rule, applied to the one
-        // choice this board is for.
+        // `moot` shows on an empty row too: the warning exists to stop a pledge
+        // before it is made (§5.1).
         let worth = if area.moot {
             "moot".to_owned()
         } else if area.dice.is_empty() {
@@ -233,10 +179,8 @@ impl Rampart {
 
     /// How many cells of `FULL` a side's bar gets.
     ///
-    /// **Ceiling division above nought**, so a band with any fight left draws at
-    /// least one cell. A bar that rounded to nothing would say *routed* about a
-    /// side that is still standing, which is the one thing this picture must
-    /// never do.
+    /// Ceiling division above nought: a bar that rounded to nothing would say
+    /// *routed* about a side still standing.
     #[must_use]
     pub fn filled(side: &Side) -> u16 {
         if side.vigour == 0 || side.full == 0 {
@@ -250,16 +194,9 @@ impl Rampart {
 
     /// One side's row, as text.
     ///
-    /// **The figures are clamped into the width they were given, because `>3` is
-    /// a floor and not a ceiling.** `{:>3}` pads a short number and *widens* for
-    /// a long one, so a garrison past 999 vigour would push the row past
-    /// [`Self::COLS`] and out through the border — and `mustered` grows with
-    /// every `deploy`, so nothing in the sim bounds it.
-    ///
-    /// A four-digit garrison is 334 troops and is not a state the game reaches
-    /// today, which is exactly why this is worth pinning: a picture that comes
-    /// apart only at a value nobody has produced yet is a defect that ships. The
-    /// bar is unaffected — [`Self::filled`] is a ratio and stays true.
+    /// The figures are clamped into their width: `{:>3}` is a floor, so a
+    /// garrison past 999 vigour pushed the row past [`Self::COLS`] and out
+    /// through the border. The bar is unaffected; [`Self::filled`] is a ratio.
     #[must_use]
     pub fn row(&self, side: &Side) -> String {
         let filled = Self::filled(side) as usize;
@@ -278,13 +215,8 @@ impl Rampart {
 
     /// A number that fits the three columns the row reserves for it.
     ///
-    /// **`1k+` rather than a truncation or a clamp**, and it is exactly three
-    /// characters — the first draft of this was `999+`, which is four and would
-    /// have overflowed the field it was written to fit. `1200` cut to `120` is a
-    /// number the board states as fact, and clamped to `999` it is a different
-    /// one; `1k+` is *true at every magnitude* and says only what it knows.
-    ///
-    /// `chance` is a percentage and can never reach this. Vigour can.
+    /// `1k+` rather than a truncation or a clamp: `1200` cut to `120` is a
+    /// different number stated as fact, and `999+` is four characters.
     fn figure(value: u32) -> String {
         if value > 999 {
             "1k+".to_owned()
@@ -295,9 +227,8 @@ impl Rampart {
 
     /// Which tint a side's bar takes.
     ///
-    /// **By name, not by pointer.** Comparing `&'static str` addresses is not
-    /// something const eval will do, and it would also be true of two equal
-    /// names from different places — a fragile answer to an easy question.
+    /// By name, not by pointer: const eval will not compare `&'static str`
+    /// addresses, and two equal names from different places would differ.
     #[must_use]
     pub fn tint(&self, side: &Side) -> Tint {
         if side.name == self.garrison.name {
@@ -343,7 +274,7 @@ mod tests {
             enemy: side("enemy", 21, 21),
             turns: 1,
             // Three dice against four areas: one row is always dark, which is
-            // the shape every assertion below is really about.
+            // what every assertion below is about.
             areas: vec![
                 area("line", &[], (0, 0), true),
                 area("buckler", &["d20"], (1, 20), false),
@@ -371,10 +302,8 @@ mod tests {
 
     #[test]
     fn a_moot_area_says_so_even_with_nothing_on_it() {
-        // **The warning exists to stop a pledge before it is made.** Hidden
-        // until something is already there, it would be advice arriving after
-        // the decision — which is §5.1's odds-before-the-commitment rule broken
-        // on the one choice this board is for.
+        // The warning stops a pledge before it is made; hidden until something
+        // is there, it would arrive after the decision (§5.1).
         let board = board();
         let line = board.area_row(&board.areas[0]);
         assert!(board.areas[0].dice.is_empty(), "the fixture changed");
@@ -397,8 +326,8 @@ mod tests {
 
     #[test]
     fn the_coffer_row_says_what_is_left_to_pledge() {
-        // A board that shows four destinations and hides the three things going
-        // to them is half a picture.
+        // Showing four destinations and hiding what goes to them is half a
+        // picture.
         let board = board();
         assert!(board.coffer_row().contains("d8"));
         let spent = Rampart {
@@ -412,12 +341,7 @@ mod tests {
         );
     }
 
-    /// **The price is on the board, which is the domain's headline rule.**
-    ///
-    /// *Show the odds before the commitment* is asserted three times in this
-    /// file, and once a pledge costs something the cost **is** the price of the
-    /// decision. A board that drew the range and hid the price would be showing
-    /// half the bargain — and `survey d20` is not the board.
+    /// The cost is the price of the decision (§5.1), so it goes on the board.
     #[test]
     fn the_coffer_row_prices_every_die_and_says_what_is_left() {
         let board = Rampart {
@@ -434,12 +358,8 @@ mod tests {
         );
     }
 
-    /// **The row a player reads the whole decision off, pinned to the board.**
-    ///
-    /// Only the two *band* rows were width-pinned, and this one grew two fields
-    /// at once. `orbs_shell::rampart::paint` truncates rather than wrapping, so
-    /// an overrun here loses the rightmost thing on the row — which is now the
-    /// pool — silently, and only on the rounds where the numbers are widest.
+    /// Only the band rows were width-pinned. `orbs_shell::rampart::paint`
+    /// truncates rather than wrapping, so an overrun silently loses the pool.
     #[test]
     fn the_coffer_row_fits_the_board_even_at_absurd_numbers() {
         for (coffer, left) in [
@@ -478,9 +398,8 @@ mod tests {
 
     #[test]
     fn a_band_with_any_fight_left_draws_at_least_one_cell() {
-        // **The one thing this picture must never do** is say *routed* about a
-        // side that is still standing. At 1 vigour in 100 the honest fraction
-        // rounds to nothing, so the bar is floored at one.
+        // At 1 vigour in 100 the honest fraction rounds to nothing, and a bar of
+        // nothing says *routed* about a side still standing.
         for vigour in 1..=40 {
             assert!(
                 Rampart::filled(&side("enemy", vigour, 400)) >= 1,
@@ -511,11 +430,8 @@ mod tests {
         }
     }
 
-    /// **The width has to hold for numbers nothing produces yet**, because
-    /// `mustered` grows with every `deploy` and the sim puts no ceiling on it.
-    /// `{:>3}` is a floor, so a four-digit garrison drew a row two cells wider
-    /// than the box that contains it — a picture that comes apart at a value
-    /// nobody has reached is a defect that ships quietly.
+    /// `mustered` grows with every `deploy` and `{:>3}` is a floor, so a
+    /// four-digit garrison drew a row wider than its box.
     #[test]
     fn a_row_keeps_its_width_at_a_garrison_no_siege_has_ever_had() {
         let mut board = board();
@@ -559,8 +475,7 @@ mod tests {
     #[test]
     fn every_glyph_the_board_draws_is_in_the_code_page() {
         // §19 records `▪` and `►` shipping as `?`. A painter's glyphs are Rust
-        // literals, so `is_renderable` — which is for authored prose — never
-        // sees them, and this is what holds them instead.
+        // literals, so `is_renderable` never sees them; this holds them instead.
         for glyph in [FULL, LOST, GROUND] {
             assert!(
                 crate::cp437::is_renderable(glyph),

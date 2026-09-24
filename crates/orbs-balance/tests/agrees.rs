@@ -1,40 +1,32 @@
 //! The See-it line, as a test: *a sweep's curve and a hand-played session agree*.
 //!
-//! ROADMAP's Phase 2 item asks for exactly that, and it is the one claim a
-//! balance harness cannot be trusted without. If the synthetic player and a
-//! person typing the same commands reach different numbers, every sweep after it
-//! is measuring a game nobody plays — §13's divergence risk, arriving through
-//! the instrument built to prevent it.
+//! The one claim a balance harness cannot be trusted without: if the synthetic
+//! player and a person typing the same commands reach different numbers, every
+//! sweep after it measures a game nobody plays — §13's divergence risk arriving
+//! through the instrument built to prevent it. The hand-played reference is
+//! CLAUDE.md's own worked line for a clarity, run through the public `Sim`.
 //!
-//! The hand-played reference is CLAUDE.md's own worked line for a clarity, run
-//! here through the same public `Sim` a dump uses.
-//!
-//! # Four claims, and two of them arrived late
-//!
-//! The first two tests below drive `Sim` directly and hold the *anchor*: one
-//! clarity by hand earns exactly the 16 that §11.5's first threshold is derived
-//! from, over more ticks than its recipes alone. They would both pass with this
-//! crate's entire harness deleted, which is what the last two are for — they run
-//! real [`Policy`]s through [`drive::run`] and compare what a sweep measures
-//! against the hand-played number and against [`report::expected`]'s pins.
+//! Four claims, two of which arrived late. The first two tests drive `Sim`
+//! directly and hold the *anchor*: one clarity by hand earns exactly the 16
+//! §11.5's first threshold is derived from. Both would pass with this crate's
+//! entire harness deleted, which is what the last two are for — they run real
+//! [`Policy`]s through [`drive::run`] and compare a sweep against the
+//! hand-played number and against [`report::expected`]'s pins.
 
 use orbs_balance::{drive, policy::Policy, report};
 use orbs_sim::Sim;
 
 /// How long a swept policy runs here.
 ///
-/// **Two hours, and an hour was not enough.** A policy pays its first lap's setup
-/// once and amortises it over the run, and the ambient sabotage surface
-/// (`tower::sabotage`) costs a few minutes an hour — so at 3600 ticks a single
-/// badly-timed swap moves the rate by more than the tolerance band.
+/// Two hours, and an hour was not enough: a policy amortises its first lap's
+/// setup over the run, and ambient sabotage costs a few minutes an hour, so at
+/// 3600 ticks one badly-timed swap moves the rate past the tolerance band.
 ///
-/// **Length alone does not fix it, which this file used to claim it did.** The
-/// note here said *"three seeds at this length were measured inside the band"*,
-/// and that was not true of the tree it was written against: measured over seeds
-/// 0, 3, 11 and 42, clarity spans 0.1244 to 0.1383 against a pinned 0.140 — a
-/// seed-to-seed spread wider than the 10% band, so seed 3 fails and seed 0
-/// passes on identical code. Sabotage is *part of the economy*, so that spread
-/// is the game rather than noise; what is wrong is measuring it once.
+/// Length alone does not fix it, which this file used to claim it did. Over
+/// seeds 0, 3, 11 and 42, clarity spans 0.1244 to 0.1383 against a pinned
+/// 0.140 — a seed-to-seed spread wider than the 10% band, so seed 3 fails and
+/// seed 0 passes on identical code. Sabotage is part of the economy, so that
+/// spread is the game; what is wrong is measuring it once.
 ///
 /// [`SEEDS`] is the fix: the pin is held against the **mean** of several worlds.
 const SPAN: u64 = 7200;
@@ -52,12 +44,11 @@ const EVERY: u64 = 600;
 
 /// The curve every pinned rate below was measured against.
 ///
-/// **Baseline, and named rather than passed anonymously.** A game has a length
-/// and the harness can measure any of them, but the numbers in `report::EXPECTED`
-/// were taken against the authored curve — so a test that quietly swept a
-/// different one would be comparing a measurement to a pin that never described
-/// it. `bound` is the column that would move most: it earns its first slot by
-/// hand, so a longer game is a longer hand-played prefix inside the same budget.
+/// Baseline, and named rather than passed anonymously: the numbers in
+/// `report::EXPECTED` were taken against the authored curve, so a test sweeping
+/// a different one compares a measurement to a pin that never described it.
+/// `bound` would move most, since it earns its first slot by hand and a longer
+/// game is a longer hand-played prefix inside the same budget.
 const MEASURED: orbs_sim::content::Length = orbs_sim::content::Length::Baseline;
 
 /// CLAUDE.md's worked clarity, verbatim in effect.
@@ -73,11 +64,10 @@ const BY_HAND: &[&str] = &[
     "empty mortar_and_pestle",
     "digest ground-sage",
     "meditate 14",
-    // **`siphon` used to be here and is not a word any more** (§19): the
-    // pipeline reaches into an unbusy instrument before the shelf, so `mix`
-    // takes the tincture out of the bath itself. Left in, it was a fuzzy miss
-    // costing the reference a tick and quietly widening the very anchor this
-    // file exists to hold — a dead command inside the number everything else is
+    // `siphon` used to be here and is not a word any more (§19): the pipeline
+    // reaches into an unbusy instrument before the shelf, so `mix` takes the
+    // tincture out of the bath. Left in it was a fuzzy miss costing the
+    // reference a tick — a dead command inside the anchor everything else is
     // compared against.
     "grind rock-salt",
     "meditate 9",
@@ -90,9 +80,9 @@ const BY_HAND: &[&str] = &[
 
 #[test]
 fn one_clarity_by_hand_earns_exactly_sixteen() {
-    // **The anchor 16 is derived from, not chosen against a clock** (§19):
-    // grind 1, digest 2, grind 1, mix 4, distil 8. If this ever reads anything
-    // else, `progression.toml` moved and §11.5's first threshold moved with it.
+    // The anchor 16 is derived from, not chosen against a clock (§19): grind 1,
+    // digest 2, grind 1, mix 4, distil 8. Anything else means
+    // `progression.toml` moved and §11.5's first threshold with it.
     let mut sim = Sim::new(0);
     for line in BY_HAND {
         sim.submit(line);
@@ -142,16 +132,15 @@ fn a_hand_played_clarity_costs_more_ticks_than_its_recipes_do() {
 
 #[test]
 fn a_swept_clarity_and_a_hand_played_one_agree() {
-    // **The See-it line this file is named for, and neither test above held it.**
-    // Both drove `Sim` by hand and would have passed with the whole harness
-    // deleted — so the one claim a balance harness cannot be trusted without was
-    // the one claim nothing checked.
+    // The See-it line this file is named for, which neither test above held:
+    // both drove `Sim` by hand and would have passed with the whole harness
+    // deleted.
     //
-    // The two numbers are not equal and must not be asserted equal: a hand-played
-    // clarity pays its setup once over 16 experience (0.130), where the looped
-    // policy amortises the same setup over dozens of laps (0.140). What has to
-    // hold is that they measure the *same loop* — within a fifth of each other,
-    // and the policy never behind the single brew that has no laps to amortise.
+    // The two numbers are not equal and must not be asserted equal — a
+    // hand-played clarity pays its setup once over 16 experience (0.130) where
+    // the looped policy amortises it over dozens of laps (0.140). What has to
+    // hold is that they measure the *same loop*: within a fifth of each other,
+    // and the policy never behind the single brew.
     let mut sim = Sim::new(0);
     for line in BY_HAND {
         sim.submit(line);
@@ -179,30 +168,27 @@ fn a_swept_clarity_and_a_hand_played_one_agree() {
 
 /// What a bound spell keeps of the same loop played by hand.
 ///
-/// **One tick in eleven, and it is the same on every world.** `grind` and
-/// `bound` issue the same two commands for ever, so everything about them is
-/// equal except who is typing — and the gap is exactly the tick a binding spends
-/// re-casting a spell that has run off the end. Measured over seeds 0, 3, 11 and
-/// 42 the ratio is 0.910, 0.911, 0.910, 0.910: the absolute rates move a lot
-/// with a world's luck at sabotage and this does not move at all, because it is
-/// a property of the script engine rather than of the tower.
+/// One tick in eleven, the same on every world. `grind` and `bound` issue the
+/// same two commands for ever, so everything about them is equal except who is
+/// typing, and the gap is the tick a binding spends re-casting a spell that ran
+/// off the end. Over seeds 0, 3, 11 and 42 the ratio is 0.910, 0.911, 0.910,
+/// 0.910 — the absolute rates move with a world's luck and this does not,
+/// because it is a property of the script engine rather than of the tower.
 const AUTOMATION_KEEPS: f64 = 0.910;
 
 #[test]
 fn a_bound_spell_keeps_a_known_fraction_of_the_loop_it_automates() {
-    // **The instrument the harness did not have.** Five policies shipped and not
-    // one invoked or bound a spell, so `SCRIPT_BUDGET`, `PATIENCE`, the wait on
-    // the production slot and the re-cast a binding performs were all unmeasured
-    // — and DESIGN.md §19's decision that *a step still costs a tick* is a claim
-    // about precisely this number.
+    // The instrument the harness did not have: five policies shipped and not one
+    // invoked or bound a spell, so `SCRIPT_BUDGET`, `PATIENCE`, the wait on the
+    // production slot and a binding's re-cast were all unmeasured — and §19's
+    // decision that *a step still costs a tick* is a claim about this number.
     //
-    // **The ratio is pinned and the rate is not**, deliberately. An absolute pin
-    // would be a pin on the world's luck: `bound` reads 0.0814 on seed 3 against
-    // 0.0910 on seed 0, and `grind` moves with it, because sabotage costs both
-    // the same minutes. The quotient cancels that and leaves the engine.
+    // The ratio is pinned and the rate is not, deliberately: an absolute pin
+    // would pin the world's luck, since `bound` reads 0.0814 on seed 3 against
+    // 0.0910 on seed 0 and `grind` moves with it. The quotient cancels that.
     //
-    // If the language overhaul moves this, it is **meant** to, and the failure
-    // here is the report — not a regression to paper over. Re-pin deliberately.
+    // If the language overhaul moves this it is *meant* to, and the failure here
+    // is the report rather than a regression to paper over.
     for seed in SEEDS {
         let grind = drive::run(
             Policy::named("grind").expect("the rate floor exists"),
@@ -239,12 +225,11 @@ fn a_bound_spell_keeps_a_known_fraction_of_the_loop_it_automates() {
 
 #[test]
 fn the_bound_policy_actually_gets_a_spell_bound() {
-    // **A policy that silently never binds would still report a rate**, and it
-    // would be the hand-played one — which is the failure mode this whole
-    // instrument exists to avoid, arriving inside the instrument. It happened
-    // once already: `Sim::bound` answers `tending.spell` where the policy names
-    // `tending`, so the driver re-issued `bind` on every free tick and a
-    // two-hour sweep carried 1,920 refusals.
+    // A policy that silently never binds would still report a rate, and it would
+    // be the hand-played one — the failure mode this instrument exists to avoid,
+    // arriving inside the instrument. It happened once: `Sim::bound` answers
+    // `tending.spell` where the policy names `tending`, so the driver re-issued
+    // `bind` every free tick and a two-hour sweep carried 1,920 refusals.
     let run = drive::run(
         Policy::named("bound").expect("the bound-spell policy exists"),
         0,
@@ -271,10 +256,9 @@ fn the_bound_policy_actually_gets_a_spell_bound() {
 
 #[test]
 fn every_pinned_rate_is_one_a_sweep_still_reaches() {
-    // **The pin, made load-bearing.** `report::EXPECTED` is documented as a
-    // regression pin, but nothing failed when a measurement left its band — the
-    // `<-- drifted` marker is a pin only for as long as somebody is reading the
-    // column. This reads it.
+    // The pin, made load-bearing: `report::EXPECTED` is documented as a
+    // regression pin, but nothing failed when a measurement left its band — a
+    // `<-- drifted` marker is a pin only while somebody reads the column.
     //
     // It caught the first thing it was pointed at: the ambient reagent swap
     // shipped taking the alphabetically-first endless pile, which is `charcoal`,
@@ -286,11 +270,10 @@ fn every_pinned_rate_is_one_a_sweep_still_reaches() {
             // one run is one sample. `report::EXPECTED` says so.
             continue;
         };
-        // **Averaged over worlds, not measured in one.** A single hardcoded seed
-        // made this test's sensitivity worse than the spread it was ignoring:
-        // seed 3 leaves clarity, damped and grind all outside the band while
-        // seed 0 passes, so any real regression smaller than that gap was
-        // invisible and any seed change was a false alarm.
+        // Averaged over worlds, not measured in one: a single hardcoded seed
+        // made this test's sensitivity worse than the spread it ignored — seed 3
+        // leaves clarity, damped and grind outside the band while seed 0 passes,
+        // so any regression smaller than that gap was invisible.
         let runs: Vec<_> = SEEDS
             .iter()
             .map(|seed| drive::run(policy, *seed, SPAN, EVERY, MEASURED))

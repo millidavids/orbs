@@ -6,18 +6,17 @@ use crate::content::Prose;
 
 /// A beast at the circle, drawn.
 ///
-/// **Every word the board shows is resolved here**, because `orbs-render` may
-/// never depend on `orbs-sim` and holds no authored English (rule 6): the
-/// senses' names and the tally are prose, and the glyphs and humours are the
-/// parser's own words, so the picture names exactly what `limn` takes.
+/// Every word the board shows is resolved here, because `orbs-render` may never
+/// depend on `orbs-sim` and holds no authored English (rule 6). The senses'
+/// names and the tally are prose, the glyphs and humours the parser's own
+/// words, so the picture names exactly what `limn` takes.
 ///
-/// **A lesser circle is the same board with less on it** — one line, two senses,
-/// four columns — because the board draws what it is handed rather than
-/// knowing which circle it is.
+/// A lesser circle is the same board with less on it — one line, two senses,
+/// four columns — since the board draws what it is handed rather than knowing
+/// which circle it is.
 ///
-/// **A turned wire is part of what a glyph is given**, carried beside the sense's
-/// name rather than folded into it, so the board draws its mark and the spoken
-/// line says *turned* from one fact.
+/// A turned wire is carried beside the sense's name rather than folded into it,
+/// so the drawn mark and the spoken *turned* come from one fact.
 #[must_use]
 pub fn view(beast: &Beast, prose: &Prose) -> orbs_render::Circle {
     let shape = beast.shape();
@@ -50,9 +49,9 @@ pub fn view(beast: &Beast, prose: &Prose) -> orbs_render::Circle {
         // The keystone alone, given the two senses as the outer glyphs would be,
         // and never turned.
         Shape::Lesser(_) => vec![line(Glyph::Keystone, named(Glyph::Keystone, [0, 1]))],
-        // **The outer two first, then the keystone they feed**, so the board
-        // reads in the direction a sense travels: into a glyph, and out through
-        // the keystone to the beast.
+        // The outer two first, then the keystone they feed, so the board reads
+        // in the direction a sense travels: into a glyph, out through the
+        // keystone to the beast.
         Shape::Whole(puzzle) => vec![
             line(Glyph::Sunwise, named(Glyph::Sunwise, puzzle.wiring.sunwise)),
             line(

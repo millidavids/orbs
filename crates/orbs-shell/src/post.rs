@@ -1,24 +1,17 @@
 //! The machine's POST, drawn.
 //!
-//! **Names and facts, no sentences** — rule 6, and the line §19 already drew for
-//! `Verb::canonical` and `tower/build.rs`. There is not a sentence in this file,
-//! and the moment the splash wants one it belongs in Phase 1's content file
-//! rather than here.
+//! Names and facts, no sentences — rule 6. The moment the splash wants one it
+//! belongs in a content file.
 //!
-//! # Why the versions are real
+//! The versions are real. `tower/boot.rs` exists because *"a boot report that
+//! could go stale would be a lie the player reads first"*, and invented version
+//! numbers would be the same lie one screen earlier: the game's version is its
+//! own package's and Bevy's is the exact pin, held by a test.
 //!
-//! `tower/boot.rs` exists because *"a boot report that could go stale would be a
-//! lie the player reads first"*. A POST screen reporting invented version
-//! numbers would be the same lie one screen earlier, and it costs nothing to
-//! avoid: the game's version is its own package's, and Bevy's is the exact pin,
-//! held to it by a test rather than by memory.
-//!
-//! The Rust version is the one that actually compiled the binary, captured by
-//! `build.rs`. `env!("CARGO_PKG_RUST_VERSION")` was the obvious choice and is
-//! **empty here** — this crate does not inherit `rust-version` — and the
-//! workspace's `1.95` is a floor rather than the compiler in use, which
-//! `rust-toolchain.toml` pins to something else again. Three numbers, only one
-//! of them true.
+//! The Rust version is the one that compiled the binary, captured by `build.rs`.
+//! `env!("CARGO_PKG_RUST_VERSION")` is empty here — this crate does not inherit
+//! `rust-version` — and the workspace's `1.95` is a floor rather than the
+//! compiler in use, which `rust-toolchain.toml` pins to something else again.
 
 use orbs_render::{Crossing, Frame, Passage, Pos, Rect, Span, Style, Toward, UtteranceKind};
 
@@ -35,12 +28,9 @@ const NAME: &str = "O.R.B.S.";
 
 /// What the initials stand for, one word per letter.
 ///
-/// **They land after the name, not with it.** Each word used to arrive as its own
-/// letter did — `Operational` with the `O` — which read well while the logo
-/// printed left to right and stopped reading once the letters began *growing*: a
-/// word appearing beside a letter still half its size is two clocks arguing. The
-/// name arrives, and then it is expanded. `the_subtitle_waits_for_the_name` holds
-/// the order.
+/// They land after the name, not with it: a word appearing beside a letter still
+/// half its size is two clocks arguing, once the letters began *growing* rather
+/// than printing. `the_subtitle_waits_for_the_name` holds the order.
 const EXPANSION: [&str; 4] = ["Operational", "Relic", "Bewitching", "System"];
 
 /// The subtitle's own width, including the single spaces between its words.
@@ -58,9 +48,8 @@ fn expansion_width() -> usize {
 
 /// Where each word of [`EXPANSION`] starts, in columns from the subtitle's left.
 ///
-/// **It used to carry the [`GLYPHS`] entry that brought each word too**, back
-/// when the words rode the letters' clock. They have their own now, so the pairing
-/// was a second thing to keep true about a relationship that no longer exists.
+/// It used to carry the [`GLYPHS`] entry that brought each word, back when the
+/// words rode the letters' clock. They have their own now.
 fn expansion_places() -> [usize; 4] {
     let mut places = [0; 4];
     let mut col = 0;
@@ -73,15 +62,12 @@ fn expansion_places() -> [usize; 4] {
 
 /// Where each character of [`NAME`] sits in [`ART`], as `(first column, width)`.
 ///
-/// The letterforms are **column-separable** — no glyph shares a column with its
-/// neighbour — and that is still what makes the name arrive a letter at a time,
-/// for a subtler reason than it used to be. Each pair is *grown* into place by a
-/// `Gather` over its own columns, and column-separability is what guarantees that
-/// gather cannot reach the letters standing whole beside it. The letters are
-/// eight cells wide except `O`,
-/// which is nine, and the full stops are three; nothing about that is regular
-/// enough to compute, so it is a table, and `the_glyph_table_tiles_the_art`
-/// holds it to covering the art exactly with no gap and no overlap.
+/// The letterforms are column-separable — no glyph shares a column with its
+/// neighbour — which is what lets a pair be grown into place by a `Gather` over
+/// its own columns without reaching the letters standing whole beside it. The
+/// widths are eight cells, nine for `O` and three for a full stop: not regular
+/// enough to compute, so a table, held to covering the art exactly by
+/// `the_glyph_table_tiles_the_art`.
 const GLYPHS: [(usize, usize); 8] = [
     (0, 9),
     (9, 3),
@@ -115,14 +101,12 @@ const ART: [&str; 6] = [
 /// What the POST reports, in the order it reports them.
 ///
 /// The studio first, then what the orb is built out of. The game's own version
-/// is not among them: [`ART`] is the game saying its name, and a version line
-/// under a six-row logo would be the only small text on the card.
+/// is not among them: a version line under a six-row logo would be the only
+/// small text on the card.
 ///
-/// **`engine` is the frontend's to supply** and the other two are not. The
-/// studio is the game's identity, and the compiler is whichever one built this
-/// binary — but the engine is `bevy` here and `crossterm` in a terminal, and a
-/// card that named the wrong one would be inventing a component. See
-/// the frontend's own `boot::engine`.
+/// `engine` is the frontend's to supply and the other two are not — it is `bevy`
+/// here and `crossterm` in a terminal, and a card naming the wrong one would be
+/// inventing a component. See the frontend's own `boot::engine`.
 fn reported(engine: &str) -> [String; 3] {
     [
         STUDIO.to_owned(),
@@ -150,11 +134,8 @@ const LETTERS_SHARE: f32 = 0.20;
 
 /// How much of the stage the subtitle takes, a word at a time.
 ///
-/// **After the letters, not alongside them.** Each word used to land with its own
-/// initial — `Operational` with the `O` — which read well while the logo printed
-/// left to right and stopped reading at all once the letters started *growing*:
-/// a word appearing beside a letter that is still half its size is two clocks
-/// arguing. The name arrives, and then it is expanded.
+/// After the letters, not alongside them: a word landing beside a letter still
+/// half its size is two clocks arguing. See [`EXPANSION`].
 const SUBTITLE_SHARE: f32 = 0.10;
 
 /// How much of the stage the name takes before the report begins.
@@ -173,10 +154,8 @@ fn letters_at(progress: f32) -> (usize, Option<f32>) {
     if letters >= 1.0 {
         return (PAIRS, None);
     }
-    // Which pair the clock is inside, **counted rather than cast**. A float to
-    // integer conversion is the one arithmetic this workspace keeps in a single
-    // place — `tween::mix` — and `arrived_cells` beneath makes the same choice
-    // for the same reason.
+    // Counted rather than cast: a float-to-integer conversion is kept in one
+    // place (`tween::mix`), and `arrived_cells` below makes the same choice.
     let span = 1.0 / f32::from(to_row(PAIRS));
     let index = (1..PAIRS)
         .filter(|pair| letters >= f32::from(to_row(*pair)) * span)
@@ -199,10 +178,9 @@ fn spoken_words(progress: f32) -> usize {
 
 /// Where each pair starts and how wide it is, in [`ART`] columns.
 ///
-/// **The stops travel with their letters.** [`GLYPHS`] is eight entries because
-/// the full stops are glyphs in their own right, and `expansion_places` already
-/// records that the letters are the even ones. A stop arriving as a beat of its
-/// own would be four extra events in a sequence that is meant to read as a name.
+/// The stops travel with their letters: [`GLYPHS`] has eight entries because a
+/// full stop is a glyph in its own right, and a stop arriving as a beat of its
+/// own would be four extra events in what should read as a name.
 fn pairs() -> [(usize, usize); PAIRS] {
     let mut out = [(0, 0); PAIRS];
     for (index, slot) in out.iter_mut().enumerate() {
@@ -215,33 +193,24 @@ fn pairs() -> [(usize, usize); PAIRS] {
 
 /// Paint the boot screen for `stage`, `progress` of the way through it.
 ///
-/// Takes no Bevy resources on purpose: `shell::dump` builds no `App`, so a screen
-/// that needed one could never be dumped as text.
+/// Takes no Bevy resources on purpose: `shell::dump` builds no `App`, so a
+/// screen that needed one could never be dumped as text.
 ///
-/// # What types and what does not
+/// The words do not type; the dots do. A name arriving one letter at a time
+/// reads as a slow machine, where a POST line should read as *this thing is
+/// being checked* — so the label lands whole, the leader fills, `ok` snaps in
+/// behind it, and then a pause.
 ///
-/// **The words do not type; the dots do.** A name arriving one letter at a time
-/// reads as a slow machine, which is the opposite of the point — a POST line
-/// should read as *this thing is being checked*. So the label lands whole, its
-/// leader dots fill the way a progress indicator fills, and `ok` snaps in behind
-/// them. Then a pause, and the next line.
-///
-/// **The logo does not print at all — it grows in from the middle.** It used to
-/// arrive a character at a time, six rows at once; it is now the whole picture
-/// moving, which is [`Passage::Gather`]'s arriving half and so the same motion
-/// the game uses whenever a surface takes the pane. The first thing the orb ever
-/// does is the thing it keeps doing.
-///
-/// [`GLYPHS`] survives that, because the **subtitle** still lands letter by
-/// letter underneath — `Operational` with the `O`, `Relic` with the `R` — and
-/// that pairing is what the table is really for.
+/// The logo does not print at all, it grows in from the middle:
+/// [`Passage::Gather`]'s arriving half, the same motion the game uses whenever a
+/// surface takes the pane. [`GLYPHS`] survives that because the subtitle still
+/// lands word by word underneath.
 pub fn paint(frame: &mut Frame, stage: Stage, progress: f32, engine: &str) {
     if !matches!(stage, Stage::Post | Stage::Close) {
         return;
     }
-    // **`Close` draws the finished card and then takes it away.** The stage is a
-    // departure rather than a different screen, so everything below runs at full
-    // progress and the gather at the end is the only thing that moves.
+    // `Close` draws the finished card and takes it away: a departure rather than
+    // a different screen, so everything below runs at full progress.
     let progress = if matches!(stage, Stage::Close) {
         1.0
     } else {
@@ -257,23 +226,19 @@ pub fn paint(frame: &mut Frame, stage: Stage, progress: f32, engine: &str) {
     let top = area.rows.saturating_sub(height) / 2;
 
     let mut painter = frame.painter(area);
-    // Centred as a **block**, on the widest row. The rows are not all the same
-    // length — only the full stops reach the bottom line — so centring each one
-    // on its own width shears the letterforms apart by a column.
+    // Centred as a block, on the widest row: the rows are not all the same
+    // length, so centring each on its own width shears the letterforms apart.
     let logo_width = ART.iter().map(|row| row.chars().count()).max().unwrap_or(0);
     let logo_col = area
         .col
         .saturating_add(area.cols.saturating_sub(to_row(logo_width)) / 2);
 
-    // **One letter at a time, and each one grows into place.** `O.`, then `R.`,
-    // then `B.`, then `S.` — the full stop arrives with the letter it belongs to
-    // rather than as a beat of its own, which is what the name is when it is read
-    // aloud.
+    // One letter at a time, each growing into place: `O.`, `R.`, `B.`, `S.`, the
+    // stop with the letter it belongs to, which is the name read aloud.
     //
-    // Each pair is drawn whole once its turn has passed and not at all before it,
-    // so the only one that moves is the one in flight — and because the pairs are
-    // column-disjoint, the gather at the end of this function reaches that one
-    // and leaves the letters already standing alone.
+    // Each pair is drawn whole once its turn has passed, so only the one in
+    // flight moves — and because the pairs are column-disjoint, the gather at
+    // the end of this function leaves the rest standing.
     let (arrived, flight) = letters_at(progress);
     for (start, width) in pairs().into_iter().take(arrived) {
         for (index, row) in ART.iter().enumerate() {
@@ -287,38 +252,25 @@ pub fn paint(frame: &mut Frame, stage: Stage, progress: f32, engine: &str) {
             );
         }
     }
-    // The logo is one utterance, not six rows of block glyphs — and it is the
-    // **whole** name from the first frame, where it used to be as much of it as
-    // had printed. §14, and the same rule every crossing follows: the linear
-    // stream is the settled screen, because a reader must never be made to wait
-    // out an animation. The name is *there*; it is only arriving by moving.
+    // One utterance, not six rows of block glyphs, and the whole name from the
+    // first frame. §14, and every crossing's rule: the linear stream is the
+    // settled screen, because a reader must never wait out an animation.
     painter.announce(UtteranceKind::Heading, Style::BRIGHT.role, NAME);
 
-    // **Every line spans the logo, edge to edge.** The label sits under the
-    // logo's left edge and `ok` ends flush with its right, with the leader
-    // filling whatever is between.
+    // Every line spans the logo, edge to edge: the label under its left edge,
+    // `ok` flush with its right, the leader filling between. Not centred, which
+    // made the card twitch — a centred line's width grows by two the moment `ok`
+    // lands, so the whole row shunted sideways at the end of every check.
     //
-    // Not centred, which is what this replaced and what made the card twitch:
-    // a centred line is positioned by its own width, and its width grows by two
-    // the moment `ok` lands, so the whole row shunted sideways at the end of
-    // every check. Anchoring both ends to something that is not moving means
-    // nothing moves but the dots.
-    // **The subtitle, a word per letter.** `Operational` lands with the `O`,
-    // `Relic` with the `R` — so the logo printing itself reads as the name being
-    // spelled out rather than as a decoration that happens to be slow.
-    //
-    // Positioned from the **whole** subtitle's width and drawn word by word at
-    // fixed offsets, never re-centred on what has arrived so far. That is the
-    // lesson the report lines below already carry: a line centred on its own
-    // width shunts sideways every time it grows, and four words arriving would
-    // have made the whole thing crawl left four times.
+    // The subtitle is positioned from the whole subtitle's width and drawn word
+    // by word at fixed offsets, never re-centred on what has arrived: four words
+    // arriving would otherwise make it crawl left four times.
     let subtitle_col = area
         .col
         .saturating_add(area.cols.saturating_sub(to_row(expansion_width())) / 2);
     let subtitle_row = top.saturating_add(to_row(ART.len()));
-    // **Its own clock, starting where the letters finish.** The words land whole
-    // and in order, which is the same progressive disclosure the report lines
-    // below use — they are small enough that growing them in would be motion
+    // Its own clock, starting where the letters finish. The words land whole and
+    // in order: they are small enough that growing them in would be motion
     // nobody could read.
     let words = spoken_words(progress);
     for (word, offset) in EXPANSION.iter().zip(expansion_places()).take(words) {
@@ -328,11 +280,10 @@ pub fn paint(frame: &mut Frame, stage: Stage, progress: f32, engine: &str) {
             Style::DIM,
         );
     }
-    // Spoken once, as much of it as is on screen — **unlike the name above**,
-    // which is spoken whole from the first frame because it is one thing
-    // *arriving*. This is four things appearing in turn, so what a reader hears
-    // is what is there. §14 wants one utterance for one thing, not four for a
-    // sentence, which is why it is joined rather than announced per word.
+    // Spoken once, as much of it as is on screen — unlike the name above, which
+    // is one thing *arriving*. These are four things appearing in turn, so a
+    // reader hears what is there; joined rather than announced per word, because
+    // §14 wants one utterance for one thing.
     let said = EXPANSION
         .iter()
         .take(words)
@@ -343,16 +294,12 @@ pub fn paint(frame: &mut Frame, stage: Stage, progress: f32, engine: &str) {
         painter.announce(UtteranceKind::Text, Style::DIM.role, &said);
     }
 
-    // The version, in the corner of the window rather than in the report. The
-    // module docs argued it out of the report on the grounds that a version line
-    // under a six-row logo would be the only small text on the card — which is
-    // still true, and is exactly why it belongs in the corner instead, where
-    // small text is what a corner is for.
+    // The version, in the corner rather than in the report: small text under a
+    // six-row logo belongs where small text goes.
     //
-    // **Not during `Close`.** It is the one thing on the card that sits *outside*
-    // the box, and the box's interior is what leaves — so left drawn it would be
-    // the last of the card still standing after the card had gone, and then be
-    // replaced by the prompt a frame later. It goes when the card starts to.
+    // Not during `Close`. It is the one thing outside the box, and the box's
+    // interior is what leaves — left drawn it would be the last of the card
+    // standing after the card had gone.
     if !matches!(stage, Stage::Close) {
         let version = format!("v{}", env!("CARGO_PKG_VERSION"));
         painter.glyphs(
@@ -393,15 +340,12 @@ pub fn paint(frame: &mut Frame, stage: Stage, progress: f32, engine: &str) {
         }
     }
 
-    // **The name grows in from the middle**, which is the motion a full-pane
-    // surface leaves and arrives by — so the first thing the game ever does is
-    // the thing it will keep doing. Applied last, after the painter has let the
-    // frame go, and over the logo's own rectangle: the subtitle and the report
-    // below are on their own clocks and must not be dragged into it.
+    // The name grows in from the middle, the motion a full-pane surface arrives
+    // by. Applied last, after the painter has let the frame go, and over the
+    // logo's own rectangle: the subtitle and the report are on their own clocks.
     //
-    // Arriving-half progress, so it runs from the midpoint to the end. `cross`
-    // reads the frame's own cells on the way in, which is why no kept screen is
-    // needed here.
+    // Arriving-half progress, from the midpoint to the end. `cross` reads the
+    // frame's own cells, so no kept screen is needed.
     if let Some(growing) = flight {
         let (start, width) = pairs()[arrived - 1];
         frame.cross(
@@ -477,9 +421,8 @@ fn line_at(progress: f32, index: usize, count: usize, dots: usize) -> Option<Lin
     let typing = (local / TYPING_SHARE).clamp(0.0, 1.0);
     Some(Line {
         // Each line fills its own leader in the same time, so a short label's
-        // longer run of dots simply moves a little faster. The alternative — a
-        // fixed rate — would make the lines finish at different moments and turn
-        // "a slight pause between each" into three different pauses.
+        // longer run of dots moves faster. A fixed rate would make the lines
+        // finish at different moments and turn one pause into three.
         dots: usize::try_from(arrived_cells(typing, dots)).unwrap_or(dots),
         // `ok` lands the instant the dots do, not gradually — the line has
         // finished being checked, and a two-letter word fading in would be the
@@ -496,10 +439,8 @@ struct Line {
 
 /// How many characters of the card have arrived by `progress`.
 ///
-/// Counted by comparison rather than by rounding a product, which keeps every
-/// number here an integer — `orbs-render` confines its one float-to-integer
-/// conversion to a single justified function, and a splash screen is not the
-/// place to open a second front.
+/// Counted by comparison rather than by rounding a product: `orbs-render`
+/// confines its one float-to-integer conversion to a single function.
 fn arrived_cells(progress: f32, total: usize) -> u32 {
     let progress = progress.clamp(0.0, 1.0);
     let reached = progress * f32::from(to_row(total));
@@ -532,9 +473,8 @@ mod tests {
 
     #[test]
     fn every_version_it_reports_is_a_real_one() {
-        // The whole argument for the screen existing at all: `tower/boot.rs` is
-        // built by walking the world so it cannot go stale, and a POST in front
-        // of it printing invented numbers would be the same lie one screen
+        // `tower/boot.rs` is built by walking the world so it cannot go stale,
+        // and a POST printing invented numbers would be the same lie one screen
         // earlier.
         for line in reported(ENGINE).iter().skip(1) {
             let version = line.split_whitespace().nth(1).unwrap_or("");
@@ -567,10 +507,9 @@ mod tests {
 
     #[test]
     fn the_glyph_table_tiles_the_art() {
-        // The table is hand-written because the letterforms are not a regular
-        // width — `O` is nine cells, the others eight, the full stops three.
-        // Hand-written means it can drift from the art, and the failure would be
-        // silent: a glyph drawn one column off, or a sliver never drawn at all.
+        // Hand-written, because the letterforms are not a regular width — so it
+        // can drift from the art, and the failure is silent: a glyph one column
+        // off, or a sliver never drawn.
         let width = ART.iter().map(|row| row.chars().count()).max().unwrap_or(0);
         let mut expected = 0;
         for (start, glyph) in GLYPHS {
@@ -602,11 +541,10 @@ mod tests {
 
     #[test]
     fn the_name_arrives_one_letter_at_a_time() {
-        // **`O.`, then `R.`, then `B.`, then `S.`** — in order, none skipped, and
-        // never two at once. This replaced a test that measured `arrived_cells`
-        // against `GLYPHS`, which the logo stopped calling when it started
-        // *growing* rather than printing: the arithmetic was still right and no
-        // longer described anything on screen.
+        // `O.`, `R.`, `B.`, `S.` — in order, none skipped, never two at once.
+        // This replaced a test measuring `arrived_cells` against `GLYPHS`, which
+        // the logo stopped calling once it grew rather than printed: still right
+        // arithmetic, no longer describing anything on screen.
         let mut seen = Vec::new();
         for step in 0..=400u16 {
             let progress = f32::from(step) / 400.0;
@@ -709,10 +647,9 @@ mod tests {
 
     #[test]
     fn a_line_reaches_from_one_edge_of_the_logo_to_the_other() {
-        // What stopped the card twitching. A centred line is positioned by its
-        // own width, and its width grows by two the moment `ok` lands, so every
-        // row shunted sideways at the end of every check. Anchored to the logo's
-        // edges, the only thing that moves is the leader.
+        // What stopped the card twitching: a centred line's width grows by two
+        // the moment `ok` lands, so every row shunted sideways. Anchored to the
+        // logo's edges, only the leader moves.
         for label in reported(ENGINE) {
             let dots = leader(&label, span());
             // label + space + dots + space + ok == the logo's width, exactly.
@@ -771,10 +708,8 @@ mod tests {
 
     #[test]
     fn it_draws_nothing_before_its_own_stage() {
-        // The tube is dark; a splash that painted through it would be on screen
-        // before the screen was. (The border no longer has a stage to itself —
-        // it closes *during* the card now, so there is one stage left to keep
-        // the splash out of.)
+        // The tube is dark; a splash painted through it would be on screen
+        // before the screen was.
         let mut frame = Frame::new(GridSize::new(80, 22));
         paint(&mut frame, Stage::Dark, 0.5, ENGINE);
         assert!(frame.to_text().trim().is_empty(), "the dark stage drew");

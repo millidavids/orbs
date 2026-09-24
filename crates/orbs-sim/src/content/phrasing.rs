@@ -3,32 +3,21 @@
 //! Authored in `content/phrasings.toml`, not here (rule 6). This module knows
 //! the *shape* of a template and nothing about which ones exist.
 //!
-//! # Not loaded by a `Sim`, deliberately
-//!
-//! Every other content file reaches a decision the world makes. This one
-//! reaches none: it is the corpus a reader is trained on and the fixture the
-//! parser is measured against, and a running tower needs neither. So there is
-//! no `Phrasings` resource and nothing installs one — `builtin()` is called by
-//! the bench and, later, by the trainer.
-//!
-//! Keeping it out of the world is what stops it becoming a *second* vocabulary:
-//! §19 records what two expressions of one rule cost, and a phrase table the
-//! parser consulted at run time would be exactly that.
-//!
-//! # Templates, not sentences
+//! Not loaded by a `Sim`, deliberately: every other content file reaches a
+//! decision the world makes and this one reaches none. It is the corpus a reader
+//! is trained on and the fixture the parser is measured against, so `builtin()`
+//! is called by the bench and the trainer and nothing installs a resource —
+//! which is also what stops it becoming a *second* vocabulary, a cost §19
+//! records.
 //!
 //! A `{slot}` names a [`NounKind`] and expands over everything of that kind the
 //! scene holds, so one authored line becomes as many examples as there are
-//! reagents. That is what makes a corpus large enough to train on something one
-//! person can write and keep true — and because the expansion knows where it
-//! substituted, **the argument spans come out of generation rather than out of
-//! hand-annotation**.
+//! reagents, and the argument spans fall out of generation rather than
+//! hand-annotation.
 //!
-//! # `say` and `holdout` are not interchangeable
-//!
-//! `say` is the corpus. `holdout` is never taught to anything and is the only
-//! thing worth measuring on: a grammar built from `say` matches `say` perfectly
-//! and has proved nothing.
+//! `say` is the corpus; `holdout` is never taught to anything and is the only
+//! thing worth measuring on, because a grammar built from `say` matches `say`
+//! perfectly and has proved nothing.
 
 use std::collections::HashMap;
 
@@ -47,11 +36,10 @@ const SPELL_FILE: &str = "spellings.toml";
 
 /// How many examples one template may contribute to a training corpus.
 ///
-/// **A number about balance, not about size.** See
-/// [`Phrasings::corpus_capped`] for why an uncapped expansion made `move` 47%
-/// of the corpus; this is the value the trainer and
-/// `no_single_verb_owns_the_capped_corpus` agree on, so raising it cannot
-/// quietly reintroduce the skew.
+/// About balance, not size: [`Phrasings::corpus_capped`] has why an uncapped
+/// expansion made `move` 47% of the corpus. The trainer and
+/// `no_single_verb_owns_the_capped_corpus` agree on this value, so raising it
+/// cannot quietly reintroduce the skew.
 pub const CORPUS_CAP: usize = 24;
 
 /// The file's name, for an error a writer can act on.
@@ -72,14 +60,13 @@ pub struct Phrasing {
 
 /// Sentences that are not commands at all.
 ///
-/// **No `canonical`, and that is the point of them.** A reader shown only
-/// commands has never seen a sentence it should refuse and answers one anyway —
-/// `what should i do next` came back as `recall`, which is the dead end §15
-/// weighs heaviest.
+/// No `canonical`, which is the point: a reader shown only commands has never
+/// seen a sentence it should refuse and answers one anyway — `what should i do
+/// next` came back as `recall`, §15's heaviest dead end.
 ///
-/// They carry slots like anything else, deliberately: a refusal must not be
-/// learnable as *"a sentence with no game words in it"*, because the hard ones
-/// are exactly the sentences that name a reagent and still ask for nothing.
+/// They carry slots like anything else, so a refusal is not learnable as "a
+/// sentence with no game words in it" — the hard ones name a reagent and still
+/// ask for nothing.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Refusal {
     /// Phrasings the reader is taught to refuse.
@@ -99,13 +86,12 @@ pub struct Phrasings {
     /// Sentences that ask for nothing.
     #[serde(default, rename = "refusal")]
     refusals: Vec<Refusal>,
-    /// Words a player might choose as a **name**, for a `{name}` slot.
+    /// Words a player might choose as a name, for a `{name}` slot.
     ///
     /// Free text, so it cannot come from a content table: `let best be north`
-    /// binds a word the tower has never heard of, and that is the point of it.
-    /// **Deliberately kept out of the reader's vocabulary** — a name a player
-    /// invents reaches the reader as a hash bucket, so the ones it learns from
-    /// have to arrive the same way.
+    /// binds a word the tower has never heard of. Kept out of the reader's
+    /// vocabulary too — a name a player invents reaches it as a hash bucket, so
+    /// the ones it learns from have to arrive the same way.
     #[serde(default)]
     names: Vec<String>,
     /// ...and the names only the holdout expands over, so what the reader is
@@ -154,23 +140,16 @@ impl Phrasings {
         super::load::builtin(FILE, BUILTIN)
     }
 
-    /// How people say the things a **spell** does.
+    /// How people say the things a *spell* does.
     ///
-    /// # The same format, and deliberately the same type
+    /// The same type as the prompt's, deliberately. A spell line and a prompt
+    /// line are different output spaces — `if` is not a verb, `grind` is not a
+    /// spell word — but the shape of the question is identical, and two formats
+    /// would mean two expansions, two span derivations and two holdout rules.
     ///
-    /// A spell line and a prompt line are different output spaces — `if` is not
-    /// a verb and `grind` is not a spell word — but the *shape* of the question
-    /// is identical: a canonical form, the ways people write it, and a holdout
-    /// nothing is taught. Two formats would mean two expansions, two span
-    /// derivations and two holdout rules, which is the defect §19 records more
-    /// often than any other.
-    ///
-    /// # Control flow only, and that is not an omission
-    ///
-    /// A spell's *command* lines are the prompt's vocabulary, so they are
-    /// already written down in `phrasings.toml` and a reader for spells trains
-    /// its command class from there. Copying two thousand say-lines into a
-    /// second file would be the same corpus twice, free to drift.
+    /// Control flow only: a spell's *command* lines are the prompt's vocabulary
+    /// and already written in `phrasings.toml`, so copying two thousand
+    /// say-lines here would be the same corpus twice, free to drift.
     ///
     /// # Panics
     ///
@@ -229,9 +208,8 @@ impl Phrasings {
 
     /// Every refusal `holdout` template, expanded.
     ///
-    /// **Scored the opposite way round from a command's holdout.** Here the
-    /// number worth reporting is how many the reader *refuses*; there it is how
-    /// many it does not.
+    /// Scored the opposite way round from a command's holdout: the number worth
+    /// reporting is how many the reader *refuses*.
     #[must_use]
     pub fn refused_holdout(&self, scene: &crate::parser::Scene) -> Vec<String> {
         self.expand_refusals(scene, |refusal| &refusal.holdout, true)
@@ -267,31 +245,21 @@ impl Phrasings {
         self.expand(scene, |entry| &entry.say, false)
     }
 
-    /// Every `say` template, expanded over `scene`, **no template contributing
-    /// more than `cap` examples**.
+    /// Every `say` template, expanded over `scene`, no template contributing
+    /// more than `cap` examples.
     ///
-    /// # Why a cap at all
+    /// A template's expansion is the *product* of its slot cardinalities, so
+    /// `move {reagent} {place}` was 47% of the whole corpus on arithmetic alone
+    /// — the widest signature in `Verb::ALL` (§19), not 47% of what anyone says.
+    /// The reader learns that as a prior: `can you take me over to the lectern`
+    /// came back `move lectern` rather than `attend lectern`. Ten examples of a
+    /// shape teach the shape; four hundred teach the shape and a prior.
     ///
-    /// A template's expansion is the *product* of its slot cardinalities, so a
-    /// two-slot shape is quadratic where a one-slot shape is linear and a bare
-    /// one is a single example. `move {reagent} {place}` was **47% of the whole
-    /// corpus** on that arithmetic alone — not because moving things is 47% of
-    /// what anyone says, but because it is the widest signature in `Verb::ALL`
-    /// (§19).
-    ///
-    /// That is a bias the reader learns as a prior: `can you take me over to the
-    /// lectern` came back `move lectern` rather than `attend lectern`, and the
-    /// slot-to-verb conditioning built to fix it was answering the wrong
-    /// question. Ten examples of a shape teach the shape; four hundred teach the
-    /// shape and a prior.
-    ///
-    /// # Thinned rather than truncated
-    ///
-    /// Taking the first `cap` would take every expansion of the *first* noun and
-    /// none of the rest, so the tagger would see one reagent in two hundred
-    /// sentences. This strides the cross-product instead, and offsets the stride
-    /// by the template's position so neighbouring templates do not all land on
-    /// the same nouns. Deterministic either way — no RNG reaches a corpus.
+    /// Thinned rather than truncated — the first `cap` would be every expansion
+    /// of the *first* noun and none of the rest, so the tagger would see one
+    /// reagent in two hundred sentences. This strides the cross-product, offset
+    /// by the template's position so neighbouring templates do not land on the
+    /// same nouns. Deterministic either way: no RNG reaches a corpus.
     #[must_use]
     pub fn corpus_capped(&self, scene: &crate::parser::Scene, cap: usize) -> Vec<Example> {
         self.by_entry(scene, cap, |entry| &entry.say, false)
@@ -300,23 +268,19 @@ impl Phrasings {
             .collect()
     }
 
-    /// [`corpus_capped`](Self::corpus_capped), each example carrying **which
-    /// entry it came from**.
+    /// [`corpus_capped`](Self::corpus_capped), each example carrying which entry
+    /// it came from.
     ///
-    /// # The spell register's classes are entries, not words
+    /// The spell register's classes are entries, not words. At the prompt a
+    /// canonical names its own class — the head of `grind sage` is `grind`, and
+    /// `Verb::ALL` has a row for it. A spell statement does not: `if {place} is
+    /// idle`, `if {place} is empty` and `if {place} has {reagent}` are all
+    /// `SpellWord::If`, and the first two carry the same number of slots, so
+    /// neither the word nor the tagging separates them.
     ///
-    /// At the prompt a canonical command names its own class: the head of `grind
-    /// sage` is `grind`, and `Verb::ALL` has a row for it. A spell statement does
-    /// not. `if {place} is idle`, `if {place} is empty` and `if {place} has
-    /// {reagent}` are all `SpellWord::If`, so a class over the twelve words could
-    /// never tell an assembler which of the three shapes to build — and the first
-    /// two carry the same number of slots, so nothing about the tagging
-    /// separates them either.
-    ///
-    /// The **template** is the class, and the index here is its row. That makes
-    /// the reading assemblable by construction: the shape is known, its slots are
-    /// filled from the spans, and no shape has to be inferred back out of a
-    /// string.
+    /// So the template is the class and the index here is its row, which makes
+    /// the reading assemblable by construction: the shape is known and its slots
+    /// come from the spans.
     #[must_use]
     pub fn corpus_by_entry(
         &self,
@@ -336,26 +300,19 @@ impl Phrasings {
     /// The shared walk: every template of every entry, expanded, thinned to
     /// `cap` (0 for no cap), tagged with the entry's index.
     ///
-    /// # A sentence two templates say goes to the one that says more of it
-    ///
-    /// `put the {reagent} in the {place}` is `move`, `put the {reagent} in the
-    /// alembic` is `distil` — and the alembic is a place, so the first expands
-    /// to the second word for word. A reader taught one sentence as two
-    /// commands is being taught a coin toss. The bench found 154 of them — 152
-    /// at the alembic, two at the lens — and scored the grammar wrong for
+    /// A sentence two templates say goes to the one that says more of it. The
+    /// alembic is a place, so `put the {reagent} in the {place}` (`move`)
+    /// expands word for word onto `put the {reagent} in the alembic` (`distil`),
+    /// and a reader taught one sentence as two commands is taught a coin toss —
+    /// the bench found 154 such collisions and scored the grammar wrong for
     /// reading each the way its more specific template said.
     ///
-    /// **The template with more fixed words keeps it**, because a word the
-    /// writer chose is evidence and a slot is not: whoever wrote `in the
-    /// alembic` meant the alembic, and whoever wrote `in the {place}` meant any
-    /// room at all. It is the order `Grammar::read` already tries templates in,
-    /// so the corpus and the grammar cannot disagree about whose sentence it
-    /// is. Judged before thinning, so a cap cannot keep the loser by striding
-    /// past the winner.
-    ///
-    /// Two templates saying it with equally many fixed words both keep it, and
-    /// `no_sentence_is_taught_as_two_commands` fails: that is a writer's to
-    /// settle, not an ordering's.
+    /// The template with more fixed words keeps it, because a word the writer
+    /// chose is evidence and a slot is not. That is the order `Grammar::read`
+    /// already tries templates in, so the corpus and the grammar cannot
+    /// disagree; judged before thinning, so a cap cannot keep the loser by
+    /// striding past the winner. A tie keeps both and fails
+    /// `no_sentence_is_taught_as_two_commands`, which is a writer's to settle.
     fn by_entry(
         &self,
         scene: &crate::parser::Scene,
@@ -417,9 +374,9 @@ impl Phrasings {
 
     /// Every `holdout` template, expanded over `scene`.
     ///
-    /// **Never taught to anything.** A grammar built from the corpus matches the
-    /// corpus by construction, and a model trained on it does nearly as well;
-    /// what either does on a phrasing it has never seen is the only number worth
+    /// Never taught to anything: a grammar built from the corpus matches the
+    /// corpus by construction and a model trained on it does nearly as well, so
+    /// what either does on an unseen phrasing is the only number worth
     /// reporting.
     #[must_use]
     pub fn holdout(&self, scene: &crate::parser::Scene) -> Vec<Example> {
@@ -462,25 +419,17 @@ impl Phrasings {
 
 /// Everything the content tables name, as one scene to expand a corpus over.
 ///
-/// # Why not the room the player is standing in
+/// Not the room the player is standing in: a corpus is not a session, and
+/// `{reagent}` should become every reagent the game *has a word for* rather than
+/// the one on the shelf — a reader trained on `grind sage` alone has learned the
+/// sage, not the grinding. The bench measured against a scene with one reagent
+/// in it, so the corpus read a factor of thirty smaller than it is and the ratio
+/// of parameters to examples looked far worse than it was.
 ///
-/// A corpus is not a session. `{reagent}` should become every reagent the game
-/// *has a word for*, not the one that happens to be on the shelf — a reader
-/// trained on `grind sage` and nothing else has learned the sage rather than the
-/// grinding.
-///
-/// **The bench was measuring against a scene with one reagent in it**, so every
-/// `{reagent}` template expanded once where the content names thirty-three, and
-/// the corpus read a factor of thirty smaller than it is. That understated the
-/// corpus and flattered nothing — it made the ratio of parameters to examples
-/// look far worse than it is.
-///
-/// # A scene, not a world
-///
-/// Deliberately built from the *tables* rather than from a `Sim`: a world has a
-/// place the player is standing and a shelf with things missing from it, and
-/// neither is a fact about the language. Every fixture's verb is offered, so a
-/// phrasing is never scored against the room it happened to be expanded in.
+/// Built from the *tables* rather than from a `Sim`, because a world has a place
+/// the player is standing and a shelf with things missing from it, and neither
+/// is a fact about the language. Every fixture's verb is offered, so a phrasing
+/// is never scored against the room it happened to be expanded in.
 #[must_use]
 pub fn corpus_scene() -> crate::parser::Scene {
     use crate::parser::{NounKind, Scene, Verb};
@@ -531,9 +480,9 @@ pub fn corpus_scene() -> crate::parser::Scene {
 
 /// The slot a `{name}` marker names, if it names one.
 ///
-/// **By label, so the file and the parser cannot disagree.** `NounKind::label`
-/// is what the orb already prints when it asks for a slot, so a writer copying
-/// the word out of a refusal has written a valid marker.
+/// By label, so the file and the parser cannot disagree: `NounKind::label` is
+/// what the orb prints when it asks for a slot, so a writer copying the word out
+/// of a refusal has written a valid marker.
 fn kind_of(name: &str) -> Option<NounKind> {
     NounKind::NAMEABLE
         .into_iter()
@@ -542,12 +491,10 @@ fn kind_of(name: &str) -> Option<NounKind> {
 
 /// Slots filled from a list the file gives rather than from the scene.
 ///
-/// **Free text never touches the world**, which is why `NounKind::NAMEABLE`
-/// leaves `Name` out: a name a spell binds is a word the tower has no noun for,
-/// and a set is a fixture's *kind* rather than a fixture. So these two expand
-/// over the phrasings file's own `names` and `groups`, and their spans carry
-/// `NounKind::Name` — the kind `scribe <name>` already uses for one word of the
-/// player's own.
+/// Free text never touches the world, which is why `NounKind::NAMEABLE` leaves
+/// `Name` out: a name a spell binds is a word the tower has no noun for, and a
+/// set is a fixture's *kind* rather than a fixture. Their spans carry
+/// `NounKind::Name`, the kind `scribe <name>` already uses.
 const FREE_TEXT: [&str; 2] = ["name", "group"];
 
 /// Whether `{label}` is a slot at all.
@@ -595,14 +542,12 @@ impl Fillers<'_> {
                 // A place answers to its leaf (§7) — players say the room, not
                 // the path.
                 //
-                // **Each word once.** `corpus_scene` adds the recipes' words and
-                // then the materials', and every substance is a material too —
-                // it has a colour — so every `{reagent}` template made each of
-                // its sentences twice: 47,628 of 109,328 examples, and every
-                // reagent verb counted double in each rate the bench and the
-                // trainer reported. Kept to once here rather than in the
-                // scene, because two leaves can repeat as well: a room is its
-                // leaf, and two rooms may each hold an instrument of one name.
+                // Each word once. `corpus_scene` adds the recipes' words and
+                // then the materials', and every substance is a material too, so
+                // every `{reagent}` template made each sentence twice: 47,628 of
+                // 109,328 examples, every reagent verb double-counted in every
+                // rate. Deduped here rather than in the scene, because leaves
+                // repeat too — two rooms may each hold an instrument of one name.
                 let mut values: Vec<String> = Vec::new();
                 for noun in self.scene.nouns() {
                     let leaf = crate::parser::leaf(&noun.name);
@@ -616,15 +561,14 @@ impl Fillers<'_> {
     }
 }
 
-/// Expand one template over every noun that could fill its slots.
+/// Expand one template over every noun that could fill its slots, one slot deep
+/// at a time, so a template with two slots yields every pairing. Templates here
+/// have at most one, but `move {reagent} to {place}` is a shape the file will
+/// want and this costs nothing to allow.
 ///
-/// One slot deep at a time, recursing, so a template with two slots yields
-/// every pairing. Templates here have at most one, but `move {reagent} to
-/// {place}` is a shape the file will want and this costs nothing to allow.
-/// At most `cap` of `examples`, spread across the whole list.
-///
-/// `offset` shifts where the stride starts, so two templates of the same shape
-/// do not both keep the same nouns. See [`Phrasings::corpus_capped`].
+/// At most `cap` of `examples`, spread across the whole list; `offset` shifts
+/// where the stride starts, so two templates of the same shape do not keep the
+/// same nouns. See [`Phrasings::corpus_capped`].
 fn thin(examples: Vec<Example>, cap: usize, offset: usize) -> Vec<Example> {
     if cap == 0 || examples.len() <= cap {
         return examples;
@@ -640,30 +584,22 @@ fn thin(examples: Vec<Example>, cap: usize, offset: usize) -> Vec<Example> {
 
 /// Expand one template, one slot at a time.
 ///
-/// # The **canonical's** slot order, not the phrasing's
-///
-/// A span's index *is* the argument's position: `Sample`'s tagger writes
-/// `Tag::Begin(n)` for `spans[n]`, and a reader reassembles a command by putting
-/// slot `n` where the canonical's `n`th argument goes. So the two have to be
-/// counted the same way round — and the phrasing is free to say them in any
-/// order at all.
-///
+/// Spans come out in the *canonical's* slot order, not the phrasing's. A span's
+/// index is the argument's position — `Sample`'s tagger writes `Tag::Begin(n)`
+/// for `spans[n]` and a reader puts slot `n` where the canonical's `n`th
+/// argument goes — while the phrasing is free to say them in any order at all.
 /// `if there is {reagent} in the {place}` means `if {place} has {reagent}`, and
-/// recursing on the *phrasing's* first slot made the reagent span 0 and the place
-/// span 1, exactly backwards. Half the templates of a two-slot shape are written
-/// that way, so the tagger was taught both orders for one shape and the assembler
-/// built `if sage has alembic`: `if {place} has {reagent}` scored **0.0%** on its
-/// holdout while every one-slot shape read fine.
+/// recursing on the phrasing's first slot numbered them backwards: half the
+/// templates of a two-slot shape are written that way, so the tagger learned
+/// both orders, the assembler built `if sage has alembic`, and `if {place} has
+/// {reagent}` scored 0.0% on its holdout while every one-slot shape read fine.
 ///
-/// # Substituted left to right, then **renumbered**
-///
-/// The substitution itself has to walk the phrasing's slots in the order they
-/// appear, because a span records a byte range into the sentence being built and
-/// filling a later slot first would leave every earlier offset pointing at the
-/// pre-substitution string. So the expansion is unchanged and the spans are
-/// permuted once at the end, into the order the canonical names its arguments.
-/// A slot the canonical does not carry sorts last, which is where a refusal's
-/// slots and an argument the command form drops both belong.
+/// Substituted left to right, then renumbered. The substitution has to walk the
+/// phrasing's slots in order because a span is a byte range into the sentence
+/// being built, and filling a later slot first would leave every earlier offset
+/// pointing at the pre-substitution string. So the spans are permuted once at
+/// the end. A slot the canonical does not carry sorts last, where a refusal's
+/// slots and a dropped argument both belong.
 fn fill(template: &str, canonical: &str, fillers: &Fillers<'_>) -> Vec<Example> {
     let order = ranked(template, canonical);
     let mut out = expand(template, canonical, fillers);
@@ -736,13 +672,11 @@ fn expand(template: &str, canonical: &str, fillers: &Fillers<'_>) -> Vec<Example
     for value in &values {
         let said = template.replace(&marker, value);
         let meant = canonical.replace(&marker, value);
-        // **Where the marker was, and to the end of the word.** Where the
-        // marker was, because every slot to its left is already filled, so its
-        // offset in the template is its offset in the sentence — and searching
-        // for the value instead finds `way` inside `always` first. To the end
-        // of the word, because `{group}s` says `ways` for a canonical that says
-        // `way`, and `Sample`'s tagger asks whether the *whole* word lies in a
-        // span: one stopping short tags the word as nothing at all.
+        // Where the marker was, and to the end of the word. The marker's own
+        // offset, because every slot to its left is filled already — searching
+        // for the value instead finds `way` inside `always`. To the end of the
+        // word, because `{group}s` says `ways` for a canonical saying `way`, and
+        // `Sample`'s tagger asks whether the *whole* word lies in a span.
         let at = template.find(&marker).map(|start| {
             let end = start + value.len();
             let word = said[end..]
@@ -778,14 +712,12 @@ mod tests {
 
     #[test]
     fn every_verb_has_a_template() {
-        // **Seventeen of the forty-six had none** (§19), and nothing said so.
-        // A verb with no examples cannot be predicted, and the refusal head
-        // cannot cover for it either — it is trained on sentences that ask for
-        // *nothing*, not on sentences that ask for something unteachable. So
-        // `send the wolves to the gate` came back as a confident `move`.
-        //
-        // A domain that coins a verb and writes no phrasing for it reopens the
-        // hole silently, which is what this is here to stop.
+        // Seventeen of the forty-six had none (§19) and nothing said so. A verb
+        // with no examples cannot be predicted, and the refusal head cannot
+        // cover for it — it is trained on sentences that ask for *nothing*, not
+        // on ones that ask for something unteachable, so `send the wolves to the
+        // gate` came back a confident `move`. A domain that coins a verb and
+        // writes no phrasing reopens the hole silently.
         let phrasings = Phrasings::builtin();
         let written: std::collections::HashSet<&str> = phrasings
             .entries()
@@ -828,9 +760,8 @@ mod tests {
 
     #[test]
     fn the_cap_thins_rather_than_truncating() {
-        // **The distinction the cap lives or dies on.** Truncating would keep
-        // every expansion of the first noun and none of the second, so the
-        // tagger would meet one reagent over and over.
+        // Truncating would keep every expansion of the first noun and none of
+        // the second, so the tagger would meet one reagent over and over.
         let phrasings = Phrasings::parse(
             r#"
             [[entry]]
@@ -855,9 +786,9 @@ mod tests {
 
     #[test]
     fn no_single_verb_owns_the_capped_corpus() {
-        // **`move` was 47% of it** (§19), because it is the only three-slot
-        // signature and its expansion is a product where everything else's is a
-        // sum. A prior that strong is learned as one, and it cost `attend`.
+        // `move` was 47% of it (§19): the only three-slot signature, and its
+        // expansion is a product where everything else's is a sum. A prior that
+        // strong is learned as one, and it cost `attend`.
         use std::collections::HashMap;
         let corpus = Phrasings::builtin().corpus_capped(&corpus_scene(), CORPUS_CAP);
         let mut count: HashMap<&str, usize> = HashMap::new();
@@ -885,14 +816,13 @@ mod tests {
     fn the_spellings_file_parses() {
         let spellings = Phrasings::spellings();
         assert!(!spellings.entries().is_empty());
-        // **Its refusals are the gate's, and they read cleanly.** The reason
-        // this used to give — *"a reader shown only lines that should be
-        // rewritten rewrites everything"* — was never true of them: the gate
-        // keeps a line that reads cleanly from the scrivener, and
-        // `Corpus::spells` drops what the reader is never shown. What they are
-        // for is the measurement's claim that a working line comes back
-        // untouched, so a refusal that did *not* read cleanly would be a line
-        // the reader is shown and taught on by accident — this lists them.
+        // Its refusals are the gate's, and they read cleanly: they exist for the
+        // measurement's claim that a working line comes back untouched, so one
+        // that did *not* read cleanly would be a line the reader is shown and
+        // taught on by accident. The older reason — "a reader shown only lines
+        // that should be rewritten rewrites everything" — was never true of
+        // them, since the gate keeps a cleanly-reading line and `Corpus::spells`
+        // drops what the reader never sees.
         let scene = corpus_scene();
         let mut refused = spellings.refused(&scene);
         refused.extend(spellings.refused_holdout(&scene));
@@ -912,11 +842,11 @@ mod tests {
 
     #[test]
     fn every_spelling_canonical_is_a_spell_statement() {
-        // **The thing that makes this corpus different from the prompt's.** A
-        // canonical here must be a line `program::read` recognises as a
-        // *statement*, not a command — a `say` line that read back as
-        // `Kind::Command` would train the reader to rewrite control flow into a
-        // verb, which is the one output the spell language cannot take.
+        // What makes this corpus different from the prompt's: a canonical here
+        // must be a line `program::read` recognises as a *statement*. A `say`
+        // line reading back as `Kind::Command` would train the reader to rewrite
+        // control flow into a verb, the one output the spell language cannot
+        // take.
         for entry in Phrasings::spellings().entries() {
             let head = entry
                 .canonical
@@ -951,17 +881,13 @@ mod tests {
 
     #[test]
     fn a_spelling_is_never_a_line_the_language_already_reads() {
-        // **The other half of the same rule, and the harder half to see.** A
-        // phrasing that is not the canonical form can still be one the spell
-        // language parses on its own: `if the {place} is not busy` is heard as
-        // `if not {place} is working`, which means what it says and needs no
-        // reader at all.
-        //
-        // Teaching those is worse than wasteful. `Scribe` leaves alone anything
-        // `reads_cleanly` accepts, so the model is being taught to rewrite lines
-        // it will never be shown — and the measurement counts every one of them
-        // as a miss, which is a bench reporting on work that was never asked
-        // for. `Copyist::worked` makes the same argument about `crush the sage`.
+        // The other half of the same rule. A phrasing that is not the canonical
+        // form can still be one the spell language parses on its own: `if the
+        // {place} is not busy` is heard as `if not {place} is working` and needs
+        // no reader at all. `Scribe` leaves alone anything `reads_cleanly`
+        // accepts, so teaching those trains the model to rewrite lines it will
+        // never be shown, and the measurement counts each as a miss —
+        // `Copyist::worked` makes the same argument about `crush the sage`.
         let spellings = Phrasings::spellings();
         let scene = corpus_scene();
         let taught = spellings.fillers(&scene, false);
@@ -1048,8 +974,8 @@ mod tests {
 
     #[test]
     fn generation_knows_where_it_substituted() {
-        // **The reason the corpus is tractable.** Slot labels fall out of the
-        // expansion, so nobody annotates 200k lines by hand.
+        // Why the corpus is tractable: slot labels fall out of the expansion, so
+        // nobody annotates 200k lines by hand.
         let phrasings = Phrasings::parse(
             r#"
             [[entry]]
@@ -1072,9 +998,9 @@ mod tests {
 
     #[test]
     fn a_free_text_slot_expands_over_the_files_own_words() {
-        // **The fix for `let tool be {place}`.** A name used to be a literal in
-        // the shape, so `tool` was the only name the reader could ever offer.
-        // It is a slot now, and a slot needs values the world cannot supply.
+        // The fix for `let tool be {place}`: a name used to be a literal in the
+        // shape, so `tool` was the only name the reader could offer. A slot
+        // needs values the world cannot supply.
         let phrasings = Phrasings::parse(
             r#"
             names = ["hammer", "best"]
@@ -1109,8 +1035,8 @@ mod tests {
             "the name is the canonical's first argument, wherever the phrasing puts it",
         );
 
-        // **The holdout's names are its own**, so it measures a name the reader
-        // has never seen rather than one it memorised.
+        // The holdout's names are its own, so it measures a name the reader has
+        // never seen rather than one it memorised.
         let held = phrasings.holdout(&scene());
         assert!(!held.is_empty());
         assert!(held.iter().all(|example| example.said.starts_with("zorb")));
@@ -1159,11 +1085,11 @@ mod tests {
 
     #[test]
     fn a_span_is_numbered_by_the_canonical_and_not_by_the_phrasing() {
-        // **The defect that made `if {place} has {reagent}` read 0.0%.** A span's
+        // The defect that made `if {place} has {reagent}` read 0.0%. A span's
         // index *is* the argument's position, and half the phrasings of a
         // two-slot shape name the second argument first — so recursing on the
-        // phrasing's slots taught the tagger both orders for one shape and the
-        // assembler built `if sage has alembic`.
+        // phrasing's slots taught the tagger both orders and the assembler built
+        // `if sage has alembic`.
         let phrasings = Phrasings::parse(
             r#"
             [[entry]]
@@ -1236,11 +1162,10 @@ mod tests {
 
     #[test]
     fn no_sentence_is_taught_as_two_commands() {
-        // **A label no reader can get right, and no single template shows it.**
-        // Each is a fine template alone; the collision is in the expansion,
-        // where a slot takes a name another template wrote down as a word. The
-        // ordering above settles every one where the templates differ in how
-        // much they fix — what reaches this is a tie, and a writer's to settle.
+        // A label no reader can get right, and no single template shows it: the
+        // collision is in the expansion, where a slot takes a name another
+        // template wrote down as a word. The ordering above settles every case
+        // where the templates fix different amounts; what reaches here is a tie.
         let scene = corpus_scene();
         for phrasings in [Phrasings::builtin(), Phrasings::spellings()] {
             let mut meant: HashMap<String, String> = HashMap::new();

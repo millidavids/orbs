@@ -1,7 +1,7 @@
 //! What the tube is doing, and how hard.
 //!
 //! DESIGN.md §4 lists the effects and §14 requires the whole thing be
-//! **disableable** — `court_wizard` ships a health warning for motion sickness and
+//! disableable — `court_wizard` ships a health warning for motion sickness and
 //! this inherits the obligation. Every field reaches zero, and
 //! [`CrtSettings::OFF`] is one value away.
 
@@ -14,9 +14,9 @@ use bevy::render::render_resource::ShaderType;
 pub(crate) struct CrtSettings {
     /// Whether the tube is on at all.
     ///
-    /// **Explicit, and deliberately not inferred from "are all the effects
-    /// zero".** §14 makes this the accessibility switch, and a switch that
-    /// something else can flip back on is not a switch.
+    /// Explicit, and deliberately not inferred from "are all the effects zero".
+    /// §14 makes this the accessibility switch, and a switch something else can
+    /// flip back on is not a switch.
     ///
     /// `enabled` used to be derived as `settings != OFF`. Both [`flash`] and
     /// [`desaturation`] are documented right here as *reserved for world state*,
@@ -55,7 +55,7 @@ pub(crate) struct CrtSettings {
     /// Not a blink: see `crt.wgsl`. Whole-screen modulation at CRT frequencies
     /// lands in the photosensitive band, so the hum is spatial and slow.
     pub(crate) flicker: f32,
-    /// Rounded bezel, as a fraction of the tube's **shorter** axis.
+    /// Rounded bezel, as a fraction of the tube's shorter axis.
     ///
     /// Aspect-corrected in the shader, so the corners come out round rather than
     /// stretched along the tube's 4:3. Expressed against the short axis because
@@ -106,20 +106,16 @@ impl CrtSettings {
         aberration: 0.0005,
         glow: 0.5,
         flicker: 0.10,
-        // **The largest radius that loses no cell**, and it is a computed bound
-        // rather than a taste (§19: compute the constant, do not reason about
-        // it). The mask is evaluated on the texture coordinate, so a cell's own
-        // grid position is what gets tested; the binding one is the session
-        // pane's top-left border corner at `(0, 0)`, and the bound is `0.0278`.
-        // Anything larger eats it — at `0.09` the arc reached the `d` of the
-        // prompt, which is what a screenshot showed and no amount of looking at
-        // the number would have.
+        // The largest radius that loses no cell — a computed bound rather than a
+        // taste (§19). The mask is evaluated on the texture coordinate, so the
+        // binding cell is the session pane's top-left border corner at `(0, 0)`
+        // and the bound is `0.0278`. At `0.09` the arc reached the `d` of the
+        // prompt, which a screenshot showed and the number never would.
         //
-        // This is barely a change: it was `0.028`, a hair *over* the bound and
-        // getting away with it because the radius was being applied to the
-        // **unwarped** tube, whose corners lie outside the picture — so it
-        // rounded nothing at any value and the picture kept a hard 90° corner.
-        // Now that it bites, the bound has to actually hold.
+        // Barely a change: it was `0.028`, a hair over the bound and getting
+        // away with it because the radius was applied to the unwarped tube,
+        // whose corners lie outside the picture. Now that it bites, the bound
+        // has to hold.
         corner_radius: 0.027,
         desaturation: 0.0,
         flash: LinearRgba::NONE,

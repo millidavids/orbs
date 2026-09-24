@@ -1,18 +1,12 @@
 //! The editor's place in the shell: opening it, feeding it keys, saving it.
 //!
-//! [`Editor`] is the buffer and knows nothing about Bevy. This is
-//! the wiring — which is a separate file because the buffer's rules (what
-//! Backspace does at column zero) and the shell's rules (which keys are chords,
-//! when the prompt is dead) are different concerns that change for different
-//! reasons.
+//! [`Editor`] is the buffer and knows nothing about Bevy; this is the wiring.
+//! A separate file because the buffer's rules (Backspace at column zero) and
+//! the shell's rules (which keys are chords) change for different reasons.
 //!
-//! # The one thing the prompt and the editor must agree on
-//!
-//! **Exactly one of them takes a keystroke.** They are both text fields on the
-//! same screen, and the failure where both consume a key is invisible until a
-//! player types `:wq` and finds it in their command history. `type_into_line`
-//! refuses to run while an editor is open, and this refuses to run while it is
-//! not — the two run conditions are complements, not a convention.
+//! Exactly one of the prompt and the editor takes a keystroke. Both consuming
+//! one is invisible until a player types `:wq` and finds it in their command
+//! history, so the two run conditions are complements, not a convention.
 
 use bevy::input::ButtonState;
 use bevy::input::keyboard::{Key, KeyboardInput};
@@ -31,10 +25,8 @@ pub(crate) struct Editing(Option<Editor>);
 impl Editing {
     /// The open editor.
     ///
-    /// **Mutable even for painting.** The viewport follows the caret and how
-    /// many lines fit is a fact only the painter has, so `scroll_to` is called
-    /// during the draw — see `Editor::scroll_to`. A read-only accessor beside
-    /// this one would just be the one nothing could use.
+    /// Mutable even for painting: only the painter knows how many lines fit, so
+    /// it calls `Editor::scroll_to` during the draw.
     pub(crate) const fn get_mut(&mut self) -> Option<&mut Editor> {
         self.0.as_mut()
     }
@@ -47,9 +39,8 @@ impl Editing {
 
     /// Put `editor` on screen, replacing whatever was there.
     ///
-    /// The one way the modal is entered, so `plugin`'s tests reach the editor
-    /// through the same door `open_requested` uses rather than through a second
-    /// one that could drift from it.
+    /// The one way the modal is entered, so `plugin`'s tests use the same door
+    /// `open_requested` does rather than a second one that could drift.
     pub(crate) fn open(&mut self, editor: Editor) {
         self.0 = Some(editor);
     }
@@ -67,17 +58,10 @@ pub(crate) fn editing(editing: Res<Editing>) -> bool {
 
 /// Whether the transcript currently owns input.
 ///
-/// # There is no `not_editing` any more
-///
-/// It was the prompt's run condition, and a run condition was the wrong shape:
-/// a system that does not *run* keeps its message cursor, so every keystroke
-/// typed while the editor or the transcript had the keyboard was still queued —
-/// and arrived at the prompt in a burst the moment it ran again. Throwing a
-/// keystroke away means reading it and dropping it, which means running.
-///
-/// So `type_into_line` runs whenever there are keys and decides for itself; the
-/// invariant that exactly one surface consumes a keystroke now lives in one
-/// function rather than in a pair of predicates that had to stay complements.
+/// There is no `not_editing` any more: a system that does not run keeps its
+/// message cursor, so keys typed while the editor had the keyboard arrived at
+/// the prompt in a burst. `type_into_line` runs whenever there are keys and
+/// decides for itself.
 pub(crate) fn reading(scroll: Res<orbs_shell::Scroll>) -> bool {
     scroll.is_reading()
 }
@@ -90,15 +74,13 @@ pub(crate) fn reading(scroll: Res<orbs_shell::Scroll>) -> bool {
 pub(crate) fn open_requested(
     mut tower: ResMut<Tower>,
     mut editing: ResMut<Editing>,
-    // `Option` for `commanding::submit`'s reason: half the tests here build the
-    // shell alone, and a bare `Res` fails parameter validation there. Absent is
-    // the same as empty — the reading is the text.
+    // `Option` for `commanding::submit`'s reason: half the tests build the
+    // shell alone, where a bare `Res` fails validation. Absent means empty.
     readers: Option<Res<crate::sim::Readers>>,
 ) {
-    // **Peeked before it is taken.** `opening` needs `&mut`, and reaching for it
-    // stamps `Tower`'s change tick — so this system re-armed its own run
-    // condition every frame and dragged `refresh_panel` and `suggest` back to
-    // 60 Hz with it.
+    // Peeked before it is taken: `opening` needs `&mut`, which stamps `Tower`'s
+    // change tick and so re-armed this system's own run condition every frame,
+    // dragging `refresh_panel` and `suggest` to 60 Hz with it.
     if !tower.has_opening() {
         return;
     }
@@ -106,8 +88,8 @@ pub(crate) fn open_requested(
         return;
     };
     let mut editor = Editor::open(&request.name, &request.domain, &request.lines);
-    // **Read before the first keystroke**, so a spell opened with a fault in it
-    // says so on the way in rather than after the first pause in the typing.
+    // Read before the first keystroke, so a spell opened with a fault in it
+    // says so on the way in rather than after the first pause.
     let scrivener = readers.as_deref().and_then(crate::sim::Readers::scrivener);
     editor.set_reading(tower.read_spell_with(
         &request.name,
@@ -115,9 +97,8 @@ pub(crate) fn open_requested(
         &request.lines,
         scrivener,
     ));
-    // **And the guide, for the same reason**: it opens on the vocabulary, and a
-    // pane that filled in only after the first keystroke would look broken to
-    // exactly the player it is there for.
+    // And the guide, for the same reason: it opens on the vocabulary, and a
+    // pane that filled in only after the first keystroke would look broken.
     editor.refresh(tower.sim());
     editing.open(editor);
 }
@@ -125,10 +106,9 @@ pub(crate) fn open_requested(
 /// Write the buffer out once the player has stopped typing, and keep the
 /// running-line marker current.
 ///
-/// **Unconditional while the editor is open**, because both halves are clocks
-/// rather than reactions: the settle timer has to run on the frames where
-/// nothing was typed — those are the only frames it can *finish* on — and a
-/// spell's marker moves on ticks the player is not touching the keyboard for.
+/// Unconditional while the editor is open, because both halves are clocks: the
+/// settle timer can only finish on a frame where nothing was typed, and the
+/// marker moves on ticks nobody pressed a key for.
 pub(crate) fn autosave(
     time: Res<Time>,
     mut editing: ResMut<Editing>,
@@ -148,15 +128,11 @@ pub(crate) fn autosave(
         let (name, lines) = (editor.name().to_owned(), editor.lines().to_vec());
         let domain = editor.domain().to_owned();
         editor.saved();
-        // **On the same beat as the save, not every frame.** Reading a buffer
-        // means parsing it and resolving every name in it against the room; at
-        // 60 Hz that is sixty parses a second to answer a question that can only
-        // change when a key is pressed. The pause the save waits for is exactly
-        // the moment the answer might have changed.
+        // On the save's beat, not every frame: reading parses the whole buffer,
+        // and only a keystroke can change what it says.
         //
-        // **The write first, then the reading**, so a line that changed is read
-        // once on this beat: the write queues its reading, and the editor's
-        // finds it there rather than asking the reader a second time.
+        // Write first, then read, so the editor's reading is the one the write
+        // queued rather than a second trip to the reader.
         let scrivener = readers.as_deref().and_then(crate::sim::Readers::scrivener);
         tower.write_spell_with(&name, &lines, scrivener);
         let reading = tower.read_spell_with(&name, &domain, &lines, scrivener);
@@ -176,19 +152,17 @@ pub(crate) fn type_into_editor(
     readers: Option<Res<crate::sim::Readers>>,
 ) {
     // Set when a keystroke proves the held chord is a ghost — see
-    // `input::chord_is_stale`. The editor needs this as much as the prompt does,
-    // and for the identical reason: they share the guard, so they shared the
-    // freeze.
+    // `input::chord_is_stale`. The editor shares the prompt's guard, so it
+    // shared the freeze.
     let mut stale = false;
     let stale_chord = super::input::chord_is_stale(quiet.gap());
     let Some(editor) = editing.get_mut() else {
         return;
     };
 
-    // Same guard as the prompt's, and for the same reason: a chord the player
-    // aimed at their operating system must not reach the text field on the way
-    // past. Alt stays out of the list — AltGr is how European layouts type `@`,
-    // `#` and `\`, which a spell needs.
+    // Same guard as the prompt's: a chord aimed at the operating system must
+    // not reach the text field on the way past. Alt stays out — AltGr is how
+    // European layouts type `@`, `#` and `\`, which a spell needs.
     let chord = held.any_pressed([
         KeyCode::ControlLeft,
         KeyCode::ControlRight,
@@ -215,12 +189,9 @@ pub(crate) fn type_into_editor(
             continue;
         }
         stale |= chord && stale_chord;
-        // **The table is `orbs-shell`'s**, and both frontends call it. Both of
-        // these keys mean something in both of the editor's states and **the
-        // editor decides which** — branching on the mode out here would be a
-        // second copy of that state machine. The table was a second copy of a
-        // different kind, and the terminal build had already been written from
-        // it without the `or` correction that lives in it now.
+        // The table is `orbs-shell`'s and both frontends call it. The editor
+        // decides what a key means in its current mode; branching on the mode
+        // out here would be a second copy of that state machine.
         let Some(key) = super::input::pressed(event) else {
             continue;
         };
@@ -250,19 +221,18 @@ fn apply(
 
     match outcome {
         EditorOutcome::Save | EditorOutcome::SaveAndClose => {
-            // One call, carrying the whole buffer — the editor's entire
-            // contribution to a replay. `Sim::write_spell` records the
-            // submission now and queues the write for the next tick, because
-            // effects land on tick boundaries.
+            // One call carrying the whole buffer — the editor's entire
+            // contribution to a replay. `Sim::write_spell` records now and
+            // queues the write for the next tick, where effects land.
             let (name, lines) = (editor.name().to_owned(), editor.lines().to_vec());
             editor.saved();
             tower.write_spell_with(&name, &lines, scrivener);
             if outcome == EditorOutcome::SaveAndClose {
                 editing.close();
             } else {
-                // **And read again, as the autosave does.** A `w` typed before
-                // the pause fired leaves the settle beat nothing to save, so the
-                // marks stayed on the buffer from a few keystrokes earlier.
+                // Read again, as the autosave does: a `w` typed before the
+                // pause fired leaves the settle beat nothing to save, so the
+                // marks went stale.
                 let domain = editor.domain().to_owned();
                 editor.set_reading(tower.read_spell_with(&name, &domain, &lines, scrivener));
             }
@@ -278,10 +248,9 @@ mod tests {
 
     /// An app with just the two resources and the one system under test.
     ///
-    /// **Not the whole `ShellPlugin`.** That wants a window and a renderer, and
-    /// a test that needed a GPU would be a test nobody runs. What is exercised
-    /// here is the wiring the unit tests on `Editor` cannot reach: a `Time` that
-    /// really advances, driving a save that really lands in the world.
+    /// Not the whole `ShellPlugin` — that wants a window and a GPU. This
+    /// exercises what the `Editor` unit tests cannot reach: a `Time` that
+    /// really advances, driving a save that lands in the world.
     fn app() -> App {
         let mut app = App::new();
         app.insert_resource(Time::<()>::default())
@@ -310,12 +279,9 @@ mod tests {
 
     #[test]
     fn a_pause_in_the_typing_writes_the_spell_out() {
-        // The user-facing behaviour, end to end: type, stop, and it is saved —
-        // with no word typed and no key pressed to make it happen.
-        //
-        // Driven through a real `App` because the clock is the mechanism. The
-        // unit test on `Editor::settle` proves the arithmetic; this proves the
-        // system is registered, takes `Time`, and reaches `Sim::write_spell`.
+        // Type, stop, and it is saved with no key pressed to make it happen.
+        // Driven through a real `App` because the clock is the mechanism;
+        // `Editor::settle`'s unit test proves the arithmetic, this the wiring.
         let mut app = app();
         app.world_mut().resource_mut::<Editing>().open(Editor::open(
             "morning.spell",
@@ -365,14 +331,9 @@ mod tests {
 
     #[test]
     fn an_autosaved_buffer_reaches_the_scrivener_and_the_file_is_still_the_players() {
-        // **The seam a dump cannot reach.** `ORBS_DUMP` builds no `App`, so
-        // everything `scripts/dumps.sh` proves about the spell reader it proves
-        // about `Sim::write_spell_reading` — never about the settle beat that
-        // carries a buffer to it. `commanding` makes the same argument about the
-        // message that carries a typed line to the prompt's reader.
-        //
-        // Both halves are asserted, because they are the whole shape of this
-        // feature: the reading is what compiles, and the file is byte-exact.
+        // The seam a dump cannot reach: `ORBS_DUMP` builds no `App`, so nothing
+        // in `scripts/dumps.sh` exercises the settle beat that carries a buffer
+        // to the reader. The reading is what compiles, the file is byte-exact.
         let mut app = app_reading();
         app.world_mut().resource_mut::<Editing>().open(Editor::open(
             "morning.spell",
@@ -416,9 +377,8 @@ mod tests {
 
     #[test]
     fn the_marker_follows_a_running_spell_without_a_keystroke() {
-        // The other half of the same system, and the half no keystroke drives:
-        // the orb moves down the file while the player sits still, so the marker
-        // has to be refreshed on frames where nothing was typed.
+        // The half no keystroke drives: the orb moves down the file while the
+        // player sits still.
         let mut app = app();
         {
             let mut tower = app.world_mut().resource_mut::<Tower>();

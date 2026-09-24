@@ -15,10 +15,10 @@ use rand_chacha::rand_core::SeedableRng;
 /// Independent random streams. Add variants freely — existing streams are
 /// unaffected, which is the entire point.
 ///
-/// Deliberately **not** `#[non_exhaustive]`. That attribute exists for downstream
-/// compatibility across crate versions; here every consumer is inside this
-/// workspace, and exhaustive matching is a feature — adding a stream should force
-/// the private `index` mapping to be updated rather than silently compiling.
+/// Deliberately not `#[non_exhaustive]`: that attribute is for downstream
+/// compatibility across crate versions, every consumer here is in this
+/// workspace, and exhaustive matching is a feature — adding a stream should
+/// force the private `index` mapping to be updated rather than compile.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RngStream {
     /// Parser tie-breaking when candidate intents score equally.
@@ -39,10 +39,9 @@ pub enum RngStream {
     Lens,
     /// The sanctum: how tall a course is (§10, `tower::erosion::height_for`).
     ///
-    /// **The variant keeps the name the room had**, which is deliberate: a
-    /// stream's identity is its *index* and a rename here changes nothing, so
-    /// the cheap thing is to leave it and the expensive thing is to have it
-    /// look like a renumber. The index table below is where that is enforced.
+    /// The variant keeps the name the room had: a stream's identity is its
+    /// index, so a rename changes nothing and only risks looking like a
+    /// renumber. The index table below is where that is enforced.
     Battlements,
     /// The menagerie: the beast a circle is drawn for (§10, `tower::circle`).
     ///
@@ -51,38 +50,34 @@ pub enum RngStream {
     Menagerie,
     /// The siege: every die the tower rolls (§10, `tower::dice`).
     ///
-    /// **Its own stream, and sharing [`Threat`](Self::Threat) was the tempting
-    /// shortcut.** That one is drawn from once a tick by `drift` and again by
-    /// `substitution`, so a combat roll taken from it would shift the ambient
-    /// sabotage schedule — moving the seeds `scripts/play.sh` chose, and
-    /// invalidating every replay that has a siege in it.
+    /// Its own stream, where sharing [`Threat`](Self::Threat) was the tempting
+    /// shortcut: that one is drawn once a tick by `drift` and again by
+    /// `substitution`, so a combat roll from it would shift the ambient sabotage
+    /// schedule and invalidate every replay with a siege in it.
     Siege,
     /// The forge: the lattice a charm is bound with.
     ///
-    /// **One draw per lattice, nine bits out of it.** Drawing a bit per glyph
-    /// would make the stream position depend on the lattice's size, so widening
-    /// it later would move every seed's world — the shape §19 records `drift`
-    /// paying for.
+    /// One draw per lattice, nine bits out of it. A bit per glyph would make the
+    /// stream position depend on the lattice's size, so widening it later would
+    /// move every seed's world — the shape §19 records `drift` paying for.
     Forge,
 }
 
 impl RngStream {
     /// Number of distinct streams. Must equal the variant count.
     ///
-    /// **Changing this is a save-format change**, which is not obvious from
-    /// here: `save::Save::from_toml` refuses a document whose `[rng].positions`
-    /// is not this long, so a world written with eight streams cannot be read by
-    /// a build with nine. `save::FORMAT` went to 3 with the ninth so the refusal
-    /// reads as *behind* rather than as *malformed*, and to **4** with the tenth
-    /// for the same reason, and to **6** with the eleventh when the siege
-    /// brought [`Siege`](RngStream::Siege).
+    /// Changing this is a save-format change, which is not obvious from here:
+    /// `save::Save::from_toml` refuses a document whose `[rng].positions` is not
+    /// this long, so a world written with eight streams cannot be read by a
+    /// build with nine. `save::FORMAT` went to 3 with the ninth so the refusal
+    /// reads as *behind* rather than *malformed*, to 4 with the tenth, to 6 with
+    /// the eleventh when the siege brought [`Siege`](RngStream::Siege), and to 9
+    /// with the twelfth when the forge brought [`Forge`](RngStream::Forge).
     ///
-    /// **A new domain almost always brings a stream, and a stream is always a
-    /// format change** — three of the last four bumps were exactly this. The
-    /// bump belongs in the same commit as the variant rather than being
-    /// discovered by the first player whose tower will not open. It went to
-    /// **9** with the twelfth, when the forge brought
-    /// [`Forge`](RngStream::Forge).
+    /// A new domain almost always brings a stream and a stream is always a
+    /// format change — three of the last four bumps were this. The bump belongs
+    /// in the same commit as the variant rather than being discovered by the
+    /// first player whose tower will not open.
     pub const COUNT: usize = 12;
 
     /// Fixed index into [`Rngs::streams`].
@@ -98,9 +93,9 @@ impl RngStream {
             Self::Drift => 3,
             Self::Yield => 4,
             Self::Trace => 5,
-            // **A new highest index, never inserted.** `derive_stream_seed`
-            // folds the index in, so renumbering would silently remap every
-            // stream and invalidate every existing replay.
+            // A new highest index, never inserted: `derive_stream_seed` folds
+            // the index in, so renumbering silently remaps every stream and
+            // invalidates every existing replay.
             Self::Archive => 6,
             Self::Lens => 7,
             Self::Battlements => 8,
@@ -135,11 +130,10 @@ impl Rngs {
 
     /// Every stream, wound forward to where it stood when the save was written.
     ///
-    /// The master seed alone is **not** enough and never was: a stream is a
+    /// The master seed alone is not enough and never was: a stream is a
     /// `ChaCha8Rng` that advances in place, so reconstructing from the seed
-    /// rewinds all eight to tick zero and the next roll is the *first* roll of
-    /// the session. `sabotage`'s two systems each draw once per tick
-    /// unconditionally, so a rewound stream would re-run the whole schedule of
+    /// rewinds all of them to tick zero. `sabotage`'s two systems draw once per
+    /// tick unconditionally, so a rewound stream re-runs the whole schedule of
     /// drifts and swaps from the beginning.
     ///
     /// The positions go beside [`master_seed`](Self::master_seed) in a save.
@@ -154,12 +148,11 @@ impl Rngs {
     /// Derives each stream exactly as [`from_seed`](Self::from_seed) does, so a
     /// save carries no key material, then winds each one forward.
     ///
-    /// **The cost of deriving rather than storing: a change to
-    /// `derive_stream_seed` breaks every existing save silently.** The keys are
-    /// recomputed from the current mixing function and wound to the *old* word
-    /// positions, so nothing compares and nothing errors — the world simply
-    /// diverges from the session that wrote it on the first roll. Changing that
-    /// function is therefore a **format change**, and `save::FORMAT` says so.
+    /// The cost of deriving rather than storing: changing `derive_stream_seed`
+    /// breaks every existing save silently. The keys are recomputed from the
+    /// current mixing function and wound to the old word positions, so nothing
+    /// compares and nothing errors — the world just diverges on the first roll.
+    /// So that function is a format change, and `save::FORMAT` says so.
     #[must_use]
     pub fn restore(master_seed: u64, positions: [u128; RngStream::COUNT]) -> Self {
         let mut rngs = Self::from_seed(master_seed);

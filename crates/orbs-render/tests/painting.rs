@@ -300,10 +300,9 @@ fn unrenderable_input_is_substituted_rather_than_dropped() {
 
 #[test]
 fn a_full_screen_linearises_in_paint_order() {
-    // **The game's own grid, and it was an arbitrary 120×33.** The rail needs
+    // The game's own grid, where it was an arbitrary 120×33. The rail needs
     // `MIN_RAIL_BOX` rows per domain across seven domains, so a short grid drops
-    // it entirely — and a test that asserts rail speech on a grid with no rail is
-    // asserting nothing. 120×45 is the only grid the game has (§19).
+    // it entirely and the rail assertion below tests nothing (§19).
     let grid = GridSize::new(120, 45);
     let layout = ScreenLayout::compute(&ScreenRequest {
         grid,
@@ -392,11 +391,9 @@ fn panes_drawn_from_a_layout_never_bleed_into_each_other() {
             .all(|cell| cell.is_blank())
     };
 
-    // **The rail is checked by column, where the sidebar was checked by row.**
-    // That is the whole shape change as a test: a rail shares every row with the
-    // main window, so a pane bleeding rightwards would show up here and nowhere
-    // else — and it is precisely the bleed a full-width sidebar could never have
-    // caught.
+    // The rail is checked by column, where the sidebar was checked by row: a
+    // rail shares every row with the main window, so a pane bleeding rightwards
+    // shows up here and nowhere else.
     let rail = layout.rail();
     assert!(
         !rail.is_empty(),
@@ -437,9 +434,8 @@ fn drawn(frame: &Frame) -> Vec<(u16, u16, char)> {
 fn a_finished_reveal_is_exactly_a_drawn_border() {
     // The property that lets the boot sequence hand over to the game without a
     // seam: the last frame of the animation and the first frame of the real
-    // screen are the same cells. Nothing tested this at all while the reveal was
-    // a single walk from the top-left, which is how it could be rewritten into
-    // four runs with no failure to warn on a missed corner.
+    // screen are the same cells. Untested while the reveal was a single walk,
+    // which is how it got rewritten into four runs with a missed corner.
     let area = Rect::new(0, 0, 40, 12);
 
     let mut revealed = frame(40, 12);
@@ -459,11 +455,10 @@ fn a_finished_reveal_is_exactly_a_drawn_border() {
 
 #[test]
 fn a_reveal_grows_from_all_four_corners() {
-    // **The point of the change.** A single line from the top-left leaves three
-    // corners dark for most of the animation; four runs put every corner down in
-    // the first few cells and close on the midpoints of nothing — they meet each
-    // other. One tenth of the way in is early enough that a single walk could
-    // not have reached even the second corner of a 40-cell box.
+    // A single line from the top-left leaves three corners dark for most of the
+    // animation; four runs put every corner down in the first few cells. One
+    // tenth of the way in is early enough that a single walk could not have
+    // reached even the second corner of a 40-cell box.
     let area = Rect::new(0, 0, 40, 12);
     let mut frame = frame(40, 12);
     frame.painter(area).border_revealed(area, Style::DIM, 0.10);
@@ -483,10 +478,9 @@ fn a_reveal_grows_from_all_four_corners() {
 
 #[test]
 fn the_four_sides_of_a_reveal_close_together() {
-    // Each side is drawn `progress` of **its own** length, so the short sides do
-    // not finish early and sit waiting. Measured as "every side is partly drawn
-    // and none is complete" at the halfway point — a shared cells-per-second
-    // pace would have the 12-row sides done and the 40-column ones half done.
+    // Each side is drawn `progress` of *its own* length, so the short sides do
+    // not finish early and sit waiting: a shared cells-per-second pace would
+    // have the 12-row sides done at halfway and the 40-column ones half done.
     let area = Rect::new(0, 0, 40, 12);
     let mut frame = frame(40, 12);
     frame.painter(area).border_revealed(area, Style::DIM, 0.5);
@@ -526,10 +520,9 @@ fn shelf(records: &mut orbs_render::Records, stock: &[(&str, &str)]) {
 
 #[test]
 fn a_listing_aligns_its_amounts_into_one_column() {
-    // The whole point of the `=`: the eye runs down it. Names differ in length,
-    // so the column only exists if every tile pads its name to the run's widest
-    // — measuring the *rendered line* instead gives one width for the pair and
-    // packs them tight, which is what this replaced.
+    // The point of the `=`: the eye runs down it. Names differ in length, so the
+    // column only exists if every tile pads its name to the run's widest —
+    // measuring the *rendered line* instead packs the pair tight.
     let mut records = orbs_render::Records::new();
     shelf(
         &mut records,
@@ -541,9 +534,8 @@ fn a_listing_aligns_its_amounts_into_one_column() {
     orbs_render::RecordView::lines().draw(&mut frame.painter(area), area, records.iter());
 
     let rows: Vec<String> = (0..6).map(|row| glyphs(&frame, row)).collect();
-    // **Character positions, not byte offsets.** `∞` is three bytes, so
-    // `match_indices` reports columns that drift by two per infinity on the row
-    // — which looked exactly like a broken alignment and was a broken test.
+    // Character positions, not byte offsets: `∞` is three bytes, so
+    // `match_indices` reports columns that drift by two per infinity on the row.
     let bound: Vec<usize> = rows
         .iter()
         .flat_map(|row| {
@@ -565,11 +557,9 @@ fn a_listing_aligns_its_amounts_into_one_column() {
 
 #[test]
 fn a_listing_never_wraps_an_entry_across_two_lines() {
-    // **The property the player asked for by name.** A tile is a whole stride
-    // and `per_row` is a whole number of them, so an entry either gets its own
-    // column or the run stacks — there is no arithmetic that can leave half a
-    // name at the end of a row. Checked at several widths, because the failure
-    // is a width-dependent off-by-one and one pane size would not find it.
+    // A tile is a whole stride and `per_row` is a whole number of them, so an
+    // entry either gets its own column or the run stacks. Checked at several
+    // widths, because the failure is a width-dependent off-by-one.
     for cols in [24u16, 31, 40, 57, 80] {
         let mut records = orbs_render::Records::new();
         shelf(

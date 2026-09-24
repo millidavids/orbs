@@ -1,45 +1,30 @@
 //! How wall-clock time becomes ticks.
 //!
-//! DESIGN.md §5.0: **one tick is one real second while the window is open.**
-//! That is a promise about the wall clock, not about frames, so the sim is
-//! driven from `FixedUpdate` rather than `Update`.
+//! §5.0: one tick is one real second while the window is open. That is a promise
+//! about the wall clock rather than about frames, so the sim is driven from
+//! `FixedUpdate`.
 //!
-//! # Why this is frame-rate independent
-//!
-//! Bevy accumulates elapsed *time* and runs `FixedUpdate` in a catch-up loop —
-//! roughly:
+//! Bevy accumulates elapsed time and runs `FixedUpdate` in a catch-up loop, so
+//! the number of `step()` calls is `elapsed / timestep` whatever the frame rate:
 //!
 //! ```text
 //! overstep += Time<Virtual>::delta()
 //! while overstep >= timestep { overstep -= timestep; run(FixedMain) }
 //! ```
 //!
-//! So the number of `step()` calls is `elapsed / timestep`, whatever the frame
-//! rate. At 120 fps the sim steps once per ~120 frames; at 20 fps, once per ~20.
-//! Both advance the world one tick per second. `frame_rate_does_not_change_world_speed`
-//! asserts exactly that.
+//! `frame_rate_does_not_change_world_speed` asserts it.
 //!
-//! # Why the default clamp had to be changed
+//! The default clamp had to change. `Time<Virtual>` refuses to report a delta
+//! larger than `max_delta` and silently discards the excess, leaving only a
+//! `debug!` that is off in release. Bevy's 250 ms default is wrong here in one
+//! direction and right in the other: an ordinary hitch — a shader compile, an
+//! asset load — must be caught up, because ticks are world time and every drift
+//! accumulates against a clock the player can see; but a genuine absence must
+//! not be, because that is what offline progression is for (§5), and replaying
+//! an hour of ticks on resume would bypass it.
 //!
-//! `Time<Virtual>` refuses to report a delta larger than `max_delta`, and
-//! **silently discards the excess** — the only trace is a `debug!` that is off in
-//! release. Bevy's default is 250 ms, chosen so that a laptop resuming from an
-//! hour's suspend does not try to simulate an hour.
-//!
-//! That default is wrong for this game in one direction and right in the other:
-//!
-//! - **Ordinary hitches must be caught up.** A shader compile or an asset load
-//!   that costs 400 ms would silently cost the tower time it was owed. Ticks are
-//!   world time (§5.0) and every drift accumulates against a wall clock the
-//!   player can see.
-//! - **Genuine absences must *not* be caught up here.** Minimise, suspend, or
-//!   quit is what offline progression exists for (§5), and it has its own rules —
-//!   it is an unlockable, and by default almost nothing accrues. Silently
-//!   replaying an hour of ticks on resume would bypass that design entirely.
-//!
-//! So the clamp is kept, and set deliberately at [`MAX_CATCH_UP`]: long enough
-//! that no realistic frame hitch loses time, short enough that a real absence
-//! still falls through to the offline path.
+//! So the clamp is kept at [`MAX_CATCH_UP`]: long enough that no realistic
+//! hitch loses time, short enough that a real absence falls through.
 
 use core::time::Duration;
 
@@ -85,9 +70,9 @@ mod tests {
 
     /// Run `frames` updates of exactly `frame_time` each, and report world time.
     ///
-    /// Bevy's **first** update reports a zero delta — there is no previous
-    /// instant to measure from — so a warm-up update runs first and `frames`
-    /// really does mean `frames` worth of elapsed time.
+    /// Bevy's first update reports a zero delta — nothing to measure from — so a
+    /// warm-up update runs first and `frames` really means `frames` worth of
+    /// elapsed time.
     fn ticks_after(frames: u32, frame_time: Duration) -> u64 {
         let mut app = App::new();
         app.add_plugins(TimePlugin)
@@ -95,6 +80,9 @@ mod tests {
                 seed: 1,
                 wizard: None,
                 persist: false,
+                // These measure the *clock*, so the world has to be running:
+                // the threshold's whole effect is that it is not.
+                threshold: false,
             })
             .insert_resource(TimeUpdateStrategy::ManualDuration(frame_time));
 
@@ -115,6 +103,7 @@ mod tests {
                     seed: 1,
                     wizard: None,
                     persist: false,
+                    threshold: false,
                 })
                 .add_plugins(TimePlugin);
             } else {
@@ -122,6 +111,7 @@ mod tests {
                     seed: 1,
                     wizard: None,
                     persist: false,
+                    threshold: false,
                 });
             }
             app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs(1)));
@@ -237,6 +227,7 @@ mod tests {
             seed: 1,
             wizard: None,
             persist: false,
+            threshold: false,
         });
         app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::ZERO));
         app.update();

@@ -1,23 +1,19 @@
 //! The tint, from the sim's own world through to a resolved colour.
 //!
-//! **The only test that crosses all three crates**, which is where this can fail
-//! with every single-crate test still green: `materials.toml` says sage is green,
-//! [`super::tint`] says what green is, and `orbs_shell::panel` is the one thing
-//! that connects them. Each half passes on its own while the bar draws in the
-//! base hue — a total, invisible failure, because an untinted material draws in
-//! the base hue too.
+//! The only test that crosses all three crates, which is where this can fail
+//! with every single-crate test still green: `materials.toml` says sage is
+//! green, [`super::tint`] says what green is, and `orbs_shell::panel` connects
+//! them. Each half passes alone while the bar draws in the base hue — an
+//! invisible failure, because an untinted material draws in the base hue too.
 //!
-//! # Why it lives here rather than beside the painter
+//! It lives here rather than beside the painter because it reaches
+//! [`super::palette`] and [`super::tint`], which resolve a `Style` to a
+//! `bevy::Color` and are this frontend's alone (rule 2).
 //!
-//! It reaches [`super::palette`] and [`super::tint`], which resolve a `Style` to
-//! a `bevy::Color` and are this frontend's alone (rule 2). The painter is shared
-//! and must not name them.
-//!
-//! It is a `#[cfg(test)]` module rather than `crates/orbs/tests/` because
-//! **`orbs` is a binary crate**: it has `src/main.rs` and no `lib.rs`, so an
-//! integration test cannot link it at all. CLAUDE.md records that exact trap for
-//! `orbs-balance`, which is *why* its tests had been written driving `Sim` by
-//! hand and asserting nothing about the harness.
+//! It is `#[cfg(test)]` rather than `crates/orbs/tests/` because `orbs` is a
+//! binary crate — `src/main.rs` and no `lib.rs` — so an integration test cannot
+//! link it. CLAUDE.md records that trap for `orbs-balance`, which is why its
+//! tests drove `Sim` by hand and asserted nothing about the harness.
 
 #[cfg(test)]
 mod tests {

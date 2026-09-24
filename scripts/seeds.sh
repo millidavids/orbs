@@ -2,12 +2,10 @@
 # Train the readers over several seeds and measure every run, so a change can be
 # told from the luck of one.
 #
-# **One run cannot tell a fix from a seed.** The trainer draws the embedding
-# table first, so any change to the vocabulary's size moves every weight's
-# starting value — and on `wgpu` a seed does not even reproduce itself bit for
-# bit. DESIGN.md §19 has a retrain that lost four points on a reader whose
-# corpus it never touched. A change is real when it clears the spread these runs
-# measure, not when one run of it beats one run of what it replaced.
+# One run cannot tell a fix from a seed: the trainer draws the embedding table
+# first, so any change to the vocabulary's size moves every weight's starting
+# value, and on `wgpu` a seed does not reproduce itself bit for bit (§19). A
+# change is real when it clears the spread these runs measure.
 #
 #     scripts/seeds.sh baseline                  # both readers, seeds 181 1 2 3 4
 #     scripts/seeds.sh fold                      # ...the same, after a change
@@ -19,19 +17,18 @@
 #     scripts/seeds.sh --summary baseline        # print a run's summary again
 #     SEEDS="181 1 2" scripts/seeds.sh baseline  # fewer, for a quick look
 #
-# **Five seeds, because three understate the spread.** The range of five runs is
-# wider than the range of three drawn from the same luck, so a change that clears
-# it has cleared more of what a seed can do on its own — and at eight seconds an
-# epoch, five runs of both readers are minutes rather than an afternoon.
+# Five seeds, because three understate the spread: the range of five runs is
+# wider than that of three drawn from the same luck. At eight seconds an epoch,
+# five runs of both readers are minutes rather than an afternoon.
 #
 # Everything lands in `target/seeds/<label>/` (`SEEDS_DIR` moves it): each
 # seed's weights, the trainer's log, one `.scores` file per measurement, the
 # binaries that produced them, and `summary.txt` — every score's mean and range
 # across the seeds.
 #
-# **Ship what was measured.** A retrain is a new run, so keeping one of these
-# means copying its `.bin` over `crates/orbs-augury/weights/`, not training it
-# again. Seed 181 is the trainer's default, the one a plain `train` takes.
+# Ship what was measured: a retrain is a new run, so keeping one of these means
+# copying its `.bin` over `crates/orbs-augury/weights/`, not training it again.
+# Seed 181 is the trainer's default, the one a plain `train` takes.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -72,15 +69,13 @@ summarise() {
   done
 }
 
-# Two labels side by side, score by score. **A score moved only when one range
-# clears the other** — `above` or `below`; anything that overlaps is `within`,
-# which is what a seed can do on its own. Neutral words rather than better and
-# worse, because for `wrongly refused` and `read as their opposite` lower is the
-# good direction.
+# Two labels side by side, score by score. A score moved only when one range
+# clears the other; anything overlapping is `within`. Neutral words rather than
+# better and worse, because for `wrongly refused` and `read as their opposite`
+# lower is the good direction.
 #
-# **The Welch t beside it is a hint, never the verdict.** A change that touched
-# nothing but the table's size reached 2.2 on one score of twenty — which is what
-# twenty scores of luck produce (DESIGN.md §19, *Several seeds*).
+# The Welch t beside it is a hint, never the verdict — a change that touched
+# nothing but the table's size reached 2.2 on one score of twenty (§19).
 compare() {
   local before="$runs/$1" after="$runs/$2" kind
   echo "$1 -> $2   (a score moved only when one range clears the other)"
@@ -140,19 +135,17 @@ fi
 seeds="${SEEDS:-181 1 2 3 4}"
 out="$runs/$label"
 mkdir -p "$out"
-# **A label is one run.** `summarise` and `compare` glob every `$kind-*.scores`
-# in the directory, so re-running a five-seed label over three seeds would fold
-# the old tree's seeds 3 and 4 into this run's mean, range and t — a contaminated
-# spread, reported as this change's. The weights and logs stay: `--spells
+# A label is one run. `summarise` and `compare` glob every `$kind-*.scores` in
+# the directory, so re-running a five-seed label over three would fold the old
+# tree's seeds into this run's spread. The weights and logs stay: `--spells
 # <label>` reads the prompt readers back out of them.
 rm -f "$out"/*.scores "$out/summary.txt"
 
 cargo build -q --release -p orbs-augury --features train \
   --example train --example measure --example trials
-# **Copied, not run in place.** A run takes hours and the tree is not frozen for
-# them, so a build made meanwhile — the next change's experiment — would
-# otherwise train the later seeds with a different trainer than the first. The
-# copies carry their corpus with them (it is compiled in), and they are the
+# Copied, not run in place: a run takes hours and the tree is not frozen, so a
+# build made meanwhile would train the later seeds with a different trainer than
+# the first. The copies carry their corpus (it is compiled in) and are the
 # record of what produced these numbers.
 bin="$out/bin"
 mkdir -p "$bin"
@@ -172,8 +165,8 @@ for seed in $seeds; do
     { trained "$reader.log"; "$bin/measure" --reader "$reader" --scores; } \
       > "$out/prompt-$seed.scores"
   else
-    # **The same prompt reader, seed for seed**, so a spell-only change is
-    # compared with the command lines read exactly as the baseline read them.
+    # The same prompt reader, seed for seed, so a spell-only change is compared
+    # with the command lines read exactly as the baseline read them.
     reader="$runs/$prompts_from/reader-$seed"
     if [[ ! -f "$reader.bin" ]]; then
       echo "no $reader.bin — run scripts/seeds.sh $prompts_from first" >&2

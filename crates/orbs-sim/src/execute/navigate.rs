@@ -5,8 +5,8 @@
 //! scene holds every place but only the belongings of where you stand — so this
 //! is the module every other verb depends on to have somewhere to act.
 //!
-//! **No prose here.** Rule 6 and §12 put authored text in content files; these
-//! emit facts and let a later layer wrap sentences around them.
+//! No prose here: rule 6 and §12 put authored text in content files, so these
+//! emit facts and a later layer wraps sentences around them.
 
 use bevy_ecs::prelude::*;
 use orbs_render::{FieldName, RecordKind, Role};
@@ -35,21 +35,18 @@ pub(super) fn attend(intent: &Intent, world: &mut World) {
         return;
     };
 
-    // **A room the tower has not opened yet refuses in voice** (§11.5). Asked
-    // of the node rather than of the name, because `attend stacks` reaches the
-    // archive by a name that is not the archive's — `tower::sealed_room_of` is
-    // the one gate, and it is asked here for the same reason `survey` asks it.
+    // A room the tower has not opened yet refuses in voice (§11.5). Asked of the
+    // node, not the name: `attend stacks` reaches the archive by a name that is
+    // not the archive's.
     if let Some(room) = tower::sealed_room_of(world, node) {
         refuse_sealed(world, Verb::Attend, &room);
         return;
     }
 
-    // **A compass bearing is not a room.** The archive's four ways have to be
-    // `NounKind::Place` — that is the only kind the place half of a spell's
-    // question resolves against, so `if north has passage` cannot be written
-    // otherwise — and being places made them somewhere you could stand. §19
-    // names walking into one as the sign the maze had become a second spatial
-    // system, which §7's filesystem already is.
+    // A compass bearing is not a room. The archive's four ways have to be
+    // `NounKind::Place` — the only kind a spell's place question resolves
+    // against, so `if north has passage` cannot be written otherwise — which
+    // also made them somewhere you could stand (§19).
     if world.get::<tower::Reading>(node).is_some() {
         let message = world
             .resource::<crate::content::Prose>()
@@ -67,12 +64,10 @@ pub(super) fn attend(intent: &Intent, world: &mut World) {
 
     world.insert_resource(Cwd(node));
 
-    // **Walking in is what clears the rail's mark**, and it is the only thing
-    // that does. §9's minimised half exists to say *something happened over
-    // there*; once you are standing in the room, the room itself is saying it,
-    // and a marker that outlived the visit would be a light nobody could turn
-    // off. A timer was the alternative and is worse — it would clear while the
-    // player was making tea, which is the case idle play is made of.
+    // Walking in is the only thing that clears the rail's mark. §9's minimised
+    // half says *something happened over there*; once you are in the room the
+    // room says it, and a marker that outlived the visit is a light nobody can
+    // turn off. A timer would clear while the player was making tea.
     if let Some(name) = world.get::<tower::Name>(node).map(|name| name.0.clone()) {
         tower::clear_mark(world, &name);
     }
@@ -90,11 +85,10 @@ pub(super) fn attend(intent: &Intent, world: &mut World) {
 
 /// List what is at a place, or here.
 ///
-/// `Verb::Survey` takes an **optional** place, and dropping it made the echo and
-/// the listing disagree: `survey archive` restated `/tower/archive` and then
-/// showed the laboratory. §6 makes the echo the thing players learn the vocabulary
-/// from, so an echo that describes a different command than the one that ran is
-/// worse than no echo at all.
+/// `Verb::Survey` takes an optional place, and dropping it made the echo and the
+/// listing disagree: `survey archive` restated `/tower/archive` and showed the
+/// laboratory. §6 makes the echo how players learn the vocabulary, so an echo
+/// describing a different command is worse than no echo.
 pub(super) fn survey(intent: &Intent, world: &mut World) {
     let at = match intent.arguments.first() {
         Some(argument) => {
@@ -116,16 +110,13 @@ pub(super) fn survey(intent: &Intent, world: &mut World) {
         return;
     }
 
-    // **A satchel answers with its queue, in queue order.** Everything below
-    // sorts by kind and then by name, which is right for a room and wrong for
-    // this: a queue's whole content is *which one is next*, and alphabetising it
-    // would be presenting the one fact it holds in an order that destroys it.
-    // The names are not children either — see `tower::satchel` for why — so the
-    // walk below would find nothing and report an empty shelf.
+    // A satchel answers with its queue, in queue order. Everything below sorts
+    // by kind then name, which destroys the one fact a queue holds: which is
+    // next. The names are not children either (see `tower::satchel`), so the
+    // walk below would report an empty shelf.
     //
-    // **Empty falls through** rather than answering here, so `the satchel holds
-    // nothing` comes from the same `survey_bare` line every other bare place
-    // gets. One sentence, one place.
+    // Empty falls through rather than answering here, so `the satchel holds
+    // nothing` comes from the same `survey_bare` line every bare place gets.
     if let Some(satchel) = world.get::<tower::Satchel>(at)
         && !satchel.is_empty()
     {
@@ -145,17 +136,16 @@ pub(super) fn survey(intent: &Intent, world: &mut World) {
         return;
     }
 
-    // **How well stocked the tower is in each of these, but only where the
-    // question means anything** (§19). A store's standing is about what the
-    // arsenal can still *supply* to a wall, so a dispensary shelf of sage has no
-    // answer and is given none rather than a word that would read as a warning.
+    // How well stocked the tower is, but only where the question means anything
+    // (§19). Standing is about what the arsenal can still supply to a wall, so a
+    // dispensary shelf of sage gets no word rather than one reading as a warning.
     let keep = tower::keep(world) == Some(at);
     let mut here: Vec<(String, &'static str, Option<String>, Option<&'static str>)> =
         tower::children_of(world, at)
             .into_iter()
-            // **A shut room is not listed**, so the tower's listing says *there is
-            // a laboratory* and nothing about what a fresh player has not earned —
-            // the rail's dark boxes make the same choice, for the same reason.
+            // A shut room is not listed, so the tower says *there is a
+            // laboratory* and nothing about what a fresh player has not earned.
+            // The rail's dark boxes make the same choice.
             .filter(|node| tower::sealed_room_of(world, *node).is_none())
             .filter_map(|node| {
                 let name = world.get::<tower::Name>(node)?.0.clone();
@@ -164,34 +154,28 @@ pub(super) fn survey(intent: &Intent, world: &mut World) {
                 // thing that is either there or not, and `x1` beside every row is a
                 // column of noise.
                 let stock = world.get::<tower::Stock>(node).map(|stock| stock.label());
-                // **Only what is stocked, and `arsenal.log` is why.** The
-                // arsenal's children include its log, and asking a *file* how
-                // well stocked the tower is in it printed `arsenal.log spent` —
-                // a warning about a thing that cannot run out. The dumps caught
-                // it; `stocktake` and the save migration already filter the same
-                // way, and this was the third place that had to.
+                // Only what is stocked, and `arsenal.log` is why: asking a file
+                // how well stocked the tower is in it printed `arsenal.log
+                // spent`, a warning about a thing that cannot run out.
+                // `stocktake` and the save migration filter the same way.
                 let supply =
                     (keep && stock.is_some()).then(|| tower::supply_of(world, &name).word());
                 Some((name, kind.label(), stock, supply))
             })
             .collect();
 
-    // **Grouped by kind, then by name.** A room's contents arrive in whatever
-    // order the tree was walked, which put the two files either side of the
-    // instruments and made the listing something you read rather than scanned.
-    // Sorted here rather than in the frontend because §14's linear stream is the
-    // same sequence — a screen-reader user gets the grouping too, and a view
-    // that re-ordered would be carrying an ordering the record stream does not.
+    // Grouped by kind, then by name: a tree walk put the two files either side
+    // of the instruments, so the listing was something you read rather than
+    // scanned. Sorted here rather than in the frontend because §14's linear
+    // stream is the same sequence, and a view that re-ordered would carry an
+    // ordering the record stream does not.
     here.sort_by(|left, right| left.1.cmp(right.1).then_with(|| left.0.cmp(&right.0)));
 
-    // **An empty place still answers.** Every record below is pushed *inside*
-    // the loop, so a place with no children said nothing at all — the orb
-    // meeting a typed command with total silence, which §6 does not allow
-    // anywhere. It went unnoticed for four phases because the rooms that were
-    // built are never empty; the sanctum made it the common case, since a
-    // station publishes `potency` only while it holds a ward and two of the
-    // three are bare for most of a solve. `survey barrier` is close to the
-    // first thing anybody types in that room.
+    // An empty place still answers. Every record below is pushed inside the
+    // loop, so a childless place said nothing at all — §6 allows silence
+    // nowhere. Unnoticed for four phases because the built rooms are never
+    // empty; the sanctum made it the common case, since two of three stations
+    // are bare for most of a solve.
     //
     // Said here rather than per-domain because the hole is `survey`'s: the
     // lens's untouched socket and a scoured instrument are the same shape.
@@ -214,11 +198,10 @@ pub(super) fn survey(intent: &Intent, world: &mut World) {
 
     let mut scrollback = world.resource_mut::<Scrollback>();
     let records = scrollback.records_mut();
-    // **A heading per kind, and the kind off every row.** `sage reagent` said
-    // the word once per line for no gain, and that repetition is what made a
-    // listing read as a wall rather than as a table. The rows carry a name and,
-    // where there is one, an amount — which is what lets the view line the two
-    // up in columns (`Tiling`).
+    // A heading per kind, and the kind off every row: `sage reagent` said the
+    // word once per line for no gain, and that repetition made a listing read as
+    // a wall rather than a table. A row carries a name and, where there is one,
+    // an amount — which is what lets the view line them up (`Tiling`).
     let mut section = "";
     for (name, kind, stock, supply) in here {
         if kind != section {
@@ -232,9 +215,9 @@ pub(super) fn survey(intent: &Intent, world: &mut World) {
         if let Some(stock) = stock {
             record = record.text(FieldName::Quantity, &stock);
         }
-        // **A third column, and only in the arsenal.** `State` is what every
-        // other surface says a derived condition with, so a spell and a screen
-        // reader meet this the way they meet `ready` and `fouled`.
+        // A third column, arsenal only. `State` is what every other surface says
+        // a derived condition with, so a spell and a screen reader meet this the
+        // way they meet `ready` and `fouled`.
         if let Some(supply) = supply {
             record = record.text(FieldName::State, supply);
         }
@@ -289,19 +272,11 @@ pub fn find_domain(world: &World, named: &str) -> Option<Entity> {
 
 /// The spell `target` names, wherever it is kept.
 ///
-/// # Nameable and findable are the same rule, and must not live apart
-///
-/// `tower::scene` registers every `.spell` from the whole tree, so a spell can be
-/// *named* from anywhere — that is what keeps `invoke` usable outside the one
-/// room with no laboratory in it. Nothing was doing the matching half, and the
-/// failure was silent in the worst way: from the laboratory,
-/// `peruse first_light.spell` resolved at **`Clear`** confidence, found no node,
-/// fell through to the record-stream reader, and reported `peruse 0` — a
-/// zero-line read of a file with three lines in it.
-///
-/// That is the symptom [`files`](super::files) already documents as the reason
-/// resolution goes by kind, arriving from the other direction. The lookup is
-/// global because the scene is global; change one and the other has to move.
+/// Nameable and findable are one rule. `tower::scene` registers every `.spell`
+/// from the whole tree so a spell can be named from anywhere; nothing was doing
+/// the matching half, and `peruse first_light.spell` resolved at `Clear`, found
+/// no node, fell through to the record reader and reported `peruse 0`. The
+/// lookup is global because the scene is global — change one and the other moves.
 ///
 /// The extension is optional, because [`with_extension`](crate::content::with_extension)
 /// makes `first_light` and `first_light.spell` the same spell everywhere else.

@@ -72,12 +72,11 @@ struct Span {
     why: bool,
     /// How long a game to measure: `baseline`, `short`, `medium` or `long`.
     ///
-    /// **Baseline unless asked**, which is what every pinned rate in
-    /// `report::EXPECTED` was measured against. The rates themselves do not move
-    /// with length — thresholds are not in the numerator or the denominator — but
-    /// **`concentration` and `renown` do**, and `bound` moves most: it earns its
-    /// first slot by hand before it can bind anything, so a longer game is a
-    /// longer hand-played prefix inside the same tick budget.
+    /// Baseline unless asked, which is what every pinned rate in
+    /// `report::EXPECTED` was measured against. The rates do not move with
+    /// length — thresholds are in neither the numerator nor the denominator —
+    /// but `concentration` and `renown` do, and `bound` moves most: it earns its
+    /// first slot by hand, so a longer game is a longer hand-played prefix.
     ///
     /// Without this flag the shipped game would run a curve the instrument never
     /// measures, which is the divergence §13 exists to prevent.
@@ -95,7 +94,7 @@ impl Span {
 
     /// The length to measure, or `None` if the word is not one.
     ///
-    /// **Refused rather than defaulted.** `ORBS_LENGTH` falls through on a typo
+    /// Refused rather than defaulted. `ORBS_LENGTH` falls through on a typo
     /// because a player mid-boot has nowhere to be told; a harness has a stderr
     /// and a person reading it, and a sweep that silently measured the wrong
     /// curve is the one output nobody would question.

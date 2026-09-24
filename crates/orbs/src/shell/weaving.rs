@@ -4,15 +4,12 @@
 //! and it is a separate file for the reason `editing.rs` is: what an arrow key
 //! *means* on a tree and which keys are stale chords are different concerns.
 //!
-//! # Exactly one surface takes a keystroke
-//!
-//! There are now four that can own the keyboard — the prompt, the editor, the
-//! unfurled transcript, and this. §19 records the shape that rule has to take:
-//! the prompt **runs and declines**, because *"a system that does not run keeps
-//! its message cursor"* and every key typed while another surface held the
-//! keyboard otherwise arrived in a burst the moment it ran again. So this is
-//! gated by a run condition and `type_into_line` is not — the asymmetry is
-//! deliberate and is the same one the editor has.
+//! Exactly one surface takes a keystroke, and four can own the keyboard: the
+//! prompt, the editor, the unfurled transcript and this. §19 records the shape —
+//! the prompt runs and declines, because *"a system that does not run keeps its
+//! message cursor"*, so keys typed while another surface held the keyboard
+//! otherwise arrived in a burst. So this is gated by a run condition and
+//! `type_into_line` is not, the same asymmetry the editor has.
 
 use bevy::input::ButtonState;
 use bevy::input::keyboard::KeyboardInput;
@@ -65,10 +62,10 @@ pub(crate) fn weaving(loom: Res<Loom>) -> bool {
 /// `Sim::weaving` takes rather than reads, so this fires once per `weave` rather
 /// than every frame — including the frame after the player quit out of it.
 pub(crate) fn open_requested(mut tower: ResMut<Tower>, mut loom: ResMut<Loom>) {
-    // **Peeked before it is taken**, exactly as `open_requested` does for the
-    // editor: `weaving` needs `&mut` and reaching for it stamps `Tower`'s change
-    // tick, which would leave this system re-arming its own run condition every
-    // frame and drag the panel and the suggestions back to 60 Hz with it.
+    // Peeked before it is taken, as the editor's `open_requested` does:
+    // `weaving` needs `&mut`, which stamps `Tower`'s change tick and would
+    // re-arm this system's own run condition every frame, dragging the panel and
+    // the suggestions back to 60 Hz.
     if !tower.has_weaving() {
         return;
     }
@@ -80,10 +77,10 @@ pub(crate) fn open_requested(mut tower: ResMut<Tower>, mut loom: ResMut<Loom>) {
 
 /// Keep the screen's reading of the world current.
 ///
-/// **Unconditional while it is open**, because the world ticks behind it: a
+/// Unconditional while it is open, because the world ticks behind it: a
 /// threshold crossed while a player is looking at the track should land while
-/// they are looking, not the next time they open it. Pushed in rather than
-/// pulled, because the screen knows nothing about the sim.
+/// they are looking. Pushed in rather than pulled, because the screen knows
+/// nothing about the sim.
 pub(crate) fn refresh(mut loom: ResMut<Loom>, tower: Res<Tower>) {
     let Some(screen) = loom.get_mut() else {
         return;
@@ -106,13 +103,11 @@ pub(crate) fn type_into_loom(
     mut loom: ResMut<Loom>,
     mut tower: ResMut<crate::sim::Tower>,
 ) {
-    // **A held chord is skipped; a *stale* one is not.** `chord_is_stale` says
-    // the modifier is a ghost — still latched from an alt-tab the window never
-    // saw released — so it means *accept this keystroke as plain text*, and the
-    // first version read it as "drop this keystroke". That is one swallowed key
-    // every time the screen is opened after a pause, which is exactly when it is
-    // opened. The prompt and the editor both have this the right way round; this
-    // now matches them rather than paraphrasing them.
+    // A held chord is skipped; a stale one is not. `chord_is_stale` says the
+    // modifier is a ghost — latched from an alt-tab the window never saw
+    // released — so it means *accept this keystroke as plain text*. The first
+    // version read it as "drop this keystroke", which swallowed one key every
+    // time the screen was opened after a pause.
     let stale_chord = super::input::chord_is_stale(quiet.gap());
     let chord = held.any_pressed([
         KeyCode::ControlLeft,
@@ -145,10 +140,10 @@ pub(crate) fn type_into_loom(
     }
     match outcome {
         Some(WeaveOutcome::Close) => loom.close(),
-        // **Handed to the sim, which decides.** The screen has already refused a
-        // marker, a locked node and a spent tier; the world re-checks all three
-        // before granting, because a screen's arithmetic is a second opinion
-        // about the rules and §19 records what happens when two of those drift.
+        // Handed to the sim, which decides. The screen has already refused a
+        // marker, a locked node and a spent tier; the world re-checks all three,
+        // because a screen's arithmetic is a second opinion about the rules
+        // (§19).
         Some(WeaveOutcome::Take(id)) => tower.take(&id),
         None => {}
     }
@@ -160,7 +155,7 @@ mod tests {
 
     /// An app with the screen's two systems and nothing that wants a window.
     ///
-    /// **Not the whole `ShellPlugin`**, for the reason `editing.rs`'s tests give:
+    /// Not the whole `ShellPlugin`, for the reason `editing.rs`'s tests give:
     /// that wants a renderer, and a test needing a GPU is a test nobody runs.
     fn app() -> App {
         let mut app = App::new();
@@ -219,12 +214,10 @@ mod tests {
 
     #[test]
     fn it_notices_the_world_moving_without_a_keystroke() {
-        // **The world ticks behind the screen**, and a track that only refreshed
-        // on input would show a total as unreached for as long as the player sat
-        // still — which is exactly when they are looking at it. Driven through a
-        // real grind, because there is no public way to hand the sim experience
-        // and a test that skipped the work would test a state the game cannot
-        // reach.
+        // The world ticks behind the screen, and a track refreshing only on
+        // input would show a total as unreached for as long as the player sat
+        // still — exactly when they are looking at it. Driven through a real
+        // grind, because there is no public way to hand the sim experience.
         let mut app = app();
         run(&mut app, "attend laboratory");
         run(&mut app, "weave");

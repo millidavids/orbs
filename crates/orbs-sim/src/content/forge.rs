@@ -5,10 +5,9 @@
 //! over, and for the same reason.
 //!
 //! What is **not** authored is what a charm *does* — that is `charm::Kind`, a
-//! closed table in Rust, because each one is read at a different site and there
-//! is nothing to derive. A key here with no matching variant fails the load
-//! rather than being ignored, which is what stops a typo shipping as a charm
-//! nobody can make.
+//! closed table in Rust. A key here with no matching variant fails the load
+//! rather than being ignored, which stops a typo shipping as a charm nobody can
+//! make.
 
 use std::collections::BTreeMap;
 
@@ -76,10 +75,9 @@ impl Charms {
 
     /// What `kind` costs to bind, given whether a siege is being fought.
     ///
-    /// **The surcharge is a multiplier and it is authored**, not a branch: a
-    /// wizard at his forge while the wall is under attack is neglecting the
-    /// wall, and scaling with the charm means hurrying a mortar mid-fight is a
-    /// small indulgence where shielding a spell is a large one.
+    /// A multiplier rather than a branch, and authored: scaling with the charm
+    /// makes hurrying a mortar mid-fight a small indulgence where shielding a
+    /// spell is a large one.
     #[must_use]
     pub fn cost(&self, kind: Kind, besieged: bool) -> u32 {
         let base = self.get(kind).map_or(u32::MAX, |charm| charm.costs);
@@ -112,12 +110,9 @@ mod tests {
         assert!(charms.names().count() > 0, "the forge has no charms");
     }
 
-    /// **Both directions, because either gap is silent.**
-    ///
-    /// A charm in the table with no variant is a word a player can read in a
-    /// file and never type; a variant with no row is a charm the forge offers
-    /// and cannot price. `siege.toml`'s own lint is the precedent — an item with
-    /// no entry there cannot be spent at all.
+    /// Both directions, because either gap is silent: a charm in the table with
+    /// no variant is a word a player can read and never type, and a variant
+    /// with no row is a charm the forge offers and cannot price.
     #[test]
     fn every_charm_the_game_has_is_one_the_file_prices() {
         let charms = Charms::builtin();

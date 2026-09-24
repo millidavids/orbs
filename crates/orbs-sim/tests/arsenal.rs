@@ -2,41 +2,31 @@
 //!
 //! §7 scopes naming to where you are standing, and that held while nothing a
 //! domain made was wanted anywhere else. A finished thing breaks it — and
-//! **nothing in the tower could be carried between rooms at all**, because
-//! `carry`'s destination lookup wants a `Fixture` child of `cwd` and a domain is
-//! neither.
+//! nothing in the tower could be carried between rooms at all, because `carry`'s
+//! destination lookup wants a `Fixture` child of `cwd` and a domain is neither.
 //!
-//! The exemption this makes is narrow and `tower::keep` states it. What this file
-//! holds is the part that is easy to get wrong: **nameable is not enough**. Every
-//! lookup that can now name what is in here has to reach it, or a word resolves
-//! at full confidence and then reports "no such thing" — §15's dead end, arriving
-//! through the affordance meant to remove one.
+//! `tower::keep` states the narrow exemption. What this file holds is the part
+//! that is easy to get wrong: nameable is not enough. Every lookup that can now
+//! name what is in here has to reach it, or a word resolves at full confidence
+//! and then reports "no such thing" — §15's dead end.
 
 use orbs_render::{FieldName, Value};
 use orbs_sim::Sim;
 
 /// A potion in the arsenal, brewed and carried the way a player would.
 ///
-/// **Distilled rather than spawned into place.** `debug_spawn` would put a
-/// `clarity` on the shelf without it ever having been made, which is the state
-/// under test in reverse: what has to work is *carrying finished work out of the
-/// room that finished it*.
+/// Distilled rather than spawned into place: `debug_spawn` would put a `clarity`
+/// on the shelf without it ever having been made, which is the state under test
+/// in reverse.
 fn with_a_potion() -> Sim {
     let mut sim = Sim::new(1);
-    // **§10.1's whole chain, from endless stock, with no debug door in it.**
-    //
-    // It used to open with `debug_spawn clarified-draught`, which is
-    // `cfg(debug_assertions)` — so every test in this file **failed under `cargo
-    // test --release`** and had done since the file was written, because nobody
-    // ran that profile. Six siblings answer the same problem by gating
-    // themselves off in release; that is the wrong answer here, because the
-    // arsenal is a shipped room and a room with no release test is the half that
-    // matters going untested.
-    //
-    // Brewing it properly costs about fifty ticks and needs no door at all:
-    // sage, rock-salt and charcoal are all `Holding::endless`. It also makes the
-    // fixture say what its own doc claims — a potion *carried out of the room
-    // that finished it*, having really been finished there.
+    // §10.1's whole chain, from endless stock, with no debug door in it. It
+    // opened with `debug_spawn clarified-draught`, which is
+    // `cfg(debug_assertions)`, so every test in this file failed under `cargo
+    // test --release`. Gating the file off in release is the wrong answer,
+    // because the arsenal is a shipped room. Brewing properly costs about fifty
+    // ticks and needs no door: sage, rock-salt and charcoal are all
+    // `Holding::endless`.
     sim.submit("attend laboratory");
     sim.step();
     sim.submit("kindle charcoal");
@@ -57,10 +47,9 @@ fn with_a_potion() -> Sim {
 /// Assumes the athanor is already lit and the player is standing in the
 /// laboratory — two of the five stages want heat.
 fn brew_one(sim: &mut Sim) {
-    // **Scoured before use, never after fouling** — `orbs-balance`'s rule, and
-    // the reason a second lap through this chain used to refuse silently: `mix`
-    // leaves the flask charged, so the *next* run's `mix` has nowhere to land.
-    // A clean instrument refuses these harmlessly.
+    // Scoured before use, never after fouling — `orbs-balance`'s rule: `mix`
+    // leaves the flask charged, so the next run's `mix` has nowhere to land. A
+    // clean instrument refuses these harmlessly.
     for line in [
         "empty mortar_and_pestle",
         "empty balneum_mariae",
@@ -107,9 +96,8 @@ fn messages(sim: &Sim) -> Vec<String> {
 
 /// Whether the orb's last answer was *"there is no ... within reach"*.
 ///
-/// **The shape of the failure this whole file is about.** A verb that can name a
-/// thing and cannot reach it does not crash and does not refuse in character; it
-/// says the thing is not there, which is the one answer that is false.
+/// The shape of the failure this file is about: a verb that can name a thing and
+/// cannot reach it says the thing is not there, which is the one false answer.
 fn said_missing(sim: &Sim, since: usize) -> bool {
     messages(sim)
         .into_iter()
@@ -117,11 +105,10 @@ fn said_missing(sim: &Sim, since: usize) -> bool {
         .any(|line| line.contains("within reach"))
 }
 
-/// What **work** is in the arsenal right now, by name.
+/// What *work* is in the arsenal right now, by name.
 ///
-/// The log is not work. Every domain is raised with one, so a room's own
-/// furniture is always in there and counting it would make an empty arsenal read
-/// as holding something.
+/// The log is not work. Every domain is raised with one, so counting it would
+/// make an empty arsenal read as holding something.
 fn kept(sim: &Sim) -> Vec<String> {
     let world = sim.world();
     orbs_sim::tower::keeping(world)
@@ -136,22 +123,19 @@ fn kept(sim: &Sim) -> Vec<String> {
 
 #[test]
 fn a_finished_potion_can_be_picked_up_at_all() {
-    // **This was broken for as long as there have been potions.** `move`'s first
-    // slot was `NounKind::Reagent` and `produce::transmute` gives a `potion =
-    // true` output `NounKind::Essence`, so `move clarity ...` could not fill a
-    // required slot — silently, because `empty` turns an instrument out
-    // wholesale and never asks what kind anything is, so the one route that
-    // mattered inside the laboratory worked.
+    // Broken for as long as there have been potions: `move`'s first slot was
+    // `NounKind::Reagent` and a potion is `NounKind::Essence`, so `move clarity
+    // ...` could not fill a required slot — silently, because `empty` never asks
+    // what kind anything is and that was the route that mattered.
     let sim = with_a_potion();
     assert_eq!(kept(&sim), ["clarity"], "the potion never left the shelf");
 }
 
 #[test]
 fn the_arsenal_takes_finished_work_and_refuses_stock() {
-    // The rule that stops this becoming a second dispensary. Asked of the
-    // **kind**, never of the name: telling finished work from stock by name
-    // would mean the tower deciding which reagents are waste, which §10.1
-    // refuses outright.
+    // The rule that stops this becoming a second dispensary. Asked of the kind,
+    // never the name: telling finished work from stock by name would mean the
+    // tower deciding which reagents are waste, which §10.1 refuses.
     let mut sim = with_a_potion();
     let before = messages(&sim).len();
     sim.submit("move sage to arsenal");
@@ -163,8 +147,7 @@ fn the_arsenal_takes_finished_work_and_refuses_stock() {
         "the sage was reported absent rather than refused: {:?}",
         messages(&sim),
     );
-    // §6 forbids a bare error, so the refusal has to say where sage *does*
-    // belong rather than only that it does not belong here.
+    // §6 forbids a bare error, so the refusal says where sage *does* belong.
     assert!(
         messages(&sim)
             .into_iter()
@@ -177,11 +160,10 @@ fn the_arsenal_takes_finished_work_and_refuses_stock() {
 
 #[test]
 fn every_verb_that_can_name_a_kept_thing_can_reach_it() {
-    // **The trap the whole exemption turns on.** Registering the arsenal's
-    // contents in the scene makes them nameable everywhere — and `purge` and
-    // `verify` take `NounKind::Any`, so they will now *resolve* on a potion from
-    // any room. Both searched `cwd`'s children and nothing else, so both would
-    // have resolved at full confidence and then reported the potion absent.
+    // The trap the exemption turns on: registering the arsenal's contents in the
+    // scene makes them nameable everywhere, and `purge` and `verify` take
+    // `NounKind::Any`. Both searched `cwd`'s children and nothing else, so both
+    // would have resolved at full confidence and reported the potion absent.
     //
     // Driven per verb, not asserted on `accepts`: what has to be true is the
     // answer the player gets.
@@ -223,14 +205,14 @@ fn what_the_arsenal_holds_can_be_carried_back_out() {
 
 #[test]
 fn the_arsenal_is_not_a_second_dispensary() {
-    // `reachable` puts the arsenal **last**, so a reagent in the room always
-    // outranks one carried — which is what makes adding it unable to change what
-    // any existing command picks up. Checked with the same name in both places.
+    // `reachable` puts the arsenal last, so a reagent in the room outranks one
+    // carried and adding it cannot change what an existing command picks up.
+    // Checked with the same name in both places.
     let mut sim = with_a_potion();
     sim.submit("attend laboratory");
     sim.step();
-    // A second clarity, on the shelf this time — **brewed, not spawned**, so
-    // this test runs in a release build where `debug_spawn` does not exist.
+    // A second clarity, on the shelf this time — brewed, not spawned, so this
+    // test runs in a release build where `debug_spawn` does not exist.
     brew_one(&mut sim);
 
     sim.submit("move clarity to flask_and_rod");
@@ -244,10 +226,9 @@ fn the_arsenal_is_not_a_second_dispensary() {
 
 #[test]
 fn the_arsenal_keeps_a_log_that_fills() {
-    // §19 records the archive's log being empty from the day it was built,
-    // because every completion set none of the three fields `files::in_domain`
-    // matches on. A domain whose log is always blank is a `peruse` that looks
-    // broken, and it is invisible until somebody tries it.
+    // The archive's log was empty from the day it was built, because every
+    // completion set none of the fields `files::in_domain` matches on (§19) —
+    // invisible until somebody tries it.
     let mut sim = with_a_potion();
     sim.submit("attend archive");
     sim.step();
@@ -265,9 +246,9 @@ fn the_arsenal_keeps_a_log_that_fills() {
 #[test]
 fn the_arsenal_refuses_to_be_unmade() {
     // It holds everything the player has finished, so §7's guard matters more
-    // here than anywhere. It comes free from being a top-level branch, and this
-    // is what says so — a future `Role` that forgot to raise it as one would
-    // make `purge arsenal` destroy a session's work.
+    // here than anywhere. It comes free from being a top-level branch; a future
+    // `Role` that forgot to raise it as one would make `purge arsenal` destroy
+    // a session's work.
     let mut sim = with_a_potion();
     sim.submit("purge arsenal");
     sim.step_n(6);
@@ -280,11 +261,9 @@ fn the_arsenal_refuses_to_be_unmade() {
 
 #[test]
 fn a_spell_can_use_what_the_arsenal_holds() {
-    // **Pillar 3's half of the feature, and it is not obvious.** A spell is
-    // written *for* a domain and `may_issue` forbids it `attend`ing, so it can
-    // only name what is in scope where it runs. Finished work that lived in the
-    // room that made it could never be used by a spell running anywhere else —
-    // so the arsenal is what makes automation able to touch a potion at all.
+    // Pillar 3's half of the feature. A spell is written *for* a domain and
+    // `may_issue` forbids it `attend`ing, so it can only name what is in scope
+    // where it runs — the arsenal is what lets automation touch a potion at all.
     let mut sim = with_a_potion();
     sim.submit("attend archive");
     sim.step();

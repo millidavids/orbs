@@ -1,19 +1,17 @@
 //! The prompt's key table — one of them, for both frontends.
 //!
-//! # Why this is shared and the routing around it is not
-//!
-//! Everything about *finding* a keystroke is backend-shaped and unshareable:
-//! winit has a press/release model, key repeat, held modifiers and a focus
-//! notion, and a terminal has none of those — it hands over discrete events
-//! carrying their own modifiers. `orbs`'s `HeldOver`, `Quiet` and `chord_is_stale`
-//! exist entirely to make sense of the first, and would be a workaround for a
-//! problem the second does not have.
+//! This is shared and the routing around it is not. Everything about *finding* a
+//! keystroke is backend-shaped: winit has press/release, key repeat, held
+//! modifiers and focus, where a terminal hands over discrete events carrying
+//! their own modifiers. `orbs`'s `HeldOver`, `Quiet` and `chord_is_stale` exist
+//! to make sense of the first and would be a workaround for a problem the second
+//! does not have.
 //!
 //! What a keystroke *means* is not backend-shaped at all. Enter submits and
-//! remembers unless the line is answering a numbered prompt; Tab completes and
-//! keeps its cycle; every other key retires the listing. Those are the rules a
-//! second implementation would get subtly wrong, and the way you would find out
-//! is a player typing `:wq` and finding it in their command history.
+//! remembers unless the line answers a numbered prompt; Tab completes and keeps
+//! its cycle; every other key retires the listing. A second implementation gets
+//! those subtly wrong, and you find out when a player types `:wq` and finds it
+//! in their command history.
 //!
 //! So each frontend maps its own events onto [`Key`] and calls [`apply`].
 
@@ -21,6 +19,7 @@ use orbs_sim::Sim;
 use orbs_sim::tower::Way;
 
 use crate::editor::{Editor, Outcome as EditorOutcome};
+use crate::manual::Outcome as ManualOutcome;
 use crate::menu::{Menu, Outcome as MenuOutcome};
 use crate::tapestry::{Outcome as WeaveOutcome, Tapestry};
 
@@ -54,12 +53,22 @@ pub enum Key {
     End,
     /// Complete, or cycle the completion.
     Tab,
+    /// A screenful back.
+    ///
+    /// The first two keys here that are not about a line, and they are here
+    /// because the manual is the first surface with more content than pane. Each
+    /// frontend answers the transcript's own paging before this layer, so it
+    /// works from behind a surface — which is why the manual must take them
+    /// first when it is open, or a chapter and the transcript page together.
+    PageUp,
+    /// A screenful on. See [`PageUp`](Self::PageUp).
+    PageDown,
     /// Characters to insert.
     ///
-    /// **Whatever the platform decided the key means**, not a `char` — a Windows
-    /// dead key yields two characters from one press, and the space bar is text
-    /// rather than a named key on every backend. `Line::insert` filters this
-    /// through the CP437 repertoire, so a control character cannot reach a cell.
+    /// Whatever the platform decided the key means, not a `char`: a Windows dead
+    /// key yields two characters from one press, and the space bar is text
+    /// rather than a named key everywhere. `Line::insert` filters through the
+    /// CP437 repertoire, so a control character cannot reach a cell.
     Text(String),
 }
 
@@ -82,10 +91,10 @@ pub fn apply(key: &Key, line: &mut Line, offered: &mut Offered, sim: &Sim) -> Op
     match key {
         Key::Enter => {
             // A bare digit answering §6's numbered prompt is an answer, not a
-            // phrasing, so it is not remembered. **Sampled before `take`**, and
-            // the caller must submit before asking the world anything else:
-            // `submit` clears `Choices`, so an `answering` read afterwards is
-            // always false and every answer would land in the history.
+            // phrasing, so it is not remembered. Sampled before `take`, and the
+            // caller must submit before asking the world anything else: `submit`
+            // clears `Choices`, so a later `answering` read is always false and
+            // every answer would land in the history.
             let remember = !answering(sim, line.text());
             return Some(line.take(remember));
         }
@@ -99,9 +108,9 @@ pub fn apply(key: &Key, line: &mut Line, offered: &mut Offered, sim: &Sim) -> Op
         Key::End => line.end(),
         Key::Tab => {
             let open = !sim.choices().is_empty();
-            // Candidates are **transient Frame content**, not a record. There is
-            // deliberately no `scrollback_mut` (§13): a frontend writing into the
-            // log makes a session that `(seed, submissions)` cannot replay, and a
+            // Candidates are transient Frame content, not a record. There is
+            // deliberately no `scrollback_mut` (§13): a frontend writing into
+            // the log makes a session `(seed, submissions)` cannot replay, and a
             // Tab press is not a submission.
             //
             // Assigned even when empty, so a Tab that *completes* a word retires
@@ -110,6 +119,10 @@ pub fn apply(key: &Key, line: &mut Line, offered: &mut Offered, sim: &Sim) -> Op
             offered.current = line.cycling();
         }
         Key::Text(text) => line.insert(text),
+        // The prompt never sees these: each frontend answers PgUp/PgDn before
+        // the surface dispatch so the transcript pages from anywhere. They are
+        // in `Key` for the manual.
+        Key::PageUp | Key::PageDown => {}
     }
     None
 }
@@ -126,28 +139,24 @@ fn answering(sim: &Sim, line: &str) -> bool {
 
 /// One keystroke, to the spell editor.
 ///
-/// **The prompt's table was shared and the other three were not**, so the
-/// editor, the weave screen and the maze each had their key semantics written
-/// once per frontend — about sixty lines duplicated across two crates, in the
-/// one place `ORBS_DUMP` cannot reach. This module's own header already made the
-/// argument for sharing them: *"what a keystroke **means** is not backend-shaped
-/// at all… so each frontend maps its own events onto [`Key`] and calls
-/// [`apply`]."* It simply stopped after the first surface.
+/// The prompt's table was shared and the other three were not, so the editor,
+/// the weave screen and the maze each had their key semantics written once per
+/// frontend — sixty-odd lines across two crates, in the one place `ORBS_DUMP`
+/// cannot reach. The module header's argument for sharing simply stopped after
+/// the first surface.
 ///
-/// The cost was already paid once and is visible in the divergence: the Bevy
-/// build learned that two Enters in one frame must not discard a pending
-/// `SaveAndClose`, and the terminal build — written later, from the same shape —
-/// did not. That correction now lives here, where there is one copy of it.
+/// The cost shows in the divergence: the Bevy build learned that two Enters in
+/// one frame must not discard a pending `SaveAndClose`, and the terminal build,
+/// written later from the same shape, did not. That correction lives here now.
 pub fn apply_to_editor(
     key: &Key,
     editor: &mut Editor,
     sim: &orbs_sim::Sim,
 ) -> Option<EditorOutcome> {
-    // A Tab cycle ends on anything that is not another Tab: the next Tab should
-    // start a fresh completion rather than resume one the player has typed past.
-    // The prompt's `apply` has the same rule three functions up, and the reason
-    // it is not shared is that `Offered` is the prompt's alone — the editor's
-    // listing is the guide, which needs no retiring because it is rebuilt every
+    // A Tab cycle ends on anything that is not another Tab, so the next Tab
+    // starts fresh rather than resuming one the player has typed past. The same
+    // rule is in `apply` three functions up and is not shared because `Offered`
+    // is the prompt's alone — the editor's listing is the guide, rebuilt every
     // keystroke anyway.
     if !matches!(key, Key::Tab) {
         editor.end_cycle();
@@ -158,10 +167,10 @@ pub fn apply_to_editor(
     } else {
         apply_key(key, editor)
     };
-    // **The keystroke beat, and the only place the guide is worked out.** It
-    // reaches `scene_at` — every recipe, topic and node — so a painter doing it
-    // would run that at 60 Hz. Here it runs when something it depends on has
-    // actually changed, which is what `offering` and `editing` each learned once.
+    // The keystroke beat, and the only place the guide is worked out. It reaches
+    // `scene_at` — every recipe, topic and node — so a painter doing it would
+    // run that at 60 Hz; here it runs when something it depends on changed,
+    // which `offering` and `editing` each learned once.
     editor.refresh(sim);
     outcome
 }
@@ -169,12 +178,11 @@ pub fn apply_to_editor(
 /// One key, applied. See [`apply_to_editor`], which is this plus the refresh.
 fn apply_key(key: &Key, editor: &mut Editor) -> Option<EditorOutcome> {
     match key {
-        // **`or`, not `=`.** Two Enters in one delivery — key repeat, a frame
-        // hitch, a practiced `wq<Enter>` — had the second overwrite the first:
-        // the command string is taken by the first call, so the second ran on an
-        // empty line, returned `None`, and discarded a pending `SaveAndClose`.
-        // The editor stayed open on a `quit` that looked ignored, with the
-        // buffer unflushed.
+        // `or`, not `=`. Two Enters in one delivery — key repeat, a frame hitch,
+        // a practiced `wq<Enter>` — had the second overwrite the first: the
+        // first call takes the command string, so the second ran on an empty
+        // line and discarded a pending `SaveAndClose`, leaving the editor open
+        // on a `quit` that looked ignored with the buffer unflushed.
         Key::Enter => editor.enter(),
         Key::Escape => {
             editor.escape();
@@ -214,7 +222,10 @@ fn apply_key(key: &Key, editor: &mut Editor) -> Option<EditorOutcome> {
         }
         // Taken by `apply_to_editor`, which is the only caller — completion
         // needs the `Sim` this table deliberately does not have.
-        Key::Tab => None,
+        //
+        // PgUp/PgDn are answered above the surface dispatch in both builds, so
+        // the editor never sees them either — see `Key::PageUp`.
+        Key::Tab | Key::PageUp | Key::PageDown => None,
     }
 }
 
@@ -222,9 +233,8 @@ fn apply_key(key: &Key, editor: &mut Editor) -> Option<EditorOutcome> {
 ///
 /// See [`apply_to_editor`] for why these live here.
 ///
-/// **The arrows do nothing**, and that is the whole difference from
-/// [`apply_to_weave`]: there is nothing on this screen to walk. Every choice is
-/// a word, which is what the rest of the game is.
+/// The arrows do nothing, which is the whole difference from [`apply_to_weave`]:
+/// there is nothing on this screen to walk, and every choice is a word.
 pub fn apply_to_menu(key: &Key, menu: &mut Menu) -> Option<MenuOutcome> {
     match key {
         Key::Enter => menu.enter(),
@@ -237,7 +247,53 @@ pub fn apply_to_menu(key: &Key, menu: &mut Menu) -> Option<MenuOutcome> {
             menu.type_text(text);
             None
         }
-        Key::Up | Key::Down | Key::Left | Key::Right | Key::Home | Key::End | Key::Tab => None,
+        Key::Up
+        | Key::Down
+        | Key::Left
+        | Key::Right
+        | Key::Home
+        | Key::End
+        | Key::Tab
+        | Key::PageUp
+        | Key::PageDown => None,
+    }
+}
+
+/// One keystroke, to the manual.
+///
+/// The arrows scroll here, unlike the menu's: a chapter is longer than the pane,
+/// so Up and Down mean what they mean in every other reader. There is no history
+/// behind them — the line takes a chapter name and nothing else — which is
+/// `editing::reading`'s argument for the transcript.
+pub fn apply_to_manual(key: &Key, reader: &mut crate::manual::Reader) -> Option<ManualOutcome> {
+    match key {
+        Key::Enter => reader.enter(),
+        Key::Escape => reader.escape(),
+        Key::Backspace => {
+            reader.backspace();
+            None
+        }
+        Key::Text(text) => {
+            reader.type_text(text);
+            None
+        }
+        Key::Up => {
+            reader.scroll(1, false);
+            None
+        }
+        Key::Down => {
+            reader.scroll(1, true);
+            None
+        }
+        Key::PageUp => {
+            reader.scroll(reader.page(), false);
+            None
+        }
+        Key::PageDown => {
+            reader.scroll(reader.page(), true);
+            None
+        }
+        Key::Home | Key::End | Key::Left | Key::Right | Key::Tab => None,
     }
 }
 
@@ -275,14 +331,14 @@ pub fn apply_to_weave(key: &Key, screen: &mut Tapestry) -> Option<WeaveOutcome> 
             screen.type_text(text);
             None
         }
-        Key::Home | Key::End | Key::Tab => None,
+        Key::Home | Key::End | Key::Tab | Key::PageUp | Key::PageDown => None,
     }
 }
 
 /// One keystroke, to the archive's map — which way the reading walks.
 ///
-/// See [`apply_to_editor`] for why these live here. This table was written
-/// **three** times: once in each frontend and once more in `dump.rs`.
+/// See [`apply_to_editor`] for why these live here. This table was written three
+/// times: once in each frontend and once more in `dump.rs`.
 #[must_use]
 pub const fn apply_to_maze(key: &Key) -> Option<Way> {
     match key {

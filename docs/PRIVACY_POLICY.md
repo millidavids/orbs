@@ -3,7 +3,7 @@
 *Draft - pending legal review.*
 
 **Effective date:** 2026-08-26
-**Last updated:** 2026-08-26
+**Last updated:** 2026-09-20
 
 ## summary
 
@@ -21,11 +21,20 @@ the state of your tower: what you have brewed, learned, and built, where you are
 standing, the spells you have written, and the seed and command history that
 reproduce your session.
 
-**In this build the save is written beside the game's executable, as
-`orbs-save.toml`.** Moving it into your operating system's standard application
-data directory arrives with the settings screen, alongside Steam Cloud support.
-When that lands, this policy will be updated with the new locations and the
-"Last updated" date above will change.
+**The save is written into your operating system's standard application data
+directory, in a folder named `orbs`:**
+
+- Linux: `~/.local/share/orbs/` (or `$XDG_DATA_HOME/orbs/`)
+- macOS: `~/Library/Application Support/orbs/`
+- Windows: `%APPDATA%\orbs\`
+
+Your towers are `orbs-save.toml` through `orbs-save-6.toml`, and your settings
+are `orbs-settings.toml` beside them.
+
+**If you played an earlier build**, your towers were written beside the game's
+executable. The first time this build runs it **copies** them into the folder
+above and leaves the originals exactly where they were, so nothing is lost and an
+older build still finds its own. Steam Cloud support is still to come.
 
 You can set the environment variable `ORBS_SAVE` to a path of your choosing to
 put the file elsewhere, or to `off` to disable saving entirely for that session.

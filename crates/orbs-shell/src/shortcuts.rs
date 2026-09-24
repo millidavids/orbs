@@ -6,12 +6,9 @@
 //! binding: which key reaches it is a frontend's business, and the two disagree
 //! already — a terminal has no `F12` screenshot and no `F2` phosphor to cycle.
 //!
-//! **They live here because they were the gap.** The terminal build shipped
-//! binding only `F10`, while `prompt.rs` drew `F4 deep` into the session border
-//! on every frame — a key the screen offered and the build did not answer, which
-//! is §19's *"the first affordance the game showed was one that did not work"*
-//! arriving a second time. Two of these were one-line rules living in the Bevy
-//! frontend, and a second copy is how the next one would have gone missing.
+//! They live here because they were the gap: the terminal build bound only
+//! `F10` while `prompt.rs` drew `F4 deep` into its border every frame — a key
+//! the screen offered and the build did not answer (§19).
 
 use orbs_render::Presentation;
 use orbs_sim::Sim;
@@ -25,10 +22,9 @@ pub const TRACE_PATH: &str = "orbs-parse.tsv";
 
 /// Step the tonal register on.
 ///
-/// §3's three registers, in the order `F7` walks them. **A rule, not a setting**
-/// — it is a development affordance for looking at eldritch and tampered text
-/// without waiting for the world to produce either, and Phase 13's settings
-/// screen is where a player-facing version would live.
+/// §3's three registers, in the order `F7` walks them. A rule, not a setting —
+/// a development affordance for looking at eldritch and tampered text without
+/// waiting for the world to produce either.
 ///
 /// Returns what it became, for whatever the caller logs.
 pub fn cycle_register(sim: &mut Sim) -> Presentation {
@@ -45,8 +41,8 @@ pub fn cycle_register(sim: &mut Sim) -> Presentation {
 ///
 /// # Errors
 ///
-/// If the file cannot be written. **A failed export must not take the session
-/// down with it** — the tester whose run it was recording is still playing — so
+/// If the file cannot be written. A failed export must not take the session
+/// down with it — the tester whose run it was recording is still playing — so
 /// every caller reports and carries on.
 pub fn export_trace(sim: &Sim) -> std::io::Result<String> {
     let log = sim.parse_log();

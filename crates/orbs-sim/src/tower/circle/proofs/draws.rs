@@ -11,8 +11,8 @@ use super::super::{Beast, Shape};
 use super::oracle::puzzles;
 use crate::rng::{RngStream, Rngs};
 
-/// **One seed is one sequence of beasts**, however many are drawn — a replay's
-/// whole claim, one room down.
+/// One seed is one sequence of beasts, however many are drawn — a replay's whole
+/// claim, one room down.
 #[test]
 fn the_same_seed_draws_the_same_beasts_in_the_same_order() {
     let sequence = |seed| {
@@ -27,9 +27,9 @@ fn the_same_seed_draws_the_same_beasts_in_the_same_order() {
     assert_ne!(sequence(3), sequence(4), "two seeds drew one sequence");
 }
 
-/// **One value from the menagerie's stream, and nothing from any other** —
-/// checked on every stream's position rather than on the next value alone, so a
-/// draw that nudged a second stream fails too.
+/// One value from the menagerie's stream and nothing from any other — checked on
+/// every stream's position rather than on the next value alone, so a draw that
+/// nudged a second stream fails too.
 #[test]
 fn a_draw_moves_the_menagerie_stream_by_one_value_and_no_other_stream() {
     for seed in 0..200 {
@@ -47,7 +47,7 @@ fn a_draw_moves_the_menagerie_stream_by_one_value_and_no_other_stream() {
     }
 }
 
-/// **Every draw is a beast the rules accept**, over twenty thousand of them.
+/// Every draw is a beast the rules accept, over twenty thousand of them.
 #[test]
 fn every_drawn_beast_is_a_puzzle_and_arrives_uncalled_at_the_opening() {
     let mut rngs = Rngs::from_seed(7);
@@ -62,11 +62,10 @@ fn every_drawn_beast_is_a_puzzle_and_arrives_uncalled_at_the_opening() {
     }
 }
 
-/// **Variety, as a player meets it.** A hundred thousand draws from one tower
-/// reach every one of the 2,994 puzzles, every wiring, every mask and all 192
-/// tempers — the rarest puzzle is two circuits in 9,756, so missing one would be a
-/// broken draw rather than bad luck — and each wiring and mask arrives about as
-/// often as its circuits say.
+/// Variety, as a player meets it. A hundred thousand draws from one tower reach
+/// every one of the 2,994 puzzles, every wiring, every mask and all 192 tempers,
+/// each about as often as its circuits say. The rarest puzzle is two circuits in
+/// 9,756, so missing one would be a broken draw rather than bad luck.
 #[test]
 fn enough_draws_reach_every_puzzle_every_wiring_and_every_turned_mask() {
     let mut rngs = Rngs::from_seed(1);
@@ -105,8 +104,8 @@ fn enough_draws_reach_every_puzzle_every_wiring_and_every_turned_mask() {
     );
 }
 
-/// **The first beast of a hundred towers is a hundred towers' worth of
-/// variety**, which is what a player starting a new game meets.
+/// The first beast of a hundred towers is a hundred towers' worth of variety,
+/// which is what a player starting a new game meets.
 #[test]
 fn a_hundred_seeds_open_on_many_different_beasts() {
     let first: BTreeSet<Puzzle> = (0..100)

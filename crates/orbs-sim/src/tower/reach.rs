@@ -1,33 +1,24 @@
 //! One rule for turning a name into a node.
 //!
-//! # Why this had to become one thing
+//! Ten call sites answered *"what does this word reach"* and differed on five
+//! axes — where they looked, which kind they accepted, leaf or path, search
+//! order, and what they did on a miss. Nothing named those axes, so each site
+//! chose again from scratch and three of the ten were byte-identical copies of
+//! *the spell node called X, wherever it is kept*.
 //!
-//! Ten call sites answered *"what does this word reach"* and they differed on
-//! five axes — where they looked, which kind they accepted, whether they compared
-//! a leaf or a path, what order they searched in, and what they did on a miss.
-//! Nothing named those axes, so each site chose them again from scratch, and
-//! three of the ten were **byte-identical copies** of *the spell node called X,
-//! wherever it is kept* (`navigate::find_script`, `bind::find`, `invoke::find`).
+//! §19 records the cost twice, both times as a word that resolves and then finds
+//! nothing: `peruse first_light.spell` read a three-line file as zero lines, and
+//! `move clarity to arsenal` reported *"no such thing"* about a potion the player
+//! could see. Both were nameable and findable drifting apart.
 //!
-//! §19 records what that costs twice already, both times as the same symptom: a
-//! word that **resolves** and then finds nothing. `peruse first_light.spell` read
-//! a three-line file as zero lines, and `move clarity to arsenal` reported *"no
-//! such thing"* about a potion the player could see. Both were the parser and the
-//! lookup disagreeing about scope — *nameable* and *findable* drifting apart,
-//! which is a pair of rules nobody had written down as a pair.
+//! The failure-mode axis stays at the call site: whether a miss is a record, a
+//! `None` or an entry on a `missing` vec is about what the player is told, which
+//! is presentation. The other four are questions about the world.
 //!
-//! **The failure-mode axis stays at the call site**, deliberately. Whether a miss
-//! is a record, a `None` or an entry on a `missing` vec is a question about what
-//! the player should be told, and that is presentation. The other four are
-//! questions about the world, and they are here.
-//!
-//! # This is a game rule, not a helper
-//!
-//! [`Scope::Fetch`] is §10.1's search order and its ordering decides what
-//! `digest ground-sage` picks up. It is written here rather than inlined at the
-//! one site that used it, because the moment a **spell** resolves a name at cast
-//! and a verb body looks it up at execution, the two have to agree — see
-//! `spell::compile`.
+//! This is a game rule rather than a helper. [`Scope::Fetch`] is §10.1's search
+//! order and decides what `digest ground-sage` picks up; it is here rather than
+//! inlined because a spell resolves a name at cast and a verb body looks it up
+//! at execution, and the two have to agree — see `spell::compile`.
 
 use bevy_ecs::prelude::*;
 
@@ -48,11 +39,11 @@ pub enum Scope {
     Under(Entity),
     /// The whole tower, from the root.
     ///
-    /// **A `.spell` is nameable from anywhere** (`tower::scene` registers every
+    /// A `.spell` is nameable from anywhere (`tower::scene` registers every
     /// one), so it has to be findable from anywhere or `invoke` resolves at full
     /// confidence and then reports nothing.
     Tower,
-    /// §10.1's fetch order — **a game rule**, and the reason this module exists.
+    /// §10.1's fetch order — a game rule, and the reason this module exists.
     ///
     /// Unbusy instruments in raise order, then stores, then the arsenal. The
     /// instruments come first because the thing a player names mid-pipeline is
@@ -61,9 +52,9 @@ pub enum Scope {
     /// lock covers taking as much as putting. The store is the fallback, and the
     /// arsenal is last so a reagent in the room always outranks one carried.
     ///
-    /// **Takes the room rather than reading `Cwd`**, because a spell installs its
-    /// own domain around each instruction and a fetch that read the resource
-    /// would be right only for as long as that stayed true.
+    /// Takes the room rather than reading `Cwd`, because a spell installs its
+    /// own domain around each instruction and a fetch reading the resource would
+    /// be right only for as long as that stayed true.
     Fetch(Entity),
     /// The arsenal, wherever it is.
     ///
@@ -77,14 +68,14 @@ pub enum Scope {
 pub enum Naming {
     /// The node's own name, exactly as it is spelled.
     Leaf,
-    /// Its name **or** its full path.
+    /// Its name or its full path.
     ///
     /// §7 makes a place answer to both — `attend laboratory` and `attend
     /// /tower/laboratory` are one command — and a `Place` argument resolves to
     /// the path while a node carries only its last segment. Comparing one to the
-    /// other matched *nothing* for an instrument, which is how `purge alembic`
-    /// came to work at a distance through a fallback that was the only path
-    /// ever taken.
+    /// other matched nothing for an instrument, which is how `purge alembic`
+    /// came to work at a distance through a fallback that was the only path ever
+    /// taken.
     LeafOrPath,
     /// Its name, with `.spell` supplied if the caller left it off.
     ///
@@ -196,10 +187,9 @@ impl<'a> Reach<'a> {
 
 /// Everything under `node`, itself included, depth first.
 ///
-/// **`node` is a candidate**, which is what lets `Under(root)` answer for the
-/// root's own children and `find_place` answer for the place it started from —
-/// `attend laboratory` typed while standing in the laboratory is a real command
-/// and it resolves to where you are.
+/// `node` is itself a candidate, which lets `Under(root)` answer for the root's
+/// children and `find_place` answer for where it started: `attend laboratory`
+/// typed in the laboratory is a real command and resolves to where you are.
 fn descend(world: &World, node: Entity) -> Vec<Entity> {
     let mut found = Vec::new();
     let mut stack = vec![node];
@@ -345,10 +335,10 @@ mod tests {
 
     #[test]
     fn a_script_is_findable_from_anywhere_it_is_nameable_from() {
-        // **Nameable and findable are one rule**, and §19 records them drifting
+        // Nameable and findable are one rule, and §19 records them drifting
         // apart twice. `tower::scene` registers every `.spell` from the whole
-        // tree, so a lookup narrower than the tree makes `invoke` resolve at full
-        // confidence and then report nothing.
+        // tree, so a narrower lookup makes `invoke` resolve at full confidence
+        // and then report nothing.
         let mut sim = tower();
         sim.submit("attend archive");
         sim.step();
@@ -386,11 +376,11 @@ mod tests {
 
     #[test]
     fn the_fetch_order_is_instruments_then_stores_then_the_arsenal() {
-        // **§10.1's search order, which is a game rule.** The instruments come
-        // first because the thing a player names mid-pipeline is the output of
-        // the last stage and it is still inside the tool that made it — that is
-        // what retired `siphon`. The store is the fallback. The arsenal is last,
-        // so a reagent in the room always outranks one carried.
+        // §10.1's search order, which is a game rule. Instruments first, because
+        // the thing a player names mid-pipeline is the last stage's output still
+        // inside the tool that made it — that is what retired `siphon`. The
+        // store is the fallback, and the arsenal last, so a reagent in the room
+        // outranks one carried.
         let sim = tower();
         let world = sim.world();
         let order: Vec<String> = look(world)
@@ -424,10 +414,10 @@ mod tests {
             "the mortar is idle, so this test proves nothing",
         );
 
-        // **By entity, not by name.** The dispensary is endless and holds sage
-        // of its own, so asking whether the *word* is reachable answers yes for
-        // a reason that has nothing to do with the lock. What must not be
-        // reachable is the load now inside the working mortar.
+        // By entity, not by name: the dispensary is endless and holds sage of
+        // its own, so asking whether the word is reachable answers yes for a
+        // reason unrelated to the lock. What must not be reachable is the load
+        // inside the working mortar.
         let inside = super::children_of(world, mortar);
         assert!(
             !inside.is_empty(),

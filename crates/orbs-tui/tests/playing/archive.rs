@@ -31,8 +31,8 @@ fn the_map_is_drawn_the_moment_a_reading_opens() {
     if !available() {
         return;
     }
-    // **Not gated on `wander`**, which is what makes a spell solving one
-    // watchable. `☼` is the reading; `Ω` is the way out.
+    // Not gated on `wander`, so a spell solving one is watchable. `☼` is the
+    // reading; `Ω` is the way out.
     let game = Game::start();
     game.does("attend archive", "/tower/archive")
         .does("research", "a way out is in them")
@@ -45,11 +45,8 @@ fn a_wall_is_loud_and_a_step_is_quiet() {
     if !available() {
         return;
     }
-    // **`follow`'s success is `quiet`** (§19): the map already shows the move,
-    // so a step is filtered out of the pane by `Records::drawn` and lives only
-    // in the log. A wall is still spoken, because nothing moved and the map
-    // reports nothing. Seed 11 opens with north and west passable, east and
-    // south walls.
+    // `follow`'s success is `quiet` (§19), so a step lives only in the log; a
+    // wall is still spoken. Seed 11 opens with north and west passable.
     let game = Game::seeded(11);
     game.does("attend archive", "/tower/archive")
         .does("research", "a way out is in them")
@@ -66,11 +63,8 @@ fn a_step_reaches_the_log_even_though_it_skips_the_transcript() {
     game.does("attend archive", "/tower/archive")
         .does("research", "a way out is in them")
         .send("follow north");
-    // **The one place a negative assertion is the claim itself**, so it is the
-    // one place this driver waits a fixed number of ticks instead of waiting for
-    // evidence: there is no event to pace against when the whole point is that
-    // nothing was said. `Records::drawn` filters a `quiet` record out of the
-    // pane, and the map already showed the move.
+    // A negative assertion has no event to pace against, so this is the one
+    // place the driver waits a fixed number of ticks rather than for evidence.
     game.refute_after(2, "the reading goes north");
     // ...and the same record, in the log, which is the stream read another way.
     game.does("peruse archive.log", "the reading goes north");
@@ -140,8 +134,7 @@ fn a_lectern_part_way_to_a_scroll_is_gathering_not_fouled() {
     if !available() {
         return;
     }
-    // **The state that exists because of this instrument.** One to three
-    // fragments must not read `fouled`: they are a job in progress, not a
+    // One to three fragments must not read `fouled`: a job in progress, not a
     // mistake to scour out.
     let game = Game::start();
     game.does("attend archive", "/tower/archive")
@@ -155,9 +148,8 @@ fn a_gleaning_scroll_swaps_the_way_out_for_things_to_gather() {
     if !available() {
         return;
     }
-    // The errand is **a word on the stacks**, which is what a spell asks for —
-    // and the map loses its `Ω` entirely, because an inert exit would have a
-    // solver walk onto it and take the same rung for ever.
+    // The errand is a word on the stacks, and the map loses its `Ω` — an inert
+    // exit would have a solver walk onto it and take the same rung for ever.
     let game = Game::start();
     game.does("attend archive", "/tower/archive")
         .does("research", "a way out is in them")
@@ -172,9 +164,9 @@ fn a_quickening_scroll_halves_the_work_in_hand() {
     if !available() {
         return;
     }
-    // **It never refuses for want of something to hurry** — it was a one-shot
-    // on the run in hand, which made it useless at the moment a player reaches
-    // for one. An 8-tick grind lands in 4.
+    // It never refuses for want of something to hurry; as a one-shot on the run
+    // in hand it was useless the moment a player reached for it. An 8-tick
+    // grind lands in 4.
     let game = Game::start();
     game.does("attend laboratory", "/tower/laboratory")
         .does("debug_spawn quickening-scroll", "all along")
@@ -189,11 +181,10 @@ fn a_verdant_scroll_puts_a_new_herb_on_the_shelf_and_then_runs_out() {
     if !available() {
         return;
     }
-    // **What may be unlocked is derived, never listed**: a base reagent is one
-    // the vocabulary knows that nothing in the tower makes. The first version
-    // asked `Recipes::outputs` and shelved every byproduct as an inexhaustible
-    // herb, with the whole suite green — so the fourth scroll refusing is as
-    // much the assertion as the first three working.
+    // What may be unlocked is derived, never listed: a base reagent is one the
+    // vocabulary knows that nothing makes. Asking `Recipes::outputs` shelved
+    // every byproduct instead, so the fourth scroll refusing is as much the
+    // assertion as the first three working.
     let game = Game::start();
     game.does("attend laboratory", "/tower/laboratory")
         .does("debug_spawn verdant-scroll 4", "all along")

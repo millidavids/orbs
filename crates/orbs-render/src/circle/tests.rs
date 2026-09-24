@@ -58,8 +58,8 @@ fn every_row_is_the_board_width_and_there_are_exactly_its_rows() {
     assert!(board.row(usize::from(rows)).is_none());
 }
 
-/// **The column a number sits over is the column its cells sit in**, or a
-/// player reads *"balks at row 7"* and looks at the wrong one.
+/// A number stands over its own cells, or *"balks at row 7"* points at the
+/// wrong one.
 #[test]
 fn the_numbers_stand_over_their_cells_and_the_marks_under_them() {
     let board = circle();
@@ -77,8 +77,8 @@ fn the_numbers_stand_over_their_cells_and_the_marks_under_them() {
     );
 }
 
-/// **A long name cannot move a row's cells** — the senses and the labels are
-/// reloadable prose, and a cell pushed right sits under the wrong number.
+/// Senses and labels are reloadable prose, so a long one must not push a
+/// cell out from under its number.
 #[test]
 fn a_long_name_is_clipped_so_its_cells_stay_under_their_numbers() {
     let mut board = circle();
@@ -110,8 +110,7 @@ fn nothing_balks_before_the_first_call_and_the_answer_row_is_blank() {
     assert!(!board.line(10).unwrap_or_default().contains(BALKS));
 }
 
-/// **A turned wire is marked on exactly its own name**, and the mark costs
-/// the line one cell: nothing else on the board moves.
+/// A turned wire is marked on its own name only; nothing else moves.
 #[test]
 fn a_turned_wire_is_marked_on_its_name_and_nowhere_else() {
     let board = circle();
@@ -130,9 +129,7 @@ fn a_turned_wire_is_marked_on_its_name_and_nowhere_else() {
     assert!(crate::is_renderable(TURNED), "`~` is not in CP437");
 }
 
-/// **A long turned name keeps its mark** — the name is what is clipped at
-/// the board's edge, never the `~` in front of it — and the row keeps the
-/// board's width.
+/// Clipping eats the name, never the `~` in front of it.
 #[test]
 fn a_long_turned_name_is_clipped_at_the_edge_with_its_mark_kept() {
     let mut board = circle();
@@ -142,9 +139,8 @@ fn a_long_turned_name_is_clipped_at_the_edge_with_its_mark_kept() {
     assert!(row.contains("← ~a-sense-with"), "{row:?}");
 }
 
-/// **A lesser circle is the same footprint with less in it** — one line,
-/// two senses, four columns — so the transcript does not move when the
-/// whole circle opens, and the marks still stand under their numbers.
+/// A lesser circle is the same footprint with less in it, so the transcript
+/// does not move when the whole circle opens.
 #[test]
 fn a_lesser_board_draws_one_line_and_four_columns_in_the_same_footprint() {
     let lit = |sense: usize| (0..4).map(|row| (row >> (1 - sense)) & 1 == 1).collect();
@@ -185,9 +181,8 @@ fn the_rows_that_balk_are_the_rows_that_differ() {
     assert_eq!(circle().balking(), vec![7]);
 }
 
-/// **CP437, and checked by a test rather than by eye** — §19 records `▪` and
-/// `►` shipping as `?` because a painter's glyphs are Rust literals, which
-/// `is_renderable` only lints in authored prose.
+/// Checked by test, not by eye: `is_renderable` lints authored prose, not a
+/// painter's Rust literals (§19).
 #[test]
 fn every_glyph_the_board_draws_is_in_the_code_page() {
     let board = circle();

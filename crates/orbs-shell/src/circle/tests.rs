@@ -48,9 +48,9 @@ fn board() -> Circle {
     }
 }
 
-/// **What a reader hears is a sentence at every count** — one row, many, and
-/// none. A hand-edited save whose last answer already agrees loads a waiting
-/// beast with nothing balking, and the summary trailed off *"balked at rows "*.
+/// What a reader hears is a sentence at every count — one row, many, and none. A
+/// hand-edited save whose last answer already agrees loads a waiting beast with
+/// nothing balking, and the summary trailed off *"balked at rows "*.
 #[test]
 fn the_spoken_summary_reads_for_one_row_many_and_none() {
     let prose = Prose::builtin();
@@ -79,7 +79,7 @@ fn the_spoken_summary_reads_for_one_row_many_and_none() {
     assert!(!none.contains("balked at"), "{none}");
 }
 
-/// **A turned wire is said, and a lit row names its senses** — the two facts the
+/// A turned wire is said, and a lit row names its senses — the two facts the
 /// silent painted rows show an eye and nothing else tells an ear.
 #[test]
 fn a_turned_wire_is_said_and_every_lit_row_names_its_senses() {
@@ -219,12 +219,12 @@ fn solve(heard: &Heard) -> Option<Vec<(String, Humour)>> {
     }
 }
 
-/// **§14's claim, made executable: a reader who hears the board can hold the
-/// beast in one call.** For beasts generated across two hundred seeds — whole
-/// circles with every kind of turned wire, and a sealed tower's lesser ones —
-/// the summary alone is parsed, a limning found that answers it, typed, and the
-/// beast called in once. The solver never sees the board, the model or the row
-/// numbering; if the words left anything out, some beast would balk.
+/// §14's claim, made executable: a reader who hears the board can hold the beast
+/// in one call. For beasts across two hundred seeds — whole circles with every
+/// kind of turned wire, and a sealed tower's lesser ones — the summary alone is
+/// parsed, a limning found that answers it, typed, and the beast called in once.
+/// The solver never sees the board, the model or the row numbering, so if the
+/// words left anything out some beast would balk.
 #[test]
 fn a_reader_who_hears_the_summary_holds_every_beast_in_one_call() {
     let prose = Prose::builtin();

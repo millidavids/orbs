@@ -1,10 +1,10 @@
 //! The circle as a whole domain: what a player can see is enough, what the world
 //! says always agrees with what the beast is, and one seed is one world.
 //!
-//! `tower::circle`'s proofs walk every circuit and prove the model; `taming.rs`
-//! drives the verbs and the spells, `lesser.rs` the sealed tower's first beasts.
-//! This file holds the claims that span all of them — the ones a regression in any
-//! one layer would break without that layer's own tests noticing.
+//! `tower::circle`'s proofs walk every circuit, `taming.rs` drives the verbs and
+//! the spells, `lesser.rs` the sealed tower's first beasts. This file holds the
+//! claims spanning all of them, which no one layer's own tests would notice
+//! breaking.
 
 use std::collections::BTreeSet;
 
@@ -63,9 +63,9 @@ fn question(board: &Circle) -> (Wires, Vec<bool>) {
     (lines, board.temper.clone())
 }
 
-/// A limning that answers the board, found by reading **only the board**: the
-/// names each glyph is given and whether turned, which senses each column lights,
-/// and the temper row. Nothing from the model but the humours' own rules.
+/// A limning that answers the board, found by reading only the board: the given
+/// names, which senses each column lights, the temper row. Nothing from the model
+/// but the humours' own rules.
 fn solve_from_board(board: &Circle) -> Option<Vec<(String, Humour)>> {
     let sense = |name: &str| board.senses.iter().position(|one| one == name);
     let input = |given: &orbs_render::CircleGiven, row: usize| {
@@ -117,12 +117,9 @@ fn solve_from_board(board: &Circle) -> Option<Vec<(String, Humour)>> {
     }
 }
 
-/// **Rule 2's claim, made executable: the picture is enough.** For two hundred
-/// seeds a solver reads the board and nothing else — not the model, not a
-/// reading, not the row numbering, which it takes from the painted sense columns
-/// — types the limning it finds, and calls the beast in once. Every beast is
-/// held on that call, turned wires included; a board missing a fact would leave
-/// some beast balking.
+/// Rule 2 made executable: the picture is enough. Two hundred seeds, each solved
+/// from the board alone — not the model, not a reading — and held on the first
+/// call. A board missing a fact would leave some beast balking.
 #[test]
 fn the_board_alone_is_enough_to_hold_every_beast_in_one_call() {
     let mut turned = 0;
@@ -161,8 +158,8 @@ fn the_board_alone_is_enough_to_hold_every_beast_in_one_call() {
     );
 }
 
-/// **A player meets different beasts in one game**: thirty held in a row from
-/// one tower are at least twenty-five different questions.
+/// A player meets different beasts in one game: thirty held in a row from one
+/// tower are at least twenty-five different questions.
 #[cfg(debug_assertions)]
 #[test]
 fn one_tower_draws_many_different_beasts() {
@@ -185,8 +182,8 @@ fn one_tower_draws_many_different_beasts() {
     );
 }
 
-/// **And different games meet different beasts**: the first beast of a hundred
-/// towers is at least ninety different questions, and most carry a turned wire.
+/// And different games meet different beasts: the first beast of a hundred
+/// towers is at least ninety different questions, most with a turned wire.
 #[test]
 fn a_hundred_towers_open_on_many_different_beasts() {
     let mut met = BTreeSet::new();
@@ -246,9 +243,9 @@ fn a_command(rng: &mut ChaCha8Rng) -> String {
     }
 }
 
-/// **One seed and one list of commands is one world**, however the commands
-/// wander — and a tower saved half way and loaded carries on as the one that
-/// never stopped.
+/// One seed and one list of commands is one world, however the commands wander —
+/// and a tower saved half way and loaded carries on as the one that never
+/// stopped.
 #[test]
 fn one_seed_and_one_list_of_commands_is_one_world_through_a_save() {
     for seed in [3, 181, 4242] {
@@ -305,24 +302,23 @@ fn humours_published(sim: &Sim, glyph: &str) -> Vec<Humour> {
         .collect()
 }
 
-/// **What the world says always agrees with what the beast is**, whatever a
-/// player types. Sixty towers of three hundred commands each, chosen at random —
-/// right and wrong words, either order, leaving the room and coming back,
-/// letting beasts go, holding them — and after every one:
+/// What the world says always agrees with what the beast is, whatever a player
+/// types. Sixty towers of three hundred random commands each — right and wrong
+/// words, either order, leaving the room, letting beasts go — and after every
+/// one:
 ///
-/// - **`fervour` is published exactly while a beast waits**;
-/// - **each glyph carries exactly its humour** while it is part of the circle,
-///   and nothing when no beast waits or the glyph is dark;
-/// - **the circle never takes the production slot** — no `Working` anywhere,
-///   since nothing else in these towers works;
-/// - **the rail says the menagerie is working exactly while a beast waits**;
-/// - **a call's answer row is what the glyphs as they stand answer**, and a call
-///   counts once — calls never go down while the same beast waits;
-/// - **a hold is counted exactly once**, and only when a beast went away on a
-///   `summon` that was not the one that drew it.
+/// - `fervour` is published exactly while a beast waits;
+/// - each glyph carries exactly its humour while it is part of the circle, and
+///   nothing when no beast waits or the glyph is dark;
+/// - the circle never takes the production slot, since nothing else works here;
+/// - the rail says the menagerie is working exactly while a beast waits;
+/// - a call's answer row is what the glyphs as they stand answer, and calls
+///   never go down while the same beast waits;
+/// - a hold is counted once, and only when a beast went away on a `summon` that
+///   was not the one that drew it.
 #[test]
 fn what_the_world_says_always_agrees_with_the_beast() {
-    // **Counted, so the fuzz cannot pass by never reaching what it guards.**
+    // Counted, so the fuzz cannot pass by never reaching what it guards.
     let (mut holds, mut answers, mut calls, mut away) = (0, 0, 0, 0);
     // Fifty open towers, and in a debug build ten sealed ones: those draw lesser
     // beasts until five holds open the whole circle, so both shapes are fuzzed
@@ -446,9 +442,9 @@ fn what_the_world_says_always_agrees_with_the_beast() {
     assert!(away >= 500, "only {away} commands left the room");
 }
 
-/// **Summoning takes nothing from any other room's draws.** Ten beasts drawn and
-/// held before the archive is walked leave the archive's stacks exactly the maze
-/// the same seed draws without them — the per-subsystem stream, held end to end.
+/// Summoning takes nothing from any other room's draws: ten beasts held before
+/// the archive is walked leave its stacks the maze the same seed draws without
+/// them — the per-subsystem stream, end to end.
 #[cfg(debug_assertions)]
 #[test]
 fn ten_beasts_move_no_other_rooms_draws() {

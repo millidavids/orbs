@@ -65,11 +65,10 @@ fn stage(sim: &mut Sim, thing: &str, instrument: &str) {
 fn run(sim: &mut Sim, thing: &str, instrument: &str) {
     stage(sim, thing, instrument);
     sim.step_n(20);
-    // **`empty`, not `siphon` then `purge`.** `siphon` is retired (§19), and
-    // scouring alone would *destroy* the product this helper exists to keep —
-    // which is the trap of removing a verb whose job was quietly two jobs.
-    // `empty` shelves everything and frees the tool in one move, and `reachable`
-    // searches the store, so the next stage finds what this one made.
+    // `empty`, not `siphon` then `purge`: `siphon` is retired (§19) and
+    // scouring alone would destroy the product this helper exists to keep.
+    // `empty` shelves everything and frees the tool in one move, and
+    // `reachable` searches the store, so the next stage finds it.
     sim.submit(&format!("empty {instrument}"));
     sim.step();
 }
@@ -101,11 +100,10 @@ fn purging_a_charged_alembic_takes_what_is_in_it_and_leaves_the_alembic() {
 
 #[test]
 fn purging_an_instrument_empties_it_rather_than_destroying_it() {
-    // §10.1's loop opens with clearing an instrument. Deleting the alembic
-    // would leave a laboratory that cannot distil — from a verb §7 calls
-    // everyday maintenance. Instruments are safe by being *places*, not by
-    // being `Protected`: that tier refuses outright and is for the root, the
-    // live domains, and the dispensary.
+    // Deleting the alembic would leave a laboratory that cannot distil, from a
+    // verb §7 calls everyday maintenance. Instruments are safe by being places,
+    // not `Protected` — that tier refuses outright and is for the root, the
+    // live domains and the dispensary.
     let mut sim = Sim::new(1);
     sim.submit("attend laboratory");
     sim.step();
@@ -128,13 +126,9 @@ fn purging_an_instrument_empties_it_rather_than_destroying_it() {
 
 #[test]
 fn the_dispensary_refuses_to_be_purged() {
-    // **Not an instrument — a shelf of stock, and the only source of `sage`
-    // and `charcoal` in the tower.** It was an ordinary fixture, so one
-    // `purge dispensary` despawned all three starting reagents at once: no
-    // recipe produces sage or charcoal, so the athanor could never be lit
-    // again and no potion could ever be brewed. An unwinnable tower from a
-    // single command, against §7's "destruction is a tool, not a trap" and
-    // §11.5's "not automating is never ruinous, only slower".
+    // Not an instrument but the tower's only source of `sage` and `charcoal`,
+    // so one `purge dispensary` used to make the tower unwinnable — against
+    // §7's "destruction is a tool, not a trap".
     let mut sim = Sim::new(1);
     sim.submit("attend laboratory");
     sim.step();
@@ -215,9 +209,8 @@ fn an_instrument_takes_time_and_lands_by_itself() {
 
 #[test]
 fn grinding_sage_yields_ground_sage_and_husks() {
-    // §10.1: the instrument consumes what it holds and leaves both the
-    // product *and* the byproduct in itself — which is what makes clearing
-    // the first move of the next loop rather than optional tidying.
+    // §10.1: the instrument leaves both the product and the byproduct in
+    // itself, which makes clearing the first move of the next loop.
     let mut sim = Sim::new(1);
     sim.submit("attend laboratory");
     sim.step();
@@ -276,11 +269,9 @@ fn a_working_instrument_will_not_be_charged_or_restarted() {
 
 #[test]
 fn an_instrument_being_scoured_refuses_to_be_charged_or_wielded() {
-    // §10.1's lock covers a scour as well as a run, and **only `Working` was
-    // guarded**. So a `purge` could be started, a reagent moved in behind it,
-    // a run begun — and four ticks later the scour despawned every child,
-    // destroying the reagent, producing nothing, and spending the tower's one
-    // production slot. Nothing said a word.
+    // §10.1's lock covers a scour as well as a run, and only `Working` was
+    // guarded — so a reagent moved in behind a `purge` was despawned by it
+    // four ticks later, silently, having spent the one production slot.
     let mut sim = Sim::new(1);
     sim.submit("attend laboratory");
     sim.step();
@@ -329,10 +320,9 @@ fn a_finished_instrument_releases_the_slot_before_it_is_collected() {
 
 #[test]
 fn the_tower_has_one_production_slot_not_one_per_domain() {
-    // §11.5 opens at multiplex capacity 1 and §9's invariant 4 reserves it
-    // for the whole duration, so working occupies the *tower*. §9's per-pane
-    // cap was amended for §10.1's instruments, but the pool stayed global —
-    // this is the test that says so.
+    // §11.5 opens at multiplex capacity 1 and §9's invariant 4 reserves it for
+    // the whole duration, so working occupies the tower. §10.1's instruments
+    // amended the per-pane cap, but the pool stayed global.
     let mut sim = Sim::new(1);
     sim.submit("attend laboratory");
     sim.step();
@@ -439,15 +429,12 @@ fn stopping_an_instrument_leaves_what_it_holds() {
 
 #[test]
 fn the_next_stage_takes_the_product_and_leaves_the_byproduct() {
-    // **What retired `siphon`** (§19). Drawing a stage's output onto the bench
-    // was the fourth move of §10.1's loop when a reagent had to be carried by
-    // hand; the per-instrument verbs reach into an idle tool, so the pipeline
-    // advances on its own and the drawing-off step had stopped doing anything.
+    // What retired `siphon` (§19): the per-instrument verbs reach into an idle
+    // tool, so the drawing-off step had stopped doing anything.
     //
-    // The byproduct still stays behind, which is the property that mattered:
-    // telling product from waste by *name* would mean the laboratory deciding
-    // which reagents are rubbish, and §10.1 refuses — every byproduct is some
-    // other recipe's input.
+    // The byproduct still stays behind. Telling product from waste by name
+    // would mean the laboratory deciding which reagents are rubbish, and §10.1
+    // refuses — every byproduct is some other recipe's input.
     let mut sim = Sim::new(1);
     sim.submit("attend laboratory");
     sim.step();
@@ -476,10 +463,8 @@ fn the_next_stage_takes_the_product_and_leaves_the_byproduct() {
 
 #[test]
 fn a_working_instrument_will_not_give_up_its_charge() {
-    // §10.1's lock covers taking as much as putting. `reachable` skips busy
-    // instruments, so a stage cannot be robbed of what it is working on — which
-    // matters more now that reaching into instruments is the ordinary path
-    // rather than the exception.
+    // §10.1's lock covers taking as much as putting: `reachable` skips busy
+    // instruments, so a stage cannot be robbed of what it is working on.
     let mut sim = Sim::new(1);
     sim.submit("attend laboratory");
     sim.step();
@@ -497,10 +482,9 @@ fn a_working_instrument_will_not_give_up_its_charge() {
 
 #[test]
 fn a_purge_runs_during_a_brew_because_triage_is_a_different_slot() {
-    // §9: *"a 6-minute brew occupies the laboratory's production slot while
-    // a 20-second purge can still run in its triage slot."* This is the
-    // test that stops a future counter from folding the two together — the
-    // inversion would be a purge refused because something else is brewing.
+    // §9: *"a 6-minute brew occupies the laboratory's production slot while a
+    // 20-second purge can still run in its triage slot."* Folding the two
+    // together would refuse a purge because something else is brewing.
     let mut sim = Sim::new(1);
     sim.submit("attend laboratory");
     sim.step();
@@ -533,9 +517,8 @@ fn a_purge_runs_during_a_brew_because_triage_is_a_different_slot() {
 
 #[test]
 fn clearing_takes_time_rather_than_happening_on_the_keystroke() {
-    // §11.5 puts "purge byproduct" in the Triage band. Instant clearing made
-    // the loop's opening move free, which is the one thing a *maintenance*
-    // verb should not be.
+    // §11.5 puts "purge byproduct" in the Triage band; instant clearing made
+    // the loop's opening move free, which a maintenance verb must not be.
     let mut sim = Sim::new(1);
     sim.submit("attend laboratory");
     sim.step();
@@ -557,19 +540,13 @@ fn clearing_takes_time_rather_than_happening_on_the_keystroke() {
 
 #[test]
 fn the_same_goal_has_two_right_answers_depending_on_what_the_laboratory_holds() {
-    // **§10.1's exit criterion.** Not "the second playthrough differs",
-    // which a coin flip satisfies — the same recipe, two tower states, two
-    // different right answers, and the difference readable from the records
-    // *before* you act.
+    // §10.1's exit criterion: the same recipe, two tower states, two different
+    // right answers, and the difference readable from the records before you
+    // act.
     //
     // Route A spends fresh sage. Route B spends the husks the mortar left
-    // behind: free if you have been grinding, unavailable if you have not,
-    // and slower, because that is the trade. Both end in clarity.
-    //
-    // The readable-before-you-act half is `recall clarity`, which lists
-    // (see `every_event_a_spell_can_wait_on_says_where_it_happened` for the
-    // other half of the contract this loop now has to keep)
-    // both routes to the draught without committing an instrument to either.
+    // behind — free if you have been grinding, unavailable if you have not,
+    // and slower. Both end in clarity, and `recall clarity` lists both.
 
     // --- Route A: fresh sage ------------------------------------------
     let mut sim = Sim::new(1);
@@ -592,10 +569,9 @@ fn the_same_goal_has_two_right_answers_depending_on_what_the_laboratory_holds() 
     sim.step();
     sim.step_n(20);
 
-    // **The draught is left where it was made**, and that is the whole of it
-    // now. `siphon flask_and_rod` used to be needed here to lift it onto the
-    // bench; the bench is gone (§19) and a finished product simply sits in the
-    // tool that made it, where the next tool — or `empty` — takes it from.
+    // The draught is left where it was made: the bench is gone (§19), so a
+    // finished product sits in the tool that made it until the next tool — or
+    // `empty` — takes it.
     sim.submit("attend flask_and_rod");
     sim.step();
     assert!(
@@ -610,10 +586,9 @@ fn the_same_goal_has_two_right_answers_depending_on_what_the_laboratory_holds() 
     // Grinding sage makes husks. Route B is what those husks are *for*.
     stage(&mut sim, "sage", "mortar_and_pestle");
     sim.step_n(20);
-    // **Straight out of the mortar.** This is the clearest place the retirement
-    // of `siphon` shows: the byproduct is taken to the next stage by naming it,
-    // with nothing drawn off first. What is left — the ground-sage route B does
-    // not want — is scoured, which is `purge` doing the one job `empty` does not.
+    // Straight out of the mortar: the byproduct goes to the next stage by name
+    // with nothing drawn off first, and the ground-sage route B does not want
+    // is scoured — `purge` doing the one job `empty` does not.
     sim.submit("move husks to balneum_mariae");
     sim.step();
     scour(&mut sim, "mortar_and_pestle");
@@ -652,21 +627,14 @@ fn the_same_goal_has_two_right_answers_depending_on_what_the_laboratory_holds() 
 
 #[test]
 fn a_whole_brew_runs_end_to_end_on_one_charcoal() {
-    // The pipeline, by hand, as a player would type it — and the thing that
-    // proves §10.1 is a mechanic rather than a diagram. Four stages, each
+    // The pipeline by hand, as a player would type it: four stages, each
     // fouling its instrument, each cleared before the next use.
     //
-    // **The interesting part is where the fire is damped.** The pipeline's
-    // two heated stages are not adjacent: the unheated `flask_and_rod` sits
-    // between the bath and the still, so burning through it is waste. The
-    // efficient play is light → bath → *damp* → combine → relight → distil,
-    // and this runs it.
-    //
-    // A charcoal now outlasts a brew by a wide margin, so the damp is an
-    // **optimisation rather than a requirement** — it was briefly the only
-    // way through, which made the fire a third instrument to watch. The
-    // sequence is kept here because it is still the good play, and because
-    // it is the only test that exercises damp-and-relight inside real work.
+    // The two heated stages are not adjacent — the unheated `flask_and_rod`
+    // sits between the bath and the still — so the efficient play is
+    // light → bath → damp → combine → relight → distil, which this runs. A
+    // charcoal outlasts a brew, so the damp is an optimisation rather than a
+    // requirement, and this is the only test that exercises damp-and-relight.
     let mut sim = Sim::new(1);
     sim.submit("attend laboratory");
     sim.step();
@@ -711,10 +679,9 @@ fn a_whole_brew_runs_end_to_end_on_one_charcoal() {
     sim.step();
     sim.submit("wield alembic");
     sim.step();
-    // **The long stage.** A distillation is 56 ticks — four times what it was
-    // (§19), and by a wide margin the longest thing in the pipeline. The number
-    // here is the recipe's, not a round one: a fixed count that merely *happened*
-    // to be enough would go quiet the next time the recipe moved.
+    // A distillation is 56 ticks (§19), the longest stage in the pipeline, and
+    // this count is the recipe's rather than a round number that happened to
+    // be enough.
     sim.step_n(60);
 
     sim.submit("attend alembic");
@@ -732,16 +699,10 @@ fn a_whole_brew_runs_end_to_end_on_one_charcoal() {
 
 #[test]
 fn every_event_a_spell_can_wait_on_says_where_it_happened() {
-    // **The contract eleven emit sites already disagreed about.** The instrument
-    // was in `Name` at one site, `Path` at another and `Source` at a third —
-    // where `FieldName::Source`'s own doc forbids a place — and `Name` itself
-    // meant a verb, an instrument, a product or a list of products depending on
-    // who wrote the line.
-    //
-    // Survivable while only a person reads the log. Unsurvivable the moment a
-    // **spell** does, because "wait until the mortar finishes" has to be one
-    // question with one answer. `FieldName::At` is that answer, and this is what
-    // stops the next completion being added without it.
+    // Eleven emit sites disagreed about where the instrument went — `Name`,
+    // `Path` or `Source` — which survives a person reading the log and not a
+    // spell, because "wait until the mortar finishes" needs one answer.
+    // `FieldName::At` is it, and this stops the next completion omitting it.
     let mut sim = Sim::new(1);
     for line in [
         "attend laboratory",
@@ -756,9 +717,8 @@ fn every_event_a_spell_can_wait_on_says_where_it_happened() {
         sim.step();
     }
 
-    // Only the completions that *are* events — a run landing, a yield, an
-    // emptying, the athanor going cold. A refusal is not something a spell waits
-    // on, and demanding `At` of one would be asserting a contract nothing needs.
+    // Only the completions that are events. A refusal is not something a spell
+    // waits on, so demanding `At` of one asserts a contract nothing needs.
     let events: Vec<String> = sim
         .scrollback()
         .records()

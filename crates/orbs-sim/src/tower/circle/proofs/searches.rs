@@ -1,10 +1,9 @@
 //! The two shipped searches over every beast, and the solver the circle refuses
 //! to publish for.
 //!
-//! **Two totals each, and both are pinned.** *Uniform* is every distinct puzzle
-//! once; *by circuit* is every entry of the draw's list, which is how often a
-//! player actually meets each puzzle. The rate `orbs-balance` pins follows the
-//! second, and §19 quotes both.
+//! Two totals each, both pinned. *Uniform* is every distinct puzzle once; *by
+//! circuit* is every entry of the draw's list — how often a player actually
+//! meets each puzzle, which is what `orbs-balance` pins (§19).
 
 use std::collections::BTreeSet;
 
@@ -13,7 +12,7 @@ use super::super::temper::{OPENING, ROWS};
 use super::super::{Glyph, Humour};
 use super::oracle::{keystones, puzzles, solutions, taming, wide, winnowing};
 
-/// **The shipped search holds every beast**, in at most 216 calls. The worst and
+/// The shipped search holds every beast, in at most 216 calls. The worst and
 /// both totals are pinned because §19 and SEEING-IT quote them: a number in a
 /// document that no test holds is a number that drifts.
 #[test]
@@ -40,10 +39,10 @@ fn the_taming_search_holds_every_puzzle_and_its_worst_is_174_calls() {
     );
 }
 
-/// **The ladder is exactly what the logic allows** — every keystone on a rung
-/// holds some beast lit on that many rows, and no beast is held by a keystone
-/// its rung leaves out. Either half wrong is a spell that wastes calls or one
-/// that never holds. Turned wires change none of the rungs.
+/// The ladder is exactly what the logic allows — every keystone on a rung holds
+/// some beast lit on that many rows, and no beast is held by a keystone its rung
+/// leaves out. Either half wrong is a spell that wastes calls or one that never
+/// holds. Turned wires change none of the rungs.
 #[test]
 fn each_rung_of_the_winnowing_ladder_names_every_keystone_that_fervour_allows() {
     let table = puzzles();
@@ -59,7 +58,7 @@ fn each_rung_of_the_winnowing_ladder_names_every_keystone_that_fervour_allows() 
     }
 }
 
-/// **What a player's knowledge buys the orb.** The fervour ladder prunes the
+/// What a player's knowledge buys the orb. The fervour ladder prunes the
 /// keystone, and De Morgan halves sunwise: every hold has a twin whose sunwise
 /// is the other of its pair, so `yoke`, `heed` and `oppose` cover all six.
 ///
@@ -94,11 +93,10 @@ fn the_winnowing_search_holds_every_puzzle_in_fewer_calls_than_taming() {
     );
 }
 
-/// **Why no *closer* or *further* is published.** A climb that keeps whichever
+/// Why no *closer* or *further* is published. A climb that keeps whichever
 /// humour agrees on more rows — the lens's sweep, transplanted — stalls on 1,104
-/// of the 2,994 puzzles, 37%, because one glyph can mask another. The lens's
-/// sockets are independent and this circle's glyphs are not; a reading that
-/// invited this solver would invite one that never ends.
+/// of the 2,994 puzzles, 37%, because one glyph can mask another: the lens's
+/// sockets are independent and this circle's glyphs are not.
 ///
 /// The climb: from the opening, try every humour at every glyph in turn, keep a
 /// change whenever it agrees on strictly more rows than the best so far, and

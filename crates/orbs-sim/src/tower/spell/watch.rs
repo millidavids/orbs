@@ -1,25 +1,14 @@
 //! What a spell can wait on, read off the record stream.
 //!
-//! # Events are records, and there is no second stream
+//! §3 forbids unlogged output, so the record stream *is* the log and every
+//! consequence is already on it. A spell watching for "the mortar finished"
+//! reads the records the player does — §8.1's *no automation driven by hidden
+//! state*. Forging the event and forging the evidence are the same act, which
+//! is what makes `verify` meaningful.
 //!
-//! §3 forbids unlogged output, so the record stream **is** the log — the
-//! scrollback, the file a player `peruse`s, and what `sift` filters are one
-//! stream read several ways. Every consequence in the game is already on it.
-//!
-//! So a spell watching for "the mortar finished" reads the same records the
-//! player does, and the strongest argument for that is §8.1's: **no automation
-//! can be driven by hidden state.** A private event bus would let a spell react
-//! to something the player cannot see or audit, and log poisoning — a *keystone*
-//! mechanic — would have nothing to bite on. Here, forging the event and forging
-//! the evidence are the same act, which is what makes `verify` meaningful.
-//!
-//! # Why this needed [`FieldName::At`] first
-//!
-//! Eleven emit sites put the instrument in whichever field was nearest, and
-//! `Name` meant a verb, an instrument, a product or a list of products depending
-//! on who wrote the line. That is survivable while a person is reading; it is
-//! not once a **spell** is, because *"has the mortar finished?"* has to be one
-//! question with one answer.
+//! This needed [`FieldName::At`] first: eleven emit sites put the instrument in
+//! whichever field was nearest, and `Name` meant a verb, an instrument or a
+//! product depending on who wrote the line.
 
 use bevy_ecs::prelude::{Entity, World};
 use orbs_render::{FieldName, Record, RecordKind, Value};
@@ -29,11 +18,9 @@ use crate::tower::{self, Cwd};
 
 /// Something that happened somewhere.
 ///
-/// Deliberately three strings rather than an enum of event kinds. A player
-/// writes `wait for the mortar` or `wait for ground-sage` — they name a **thing**
-/// and the orb works out which of its senses they meant, which is §6's whole
-/// posture applied one layer in. An enum would make the spell language ask the
-/// player to know a taxonomy the game never taught them.
+/// Three strings rather than an enum of event kinds: a player writes `wait for
+/// the mortar` or `wait for ground-sage` and the orb works out which sense they
+/// meant (§6). An enum would ask the player to know a taxonomy nobody taught.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Event {
     /// Where it happened — an instrument, always. [`FieldName::At`].
@@ -47,10 +34,8 @@ pub struct Event {
 impl Event {
     /// Whether this is the thing a spell named.
     ///
-    /// Matched against **either** the place or the subject, because both are
-    /// natural: `wait for the mortar` names where, `wait for ground-sage` names
-    /// what. Case-folded through the same helper `sift` uses, so a search and a
-    /// wait cannot disagree about what counts as a match.
+    /// Either the place or the subject, because both are natural. Case-folded
+    /// through the helper `sift` uses, so a search and a wait cannot disagree.
     #[must_use]
     pub fn names(&self, wanted: &str) -> bool {
         let wanted = crate::parser::leaf(wanted);
@@ -61,10 +46,9 @@ impl Event {
 
 /// The event `record` reports, if it reports one.
 ///
-/// **A completion that says where it happened.** Everything else — an echo, a
-/// status row, the orb speaking — is not something that *occurred* in the
-/// laboratory, and a spell waiting on one would be waiting on the log rather
-/// than on the world.
+/// A completion that says where it happened. An echo, a status row or the orb
+/// speaking did not *occur*, so a spell waiting on one would be waiting on the
+/// log rather than on the world.
 #[must_use]
 pub fn watch(record: &Record<'_>) -> Option<Event> {
     if record.kind() != RecordKind::Completion {
@@ -80,33 +64,18 @@ pub fn watch(record: &Record<'_>) -> Option<Event> {
 
 /// What the tower answers, and every name in the question it could not place.
 ///
-/// # Three answers, because two were a silent bug
+/// Three answers, because two were a silent bug: `false` for a name the tower
+/// lacks made `if mortar is empty` answer no for ever and take the `else` every
+/// time, which reads like an inverted condition. §8's *Referent missing*
+/// instead. §6's matcher is not involved — the names arrive already resolved
+/// against the room the spell was cast in (`spell::compile`).
 ///
-/// §6's matcher is deliberately not involved: a fuzzy answer here would decide
-/// what a laboratory does while nobody is watching, and the names arrive
-/// **already resolved**, fixed against the room when the spell was cast
-/// (`spell::compile`).
-///
-/// So a name that does not match is not a near miss to be guessed at — it is a
-/// place the tower does not have, which is §8's *Referent missing* and not the
-/// same thing as the answer being no. It returned `false` for both, and
-/// `if mortar is empty` — written before an `if` resolved its names — answered
-/// no for ever and took the `else` every time. That reads exactly like the
-/// condition being inverted, which is how it was reported.
-///
-/// # Strict, so an `or` cannot answer over a name nobody can find
-///
-/// One missing place makes the **whole** question unanswerable, even where the
-/// other half of an `or` already said yes. The alternative — three-valued logic,
-/// answering from the half that resolved — was considered and rejected (§19):
-/// an instrument that has stopped existing is §8.1's substitution surface, and a
-/// spell carrying on over it is exactly the thing that must not pass quietly.
-/// The runner runs **neither** branch when this answers `None`, so a question
-/// nobody can answer decides nothing.
+/// Strict rather than three-valued (§19): one missing place makes the whole
+/// question unanswerable even where the other half said yes, and the runner
+/// runs neither branch on `None`.
 ///
 /// The names come back with the answer rather than being logged here: this is a
-/// `&World` read with no opinion about prose, and the runner needs them to say
-/// which word it could not place.
+/// `&World` read with no opinion about prose.
 #[must_use]
 pub fn holds(world: &World, condition: &Condition) -> (Option<bool>, Vec<String>) {
     let mut missing = Vec::new();
@@ -118,17 +87,11 @@ pub fn holds(world: &World, condition: &Condition) -> (Option<bool>, Vec<String>
 fn ask(world: &World, condition: &Condition, missing: &mut Vec<String>) -> Option<bool> {
     match condition {
         Condition::Not(inner) => ask(world, inner, missing).map(|answer| !answer),
-        // **Every operand is asked, even after one has failed.** Short-circuiting
-        // would report the first bad name and hide the second, so a player fixing
-        // a question would be sent back for the next one — and §8.1's rule is
-        // that the culprit is never anonymous, not that one culprit is enough.
+        // Every operand is asked even after one has failed: §8.1's rule is that
+        // the culprit is never anonymous, not that one culprit is enough.
         //
-        // **And one `None` makes the whole thing `None`**, even where the rest
-        // would have settled it — an `and` with a false operand beside a missing
-        // name, an `or` with a true one. That is the strict rule, chosen over
-        // three-valued logic deliberately (§19): a name the tower cannot place is
-        // a spell that has stopped describing the world it runs in, and carrying
-        // on over it is what must not pass quietly.
+        // One `None` makes the whole thing `None`, even where the rest would
+        // have settled it — strict rather than three-valued (§19).
         Condition::All(items) => {
             let answers = every(world, items, missing)?;
             Some(answers.into_iter().all(|answer| answer))
@@ -137,18 +100,11 @@ fn ask(world: &World, condition: &Condition, missing: &mut Vec<String>) -> Optio
             let answers = every(world, items, missing)?;
             Some(answers.into_iter().any(|answer| answer))
         }
-        // **A named child, and deliberately not `tower::holdings`.** `holdings`
-        // skips `Nameable(NounKind::Sense)`, which is right for a shelf and fatal
-        // here: every maze reading is a `Sense` child — `passage`, `wall`,
-        // `walked`, `twice`, `exit`, `back`, `spoil` and the errand word all come
-        // from `tower::raise_reading`. Asking `holdings` would answer *no* to
-        // `if north has passage` for ever and delete the archive's whole
-        // automation pillar, while looking like reuse. `tower::build`'s own note
-        // on `raise_reading` says it outright: *"a named child, which is the one
-        // read the language has."*
-        //
-        // The count then comes from the node's own `Stock`, which is where a
-        // quantity lives when there is one.
+        // A named child, and deliberately not `tower::holdings`, which skips
+        // `Nameable(NounKind::Sense)` — every maze reading is a `Sense` child
+        // from `tower::raise_reading`, so `holdings` would answer *no* to
+        // `if north has passage` for ever. The count then comes from the node's
+        // own `Stock`.
         Condition::Has {
             place,
             thing,
@@ -156,24 +112,18 @@ fn ask(world: &World, condition: &Condition, missing: &mut Vec<String>) -> Optio
             bound,
         } => {
             let at = find(world, place, missing)?;
-            // **The other side is asked first, and unconditionally.** A
-            // comparison against a place the tower lacks must report that name
-            // even when this side already settles the answer — the same rule
-            // `every` follows for connectives, and the same reason: §8.1 wants
-            // the culprit named, not the first culprit.
+            // Asked unconditionally: a comparison against a place the tower
+            // lacks must report that name even when this side settles the
+            // answer (§8.1).
             let want = worth(world, count, thing, missing)?;
             let many = many_at(world, at, thing);
-            // **Strict against a world read, inclusive against a number**, and
-            // the asymmetry is English rather than an inconsistency: `has 2 or
-            // fewer marks` includes two and `has fewer marks than east` does
-            // not. The third comparative — *at least as many* — is deliberately
-            // absent, because `not … fewer … than` already says it.
+            // Strict against a world read, inclusive against a number: English,
+            // since `has 2 or fewer marks` includes two and `has fewer marks
+            // than east` does not.
             //
-            // **Asked of the grammar, not of the variant.** Written
-            // `matches!(count, Elsewhere(_))` the three expression variants would
-            // all fall to *inclusive*, so `than the d20` and `than the d20 has
-            // quintessence` would disagree at equality and `plus 0` would change
-            // a sentence's meaning. `Quantity::strict` is the one rule.
+            // Asked of the grammar, not of the variant: `matches!(count,
+            // Elsewhere(_))` would drop the three expression variants to
+            // inclusive, so `plus 0` would change a sentence's meaning.
             let strict = count.strict();
             Some(match bound {
                 crate::parser::Bound::AtLeast if strict => many > want,
@@ -183,29 +133,23 @@ fn ask(world: &World, condition: &Condition, missing: &mut Vec<String>) -> Optio
                 crate::parser::Bound::Exactly => many == want,
             })
         }
-        // **The panel's word, not `busy()`.** The two are the same answer for the
-        // four instruments that consume Focus and differ for the athanor, whose
-        // fire is `Burning` rather than `Working` — so `if athanor is idle` was
-        // yes while it burned. See [`State::is_busy`](tower::State::is_busy).
+        // The panel's word, not `busy()`: the two agree for the four instruments
+        // that consume Focus and differ for the athanor, whose fire is `Burning`
+        // rather than `Working` — so `if athanor is idle` was yes while it
+        // burned. See [`State::is_busy`](tower::State::is_busy).
         //
-        // `Empty` stays a question about **contents** rather than the panel's
-        // `State::Empty`: the athanor never reports that word — it is cold, or
-        // charged, or alight — and reading it from the panel would make
-        // `if athanor is empty` false however bare it was.
+        // `Empty` stays a question about contents rather than the panel's
+        // `State::Empty`, which the athanor never reports, so reading it there
+        // would make `if athanor is empty` false however bare it was.
         Condition::Is { place, state } => {
             let at = find(world, place, missing)?;
             Some(match state {
                 SpellState::Idle => !tower::state_at(world, at).is_busy(),
                 SpellState::Working => tower::state_at(world, at).is_busy(),
-                // **A satchel answers from its queue, not from its children.**
-                // It has none either way — the names ride a `VecDeque` on the
-                // node, because a queue is an ordered multiset and `Stock`
-                // collapses duplicates and has no order — so without this arm
-                // `if the satchel is empty` is *true of a full satchel*, for
-                // ever and silently. That is the shape §19 records twice already
-                // (`is idle` in the menagerie, `is empty` in the lens): a guard
-                // that answers before the loop can run, and a spell that does
-                // nothing without saying so.
+                // A satchel answers from its queue, not its children: a queue
+                // is an ordered multiset and `Stock` collapses duplicates.
+                // Without this arm `if the satchel is empty` is true of a full
+                // satchel, silently (§19).
                 SpellState::Empty => world.get::<tower::Satchel>(at).map_or_else(
                     || tower::children_of(world, at).is_empty(),
                     tower::Satchel::is_empty,
@@ -217,20 +161,13 @@ fn ask(world: &World, condition: &Condition, missing: &mut Vec<String>) -> Optio
 
 /// What the far side of a comparison comes to.
 ///
-/// **Recursive, because the far side is a small expression** —
-/// `double the enemy has mettle plus 6` is a tree and each node is one world
-/// read, one doubling or one addition.
+/// Recursive, because the far side is a small expression: `double the enemy has
+/// mettle plus 6` is a tree of world reads, doublings and additions. Every name
+/// inside is resolved unconditionally — §8.1 wants the culprit named.
 ///
-/// **Every name inside is resolved, and unconditionally**, which is the rule the
-/// caller's own comment states: a comparison against a place the tower lacks
-/// must report *that* name even when the near side already settles the answer.
-/// Bailing at the first `None` would name the first culprit and hide the rest,
-/// and §8.1 wants the culprit named.
-///
-/// **Saturating throughout.** `thing` is a count off a node and `by` is a number
-/// the player typed, so `double` and `plus` are both reachable with values that
-/// would overflow in a debug build — and a question that panicked would take the
-/// tower down over a sentence.
+/// Saturating throughout: both a count off a node and a number the player typed
+/// are reachable with values that overflow in a debug build, and a question
+/// that panicked would take the tower down over a sentence.
 fn worth(
     world: &World,
     count: &crate::parser::Quantity,
@@ -243,9 +180,8 @@ fn worth(
             let there = find(world, other, missing)?;
             Some(many_at(world, there, thing))
         }
-        // **The far side's own reading**, which is the whole of what this variant
-        // adds: `has fewer quintessence than the d20 has cost` asks a different
-        // word over there.
+        // The far side's own reading, all this variant adds: `has fewer
+        // quintessence than the d20 has cost` asks a different word over there.
         crate::parser::Quantity::Of { place, thing } => {
             let there = find(world, place, missing)?;
             Some(many_at(world, there, thing))
@@ -261,24 +197,17 @@ fn worth(
 
 /// How many of `thing` are at `at`, where absent is nought and means it.
 ///
-/// **One read, used by both sides of a comparison**, which is what makes
-/// `north has fewer marks than east` an honest question rather than two notions
-/// of counting placed side by side. It is also the arithmetic
-/// `tower::build::raise_count` promises: *"`has 2 or more marks` is answered by
-/// the same arithmetic that answers `has 4 fragment`, rather than by a second
-/// notion of how many of something there is."*
+/// One read, used by both sides of a comparison, so `north has fewer marks than
+/// east` is one question rather than two notions of counting — the arithmetic
+/// `tower::build::raise_count` promises.
 ///
-/// **Absent is nought, and the other reading was refused.** A comparison needs
-/// something to count, so an argument exists that `or fewer` should be false of
-/// an absent thing — but then `if the dispensary has 2 or fewer sage` is **false
-/// with no sage at all**, which is the one case a restock guard is written for.
-/// A player who writes that sentence gets what it says.
+/// Absent is nought: `or fewer` false of an absent thing would make `if the
+/// dispensary has 2 or fewer sage` false with no sage at all, the one case a
+/// restock guard is written for.
 ///
 /// A thing with no `Stock` is one of it: a reading, a file, a spell.
 fn many_at(world: &World, at: Entity, thing: &str) -> u32 {
-    // **A named child, and deliberately not `tower::holdings`** — see the note
-    // on `Condition::Has` above. Every maze and ward reading is a
-    // `Nameable(NounKind::Sense)` child, which `holdings` skips.
+    // A named child, not `tower::holdings` — see the note on `Condition::Has`.
     let held = tower::children_of(world, at).into_iter().find(|held| {
         world
             .get::<tower::Name>(*held)
@@ -294,11 +223,8 @@ fn many_at(world: &World, at: Entity, thing: &str) -> u32 {
 
 /// Every operand's answer, or `None` if any of them had none.
 ///
-/// **Collected before it is folded**, so every operand is asked even once the
-/// answer is settled. Short-circuiting would report the first bad name and hide
-/// the second, and a player fixing a question would be sent back for the next
-/// one — §8.1's rule is that the culprit is never anonymous, not that one
-/// culprit is enough.
+/// Collected before it is folded, so every operand is asked even once the
+/// answer is settled: §8.1 wants no anonymous culprit.
 fn every(world: &World, items: &[Condition], missing: &mut Vec<String>) -> Option<Vec<bool>> {
     items
         .iter()
@@ -310,8 +236,8 @@ fn every(world: &World, items: &[Condition], missing: &mut Vec<String>) -> Optio
 
 /// The place `named`, or `None` with the name noted as one the tower lacks.
 ///
-/// Named **once**, however many operands mention it: a question repeating a bad
-/// name would otherwise say the same sentence twice about one mistake.
+/// Named once, however many operands mention it, or a question repeating a bad
+/// name would say the same sentence twice about one mistake.
 fn find(world: &World, named: &str, missing: &mut Vec<String>) -> Option<Entity> {
     let cwd = world.resource::<Cwd>().0;
     let leaf = crate::parser::leaf(named).to_owned();
@@ -322,19 +248,13 @@ fn find(world: &World, named: &str, missing: &mut Vec<String>) -> Option<Entity>
                 .is_some_and(|name| name.0 == leaf)
         })
     };
-    // **The room first, then the arsenal — but only a *store*.**
+    // The room first, then the arsenal — but only a *store*. `for each store`
+    // binds a cursor to an arsenal item and the next line asks it a question,
+    // so the arsenal has to be reachable from wherever the spell stands (§19).
     //
-    // `for each store` binds a cursor to an arsenal item and the very next line
-    // asks it a question, so the arsenal has to be reachable from wherever the
-    // spell stands. §19's exemption is *"the one room reachable from every
-    // other"* and `scene` already folds its contents into the naming scope.
-    //
-    // **The fallback is narrowed to `Grouped(STORE)` deliberately**, because an
-    // unrestricted one silences complaints for every other condition: a spell in
-    // the laboratory asking `if the clarity has ready` about a clarity that is
-    // *not there* would stop pushing to `missing`, bind to the arsenal's shelf
-    // instead, read false for ever, and run doing nothing — the exact silent
-    // failure the complaint mechanism exists to surface.
+    // Narrowed to `Grouped(STORE)` because an unrestricted fallback silences
+    // complaints for every other condition: a laboratory spell asking about an
+    // absent clarity would bind to the arsenal's shelf and read false for ever.
     let found = here(cwd).or_else(|| {
         tower::keep(world).and_then(here).filter(|node| {
             world
@@ -351,8 +271,7 @@ fn find(world: &World, named: &str, missing: &mut Vec<String>) -> Option<Entity>
 fn text(record: &Record<'_>, field: FieldName) -> Option<String> {
     match record.field(field)? {
         Value::Text(text) => Some(text.to_owned()),
-        // A number is never a thing a spell waits *on*. `wait for 3` is not a
-        // sentence, and treating a count as a name would let `qty: 3` match a
+        // A number is never a thing a spell waits *on*: `qty: 3` would match a
         // spell waiting for something called 3.
         _ => None,
     }
@@ -398,8 +317,8 @@ mod tests {
 
     #[test]
     fn a_spell_can_name_the_place_or_the_thing() {
-        // `wait for the mortar` and `wait for ground-sage` are both natural, and
-        // a player should not have to know which sense the orb keeps.
+        // Both are natural, and a player should not have to know which sense
+        // the orb keeps.
         let event = Event {
             at: "mortar_and_pestle".to_owned(),
             what: "ground-sage".to_owned(),
@@ -424,15 +343,9 @@ mod tests {
 
     #[test]
     fn a_burning_athanor_is_working_rather_than_idle() {
-        // **Reported from a spell**: `if athanor is idle` fired while it was
-        // burning charcoal, which is not what anybody reads that word to mean.
-        //
-        // The cause is a deliberate decision one layer down. The fire is
-        // `Burning` and pointedly **not** `Working`, because the athanor takes no
-        // Focus and nothing counting the production pool may see it — so
-        // `busy()`, which reads `Working` and `Triaging`, could not see it
-        // either. Both words were wrong at once: idle said yes, working said no,
-        // and the panel beside them drew `at burning` the whole time.
+        // `if athanor is idle` fired while it burned charcoal. The fire is
+        // `Burning`, not `Working`, because the athanor takes no Focus — so
+        // `busy()` could not see it either, and both words were wrong at once.
         let mut sim = Sim::new(1);
         sim.submit("attend laboratory");
         sim.step();
@@ -460,8 +373,8 @@ mod tests {
 
     #[test]
     fn a_damped_athanor_is_idle_again() {
-        // `Banked` is fuel put by, not work in progress. A spell waiting for the
-        // athanor to be free must not wait on a damped one for ever.
+        // `Banked` is fuel put by, not work in progress, so a spell waiting for
+        // a free athanor must not wait on a damped one for ever.
         let mut sim = Sim::new(1);
         for line in ["attend laboratory", "kindle charcoal", "stop athanor"] {
             sim.submit(line);
@@ -473,9 +386,8 @@ mod tests {
 
     #[test]
     fn an_instrument_mid_run_is_still_working() {
-        // The other four instruments answer exactly as they did through
-        // `busy()`, which is what makes the fix above a widening rather than a
-        // replacement.
+        // The other four answer exactly as they did through `busy()`, which
+        // makes the fix above a widening rather than a replacement.
         let mut sim = Sim::new(1);
         for line in ["attend laboratory", "grind sage"] {
             sim.submit(line);
@@ -546,22 +458,18 @@ mod tests {
         .0
     }
 
-    /// **The arithmetic, evaluated rather than merely parsed.**
+    /// The arithmetic, evaluated rather than merely parsed.
     ///
-    /// `tests/questions.rs` proves the far side round-trips; nothing there runs
-    /// it. A tree that read back perfectly and computed the wrong number would
-    /// pass every one of those properties — so this is where `double` and `plus`
-    /// are actually worth what they say.
+    /// `tests/questions.rs` proves the far side round-trips but never runs it,
+    /// so a tree computing the wrong number passes every property there.
     #[test]
     fn the_far_side_of_a_comparison_does_its_arithmetic() {
         use crate::parser::{Bound, Quantity};
         let mut sim = Sim::new(1);
         walked(&mut sim);
 
-        // **Which way round is derived, never assumed.** A walled way publishes
-        // no `marks` and reads as nought, so which of the two the fixture
-        // actually walked more is a fact about the seed's maze — the sibling
-        // test below makes the same move for the same reason.
+        // Derived, never assumed: a walled way publishes no `marks`, so which
+        // way the fixture walked more is a fact about the seed's maze.
         let marks = |way: &str| {
             super::many_at(
                 sim.world(),
@@ -581,8 +489,8 @@ mod tests {
              comparison from one that always says no",
         );
 
-        // `plus` shifts the threshold by exactly what it says: the busier way is
-        // strictly ahead, and stops being so once the other is given the gap.
+        // `plus` shifts the threshold by what it says: the busier way is
+        // strictly ahead until the other is given the gap.
         let by = marks(more) - marks(fewer);
         assert_eq!(
             weighing(
@@ -614,8 +522,8 @@ mod tests {
             "the comparison is strict, so equal is not more",
         );
 
-        // `double` multiplies what is inside it, and it is asked *before* `plus`
-        // wraps it — `double north plus 0` and `double north` are one question.
+        // `double` is asked *before* `plus` wraps it — `double north plus 0`
+        // and `double north` are one question.
         assert_eq!(
             weighing(
                 &sim,
@@ -639,9 +547,8 @@ mod tests {
             "`plus 0` changed the answer, so `strict` is reading the variant",
         );
 
-        // **A name inside the tree is still reported when the tower lacks it.**
-        // Bailing at the first `None` would hide a nested culprit, which is the
-        // rule `every` follows one level up.
+        // A nested name is still reported: bailing at the first `None` would
+        // hide it, which is the rule `every` follows one level up.
         let (answer, missing) = holds(
             sim.world(),
             &Condition::Has {
@@ -661,17 +568,16 @@ mod tests {
         );
     }
 
-    /// **`Of` reads a different word over there**, which is the whole reason it
-    /// exists — `Elsewhere` can only ask about the same reading on both sides.
+    /// `Of` reads a different word over there, which is why it exists —
+    /// `Elsewhere` can only ask the same reading on both sides.
     #[test]
     fn a_comparison_can_name_a_different_reading_on_the_far_side() {
         use crate::parser::{Bound, Quantity};
         let mut sim = Sim::new(1);
         walked(&mut sim);
 
-        // **Whichever way this seed's maze actually let the fixture walk.** A
-        // walled way publishes no `marks` at all, so naming one by hand would be
-        // asserting against the seed rather than against the language.
+        // Whichever way this seed's maze let the fixture walk: naming one by
+        // hand would assert against the seed rather than the language.
         let marks = |way: &str| {
             super::many_at(
                 sim.world(),
@@ -684,8 +590,8 @@ mod tests {
             .find(|way| marks(way) > 0)
             .expect("the fixture walked somewhere");
 
-        // Against a word that is not published there at all: absent is nought,
-        // so any walked way has strictly more than none of it.
+        // Against a word not published there at all: absent is nought, so any
+        // walked way has strictly more than none of it.
         assert_eq!(
             weighing(
                 &sim,
@@ -702,8 +608,7 @@ mod tests {
         );
 
         // ...and it really is reading the *far* side's own word: asked for
-        // `marks` over there instead, the same question answers differently
-        // wherever the two ways differ.
+        // `marks` over there instead, the same question answers differently.
         assert_eq!(
             weighing(
                 &sim,
@@ -722,15 +627,10 @@ mod tests {
 
     #[test]
     fn a_comparison_reads_both_sides_off_the_same_published_count() {
-        // **The step the whole language overhaul rests on**, and it is small
-        // because the tower was already shaped for it: `raise_count` puts a
-        // maze's `marks` on `Stock` so that *"`has 2 or more marks` is answered
-        // by the same arithmetic that answers `has 4 fragment`"*. This makes the
-        // **other** side of that arithmetic a world read too.
-        //
-        // §8.1 is why it reads the published `Sense` children rather than
-        // `Maze::marks`: forging the event and forging the evidence have to stay
-        // the same act, or log poisoning has nothing to bite on.
+        // `raise_count` puts a maze's `marks` on `Stock` so one arithmetic
+        // answers both `has 2 or more marks` and `has 4 fragment`; this makes
+        // the far side a world read too. It reads the published `Sense`
+        // children rather than `Maze::marks` because of §8.1.
         use crate::parser::Bound;
         let mut sim = Sim::new(1);
         walked(&mut sim);
@@ -775,11 +675,9 @@ mod tests {
 
     #[test]
     fn a_comparison_against_itself_is_equal_and_not_more() {
-        // **Strict, which is what the English says.** `north has more marks than
-        // north` is false; `as many … as` is what asks the other question. The
-        // asymmetry against `has 2 or more marks` — which *does* include two —
-        // is English rather than an inconsistency, and `Quantity::Elsewhere`
-        // records it.
+        // Strict, as the English says: `north has more marks than north` is
+        // false. The asymmetry against `has 2 or more marks`, which does
+        // include two, is English rather than an inconsistency.
         use crate::parser::Bound;
         let mut sim = Sim::new(1);
         walked(&mut sim);
@@ -802,8 +700,7 @@ mod tests {
     #[test]
     fn a_comparison_against_a_place_the_tower_lacks_answers_nothing() {
         // The far side resolves like the near one, so §8's *Referent missing*
-        // applies to it — a spell comparing against a room that is not there has
-        // stopped describing the world it runs in, and must not carry on.
+        // applies to it too.
         use crate::parser::Bound;
         let mut sim = Sim::new(1);
         walked(&mut sim);
@@ -826,8 +723,7 @@ mod tests {
 
     #[test]
     fn a_question_about_a_place_the_tower_does_not_have_is_not_an_answer() {
-        // Three answers, not two — the distinction `holds` exists for. Kept
-        // beside the states because it is the same call and the same `Option`.
+        // Three answers, not two — the distinction `holds` exists for.
         let mut sim = Sim::new(1);
         sim.submit("attend laboratory");
         sim.step();
@@ -837,8 +733,8 @@ mod tests {
 
     #[test]
     fn the_echo_of_a_command_is_not_an_event() {
-        // A spell waits on the **world**, not on the log. An echo, a status row
-        // and the orb speaking are all records; none of them happened anywhere.
+        // A spell waits on the world, not on the log. An echo, a status row and
+        // the orb speaking are all records; none of them happened anywhere.
         let mut sim = Sim::new(1);
         sim.submit("status");
         sim.step();

@@ -5,39 +5,23 @@
 //! a glyph flips it and its orthogonal neighbours**, and the charm sets only
 //! when every glyph is alight.
 //!
-//! # It is Lights Out, and the shape of the solution is why it is playable here
+//! It is Lights Out, and the shape of the solution is why it is playable here:
+//! the whole thing is determined by the top row, since every later press is
+//! forced. That is why this domain addresses *columns* rather than cells — nine
+//! addressable cells would want nine unique place names, and [`COLUMNS`] records
+//! what the sweep found looking for them. So a turn is: pick one of three
+//! columns, settle, let it cascade. Eight openings, exactly one right.
 //!
-//! The whole solution is determined by the **top row**: once those are chosen,
-//! every later press is forced — press the glyph below any dark one, row by row,
-//! and each row is fixed permanently as you pass it. That is why this domain
-//! addresses *columns* and not cells. Nine addressable cells would want nine
-//! unique place names, and [`COLUMNS`] records what the sweep found when it went
-//! looking for them.
+//! Everything here was measured over all 512 boards, not reasoned about: every
+//! board is solvable with a unique solution (the 3×3 toggle matrix is invertible
+//! over GF(2)), the eight openings give eight distinct residues, and the
+//! residue-to-answer table is universal — which is what makes it a rule a spell
+//! can hold. All three are tests below rather than claims.
 //!
-//! So a turn is: choose which of the three columns to snap, then settle and let
-//! it cascade. Three binary choices, eight openings, and exactly one is right.
-//!
-//! # Everything here was measured, not reasoned about
-//!
-//! Over all 512 boards, exhaustively:
-//!
-//! - **every board is solvable, and its solution is unique** — the 3×3 toggle
-//!   matrix is invertible over GF(2), so there is no unsolvable draw to reject
-//!   and no ambiguity to break;
-//! - **the eight openings give eight distinct residues**, so what the bottom row
-//!   says after a settle identifies the answer completely;
-//! - **the residue-to-answer table is universal** — the same eight entries serve
-//!   every board, which is what makes it a rule a spell can hold rather than a
-//!   thing that must be recomputed.
-//!
-//! All three are tests below rather than claims, in the shape `tower::ward`'s
-//! 1296-code proofs already have.
-//!
-//! **Height 5 is excluded by arithmetic.** 3×3, 3×4 and 3×6 are each uniquely
-//! solvable with their own universal table; **3×5 is not solvable for every
-//! board** — the null space is non-trivial there. So a taller lattice is a real
-//! lever for later (and 4 and 6 share one table, where 3 has its own), but 5 is
-//! not available and is recorded here so nobody spends an afternoon on it.
+//! Height 5 is excluded by arithmetic: 3×3, 3×4 and 3×6 are each uniquely
+//! solvable with their own universal table, and 3×5 is not solvable for every
+//! board, because its null space is non-trivial. Recorded here so nobody spends
+//! an afternoon on it.
 
 /// How wide a lattice is.
 pub const WIDTH: usize = 3;
@@ -53,23 +37,19 @@ pub const CELLS: usize = WIDTH * HEIGHT;
 
 /// The words `snap` takes, left to right.
 ///
-/// **Three, because the tower has no more to give.** A sweep for nine cell names
-/// found the noun space exhausted — `crown` scores 800 against `brown`, `base`
-/// 750 against `bare`, `warp` 750 against `ward`, `tier` 600 against `tower`,
-/// `brace` 600 against `place` — and §6's matcher is prefix-first in both
-/// directions, so none of those is available. These three came back clean
-/// against every word the game knows and against each other.
+/// Three, because the tower has no more to give: a sweep for nine cell names
+/// found the noun space exhausted — `crown` 800 against `brown`, `base` 750
+/// against `bare`, `warp` 750 against `ward`, `tier` 600 against `tower`,
+/// `brace` 600 against `place`. These three came back clean against every word
+/// the game knows and against each other.
 pub const COLUMNS: [&str; WIDTH] = ["apex", "belt", "hem"];
 
 /// What is open on the forge's lattice: a charm, a tool, and the puzzle.
 ///
-/// **The component itself travels in the save**, which is `Siege`'s decision one
-/// room over and for the same reason: a binding *is* its state, so a second
-/// shape would be a copy of the first with a chance to disagree.
-///
-/// The tool is a **path** rather than an entity, because an entity id means
-/// nothing across a save — `adopt` matches by path, and this is the same
-/// address every other cross-reference in the file uses.
+/// The component itself travels in the save, `Siege`'s decision one room over
+/// and for its reason: a binding *is* its state, so a second shape would be a
+/// copy that can disagree. The tool is a path rather than an entity, because an
+/// entity id means nothing across a save.
 #[derive(bevy_ecs::prelude::Component, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Binding {
     /// Which charm, by the word a player typed.
@@ -86,9 +66,9 @@ pub struct Binding {
 /// A glyph lattice, part-solved.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Lattice {
-    /// The draw. **Never mutated** — a failed settle springs back to it, which
-    /// is what makes each attempt an independent read of the same board rather
-    /// than a walk that can be got lost in.
+    /// The draw. Never mutated — a failed settle springs back to it, which makes
+    /// each attempt an independent read of the same board rather than a walk
+    /// that can be got lost in.
     opening: [bool; CELLS],
     /// Which columns are snapped for the attempt being built.
     pressed: [bool; WIDTH],
@@ -101,15 +81,10 @@ pub struct Lattice {
 impl Lattice {
     /// A lattice from the low [`CELLS`] bits of `bits`, lit where set.
     ///
-    /// **Nine bits of one draw, never nine draws.** The forge takes one number
-    /// from its stream and hands it here, so the stream position does not depend
-    /// on how big the lattice is — widening it later moves no seed's world,
-    /// where nine draws would move every one. That is the shape §19 records
-    /// `drift` paying for, avoided by construction.
-    ///
-    /// No rejection loop, because there is nothing to reject: every board of
-    /// this size is solvable, which the tests below establish exhaustively
-    /// rather than by assertion.
+    /// Nine bits of one draw, never nine draws: the stream position must not
+    /// depend on how big the lattice is, or widening it later moves every seed's
+    /// world. No rejection loop, because every board of this size is solvable —
+    /// which the tests below establish exhaustively.
     #[must_use]
     pub fn from_bits(bits: u64) -> Self {
         let mut opening = [false; CELLS];
@@ -144,9 +119,9 @@ impl Lattice {
 
     /// The board after `presses` on the top row and the forced cascade below it.
     ///
-    /// **The cascade is not a choice**, which is the whole reason this domain
-    /// addresses columns: press the glyph under any dark one, top to bottom, and
-    /// each row is settled for good as you leave it.
+    /// The cascade is not a choice, which is why this domain addresses columns:
+    /// press the glyph under any dark one, top to bottom, and each row is
+    /// settled for good as you leave it.
     #[must_use]
     fn cascade(opening: &[bool; CELLS], presses: &[bool; WIDTH]) -> [bool; CELLS] {
         let mut board = *opening;
@@ -233,12 +208,11 @@ impl Lattice {
 
     /// Commit the attempt. `true` when every glyph came up lit.
     ///
-    /// A failure **springs back to the draw** rather than leaving the board
-    /// part-worked. Two reasons, and the second is the load-bearing one: a
-    /// half-cascaded board is a state the player cannot reason about, and an
-    /// independent attempt keeps [`residue`](Self::residue) meaning the same
-    /// thing every time — which is what lets one universal table serve a loop
-    /// that runs more than once.
+    /// A failure springs back to the draw rather than leaving the board
+    /// part-worked: a half-cascaded board is a state the player cannot reason
+    /// about, and an independent attempt keeps [`residue`](Self::residue)
+    /// meaning the same thing every time — which is what lets one universal
+    /// table serve a loop that runs more than once.
     pub fn settle(&mut self) -> bool {
         self.attempts = self.attempts.saturating_add(1);
         self.set = Self::cascade(&self.opening, &self.pressed)
@@ -287,11 +261,9 @@ mod tests {
             .collect()
     }
 
-    /// **No draw can be a dead end, and none is ambiguous.**
-    ///
-    /// This is why `draw` has no rejection loop. If it ever fails, the lattice
-    /// has been resized to something the arithmetic does not support — 3×5 is
-    /// the nearby example, and it is excluded for exactly this reason.
+    /// No draw can be a dead end, and none is ambiguous — which is why `draw`
+    /// has no rejection loop. If it fails, the lattice has been resized to
+    /// something the arithmetic does not support, as 3×5 is.
     #[test]
     fn every_board_has_exactly_one_answer() {
         for lattice in every_board() {
@@ -311,7 +283,7 @@ mod tests {
         }
     }
 
-    /// **The residue identifies the answer**, which is what makes it worth
+    /// The residue identifies the answer, which is what makes it worth
     /// publishing. Eight openings, eight residues, no two alike.
     #[test]
     fn the_eight_openings_leave_eight_different_residues() {
@@ -332,11 +304,9 @@ mod tests {
         }
     }
 
-    /// **One table serves every board.**
-    ///
-    /// The property a solver's eight rungs rest on: if the map from residue to
-    /// answer varied with the draw, no fixed ladder could hold it and the domain
-    /// would be unscriptable.
+    /// One table serves every board — the property a solver's eight rungs rest
+    /// on. If the map from residue to answer varied with the draw, no fixed
+    /// ladder could hold it and the domain would be unscriptable.
     #[test]
     fn the_residue_names_the_same_answer_on_every_board() {
         let mut table: std::collections::BTreeMap<Vec<bool>, [bool; WIDTH]> =
@@ -400,13 +370,10 @@ mod tests {
         }
     }
 
-    /// **The chase clears every row but the last**, which is the property the
-    /// whole domain rests on and the reason columns are enough to address.
-    ///
-    /// If it were ever false, the residue would stop identifying the answer —
-    /// there would be dark glyphs above the bottom row that no opening could
-    /// account for, and every rung of every solver's table would be reading a
-    /// signal that no longer meant anything.
+    /// The chase clears every row but the last, which is why columns are enough
+    /// to address. If it were false, the residue would stop identifying the
+    /// answer — dark glyphs above the bottom row that no opening accounts for,
+    /// and every solver's table reading a signal that means nothing.
     #[test]
     fn the_cascade_leaves_only_the_last_row_in_doubt() {
         for lattice in every_board() {
@@ -431,10 +398,10 @@ mod tests {
 
     /// A lattice survives being written down and read back.
     ///
-    /// **The whole thing, not a derived shape.** A `Binding` travels in the save
-    /// as the component itself, so what has to round-trip is the draw, the
-    /// presses and the count of falls — and a board that came back with its
-    /// presses cleared would be a player's turn quietly undone by quitting.
+    /// The whole thing, not a derived shape: a `Binding` travels as the
+    /// component, so the draw, the presses and the count of falls must all
+    /// round-trip. A board that came back with its presses cleared would be a
+    /// player's turn quietly undone by quitting.
     #[test]
     fn a_part_worked_lattice_reads_back_as_itself() {
         let mut lattice = Lattice::from_bits(0b1_0110_1001);

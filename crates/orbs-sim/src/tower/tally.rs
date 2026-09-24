@@ -1,26 +1,18 @@
 //! What has been done, counted (DESIGN.md §11.5).
 //!
-//! # Every completion goes through one door
+//! Every completion goes through one door. [`done`] is
+//! [`credit`](super::credit) with the *deed* beside the number: what was made,
+//! at which instrument, or what kind of thing happened. Mastery's seven lines
+//! read the tally, so a seam that credits and does not count is a room whose
+//! line never moves — `tower::mastery`'s tests list the seams so a ninth cannot
+//! slip in.
 //!
-//! There were eight sites in the game where work succeeded and each called
-//! [`credit`](super::credit) with what it earned. [`done`] is that call with
-//! the *deed* beside the number: what was made, at which instrument, or what
-//! kind of thing happened. The tally is what Mastery's seven lines read, so a
-//! seam that credits and does not count is a room whose line never moves — and
-//! the seams are listed in `tower::mastery`'s tests so a ninth cannot be added
-//! without being noticed.
+//! Counts, not a currency: a tally key is never spent, never weighted, and never
+//! summed into experience. §11.5 keeps experience the one number that buys
+//! anything.
 //!
-//! # Counts, not a currency
-//!
-//! A tally key is a count of things done and nothing else: it is never spent,
-//! never weighted, and never summed into experience. §11.5 keeps experience the
-//! one number that buys anything.
-//!
-//! # No stream
-//!
-//! Nothing here is drawn. A tally is a function of the submissions alone, so it
-//! replays from `(seed, submissions)` without a stream of its own — and a save
-//! carries it only so a restore need not replay to know it.
+//! No stream. A tally is a function of the submissions alone, so it replays from
+//! `(seed, submissions)`; a save carries it only so a restore need not replay.
 
 use std::collections::BTreeMap;
 
@@ -28,16 +20,15 @@ use bevy_ecs::prelude::*;
 
 /// The things a room can do that are not a run at an instrument.
 ///
-/// **A closed set, checked at load**, so a deed authored against an event
-/// nothing emits fails `progression.toml` rather than authoring a station
-/// nothing can reach. Every name here has exactly one seam that counts it.
+/// A closed set, checked at load, so a deed authored against an event nothing
+/// emits fails `progression.toml` rather than making a station nothing reaches.
+/// Every name here has exactly one seam that counts it.
 pub const EVENTS: [&str; 5] = [FIGURE, SIEGE, SIEGE_WON, BOUND, SECRET];
 
 /// A beast held at the menagerie's circle (`execute::summon`).
 ///
-/// **The chant's name, kept** — a tally is carried in a save, and renaming the
-/// key would have zeroed every menagerie station a tower had already reached
-/// for a word no player sees.
+/// The chant's name, kept: a tally is carried in a save, so renaming the key
+/// would zero every menagerie station a tower had already reached.
 pub const FIGURE: &str = "figure";
 /// A siege settled, held or fallen (`execute::defend::report::settle`).
 pub const SIEGE: &str = "siege";
@@ -109,20 +100,12 @@ impl Work {
 
     /// Also record that this run put `product` on a shelf.
     ///
-    /// **For the runs that stock the tower without being a recipe.** The
-    /// menagerie's circle holds a beast — a *figure*, the event its mastery line
-    /// counts — and in the same breath gives troops to the arsenal; the
-    /// archive's maze finishes at an instrument and shelves a fragment. Both put
-    /// a nameable thing on a shelf, which is exactly the question [`sold`] asks,
-    /// and both answered no because neither went through [`made`](Self::made).
-    ///
-    /// So the menagerie and the archive stocked the arsenal and the shelves for
-    /// nothing, while the laboratory was paid for the same act — and troops are
-    /// what a siege spends. This is the seam that says *a thing was made here*
-    /// independently of how the run is counted.
+    /// For the runs that stock the tower without being a recipe: the menagerie
+    /// gives troops to the arsenal, the archive shelves a fragment. Neither goes
+    /// through [`made`](Self::made), so both answered [`sold`] no and stocked
+    /// the tower for nothing while the laboratory was paid for the same act.
     ///
     /// [`sold`]: Self::sold
-    /// [`made`]: Self::made
     #[must_use]
     pub fn making(mut self, product: &str) -> Self {
         self.keys.push(format!("made:{product}"));
@@ -149,22 +132,15 @@ impl Work {
 
     /// Whether this run put a nameable thing on a shelf.
     ///
-    /// **The question renown asks, and the reason it is asked here.** `done` is
-    /// the one door for *events* as well as makings, so a mint on the door
-    /// itself would pay for binding a spell and would pay a siege twice — escrow
-    /// arrives through the same call, and escrow pays on a loss.
+    /// The question renown asks, and asked here because `done` is the one door
+    /// for events too: a mint on the door itself would pay for binding a spell
+    /// and pay a siege twice, since escrow arrives the same way and pays on a
+    /// loss.
     ///
-    /// **A `made:` key is the answer, and three seams set one.**
-    /// [`made`](Self::made) is the recipe case; [`making`](Self::making) is for
-    /// the two runs that stock the tower without being a recipe. It used to read
-    /// *only* `made`, which meant the archive shelved fragments and the
-    /// menagerie shelved troops for no standing — this doc said "on a shelf" the
-    /// whole time and both of those reach `tower::give`.
-    ///
-    /// **What still answers no is anything that shelves nothing**, and that is
-    /// most of the tower: the lens finds knowledge, the sanctum's pylon solves a
-    /// course, the forge's lattice lays a charm on a tool. None of them makes
-    /// stock, so none of them is a sale.
+    /// A `made:` key is the answer, set by [`made`](Self::made) for recipes and
+    /// [`making`](Self::making) for the runs that stock the tower without being
+    /// one. Anything that shelves nothing answers no — the lens, the pylon, the
+    /// lattice — because none of them makes stock.
     #[must_use]
     pub fn sold(&self) -> bool {
         self.keys.iter().any(|key| key.starts_with("made:"))
@@ -172,11 +148,10 @@ impl Work {
 
     /// What this run put on a shelf, if it put anything there.
     ///
-    /// **The same `made:` key [`sold`](Self::sold) asks about**, read for its
-    /// name rather than its presence — so the two questions cannot come to
-    /// disagree about what a making is. A run makes at most one nameable thing,
-    /// which is why this is an `Option` and not a list: the byproduct goes to
-    /// the instrument and is not a sale.
+    /// The same `made:` key [`sold`](Self::sold) asks about, read for its name
+    /// rather than its presence, so the two cannot disagree. A run makes at most
+    /// one nameable thing — the byproduct goes to the instrument and is not a
+    /// sale.
     #[must_use]
     pub fn product(&self) -> Option<&str> {
         self.keys.iter().find_map(|key| key.strip_prefix("made:"))
@@ -185,14 +160,12 @@ impl Work {
 
 /// Count a completion, credit what it earned, and move every line it moved.
 ///
-/// **The order is the order a player reads it in**: the run's own sentence has
-/// already been said by the seam; then the level it bought, if any; then what it
-/// was worth in standing; then the station it reached, if any; then what that
-/// opened. Called where a run *succeeded*, never where one merely ended — see
-/// `credit`.
+/// The order is the order a player reads it in: the seam's own sentence, the
+/// level it bought, what it was worth in standing, the station it reached, what
+/// that opened. Called where a run *succeeded*, never where one merely ended.
 ///
-/// **Renown is minted only for a making**, which is what [`Work::sold`] asks.
-/// The door carries events too, and paying for those would pay a siege twice.
+/// Renown is minted only for a making ([`Work::sold`]); the door carries events
+/// too, and paying for those would pay a siege twice.
 pub fn done(world: &mut World, work: &Work, earned: u64) {
     {
         let mut tally = world.resource_mut::<Tally>();
@@ -202,30 +175,18 @@ pub fn done(world: &mut World, work: &Work, earned: u64) {
     }
     super::credit(world, earned);
     if work.sold() {
-        // **What the tower is stocked in, measured before the mint reads it.**
-        // A store's standing is a *rate* — how many were made lately — so this
-        // is the one door that has to see every making, and it is already that
-        // door for renown.
+        // A store's standing is a rate, so this door has to see every making.
+        // Surplus sells: a making of a name already at full strength is stock
+        // the tower did not need, so it pays twice. Asked before this making is
+        // recorded, or every making would look like its own surplus.
         //
-        // **Surplus sells**, which is why the order matters: a making of a name
-        // that was *already* at full strength is stock the tower did not need,
-        // so it is sold rather than shelved and pays a second time. Asked before
-        // this making is recorded, or every making would look like its own
-        // surplus.
-        //
-        // **This is the steady state of any sustained loop, not an occasional
-        // bonus, and the number says so**: a bound brewing spell holds `Fresh`
-        // permanently, so every making past the third inside the window pays
-        // double. Measured at `0.11.14`, `clarity` mints 1,103 renown against
-        // 996 experience — a little over twice `worth`.
-        //
-        // That is the mechanic read literally rather than a defect: a loop that
-        // outruns its own stores *is* selling the excess. But it means renown
-        // from production is uniformly doubled, which **rescales the currency
-        // rather than rewarding a behaviour** — so the ten rank thresholds in
-        // `progression.toml` are now priced against a number twice what they
-        // were authored for, and `orbs-balance` is what settles whether they
-        // move or this does.
+        // That is the steady state of any sustained loop, not an occasional
+        // bonus — a bound brewing spell holds `Fresh` permanently, so at
+        // `0.11.14` `clarity` minted 1,103 renown against 996 experience. It
+        // rescales the currency rather than rewarding a behaviour, so
+        // `progression.toml`'s ten thresholds are priced against twice what
+        // they were authored for; `orbs-balance` settles whether they move or
+        // this does.
         let over = work
             .product()
             .is_some_and(|named| super::supply_of(world, named) == super::Supply::Fresh);

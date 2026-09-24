@@ -7,8 +7,8 @@ use std::collections::BTreeSet;
 use super::super::temper::{ROWS, SENSES, Temper, sense_lit};
 use super::super::{Glyph, Humour, LESSER_SENSES};
 
-/// **Each humour is the gate its `recall` page names**, row for row: both dark,
-/// one lit, the other lit, both lit.
+/// Each humour is the gate its `recall` page names, row for row: both dark, one
+/// lit, the other lit, both lit.
 #[test]
 fn every_humour_answers_the_logicians_table_its_page_names() {
     let gates: [(Humour, fn(bool, bool) -> bool); 6] = [
@@ -30,9 +30,9 @@ fn every_humour_answers_the_logicians_table_its_page_names() {
     assert_eq!(covered.len(), Humour::ALL.len());
 }
 
-/// **Turning over and taking the dual are each their own undoing**, and the
-/// pairs are the ones the pages teach: yoke and spurn, heed and eschew, oppose
-/// and mirror; yoke's dual eschew, heed's spurn, oppose and mirror their own.
+/// Turning over and taking the dual are each their own undoing, and the pairs
+/// are the ones the pages teach: yoke and spurn, heed and eschew, oppose and
+/// mirror; yoke's dual eschew, heed's spurn, oppose and mirror their own.
 #[test]
 fn negation_and_duality_pair_the_humours_the_pages_pair() {
     for humour in Humour::ALL {
@@ -49,9 +49,9 @@ fn negation_and_duality_pair_the_humours_the_pages_pair() {
     assert_eq!(Humour::Mirror.dual(), Humour::Mirror);
 }
 
-/// **No humour's word is a word the spell grammar owns, or a glyph's** — a
-/// humour called `and` could never be asked about in an `if` line, and a humour
-/// sharing a glyph's word would make `limn` ambiguous in either order.
+/// No humour's word is one the spell grammar owns, or a glyph's: a humour called
+/// `and` could never be asked about in an `if` line, and one sharing a glyph's
+/// word would make `limn` ambiguous in either order.
 #[test]
 fn no_humour_word_is_grammar_or_a_glyph() {
     const GRAMMAR: [&str; 7] = ["and", "or", "not", "either", "both", "odd", "none"];
@@ -83,9 +83,9 @@ fn every_glyph_reads_back_as_itself_and_sits_at_its_index() {
     );
 }
 
-/// **Row nought is every sense dark and the last every sense lit**, the first
-/// sense the highest bit — the order a truth table is written and the board's
-/// columns are drawn, for both circles.
+/// Row nought is every sense dark and the last every sense lit, the first sense
+/// the highest bit — the order a truth table is written and the board's columns
+/// are drawn, for both circles.
 #[test]
 fn rows_count_up_with_the_first_sense_highest() {
     for (senses, rows) in [(SENSES, ROWS), (LESSER_SENSES, 4)] {
@@ -106,7 +106,7 @@ fn rows_count_up_with_the_first_sense_highest() {
     }
 }
 
-/// **Every temper of both sizes reads back as itself**, and a string of the wrong
+/// Every temper of both sizes reads back as itself, and a string of the wrong
 /// length or with anything but `0` and `1` in it is refused.
 #[test]
 fn every_temper_round_trips_through_its_rows_and_nothing_else_reads() {
@@ -137,8 +137,8 @@ fn every_temper_round_trips_through_its_rows_and_nothing_else_reads() {
     }
 }
 
-/// **Agreement is symmetric, a temper agrees with itself on every row, and a
-/// lesser temper never counts rows it does not have.**
+/// Agreement is symmetric, a temper agrees with itself on every row, and a
+/// lesser temper never counts rows it does not have.
 #[test]
 fn agreement_is_symmetric_whole_with_itself_and_masked_when_lesser() {
     for a in 0..=u8::MAX {
@@ -162,9 +162,9 @@ fn agreement_is_symmetric_whole_with_itself_and_masked_when_lesser() {
     }
 }
 
-/// **`turns_on_every_sense` is its definition**, checked by brute force over all
-/// 256 eight-row tempers and all 16 four-row ones: every sense has some row
-/// whose answer changes when that sense alone is turned over.
+/// `turns_on_every_sense` is its definition, checked by brute force over all 256
+/// eight-row tempers and all 16 four-row ones: every sense has some row whose
+/// answer changes when that sense alone is turned over.
 #[test]
 fn turning_on_every_sense_is_what_it_says_for_every_temper() {
     for senses in [SENSES, LESSER_SENSES] {

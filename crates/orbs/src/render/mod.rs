@@ -1,6 +1,6 @@
 mod atlas;
 mod blink;
-// **A test instrument, so it is compiled only for tests.** It simulates colour
+// A test instrument, so it is compiled only for tests. It simulates colour
 // vision deficiency to hold the palette to §14's claim; it draws nothing, and
 // the correction filter §19 specified is deliberately not shipped — see the
 // module header for the measurement that decided it. Gated rather than `pub`
@@ -20,3 +20,6 @@ pub(crate) mod tint;
 mod tinting;
 
 pub use plugin::RenderPlugin;
+// The phosphor as a *setting*. `shell::setting` reads the theme that is in
+// effect from here and the list of them from `palette`.
+pub(crate) use plugin::Theme;

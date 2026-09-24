@@ -1,20 +1,17 @@
 //! The ward's sheet, beside the transcript (DESIGN.md §10, `tower::ward`).
 //!
-//! The map's shape, one room over. **It is not gated on a word**: it draws
-//! whenever a reading is open, which is what makes a bound solver watchable —
-//! watching and doing are different activities, and only one of them owns the
-//! keyboard. There is no full-pane mode here at all, because unlike a maze there
-//! is nothing to walk: a ward is played from the prompt with `dial` and `probe`.
+//! The map's shape, one room over, and not gated on a word: it draws whenever a
+//! reading is open, which is what makes a bound solver watchable. There is no
+//! full-pane mode, because unlike a maze there is nothing to walk — a ward is
+//! played from the prompt with `dial` and `probe`.
 //!
-//! **Columns, never rows**, and it splits *after* the instrument panel — an
-//! instrument row is load-bearing where a sheet is a convenience, and whichever
-//! split runs second is the one whose refusal can fire. §19 records getting that
-//! backwards.
+//! Columns, never rows, and it splits after the instrument panel: an instrument
+//! row is load-bearing where a sheet is a convenience, and whichever split runs
+//! second is the one whose refusal can fire. §19 records getting that backwards.
 //!
-//! It **refuses rather than truncating**: a row missing its pegs says a press
-//! answered nothing, which is worse than no sheet at all. That is the maze's
-//! rule where the maze's own picture pans instead, and the difference is that a
-//! ward has no "where you are" to centre on — every row matters equally.
+//! It refuses rather than truncating, because a row missing its pegs says a
+//! press answered nothing. The maze's picture pans instead; the difference is
+//! that a ward has no "where you are" to centre on.
 
 use orbs_render::{Board, Painter, Pos, Rect, Role, Style, UtteranceKind, Wash};
 use orbs_sim::content::Prose;
@@ -49,17 +46,15 @@ pub fn split(area: Rect, board: Option<&Board>) -> Split {
     let (cols, _) = board.size();
     let block = cols.saturating_add(2);
 
-    // **Columns are refused whole; rows are windowed.** Clipping a sheet
-    // sideways loses a press's pegs, which says a press answered nothing — but
-    // `Board::SHOWN` has always made this a window on the most recent twelve, so
-    // a shorter pane showing ten of them is the same kind of view rather than a
-    // lost comparison.
+    // Columns are refused whole; rows are windowed. Clipping sideways loses a
+    // press's pegs, but `Board::SHOWN` has always made this a window on the most
+    // recent twelve, so a shorter pane showing ten is the same kind of view.
     //
     // It mattered: at the 80×22 authoring floor a full twelve-row sheet is one
-    // row too tall, so the board **vanished entirely on the twelfth press** —
-    // the cliff `SHOWN` exists to remove, moved rather than deleted. A blind
-    // ladder averages twenty-three presses, so a bound solver lost its sheet
-    // part-way through every solve, with no partial view and nothing said.
+    // row too tall, so the board vanished entirely on the twelfth press — the
+    // cliff `SHOWN` exists to remove, moved rather than deleted. A blind ladder
+    // averages twenty-three presses, so a bound solver lost its sheet part-way
+    // through every solve with nothing said.
     let inside = area.rows.saturating_sub(2);
     let presses = board
         .showing()
@@ -67,13 +62,12 @@ pub fn split(area: Rect, board: Option<&Board>) -> Split {
         .min(orbs_render::Board::presses_within(inside));
     let tall = orbs_render::Board::rows_for(presses).saturating_add(2);
 
-    // **`presses == 0` refuses**, which the first version of this windowing did
-    // not check. At exactly eight rows the arithmetic came out `tall == 8` and
-    // the guard below is `8 > 8` — false — so the sheet was laid out and painted
-    // with a header, a rule, an aperture and two legend rows and **no presses at
-    // all**, while still taking 41 columns off the transcript. That is the exact
-    // inverse of this module's rule, and `presses_within` names the zero case as
-    // *"where the sheet does refuse"*.
+    // `presses == 0` refuses, which the first windowing did not check. At
+    // exactly eight rows the arithmetic came out `tall == 8` and the guard below
+    // is `8 > 8` — false — so the sheet painted a header, a rule, an aperture
+    // and two legend rows with no presses at all, while still taking 41 columns
+    // off the transcript. `presses_within` names the zero case as *"where the
+    // sheet does refuse"*.
     if presses == 0
         || block.saturating_add(GUTTER + TRANSCRIPT_FLOOR) > area.cols
         || tall > area.rows
@@ -100,9 +94,9 @@ pub fn paint(painter: &mut Painter<'_>, at: Rect, board: &Board, presses: usize,
 
     let inside = at.inset(1);
     for row in 0..inside.rows {
-        // **The same cap [`split`] sized the rectangle from**, or the sheet
-        // would draw twelve presses into a box measured for ten and the foot —
-        // the legend and the aperture — would fall off the bottom.
+        // The same cap [`split`] sized the rectangle from, or the sheet draws
+        // twelve presses into a box measured for ten and the foot — the legend
+        // and the aperture — falls off the bottom.
         let Some(cells) = board.row_capped(usize::from(row), presses) else {
             break;
         };
@@ -112,11 +106,10 @@ pub fn paint(painter: &mut Painter<'_>, at: Rect, board: &Board, presses: usize,
                 break;
             }
             let at = Pos::new(inside.col + col, inside.row + row);
-            // **`glyphs`, so the picture is silent**, and the summary below says
-            // what it means. A reader hearing four sigils and four pegs read out
-            // cell by cell would get box-drawing noise, which is exactly what
-            // §19's frame rule puts structure on one channel and content on the
-            // other to prevent.
+            // `glyphs`, so the picture is silent and the summary below says what
+            // it means. A reader hearing four sigils and four pegs cell by cell
+            // gets box-drawing noise, which is what §19's frame rule — structure
+            // on one channel, content on the other — exists to prevent.
             painter.glyphs(at, &glyph.to_string(), style);
             if let Some(tint) = tint {
                 painter.tint(Rect::new(at.col, at.row, 1, 1), Wash::plain(tint));
@@ -129,22 +122,20 @@ pub fn paint(painter: &mut Painter<'_>, at: Rect, board: &Board, presses: usize,
 
 /// What the sheet says, for a reader.
 ///
-/// **Spoken once as a summary, never cell by cell.** §14 makes the linear stream
-/// architectural rather than a nicety, and the thing a reader needs from a board
-/// is the last answer and how many presses it has cost — not a transcription of
-/// twenty glyphs. The per-press detail is already in the transcript, where it was
-/// said as a sentence.
+/// Spoken once as a summary, never cell by cell. §14 makes the linear stream
+/// architectural, and what a reader needs from a board is the last answer and
+/// what it cost — not twenty glyphs transcribed. The per-press detail is already
+/// in the transcript as a sentence.
 fn speak(painter: &mut Painter<'_>, board: &Board, prose: &Prose) {
     let spent = board.attempts.len();
     let (aligned, astray) = board
         .attempts
         .last()
         .map_or((0, 0), |attempt| (attempt.aligned, attempt.astray));
-    // **No count of held sockets any more.** The sheet used to say how many
+    // No count of held sockets any more: the sheet used to say how many
     // positions were proven, which is the one thing a codemaker may not tell you
-    // (§19) — the reader got a better game than the player. What is left is the
-    // last answer and what it cost, which is what a sighted player reads off the
-    // rows.
+    // (§19), so the reader got a better game than the player. What is left is
+    // what a sighted player reads off the rows.
     painter.announce(
         UtteranceKind::Progress,
         Role::Normal,

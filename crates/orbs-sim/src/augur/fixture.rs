@@ -4,12 +4,12 @@ use super::Augur;
 
 /// A reader that answers from a table, for driving the augury without a model.
 ///
-/// **The instrument that keeps this feature visible.** `ORBS_DUMP` builds no
-/// app and presses no key, `scripts/dumps.sh` captures surfaces as text, and
-/// `scripts/play.sh` drives the terminal build — none of which can hold a GPU,
-/// a worker thread or two megabytes of weights. Without a reader they can
-/// reach, every divined surface would be gated on one person typing one
-/// sentence into one window, which is the blindness CLAUDE.md records the
+/// The instrument that keeps this feature visible. `ORBS_DUMP` builds no app
+/// and presses no key, `scripts/dumps.sh` captures surfaces as text, and
+/// `scripts/play.sh` drives the terminal build — none of which can hold a GPU, a
+/// worker thread or two megabytes of weights. Without a reader they can reach,
+/// every divined surface would be gated on one person typing one sentence into
+/// one window, which is the blindness CLAUDE.md records the
 /// bailey shipping under.
 ///
 /// It is also the fixture the real reader is measured against: deterministic,
@@ -37,12 +37,11 @@ impl Fixture {
 
     /// The worked phrasings, for a dump or a scenario that wants a live augury.
     ///
-    /// **A table in Rust, and deliberately a short one.** These are fixtures the
-    /// way `Verb::canonical` is a table rather than writing, so rule 6 is not in
-    /// play — but the corpus in `content/phrasings.toml` is where phrasings are
-    /// *authored*, and [`Grammar`](super::Grammar) is what reads them. What
-    /// stays here is the handful `dumps.sh` pins, chosen so a capture cannot
-    /// move when a template is reworded.
+    /// A table in Rust, deliberately short. These are fixtures the way
+    /// `Verb::canonical` is a table rather than writing, so rule 6 is not in
+    /// play — but `content/phrasings.toml` is where phrasings are authored and
+    /// [`Grammar`](super::Grammar) reads them. What stays here is the handful
+    /// `dumps.sh` pins, so a capture cannot move when a template is reworded.
     ///
     /// Each is a phrasing the deterministic pipeline genuinely cannot read, so
     /// a scenario using one is exercising the augury and not the matcher.
@@ -109,10 +108,10 @@ mod tests {
 
     #[test]
     fn every_worked_phrasing_is_one_the_matcher_cannot_read() {
-        // **The fixture must exercise the augury, not the matcher.** A phrasing
-        // the deterministic pipeline already reads outright would never reach a
-        // reader, so a scenario built on it would pass whether or not the seam
-        // worked at all — green, and measuring nothing.
+        // The fixture must exercise the augury, not the matcher: a phrasing the
+        // deterministic pipeline already reads outright would never reach a
+        // reader, so a scenario built on it passes whether or not the seam
+        // works — green, and measuring nothing.
         use crate::parser::{Mode, NounKind, Scene, Verb, analyse, is_literal};
 
         // Everything the worked phrasings name, with every fixture's verb in

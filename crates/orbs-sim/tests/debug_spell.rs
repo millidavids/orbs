@@ -1,9 +1,9 @@
 //! `debug_spell` — a known-good spell written out, in the builds a tester runs.
 //!
-//! Two properties nothing else can hold. **The door is shut in release**, which
-//! only a `--release` run can check because the code is `cfg`'d away; and **one
-//! input records one submission**, which only a look at `Submissions` can check
-//! because the scrollback shows one line either way.
+//! Two properties nothing else can hold: the door is shut in release, which only
+//! a `--release` run can check because the code is `cfg`'d away, and one input
+//! records one submission, which only a look at `Submissions` can check because
+//! the scrollback shows one line either way.
 //!
 //! That second one is the whole reason this word does not simply mirror
 //! `debug_spawn`. `debug_spawn` records the typed line and re-runs it on replay;
@@ -63,13 +63,11 @@ fn the_word_does_nothing_in_a_release_build() {
 #[cfg(not(debug_assertions))]
 #[test]
 fn a_release_shelf_holds_only_the_shipped_spells() {
-    // **The other half of shelving them**, and the half that matters to a player.
+    // The other half of shelving them, and the half that matters to a player.
     // `raise_grimoire` puts the dev ladders on the shelf under
-    // `cfg(debug_assertions)`; if that guard were ever dropped, a release build
-    // would ship a working maze solver, a working ward solver and the answer to
-    // the archive's central puzzle — which §12 wants the player to find, and
-    // `dev_spells.toml`'s own header says is the whole reason it is not
-    // `spells.toml`.
+    // `cfg(debug_assertions)`; drop that guard and a release build ships a
+    // working maze solver, a working ward solver and the answer to the archive's
+    // central puzzle, which §12 wants the player to find.
     //
     // Named rather than derived: `execute::dev_spells` does not exist in this
     // build, so there is nothing to iterate. That absence is the point.
@@ -93,10 +91,10 @@ fn a_release_shelf_holds_only_the_shipped_spells() {
 #[cfg(debug_assertions)]
 #[test]
 fn one_input_records_exactly_one_submission_and_it_is_the_write() {
-    // **The defect this shape exists to avoid.** Mirroring `debug_spawn`
-    // exactly would push the typed line *and* the `Wrote` that `write_spell`
-    // pushes — two entries for one input — and `Sim::replay` would then re-enter
-    // `submit`, re-match the word, and push two more.
+    // The defect this shape exists to avoid: mirroring `debug_spawn` exactly
+    // would push the typed line and the `Wrote` that `write_spell` pushes — two
+    // entries for one input — and `Sim::replay` would re-enter `submit`,
+    // re-match the word, and push two more.
     let mut sim = archive();
     let before = sim.submissions().all().len();
     sim.submit("debug_spell threading");
@@ -126,11 +124,10 @@ fn one_input_records_exactly_one_submission_and_it_is_the_write() {
 #[cfg(debug_assertions)]
 #[test]
 fn a_session_that_used_it_replays_to_the_same_world() {
-    // **The world replays, the tester's console chatter does not**, and that is
-    // the shape rather than a shortfall. Only the write is recorded, so a replay
-    // re-writes the spell without re-running the word — the two lines
-    // `debug_spell` said to the tester are absent, and every line the *world*
-    // produced is identical.
+    // The world replays, the tester's console chatter does not — the shape
+    // rather than a shortfall. Only the write is recorded, so a replay re-writes
+    // the spell without re-running the word: the two lines `debug_spell` said
+    // are absent, and every line the world produced is identical.
     //
     // That is the right side to be on. `debug_spawn` records its typed line and
     // therefore replays its own announcement; the cost is that its replay is
@@ -184,20 +181,20 @@ fn a_session_that_used_it_replays_to_the_same_world() {
 #[cfg(debug_assertions)]
 #[test]
 fn the_dev_spells_are_on_the_shelf_from_the_first_tick() {
-    // **Reversed deliberately.** This used to assert the opposite — that a dev
+    // Reversed deliberately. This used to assert the opposite — that a dev
     // ladder reached the grimoire only when `debug_spell` wrote it — on the
-    // argument that a tester looking at what the game does should not see
-    // scaffolding. In practice the first thing a tester does with one is cast it,
-    // and making them type `debug_spell breaking` first was a step that taught
-    // nothing. They are shelved at construction now, in a debug build only.
+    // argument that a tester should not see scaffolding. In practice the first
+    // thing a tester does with one is cast it. They are shelved at construction
+    // now, in a debug build only.
     //
-    // A shelved spell carries its **own** `Domain` from the file, which is why
-    // this can skip the room check `debug_spell` needs: `scribe::write` homes a
-    // *new* spell to where the player stands, and nothing here is new.
-    // **`Sim::spell`, not the transcript.** The version of this that asserted the
-    // opposite read `said(&sim)` — the sentences said so far — which contains no
-    // spell name either way, so it passed against a grimoire holding every ladder.
-    // An absence test that cannot see the thing it forbids is not a test.
+    // A shelved spell carries its own `Domain` from the file, which is why this
+    // skips the room check `debug_spell` needs: `scribe::write` homes a new
+    // spell to where the player stands, and nothing here is new.
+    //
+    // `Sim::spell`, not the transcript: the version that asserted the opposite
+    // read `said(&sim)`, which contains no spell name either way, so it passed
+    // against a grimoire holding every ladder. An absence test that cannot see
+    // the thing it forbids is not a test.
     let sim = archive();
     for (name, spell) in orbs_sim::execute::dev_spells().iter() {
         let held = sim

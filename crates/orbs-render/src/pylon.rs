@@ -1,28 +1,20 @@
 //! A course of wards across three stations — what the pylon looks like.
 //!
-//! Drawn beside the transcript whenever a course is drawn up, which is the rule
-//! the archive's map and the lens's sheet both follow: **the picture is not
-//! gated on a word**, because watching a bound spell solve one and solving it
-//! yourself are different activities and only the second involves typing.
+//! Drawn beside the transcript whenever a course is drawn up, the rule the
+//! archive's map and the lens's sheet both follow: the picture is not gated on
+//! a word, because watching a bound spell solve one and solving it yourself are
+//! different activities.
 //!
-//! # It carries nothing the readings lack
+//! It carries nothing the readings lack (rule 2). Every ward here could be
+//! counted off `survey wellspring` and the two `potency` readings, and the
+//! tally is what `survey pylon` says. What the picture adds is all three
+//! stations legible at once, which is what makes a Hanoi position readable.
 //!
-//! Rule 2's line. Every ward drawn here is one the player could count off
-//! `survey wellspring` and the two `potency` readings, and the tally under the
-//! rule is what `survey pylon` says. What the picture adds is that all three
-//! stations are legible **at once**, which is the whole of what makes a Hanoi
-//! position readable — the same thing the ward's sheet adds by holding five
-//! presses side by side.
-//!
-//! # A ward's magnitude is its width, never its colour
-//!
-//! §14 forbids meaning that lives only in hue, and here the constraint bites
-//! harder than usual: the puzzle's one rule is *a greater ward will not rest
-//! upon a lesser*, so if magnitude were a colour the rule would be invisible in
-//! greyscale and invisible in a dump. A ward `n` wide is `n` cells of [`WARD`],
-//! so the stack is a staircase and an illegal position would be a staircase with
-//! a step the wrong way up. The tint is one colour for every ward and is pure
-//! enrichment.
+//! A ward's magnitude is its width, never its colour. §14 forbids meaning that
+//! lives only in hue, and the puzzle's one rule is *a greater ward will not
+//! rest upon a lesser* — as a colour it would be invisible in greyscale and in
+//! a dump. A ward `n` wide is `n` cells of [`WARD`], so an illegal position is
+//! a staircase with a step the wrong way up. The tint is pure enrichment.
 
 use crate::style::{Style, Tint};
 
@@ -37,12 +29,11 @@ pub const TINT: Tint = Tint::Violet;
 
 /// The tallest course the pylon will draw up.
 ///
-/// **A painter's constant, not a copy of the sim's.** `tower::pylon::MOST` is
-/// the world's rule; this is how many rows the picture reserves, and they are
-/// the same number for the good reason that a board which could not draw the
-/// tallest course would be a board that stopped working on a neglected tower.
-/// `a_board_has_room_for_the_tallest_course` holds the two together from the
-/// sim's side, which is the only side that can see both.
+/// A painter's constant, not a copy of the sim's. `tower::pylon::MOST` is the
+/// world's rule; this is how many rows the picture reserves, and they match
+/// because a board that could not draw the tallest course would stop working on
+/// a neglected tower. `a_board_has_room_for_the_tallest_course` holds the two
+/// together from the sim's side, the only side that sees both.
 pub const TALLEST: usize = 7;
 
 /// The stations, and what is stacked at each.
@@ -56,11 +47,10 @@ pub struct Pylon {
     pub stations: [Vec<usize>; 3],
     /// What the stations are called, left to right.
     ///
-    /// **Handed in by the sim, not held here.** `haul wellspring conduit` names
-    /// a station by word, so a board whose columns are unlabelled is one a
-    /// player has to count along before they can type — the lens's sheet paid
-    /// for this exact omission. They are content (`tower::pylon::STATIONS`),
-    /// which rule 6 keeps out of a painter.
+    /// Handed in by the sim: `haul wellspring conduit` names a station by word,
+    /// so unlabelled columns make a player count along before they can type —
+    /// the lens's sheet paid for exactly that. They are content
+    /// (`tower::pylon::STATIONS`), which rule 6 keeps out of a painter.
     pub names: [&'static str; 3],
     /// How many wards this course has.
     pub height: usize,
@@ -68,20 +58,16 @@ pub struct Pylon {
     pub hauls: u32,
     /// The tower's standing.
     ///
-    /// **The denominator is not here, and was.** A `standing: u32` sat beside
-    /// this saying what full would be, written by every constructor and read by
-    /// nothing — the board draws no bar, so it had nothing to measure against.
-    /// The rail is where a proportion is drawn (`Unit::Standing`), and it takes
-    /// its own from `tower::STANDING`.
+    /// No denominator here: the board draws no bar, so the `standing: u32` that
+    /// sat beside this had nothing to measure against. The rail draws the
+    /// proportion (`Unit::Standing`) from `tower::STANDING`.
     pub integrity: u32,
     /// The line under the ground rule, already written.
     ///
-    /// **Handed in rather than composed here**, and it is rule 6 rather than
-    /// tidiness: `4 wards, 7 hauled, 62` is a sentence, and a sentence built out
-    /// of literals in a painter is prose that cannot be hot-reloaded, cannot be
-    /// re-registered, and would be the only authored English in this crate. The
-    /// three numbers above it are still here because a *test* wants them; what
-    /// gets drawn is this.
+    /// Handed in rather than composed here, by rule 6: `4 wards, 7 hauled, 62`
+    /// is a sentence, and a sentence built from literals in a painter cannot be
+    /// hot-reloaded. The three numbers above it stay because a *test* wants
+    /// them; what gets drawn is this.
     pub tally: String,
 }
 
@@ -89,8 +75,8 @@ impl Pylon {
     /// One station's column, in cells.
     ///
     /// Eleven, because `wellspring` is ten and a column with no gap beside it
-    /// runs into its neighbour. It also has to hold the tallest ward, which is
-    /// [`TALLEST`] cells wide — so the name is what sets this, not the wards.
+    /// runs into its neighbour — so the name sets this, not the wards, which
+    /// reach [`TALLEST`] cells.
     const COLUMN: u16 = 11;
 
     /// The whole board's width.
@@ -104,15 +90,13 @@ impl Pylon {
 
     /// The rows a board wants, whatever is on it.
     ///
-    /// **Fixed, and deliberately not sized to the course in hand.** A board that
-    /// shrank with the stack would move the ground line every haul, and the
-    /// ground line is the one thing a player reads position against. Seven rows
-    /// of sky above a three-ward course is the cost, and it is the right one.
+    /// Fixed, not sized to the course in hand: a board that shrank with the
+    /// stack would move the ground line every haul, and that line is what a
+    /// player reads position against.
     #[must_use]
     pub const fn rows() -> u16 {
-        // `TALLEST` is 7. The cast is a const-fn away from `try_from`, and the
-        // constant is right here — `Board::rows_for` takes the same licence for
-        // the same reason.
+        // `TALLEST` is 7. The cast is a const-fn away from `try_from` and the
+        // constant is right here — `Board::rows_for` takes the same licence.
         #[allow(clippy::cast_possible_truncation)]
         let tallest = TALLEST as u16;
         Self::HEAD + tallest + Self::FOOT
@@ -124,14 +108,13 @@ impl Pylon {
         (Self::COLS, Self::rows())
     }
 
-    // **There is no `viewport` here, and there was.** It answered *does the
-    // bare board fit in this area*, and its only caller was the test that
-    // tested it: `orbs_shell::pylon::split` asks a different question — a
-    // bordered board, plus the gutter and the transcript floor beside it — and
-    // gets the one thing the two share, [`size`](Self::size), from here. A
-    // second fits-or-not that nothing consults is a rule waiting to disagree
-    // with the one that ships. (`Board::viewport` in the lens is the sibling
-    // this was copied from and is dead in the same way.)
+    // No `viewport` here, and there was one: it answered *does the bare board
+    // fit*, and its only caller was its own test. `orbs_shell::pylon::split`
+    // asks a different question — a bordered board plus gutter and transcript
+    // floor — and takes the one shared piece, [`size`](Self::size), from here.
+    // A second fits-or-not that nothing consults is a rule waiting to disagree
+    // with the one that ships. (`Board::viewport` in the lens is dead the same
+    // way.)
 
     /// One row of the board, as glyphs and their styles.
     ///
@@ -260,10 +243,8 @@ mod tests {
     #[test]
     fn every_glyph_the_board_draws_is_in_the_code_page() {
         // Listed rather than derived, for the reason the rail's own lint gives:
-        // a painter's glyphs are the constants on the other side of these names,
-        // and adding one without adding it here is the failure this cannot
-        // catch. `▪` drew as `?` on the lens's sheet and `▸` on the rail; both
-        // were found this way and both are in §19.
+        // adding a glyph without adding it here is the failure this cannot
+        // catch. `▪` drew as `?` on the lens's sheet and `▸` on the rail (§19).
         for glyph in [WARD, GROUND, '─', ' '] {
             assert!(
                 crate::cp437::is_renderable(glyph),
@@ -275,9 +256,8 @@ mod tests {
 
     #[test]
     fn every_row_is_exactly_as_wide_as_the_board_says() {
-        // The property the whole layout rests on: a row that came out short
-        // would leave the transcript's border painted over by whatever was
-        // underneath, and a long one would run into it.
+        // A short row leaves the transcript's border painted over by whatever
+        // was underneath; a long one runs into it.
         let board = board([vec![3, 2, 1], vec![], vec![]]);
         for index in 0..Pylon::rows() as usize {
             let row = board.row(index).expect("a row inside the board");
@@ -314,9 +294,8 @@ mod tests {
 
     #[test]
     fn the_stack_is_drawn_from_the_ground_up() {
-        // The bug this exists for: a picture drawn top-down puts a three-ward
-        // course floating in the sky above its own ground line, which reads as
-        // two wards missing rather than as a short stack.
+        // A picture drawn top-down puts a three-ward course floating above its
+        // own ground line, which reads as two wards missing.
         let board = board([vec![2, 1], vec![], vec![]]);
         let sky = board.line(1).expect("the top of the picture");
         assert!(
@@ -332,8 +311,7 @@ mod tests {
     #[test]
     fn the_header_names_the_stations_a_haul_would_name() {
         // The lens's sheet shipped without this and a player had to count
-        // columns before they could type. Same failure, caught by copying the
-        // fix rather than the hole.
+        // columns before they could type.
         let header = board([vec![1], vec![], vec![]]).line(0).expect("a header");
         for name in ["wellspring", "conduit", "barrier"] {
             assert!(header.contains(name), "{header:?} never names {name}");
@@ -347,17 +325,15 @@ mod tests {
 
     #[test]
     fn the_tallest_course_still_fits_between_the_names_and_the_floor() {
-        // A ward is as wide as its magnitude, so the widest one has to fit a
-        // column that was sized for a station's *name*. It does, with room to
-        // spare — and if `TALLEST` ever rises past that this fails rather than
-        // drawing a ward wider than its own station.
+        // A ward is as wide as its magnitude, so the widest has to fit a column
+        // sized for a station's *name*. If `TALLEST` rises past that this fails
+        // rather than drawing a ward wider than its own station.
         let board = board([(1..=TALLEST).rev().collect(), vec![], vec![]]);
         for index in 0..Pylon::rows() as usize {
             assert_eq!(board.row(index).expect("a row").len(), Pylon::COLS as usize);
         }
-        // The widest ward is the one on the ground, and a full course reaches
-        // the top of the picture — so the two ends of the staircase pin both
-        // that nothing is clipped and that nothing is drawn upside down.
+        // The two ends of the staircase pin both that nothing is clipped and
+        // that nothing is drawn upside down.
         let widest = board
             .line(Pylon::rows() as usize - 3)
             .expect("the ground storey");

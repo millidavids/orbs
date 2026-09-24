@@ -1,49 +1,30 @@
 //! The archive's stacks, as a picture (DESIGN.md §10, §19).
 //!
-//! # What a frontend is given, and why it is not the maze
-//!
 //! `orbs-sim` depends on *this* crate, never the other way round, so the type a
-//! frontend draws has to live here and the sim has to build one. That is the same
-//! arrangement `Instrument`'s [`Wash`](crate::Wash) already has, and it has a
-//! second virtue: what crosses the boundary is a *description*, so the sim's
-//! `Maze` keeps its cells private and there is exactly one place — its `view` —
-//! where the fog is decided.
+//! frontend draws lives here and the sim builds one — the arrangement
+//! `Instrument`'s [`Wash`](crate::Wash) already has. What crosses is a
+//! *description*, so the sim's `Maze` keeps its cells private.
 //!
-//! # One character per square, and why that took two goes
+//! One character per square. The maze was cells with the walls *between* them,
+//! drawn `2w+1` across, so one step moved the reading two characters and read
+//! as two. A wall is a square of its own now.
 //!
-//! The maze was 7×7 *cells* with the walls **between** them, which has to draw
-//! `2w+1` characters across — so one step moved the reading two characters and
-//! read, correctly, as moving two spaces at a time. A wall is a square of its own
-//! now: the picture *is* the grid, the corridor between two cells is somewhere
-//! you stand, and a step of one square is a step of one character.
+//! The whole maze is drawn and the fog is gone (§19). The trade: a sighted
+//! player sees more than the linear stream carries, the asymmetry §14 exists to
+//! prevent. What survives it is that a spell still solves the maze from the
+//! four `survey` readings alone.
 //!
-//! # The whole maze is drawn, and the fog is gone
-//!
-//! A square used to be drawn only once the reading had stood in it or beside it
-//! — precisely what the four `survey` readings answer, so the picture carried no
-//! information the linear stream lacked. The maze is now drawn whole, which
-//! makes walking it a matter of *routing* rather than of feeling along a wall.
-//!
-//! **That is a real trade and it is recorded in §19**: a sighted player now sees
-//! more than the linear stream carries, which is the one asymmetry §14 exists to
-//! prevent. What survives it is that a *spell* still solves the maze from the
-//! four readings alone — the automation pillar is untouched — and the cheap
-//! repair, if the asymmetry bites, is a spoken bearing to the exit rather than a
-//! return to fog.
-//!
-//! Unwalked floor still draws as nothing. The walls around it are on screen, so
-//! a corridor is a gap in them; a glyph there would be a third way of saying
-//! what the wall already says, which is what the `·` was and why it went.
+//! Unwalked floor draws as nothing. The walls around it are on screen, so a
+//! corridor is a gap in them; a glyph there says what the wall already says,
+//! which is what the `·` was and why it went.
 
 use crate::geometry::Rect;
 use crate::style::Style;
 
 /// One square of the grid.
 ///
-/// **A square, not a cell with four walls.** The maze used to be cells with the
-/// walls *between* them, drawn `2w+1` across — so a one-cell step moved the
-/// reading two characters and read as moving two spaces at a time. A wall is a
-/// square of its own now, so a step is a step.
+/// A square, not a cell with four walls: the old form drew `2w+1` across, so a
+/// one-cell step moved the reading two characters.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct Square {
     /// Whether this is solid.
@@ -63,11 +44,9 @@ pub struct Stacks {
     pub at: usize,
     /// Where the way out is, when there is one.
     ///
-    /// **`Option`, because the stacks can be walked for something other than
-    /// the exit.** A maze set to gather withdraws the way out entirely rather
-    /// than keeping one that does nothing, and the picture has to say the same
-    /// thing the readings do — an `Ω` a spell cannot see and a player cannot use
-    /// would be the only mark here that lies.
+    /// `Option` because a maze set to gather withdraws the way out entirely —
+    /// an `Ω` a spell cannot see and a player cannot use would be the only mark
+    /// here that lies.
     pub exit: Option<usize>,
     /// Squares still holding something to pick up.
     ///
@@ -78,8 +57,8 @@ pub struct Stacks {
 impl Stacks {
     /// The picture's size in character cells.
     ///
-    /// **One character per square**, which is the whole point of squares: the
-    /// picture *is* the grid, so a step of one square is a step of one character.
+    /// One character per square, so a step of one square is a step of one
+    /// character.
     #[must_use]
     pub fn size(&self) -> (u16, u16) {
         let width = self.width.max(1);
@@ -92,8 +71,8 @@ impl Stacks {
     /// Whether the square one step from the reading is floor.
     ///
     /// `way` indexes the sim's `Way::ALL` — north, east, south, west. This crate
-    /// cannot name that type (the dependency runs the other way), so the index is
-    /// the shared vocabulary, exactly as [`Square::wall`]'s ordering is.
+    /// cannot name that type (the dependency runs the other way), so the index
+    /// is the shared vocabulary.
     #[must_use]
     pub fn open(&self, way: usize) -> bool {
         let width = usize::from(self.width.max(1));
@@ -111,8 +90,8 @@ impl Stacks {
     /// Floor the reading has stood in, against floor there is.
     ///
     /// The same pair the lectern's panel meter reports, so the full-pane view
-    /// can say it in words without a second definition of *explored*. Walls are
-    /// not counted: they are most of the grid and none of the walk.
+    /// needs no second definition of *explored*. Walls are not counted: they
+    /// are most of the grid and none of the walk.
     #[must_use]
     pub fn explored(&self) -> (usize, usize) {
         let floor = self.squares.iter().filter(|square| !square.wall);
@@ -134,27 +113,21 @@ pub(crate) const HEAD: char = '☼';
 pub(crate) const EXIT: char = 'Ω';
 /// Something scattered through the maze, waiting to be picked up.
 ///
-/// **In CP437 at 0x04**, checked by `ALPHABET` below — `Cell::new` substitutes
-/// silently outside the repertoire, so a glyph that is not in the table becomes
-/// a faint smudge rather than a failure, and a drawing is the hardest place to
-/// notice that.
+/// In CP437 at 0x04, checked by `ALPHABET` below — `Cell::new` substitutes
+/// silently, and a drawing is the hardest place to notice a smudge.
 pub(crate) const SPOIL: char = '♦';
 
 /// Every glyph the picture can put on the screen.
 ///
-/// **Named as a list so a test can walk it**, and needed nowhere else — the
-/// picture is drawn here, so no frontend ever names a glyph. `Cell::new`
-/// substitutes anything outside CP437 silently, which turns a wrong glyph into a
-/// faint smudge rather than a failure, and a drawing is the hardest place to
-/// notice that.
+/// A list so a test can walk it, and needed nowhere else — the picture is drawn
+/// here, so no frontend ever names a glyph.
 #[cfg(test)]
 const ALPHABET: [char; 7] = [' ', WALL, ONCE, TWICE, HEAD, EXIT, SPOIL];
 
 /// What is at one coordinate of the picture.
 ///
-/// `col` and `row` are relative to the picture's own top-left, and index the
-/// grid directly — there is no odd/even split any more, because a wall is a
-/// square rather than a line between two.
+/// `col` and `row` are relative to the picture's own top-left and index the
+/// grid directly — a wall is a square, not a line between two.
 pub(crate) fn cell(maze: &Stacks, col: u16, row: u16) -> (char, Style) {
     let width = maze.width.max(1);
     if col >= width {
@@ -165,30 +138,25 @@ pub(crate) fn cell(maze: &Stacks, col: u16, row: u16) -> (char, Style) {
         return (' ', Style::NORMAL);
     };
 
-    // **The head outranks everything**, including the way out: the moment they
-    // are the same square the maze is solved and the picture is gone, so the
-    // case that matters is the one where they differ.
+    // The head outranks everything, including the way out: once they are the
+    // same square the maze is solved and the picture is gone.
     if index == maze.at {
         return (HEAD, Style::BRIGHT);
     }
     if square.wall {
         return (WALL, Style::DIM);
     }
-    // **The way out announces itself the moment the reading knows it is there.**
     // Not a giveaway: `survey east` already answers `exit` from the same square.
     if maze.exit == Some(index) {
         return (EXIT, Style::SUCCESS);
     }
-    // A spoil outranks the mark under it for the same reason the exit does: it
-    // is what the walk is *for*, and `survey east` already answers `spoil` from
-    // the square beside it. Picking one up removes it, so a walked square never
-    // draws one.
+    // A spoil outranks the mark under it: it is what the walk is *for*, and
+    // `survey east` already answers `spoil` from the square beside it.
     if maze.spoils.contains(&index) {
         return (SPOIL, Style::SUCCESS);
     }
-    // Floor nobody has walked draws nothing. The walls around it are already on
-    // screen, so the corridor is a gap in them — a glyph here would be a third
-    // way of saying the same thing (a `·` was, once).
+    // Floor nobody has walked draws nothing: the walls around it are already on
+    // screen, so the corridor is a gap in them (a `·` sat here once).
     match square.marks {
         0 => (' ', Style::NORMAL),
         1 => (ONCE, Style::NORMAL),
@@ -198,23 +166,13 @@ pub(crate) fn cell(maze: &Stacks, col: u16, row: u16) -> (char, Style) {
 
 /// The window onto the maze that `area` can show, and where it starts.
 ///
-/// Returns the rectangle **on screen** to draw into, and the maze coordinate of
-/// its top-left corner.
+/// Returns the rectangle on screen to draw into, and the maze coordinate of its
+/// top-left corner.
 ///
-/// # It pans rather than refusing
-///
-/// This used to hand back nothing unless the whole picture fitted, on the
-/// argument that half a maze is not a smaller maze but a wrong one. That was
-/// right while a maze was 15 squares and fitted everywhere; at 33 it meant the
-/// map simply vanished from every small pane, which is not *honest*, it is
-/// *absent* — and a player at the 80×22 floor got no picture at all rather than
-/// the part of it they were standing in.
-///
-/// So a pane too small for the whole maze gets a **window centred on the
-/// reading**, clamped inside the maze so it never shows emptiness past the edge.
-/// Walking pans it, which is what a map you are inside should do. When the whole
-/// picture does fit, the window is the whole picture and nothing moves — the
-/// common case is still a still.
+/// It pans rather than refusing. Handing back nothing unless the whole picture
+/// fitted was fine at 15 squares; at 33 the map vanished from every small pane.
+/// So a pane too small gets a window centred on the reading, clamped inside the
+/// maze. When the whole picture fits, nothing moves.
 #[must_use]
 pub(crate) fn viewport(maze: &Stacks, area: Rect) -> Option<(Rect, u16, u16)> {
     let (cols, rows) = maze.size();
@@ -277,8 +235,7 @@ mod tests {
     #[test]
     fn every_glyph_the_picture_can_draw_is_in_the_repertoire() {
         // `Cell::new` substitutes silently, so a glyph outside CP437 becomes a
-        // smudge rather than a failure — and a drawing is the worst place for
-        // that, because nothing about it looks wrong.
+        // smudge rather than a failure, and nothing about it looks wrong.
         for glyph in ALPHABET {
             assert!(
                 cp437::is_renderable(glyph),
@@ -289,9 +246,8 @@ mod tests {
 
     #[test]
     fn one_square_is_one_character() {
-        // **The whole reason a wall is a square.** The maze was cells with the
-        // walls between them, so the picture was `2w+1` across and one step
-        // moved the reading two characters — which is exactly how it read.
+        // Why a wall is a square: cells with walls between them drew `2w+1`
+        // across, so one step moved the reading two characters.
         let maze = solid(15);
         assert_eq!(maze.size(), (15, 15));
         assert_eq!(drawn(&maze).len(), 15);
@@ -300,9 +256,8 @@ mod tests {
 
     #[test]
     fn the_whole_maze_is_drawn_and_only_the_walking_is_not() {
-        // **The fog is gone** (§19): every wall is on screen from the moment the
-        // maze opens, so what changes as a player walks is the marks and nothing
-        // else. An unwalked corridor is a gap in the walls around it.
+        // The fog is gone (§19): every wall is on screen from the moment the
+        // maze opens, so walking changes the marks and nothing else.
         let mut maze = solid(5);
         maze.at = 6;
         maze.squares[6] = Square {
@@ -320,8 +275,7 @@ mod tests {
 
     #[test]
     fn a_walked_path_draws_as_one_unbroken_run() {
-        // A corridor is squares the reading stood in, so a path is a solid run
-        // with the wall it was cut through on either side of it.
+        // A path is a solid run with the wall it was cut through either side.
         let mut maze = solid(7);
         maze.at = 8;
         maze.exit = Some(12);
@@ -337,8 +291,7 @@ mod tests {
 
     #[test]
     fn the_marks_are_told_apart_and_the_finished_ones_recede() {
-        // Reading `once` from `twice` is how a player debugs a solver that is
-        // looping, so the two must not collapse into one glyph.
+        // Telling `once` from `twice` is how a player debugs a looping solver.
         let mut maze = solid(5);
         maze.at = 5;
         maze.exit = Some(24);
@@ -355,8 +308,7 @@ mod tests {
 
     #[test]
     fn floor_beside_the_path_but_never_walked_draws_nothing() {
-        // The `·` that used to sit here made every unexplored way out of the
-        // region into a dot saying what the gap in the wall already said.
+        // The `·` that used to sit here said what the gap in the wall says.
         let mut maze = solid(3);
         maze.at = 4;
         maze.exit = Some(8);
@@ -373,9 +325,8 @@ mod tests {
 
     #[test]
     fn a_picture_that_fits_is_centred_and_still() {
-        // The common case must not pan: a maze small enough to show whole should
-        // sit where it is, or the picture would drift under a walking reading
-        // for no reason.
+        // A maze small enough to show whole must not drift under a walking
+        // reading.
         let mut maze = solid(15);
         maze.at = 7 * 15 + 7;
         assert_eq!(
@@ -387,9 +338,8 @@ mod tests {
 
     #[test]
     fn a_pane_too_small_gets_a_window_on_the_reading() {
-        // **It pans rather than refusing.** Handing back nothing meant the map
-        // vanished from every small pane once the maze grew, which is absent
-        // rather than honest.
+        // Handing back nothing meant the map vanished from every small pane
+        // once the maze grew.
         let mut maze = solid(33);
         maze.at = 20 * 33 + 20;
         let (onto, from_x, from_y) =
@@ -420,7 +370,7 @@ mod tests {
     #[test]
     fn walls_are_not_counted_as_somewhere_to_go() {
         // Most of the grid is wall, so counting it would peg the meter near a
-        // third before the reading had walked anywhere at all.
+        // third before the reading had walked anywhere.
         let mut maze = solid(3);
         maze.squares[4].wall = false;
         maze.squares[4].marks = 1;

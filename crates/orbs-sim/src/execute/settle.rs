@@ -1,19 +1,17 @@
 //! A load's one tidy: a puzzle the document carried and the load refused.
 //!
-//! **Every puzzle travels twice** — as a component on its fixture, and as the
-//! readings it published, which are nodes of their own and restore like any
-//! other node. A restore that refuses the component (`Beast::from_save`,
-//! `Course::from_save`) brings the readings back without it: `survey keystone`
-//! names a humour with nothing waiting, and `if the circle is empty` is false.
+//! Every puzzle travels twice — as a component on its fixture, and as the
+//! readings it published, which are nodes of their own. A restore that refuses
+//! the component brings the readings back without it: `survey keystone` names a
+//! humour with nothing waiting, and `if the circle is empty` is false.
 //!
-//! **One pass over [`Open::ALL`], matched exhaustively**, which is
-//! `puzzle::Open`'s own rule. The circle and the pylon each grew a `settle` of
-//! their own, and a third puzzle whose restore started refusing would have
-//! needed a third that nothing reminded anybody to write. A variant added to
-//! `Open` is a compile error here until it says what its readings are and what
-//! publishes them — and every puzzle is covered whichever restore refuses.
+//! One pass over [`Open::ALL`], matched exhaustively, which is `puzzle::Open`'s
+//! own rule. The circle and the pylon each grew a `settle` of their own, and a
+//! third puzzle would have needed a third nobody was reminded to write. A
+//! variant added to `Open` is a compile error here until it says what its
+//! readings are and what publishes them.
 //!
-//! **A whole save is left exactly as saved.** Republishing issues new ids, so a
+//! A whole save is left exactly as saved. Republishing issues new ids, so a
 //! fixture is touched only when it has no puzzle and still says something about
 //! one, which no whole save can be.
 

@@ -22,9 +22,8 @@ pub struct Offered {
     pub options: Vec<String>,
     /// Which one repeated Tab has reached, so the list can mark it.
     ///
-    /// Without this the list is a wall of equal-looking words while the line
-    /// changes underneath it, and the player has no way to see where they are in
-    /// the cycle — which is the whole affordance.
+    /// Without it the list is a wall of equal-looking words while the line
+    /// changes underneath it, and nothing says where in the cycle you are.
     pub current: Option<usize>,
 }
 
@@ -44,15 +43,11 @@ impl Offered {
 
 /// The inline suggestion trailing the caret.
 ///
-/// **Recomputed on change, not per frame.** [`Line::ghost`](super::line::Line)
-/// walks the history, then runs the whole completer — which filters every
-/// synonym, builds an owned `String` per candidate, sorts, dedups, and collects
-/// a `Vec<char>` into a `String` for the common prefix. That ran at 60 Hz off
-/// inputs that change on a keystroke or a tick, so ~59 frames in 60 rebuilt a
-/// string identical to the one already on screen.
+/// Recomputed on change, not per frame: [`Line::ghost`](super::line::Line)
+/// walks the history and runs the whole completer, which allocates per
+/// candidate, and it ran at 60 Hz off inputs that change on a keystroke.
 ///
 /// It stays a pure function of `(line, scene, prompt_open)` — this holds the
-/// result, and the run condition names exactly what invalidates it, so there is
-/// no second copy able to drift from the line it trails.
+/// result, and the run condition names what invalidates it.
 #[derive(Resource, Debug, Default)]
 pub struct Ghost(pub String);

@@ -5,10 +5,9 @@
 //! the linear stream that says the same thing without pixels.
 //!
 //! Frontends receive `&Frame` and rasterise. They may add enrichment the other
-//! frontend cannot reproduce — CRT effects, audio — provided it
-//! carries **no information absent from the Frame** (DESIGN.md §13). The moment a
-//! frontend conveys something the Frame does not, the other frontend is playing a
-//! worse game rather than wearing a different skin.
+//! cannot reproduce — CRT effects, audio — provided it carries no information
+//! absent from the Frame (DESIGN.md §13); otherwise the other frontend is
+//! playing a worse game rather than wearing a different skin.
 
 use crate::cell::Cell;
 use crate::geometry::{GridSize, Pos, Rect};
@@ -32,20 +31,16 @@ pub struct Frame {
     tints: Vec<(Rect, Wash)>,
     /// Runs of spell text, by part of speech. See [`Frame::lit`].
     ///
-    /// Separate from [`tints`](Self::tints) rather than folded into it, and
-    /// that is the decision: `Tint` means **materials**, and the laboratory
-    /// draws an instrument panel two columns from the editor. A verb sharing a
-    /// colour name with a potion in the bar beside it would be one vocabulary
-    /// meaning two things on one screen.
+    /// Separate from [`tints`](Self::tints), which mean *materials*: the
+    /// laboratory draws an instrument panel two columns from the editor, and a
+    /// verb sharing a colour with a potion beside it would be one vocabulary
+    /// meaning two things.
     syntax: Vec<(Rect, Lexeme)>,
     /// Somewhere to hold a region while a crossing reads it and writes over it.
     ///
-    /// [`Passage::Gather`](crate::Passage) moves glyphs, and on the arriving half
-    /// the screen it moves is *this* one — so a cell would be overwritten while
-    /// another still needed to read it. A copy is the honest fix; it lives here,
-    /// reused, rather than being allocated per frame for the half-second a
-    /// crossing runs. [`reset`](Self::reset) leaves it alone, because it is
-    /// scratch rather than screen.
+    /// [`Passage::Gather`](crate::Passage) moves glyphs, and on the arriving
+    /// half the screen it moves is *this* one. Reused rather than allocated per
+    /// frame; [`reset`](Self::reset) leaves it alone, being scratch not screen.
     scratch: Kept,
 }
 
@@ -60,10 +55,9 @@ impl Frame {
 
     /// Blank the frame and resize it, keeping the existing allocations.
     ///
-    /// Called once per rendered frame. Under the Bevy frontend the grid is
+    /// Called once per rendered frame. Under Bevy the grid is
     /// [`GRID`](crate::GRID) every time, so this is a blank rather than a
-    /// resize; `orbs-tui` and `ORBS_GRID` are what still change it, and resizing
-    /// is cheap because the allocations are kept.
+    /// resize; `orbs-tui` and `ORBS_GRID` are what still change it.
     pub fn reset(&mut self, grid: GridSize) {
         self.grid = grid;
         self.cells.clear();
@@ -72,7 +66,7 @@ impl Frame {
         self.speech.clear();
         self.magnified = None;
         // Cleared, not reallocated — the panel writes the same handful of
-        // regions every frame and this keeps the allocation across all of them.
+        // regions every frame.
         self.tints.clear();
         self.syntax.clear();
     }
@@ -113,11 +107,9 @@ impl Frame {
 
     /// Whether every cell is blank.
     ///
-    /// A frontend uploading geometry per frame wants this: a screen with nothing
-    /// on it produces no geometry, and re-uploading an empty buffer every frame
-    /// is at best wasted work — and on Bevy 0.19 it is worse than that, which is
-    /// why this exists. Says nothing about the cursor; a caller that draws one
-    /// checks it separately.
+    /// A frontend uploading geometry per frame wants this: on Bevy 0.19 a
+    /// re-uploaded empty buffer is worse than wasted work. Says nothing about
+    /// the cursor; a caller that draws one checks separately.
     #[must_use]
     pub fn is_blank(&self) -> bool {
         self.rows()
@@ -127,8 +119,8 @@ impl Frame {
     /// Where the caret sits, if it is shown.
     ///
     /// Kept out of [`Cell`] because the terminal frontend must position the
-    /// *real* terminal cursor — that is what makes the input line work with the
-    /// user's own line editing and with screen readers that track the caret.
+    /// *real* terminal cursor, which is what makes the input line work with the
+    /// user's line editing and with screen readers that track the caret.
     #[must_use]
     pub const fn cursor(&self) -> Option<Pos> {
         self.cursor
@@ -139,23 +131,15 @@ impl Frame {
         self.cursor = cursor.filter(|&pos| self.grid.contains(pos));
     }
 
-    /// A region whose glyphs are drawn at **double size**.
+    /// A region whose glyphs are drawn at double size: one row of cells,
+    /// occupying two rows and twice the columns on screen.
     ///
-    /// One row of cells, occupying two rows and twice the columns on screen.
+    /// Nothing in the game sets this today — the prompt did until §19 fixed the
+    /// grid — and the mechanism is kept because it is one constant from coming
+    /// back.
     ///
-    /// **Nothing in the game sets this today.** The prompt did, while
-    /// [`INPUT_ROWS`](crate::INPUT_ROWS) was 2 — a second row spent to keep the
-    /// line's *pixel* height when a finer fidelity tier shrank the cells. §19
-    /// fixed the grid, so there is no tier to compensate for and the doubling
-    /// became plain magnification: a prompt twice the transcript's size at every
-    /// window, and typing into half the columns. It is one constant from coming
-    /// back, and the mechanism is kept for that rather than for a caller it does
-    /// not have.
-    ///
-    /// This lives on the `Frame` rather than in the frontend because it is
-    /// **informational**, not decoration: at double width a line holds half the
-    /// characters, so what fits depends on it. Rule 2 draws the line at *how a
-    /// cell is drawn*, and this is what is drawn where.
+    /// On the `Frame` because it is informational, not decoration: at double
+    /// width a line holds half the characters, so what fits depends on it.
     #[must_use]
     pub const fn magnified(&self) -> Option<Rect> {
         self.magnified
@@ -168,25 +152,16 @@ impl Frame {
 
     /// The colour family a region draws in, if one was asked for.
     ///
-    /// **Regions, not cells, and that is the whole design.** A tint is a
-    /// property of *what is in an instrument*, so every cell of one bar shares
-    /// it — encoding it per cell would spend a byte on all 7,040 cells of a
-    /// 160×44 grid to express a value that varies across five of them, and
-    /// [`Cell`] is pinned at 8 bytes by a test that records what the
-    /// last such byte cost.
+    /// Regions, not cells: a tint belongs to *what is in an instrument*, and
+    /// per cell it would spend a byte on all 7,040 cells of a 160×44 grid for a
+    /// value that varies across five ([`Cell`] is pinned at 8 bytes by a test).
     ///
-    /// It lives on the `Frame` rather than beside it for the same reason
-    /// [`Frame::magnified`] does: the moment a frontend is handed something the
-    /// Frame does not carry, the other frontend is playing a worse game rather
-    /// than wearing a different skin. `orbs-tui` reads this and resolves the
-    /// same eight names to ANSI indices — and reads it **per cell while
-    /// blitting**, because a tint is a region: a cell can be byte-identical
-    /// while the wash over it changed, which is what the flask's mixture band
-    /// growing looks like. A diff keyed on `Cell` alone would miss every frame
-    /// of it.
+    /// On the `Frame` for [`Frame::magnified`]'s reason. `orbs-tui` reads it per
+    /// cell while blitting — a cell can be byte-identical while the wash over it
+    /// changed, which is the flask's mixture band growing.
     ///
-    /// **Later regions win**, so a caller may paint over an earlier tint without
-    /// having to find and remove it — the same last-write-wins a `Cell` has.
+    /// Later regions win, so a caller may paint over an earlier tint without
+    /// finding and removing it.
     #[must_use]
     pub fn tint_at(&self, at: Pos) -> Option<Wash> {
         self.tints
@@ -198,9 +173,9 @@ impl Frame {
 
     /// Draw a region in a material's colour family.
     ///
-    /// An empty rectangle is ignored rather than stored, so a caller need not
-    /// check — the panel skips whole instruments at narrow widths and would
-    /// otherwise leave zero-area entries for `tint_at` to walk.
+    /// An empty rectangle is ignored rather than stored: the panel skips whole
+    /// instruments at narrow widths and would otherwise leave zero-area entries
+    /// for `tint_at` to walk.
     pub fn set_tint(&mut self, area: Rect, wash: Wash) {
         let area = area.intersection(self.area());
         if !area.is_empty() {
@@ -217,28 +192,19 @@ impl Frame {
 
     /// Draw a run of spell text in its part of speech's colour.
     ///
-    /// # A side-table, for [`Wash`]'s reason
+    /// A side-table, for [`Wash`]'s reason: a fifth `Style` field cost +28 KiB
+    /// and ~1.2 µs a frame on every screen, which `a_cell_stays_eight_bytes`
+    /// rejected. A syntax run is a *region* the way an instrument's bar is.
     ///
-    /// `Cell` is pinned at eight bytes and `Style` has no spare one, so a fifth
-    /// field cost +28 KiB and ~1.2 µs a frame on every screen — measured, and
-    /// what `a_cell_stays_eight_bytes` rejected. A syntax run is a *region* in
-    /// exactly the way an instrument's bar is, so it is affordable here and
-    /// would not be per cell: a handful of entries on the one frame that has an
-    /// editor open, and none at all on every other screen.
+    /// Weight still carries the reading on its own — `ORBS_DUMP` has no colour
+    /// and §14 has to hold on a greyscale tube — so [`Lexeme::weight`] is
+    /// applied as the run is painted and the hue is a second, finer cut.
     ///
-    /// **Weight still carries the reading on its own.** The hue is a second,
-    /// finer cut — `ORBS_DUMP` has no colour, and §14 has to hold on a greyscale
-    /// tube — so [`Lexeme::weight`] is applied to the `Style` as the run is
-    /// painted and this is what a frontend adds on top of it.
-    ///
-    /// An empty rectangle is ignored rather than stored, as [`Self::set_tint`]
-    /// does:
-    /// the editor clips runs to a scrolled window and would otherwise leave
-    /// zero-area entries for [`lit_at`](Self::lit_at) to walk.
+    /// An empty rectangle is ignored, as [`Self::set_tint`] does: the editor
+    /// clips runs to a scrolled window.
     pub fn lit(&mut self, area: Rect, kind: Lexeme) {
         let area = area.intersection(self.area());
-        // `None` is *"nothing to say about this"*, which is what an unlisted
-        // region already means — storing it would be a frontend asking twice.
+        // `None` is what an unlisted region already means.
         if !area.is_empty() && kind != Lexeme::None {
             self.syntax.push((area, kind));
         }
@@ -246,8 +212,8 @@ impl Frame {
 
     /// What part of speech is drawn at `at`, if any.
     ///
-    /// **Later regions win**, exactly as [`tint_at`](Self::tint_at) resolves, so
-    /// a caller may paint over an earlier run without finding and removing it.
+    /// Later regions win, as [`tint_at`](Self::tint_at) resolves, so a caller
+    /// may paint over an earlier run without finding and removing it.
     #[must_use]
     pub fn lit_at(&self, at: Pos) -> Option<Lexeme> {
         self.syntax
@@ -282,13 +248,10 @@ impl Frame {
 
     /// Keep the cells of `area`, for a crossing to depart from.
     ///
-    /// Called on every *settled* frame, which is what makes a crossing possible
-    /// at all: the shell has no way to ask for last frame's screen after the fact,
-    /// because [`reset`](Self::reset) has already blanked it. The cost is a
-    /// 43 KiB copy at a 120×45 grid, into a buffer [`Kept`] reuses.
-    ///
-    /// An area outside the grid is clipped rather than refused, as every other
-    /// rectangle here is.
+    /// Called on every *settled* frame, since [`reset`](Self::reset) has
+    /// blanked last frame's screen by the time anything could ask. A 43 KiB
+    /// copy at a 120×45 grid, into a buffer [`Kept`] reuses. An area outside
+    /// the grid is clipped rather than refused.
     pub fn keep(&self, area: Rect, into: &mut Kept) {
         let area = area.intersection(self.area());
         if area.is_empty() {
@@ -305,57 +268,32 @@ impl Frame {
 
     /// Draw `crossing` over `area`, departing from `from`.
     ///
-    /// Applied **after** everything else has painted, so `from` supplies the old
-    /// screen and the frame itself supplies the new one. A crossing at either
-    /// endpoint is a no-op by construction — see [`crate::passage`], where that
-    /// is the first property tested.
+    /// Applied *after* everything else has painted, so `from` supplies the old
+    /// screen and the frame itself the new one. A crossing at either endpoint is
+    /// a no-op by construction — see [`crate::passage`].
     ///
-    /// # One call per region, not one per screen
+    /// One call per region, not one per screen: a room change moves the gauges
+    /// and the instrument panel, but not the transcript between them, which is
+    /// continuous history. Each region crosses with its own
+    /// [`Toward`](crate::Toward), leaving by the edge it sits against; a
+    /// surface that replaces the whole pane is one call over the lot. This
+    /// replaced a spared-rectangle parameter that could only give both halves
+    /// one direction.
     ///
-    /// A room change moves two things that are not one rectangle: the gauges and
-    /// the road along the top, and the instrument panel and its board down the
-    /// side. Between them sits the **transcript**, which did not change — it is
-    /// continuous history, and blanking it would say the session went away.
+    /// It does not touch [`speech`](Self::speech) or [`cursor`](Self::cursor):
+    /// the linear stream is the *settled* screen, so a reader never waits for
+    /// an animation (§14, §19).
     ///
-    /// So the caller crosses each region on its own, with its own
-    /// [`Toward`](crate::Toward): the top strip leaves upward and the side block
-    /// leaves rightward, each by the edge it already sits against, and neither
-    /// touches the text between them. A surface that genuinely replaces the whole
-    /// pane — the maze, the editor, the weave screen — is one call over the lot.
-    ///
-    /// This replaced a spared-rectangle parameter, which described the same shape
-    /// as a hole rather than as its parts and could only give both halves one
-    /// direction.
-    ///
-    /// # What it does not touch
-    ///
-    /// [`speech`](Self::speech) and [`cursor`](Self::cursor). The linear stream
-    /// is the **settled** screen from the first frame of a crossing, so a reader
-    /// is never made to wait for an animation — §14, and the same trade §19
-    /// records for the hearth, whose spoken summary says *burning* from the frame
-    /// the fire is lit.
-    ///
-    /// # What it does clear
-    ///
-    /// Every [`tint`](Self::set_tint) and [`syntax run`](Self::lit) meeting
-    /// `area`. Both are resolved **per cell position** by the frontends, so
-    /// leaving them behind while the glyphs moved would give coloured blank cells
-    /// where a bar used to be and de-coloured glyphs wherever they landed. A wash
-    /// describes content that has left; dropping it is the honest answer, and
-    /// translating the rectangles alongside the cells is not worth it for half a
-    /// second.
-    ///
-    /// A region reaching outside `area` loses the part outside it too. Nothing in
-    /// the game draws one — every wash belongs to an instrument, and an
-    /// instrument is inside one region — so it is stated rather than handled.
+    /// It does clear every [`tint`](Self::set_tint) and [`syntax run`](Self::lit)
+    /// meeting `area`, since both resolve *per cell position*; translating the
+    /// rectangles alongside the cells is not worth it for half a second. A
+    /// region reaching outside `area` loses the part outside too.
     pub fn cross(&mut self, area: Rect, crossing: Crossing, from: Option<&Kept>) {
         let area = area.intersection(self.area());
         if area.is_empty() {
             return;
         }
-        // A wash the crossing reaches loses its colour, because both frontends
-        // resolve a tint per cell position and a wash over a moved glyph is the
-        // bar's colour with no bar in it.
+        // A wash over a moved glyph is the bar's colour with no bar in it.
         self.tints
             .retain(|(region, _)| region.intersection(area).is_empty());
         self.syntax
@@ -371,8 +309,7 @@ impl Frame {
         for row in area.row..area.bottom() {
             for col in area.col..area.right() {
                 let at = Pos::new(col, row);
-                // On the way out the source is the screen that is leaving; on the
-                // way in it is the one already painted here.
+                // Out: the screen that is leaving. In: the one painted here.
                 let source = if crossing.is_leaving() {
                     from.map_or(Cell::BLANK, |kept| kept.cell(at))
                 } else {
@@ -386,24 +323,20 @@ impl Frame {
         }
     }
 
-    /// Draw `crossing` over `area`, departing from **what is already there**.
+    /// Draw `crossing` over `area`, departing from what is already there.
     ///
     /// [`cross`](Self::cross) departs from a screen the shell kept across the
-    /// frame boundary, because an ordinary crossing replaces one screen with
-    /// another and the first is gone by the time the second is painted. The boot
-    /// card is the case that is not like that: it paints itself and then leaves,
-    /// so the screen it departs from is the one in front of it.
-    ///
-    /// Only the **leaving** half needs this — `cross` already reads the frame's
-    /// own cells on the way in, which is the same thing from the other side.
+    /// frame boundary. The boot card is not like that: it paints itself and
+    /// then leaves, so it departs from the screen in front of it. Only the
+    /// *leaving* half needs this — `cross` reads the frame's own cells on the
+    /// way in.
     pub fn fold(&mut self, area: Rect, crossing: Crossing) {
         let area = area.intersection(self.area());
         if area.is_empty() {
             return;
         }
-        // Borrowed out and put back, so the copy costs an allocation once rather
-        // than once a frame. `cross` takes it too on the arriving half, and finds
-        // an empty one — which is why this is documented as the leaving half's.
+        // Borrowed out and put back, so the copy allocates once rather than
+        // once a frame.
         let mut scratch = std::mem::take(&mut self.scratch);
         self.keep(area, &mut scratch);
         self.cross(area, crossing, Some(&scratch));
@@ -412,10 +345,8 @@ impl Frame {
 
     /// The glyphs flying to the middle, or out of it.
     ///
-    /// Its own pass because it **reads a screen it is also writing**: the
-    /// arriving half moves the frame's own cells, so a copy has to be taken
-    /// before the first write. [`Self::scratch`] is that copy, borrowed out of
-    /// `self` for the pass and put back, so the allocation survives the frame.
+    /// Its own pass because it reads a screen it is also writing, so a copy is
+    /// taken first: [`Self::scratch`], borrowed out and put back.
     fn gather(&mut self, area: Rect, crossing: Crossing, from: Option<&Kept>) {
         let mut scratch = std::mem::take(&mut self.scratch);
         if !crossing.is_leaving() {
@@ -529,11 +460,8 @@ mod tests {
 
     #[test]
     fn a_crossing_says_nothing() {
-        // §14: the linear stream is the **settled** screen from the first frame
-        // of a crossing. A reader who had to wait half a second for the
-        // animation to finish would be paying for a display setting in
-        // capability, which is the parity failure §9 exists to prevent and which
-        // `Reveal` already argues at length.
+        // §14: the linear stream is the *settled* screen. A reader waiting half
+        // a second for the animation pays for a display setting in capability.
         let mut frame = Frame::new(GridSize::new(12, 4));
         let area = frame.area();
         frame
@@ -557,9 +485,8 @@ mod tests {
 
     #[test]
     fn a_crossing_stays_inside_its_region() {
-        // `tween`'s "no pane leaves the span of its own endpoints", for glyphs.
-        // A crossing writing past its rectangle would scribble on the transcript
-        // it was chosen not to touch.
+        // `tween`'s "no pane leaves the span of its own endpoints", for glyphs:
+        // writing past the rectangle scribbles on the untouched transcript.
         let mut frame = Frame::new(GridSize::new(6, 3));
         frame
             .painter(frame.area())
@@ -571,11 +498,8 @@ mod tests {
 
     #[test]
     fn what_is_not_crossed_is_left_alone() {
-        // **The transcript, when a domain changes.** It is continuous history and
-        // it did not change, so a crossing that blanked it would say the session
-        // went away. Two calls move the strip along the top and the block down
-        // the side; the text between them is untouched because nothing asked for
-        // it, which is a stronger guarantee than a spared rectangle was.
+        // The transcript is continuous history, so blanking it on a domain
+        // change would say the session went away.
         let mut frame = Frame::new(GridSize::new(6, 3));
         let whole = frame.area();
         frame.painter(whole).fill(whole, 'x', Style::NORMAL);
@@ -590,9 +514,7 @@ mod tests {
 
     #[test]
     fn a_crossing_drops_the_washes_it_paints_over() {
-        // Both frontends resolve a tint per cell *position*, so a wash left
-        // behind while the glyphs moved is a coloured blank cell — the bar's
-        // colour with no bar in it.
+        // A wash left behind while the glyphs moved is a coloured blank cell.
         let mut frame = Frame::new(GridSize::new(8, 2));
         frame.set_tint(Rect::new(0, 0, 4, 1), Wash::plain(crate::Tint::Green));
         frame.set_tint(Rect::new(6, 1, 2, 1), Wash::plain(crate::Tint::Green));
@@ -614,7 +536,7 @@ mod tests {
     #[test]
     fn keeping_clips_to_the_grid() {
         // An out-of-date layout produces a smaller picture rather than a panic,
-        // which is the rule `Frame::painter` already states for its own area.
+        // as `Frame::painter` already states for its own area.
         let mut frame = Frame::new(GridSize::new(4, 2));
         frame.set(Pos::new(3, 1), Cell::new('x', Style::NORMAL));
 

@@ -4,36 +4,26 @@
 //! must agree about what motion *means*, or the panel says two different things
 //! with the same picture. So the vocabulary lives here and both draw from it.
 //!
-//! # Bubbles mean heat, and nothing else does
+//! Bubbles mean heat and nothing else does. [`Motion::Bubbling`] is the only
+//! state whose pattern travels, and it belongs to a bath over a lit athanor: the
+//! flask is never heated so never bubbles, and a bath whose fire has gone out
+//! stops at once, which is the panel saying the athanor died without a word.
+//! §10.1 makes *"light it once, get both heated stages done inside that window"*
+//! the central timing decision — this is that window, visible.
 //!
-//! [`Motion::Bubbling`] is the only state whose pattern **travels**: lighter
-//! cells rise and go out at the surface. It belongs to a bath over a lit
-//! athanor and to nothing else in the game.
+//! Everything else shifts in place. [`Motion::Stirring`] and
+//! [`Motion::Drifting`] are one stationary shimmer at two rates: liquid moving
+//! but not driven from below. A finished vessel still shifts, because liquid
+//! does.
 //!
-//! That is the whole reason the distinction is worth a state. The flask is never
-//! heated, so it never bubbles however hard it is working; and a bath whose fire
-//! has gone out stops bubbling *immediately*, which is the panel telling a player
-//! their athanor died without them having to read a word. §10.1 makes the burn a
-//! shared, depleting resource and *"light it once, get both heated stages done
-//! inside that window"* the central timing decision — this is that window,
-//! visible.
+//! A stationary shimmer takes the staggered clock and a travelling one must not.
+//! `pulse::tick_of` folds each cell's offset into the tick, which stops a strip
+//! turning over as one field; a rising pattern cannot use it, because cell `s+1`
+//! would sit half a tick behind cell `s` and the rise would wash out into churn.
+//! It does not need to either, since a translation moves brightness along the
+//! strip.
 //!
-//! # Everything else shifts in place
-//!
-//! [`Motion::Stirring`] and [`Motion::Drifting`] are the same stationary
-//! shimmer at two rates: liquid that is present and moving, but not being driven
-//! from below. A vessel that has *finished* still shifts, because liquid does —
-//! it is simply no longer being worked.
-//!
-//! **A stationary shimmer takes the staggered clock; a travelling one must not.**
-//! `pulse::tick_of` folds each cell's own offset into the tick, which is what stops a
-//! strip turning over as one field. A rising pattern cannot use it — cell `s+1`
-//! would be half the time a tick behind cell `s` and the rise would wash out into
-//! churn — and does not need to, because a translation moves brightness *along*
-//! the strip rather than in and out of it. Both are safe; they are safe for
-//! different reasons, and using either one's clock for the other breaks it.
-//!
-//! # Tempo is the signature
+//! Tempo is the signature:
 //!
 //! | Motion | Ticks per step | Flashes | Reads as |
 //! |---|---|---|---|
@@ -42,8 +32,8 @@
 //! | [`Motion::Stirring`] | [`STIR_EVERY`] | 0.6 Hz | being worked |
 //! | [`Motion::Bubbling`] | [`RISE_EVERY`] | 1 Hz | being worked **over a fire** |
 //!
-//! Every one of them is under §14's 3 Hz floor, so unlike the athanor's fire no
-//! part of this needs a photosensitivity exemption.
+//! Every one is under §14's 3 Hz floor, so unlike the athanor's fire no part of
+//! this needs a photosensitivity exemption.
 
 use crate::pulse::{TICKS_PER_CYCLE, drift_noise, noise, rising, shared_tick, tick_of};
 use crate::style::Roil;
@@ -57,8 +47,8 @@ pub const RISE_EVERY: u16 = 3;
 
 /// Cells a bubble rises in one cycle — the period its coordinate wraps on.
 ///
-/// **It must divide exactly**, or the last rise of a cycle is a fraction of a
-/// cell and the wrap tears. Checked rather than trusted, for the reason
+/// It must divide exactly, or the last rise of a cycle is a fraction of a cell
+/// and the wrap tears. Checked rather than trusted, as
 /// [`grind`](crate::grind)'s equivalent is.
 const RISE_SPAN: u16 = TICKS_PER_CYCLE / RISE_EVERY;
 const _: () = assert!(
@@ -80,9 +70,8 @@ pub const DRIFT_EVERY: u16 = 9;
 
 /// What a vessel of liquid is doing.
 ///
-/// **Four states, and the top one is about the athanor.** See this module's
-/// header: bubbles mean heat, so the difference between `Bubbling` and
-/// `Stirring` is whether the fire is lit — which is the one piece of laboratory
+/// Four states, and the top one is about the athanor: bubbles mean heat, so
+/// `Bubbling` against `Stirring` is whether the fire is lit — the laboratory
 /// state §10.1 makes most expensive to forget.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum Motion {
@@ -101,7 +90,7 @@ pub enum Motion {
     ///
     /// The flask, always, since nothing heats it.
     Stirring,
-    /// Bubbles rising — a vessel being worked **over a lit athanor**.
+    /// Bubbles rising — a vessel being worked *over a lit athanor*.
     ///
     /// The bath, and only while the fire is in.
     Bubbling,
@@ -122,7 +111,7 @@ impl Motion {
 pub(crate) fn roil(lane: u16, step: u16, phase: f32, motion: Motion) -> Roil {
     match motion {
         Motion::Standing => Roil::Still,
-        // **Travelling**, so the shared clock and a wrapped drift coordinate.
+        // Travelling, so the shared clock and a wrapped drift coordinate.
         Motion::Bubbling => {
             let risen = shared_tick(phase) / RISE_EVERY;
             match drift_noise(lane, rising(step, risen, RISE_SPAN)) >> 5 {
@@ -135,8 +124,8 @@ pub(crate) fn roil(lane: u16, step: u16, phase: f32, motion: Motion) -> Roil {
                 _ => Roil::Rolling,
             }
         }
-        // **Stationary**, so the staggered clock — which is what stops the whole
-        // vessel turning over on one instant.
+        // Stationary, so the staggered clock, which stops the whole vessel
+        // turning over on one instant.
         Motion::Stirring => shift(lane, step, phase, STIR_EVERY, false),
         // The same shimmer, slower and shallower. Never reaches `Rolling`:
         // nothing about a vessel standing full is vigorous.
@@ -153,11 +142,9 @@ const STAGES: u16 = 3;
 
 /// How many cells one of those lengths is worth.
 ///
-/// **Two, where it was one.** Each stage doubled, so every bubble rises exactly
-/// twice as far as it used to: two cells, four, or six. At one the whole
-/// vocabulary happened inside three cells of the face and the picture read as a
-/// fizz at the surface rather than as something leaving it — a bubble wants
-/// enough room to be seen going.
+/// Two, where it was one: every bubble rises twice as far, so two cells, four,
+/// or six. At one the whole vocabulary happened inside three cells of the face
+/// and read as a fizz at the surface rather than as something leaving it.
 const STAGE: u16 = 2;
 
 /// How far above the surface a bubble gets before it is gone.
@@ -170,71 +157,51 @@ pub const CARRY: u16 = STAGES * STAGE;
 
 /// One air cell in this many carries a bubble, before lifetime thins them.
 ///
-/// **Tuned by looking, at `screens`.** Sparse enough that every mark is a thing
-/// rather than a texture — every cell above the face is one the eye has to rule
-/// out as fill — and dense enough to read as a boil: at five, a two-lane column
-/// showed a bubble about a third of the time and the picture looked like a
-/// stray artefact rather than an instrument working.
-///
-/// With a life of one to [`CARRY`] cells over the top of it, this puts a little
-/// over one mark in the air at a time, thinning with height.
+/// Tuned by looking, at `screens`. Sparse enough that every mark is a thing
+/// rather than a texture, and dense enough to read as a boil: at five, a
+/// two-lane column showed a bubble about a third of the time and looked like a
+/// stray artefact rather than an instrument working. With a life of one to
+/// [`CARRY`] cells, this puts a little over one mark in the air at a time,
+/// thinning with height.
 const ESCAPE_ODDS: u32 = 3;
 
 /// A bubble that has broken the surface, `ahead` cells above it.
 ///
-/// # Why the alembic has these and the balneum does not
+/// [`roil`] already has bubbles going out at the surface, which is the balneum's
+/// whole motion. The alembic adds that some get through — distilling is a harder
+/// boil than a digestion. Gated on `breaking` and [`Motion::Bubbling`], so it
+/// means what the rest of the vocabulary means: over a lit athanor.
 ///
-/// [`roil`] already has bubbles: lighter cells rising through the liquid and
-/// going out at the surface, which is the balneum's whole motion. What the
-/// alembic adds is that some of them *get through* — distilling is a harder boil
-/// than a gentle digestion, and this is that difference drawn rather than
-/// argued. It is gated on `breaking` and on [`Motion::Bubbling`], so it means
-/// what the rest of the liquid vocabulary means: **over a lit athanor**, and
-/// only there.
+/// It rides the liquid's clock, because an escaped bubble is the bubble that was
+/// rising a moment ago: `rising` gives a coordinate constant for one bubble
+/// while the tick and its height climb together, as `fire::spark` does. Its
+/// lifetime is read off that travelling coordinate rather than a stationary one,
+/// which would be a fixed ceiling every bubble died at.
 ///
-/// # It rides the same clock the liquid does
-///
-/// A bubble that escaped is the same bubble that was rising a moment ago, so it
-/// keeps the liquid's own tempo and its own identity: `rising` gives a
-/// coordinate that is constant for one bubble while the tick and its height
-/// climb together, exactly as `fire::spark` does — and for the reason recorded
-/// there, its lifetime is read off that travelling coordinate rather than off a
-/// stationary one, which would be a fixed ceiling every bubble died at and would
-/// read as a hard edge.
-///
-/// # Measured from the surface, so the surface can never overtake it
-///
-/// **`ahead`, not the absolute cell.** The vessel is *filling* while this runs,
-/// and how fast depends on the recipe's length and on the height of a bar that
-/// grows with the window — so a bubble anchored in absolute space is overtaken
-/// by the rising face whenever `bar / ticks` beats one cell per
-/// [`RISE_EVERY`], which at the shipped durations it did, comfortably. What that
-/// looks like is bubbles being swallowed by the liquid they just left.
-///
-/// No tick count can fix that at every window size, so the frame does it
-/// instead: a bubble is *defined* as sitting so many cells above the face, and
-/// that number only grows. The liquid carries them up as it rises and they climb
-/// away from it on their own beat, which is what a boil does and is now true by
-/// construction rather than by tuning.
+/// `ahead`, not the absolute cell, so the surface can never overtake it. The
+/// vessel fills while this runs, at a rate depending on the recipe and on a bar
+/// that grows with the window, so a bubble anchored in absolute space is
+/// swallowed by the liquid it just left whenever `bar / ticks` beats one cell
+/// per [`RISE_EVERY`] — which at the shipped durations it did. No tick count
+/// fixes that at every window size, so a bubble is defined as sitting so many
+/// cells above the face.
 ///
 /// Returns the [`Roil`] rather than a style: what colour a piece of liquid is
-/// belongs with the rest of the liquid, and a bubble is liquid that has left.
+/// belongs with the liquid, and a bubble is liquid that has left.
 pub(crate) fn escaping(lane: u16, ahead: u16, phase: f32) -> Option<(char, Roil)> {
-    // **The face itself is never a bubble.** It is the cell the level is read
-    // off — solid against blank, the strongest join the alphabet has — and a
-    // mark on it would be the one place the picture and the value disagree.
+    // The face itself is never a bubble: it is the cell the level is read off,
+    // and a mark on it is the one place picture and value disagree.
     if ahead == 0 {
         return None;
     }
     let risen = shared_tick(phase) / RISE_EVERY;
     let drift = rising(ahead, risen, RISE_SPAN);
-    // **Divided out, not shifted.** Presence and lifetime come from one hash, so
-    // they have to be taken from *independent* parts of it — the fire's sparks
-    // do exactly this (`seed / SPARK_ODDS % 7`) and this copied the shape without
-    // the division at first: `drift_noise` is eight bits wide, `seed >> 8` was
-    // therefore always zero, and every bubble had a life of exactly one cell.
-    // Which is a picture that blinks one row above the face and never rises —
-    // visible in `screens` the moment it was drawn, and in nothing else.
+    // Divided out, not shifted. Presence and lifetime come from one hash and
+    // must be taken from *independent* parts of it, as the fire's sparks do
+    // (`seed / SPARK_ODDS % 7`). This copied the shape without the division:
+    // `drift_noise` is eight bits wide, so `seed >> 8` was always zero and every
+    // bubble lived exactly one cell — a blink one row above the face that never
+    // rises, visible in `screens` and in nothing else.
     let seed = drift_noise(lane, drift);
     if !seed.is_multiple_of(ESCAPE_ODDS) {
         return None;
@@ -248,8 +215,8 @@ pub(crate) fn escaping(lane: u16, ahead: u16, phase: f32) -> Option<(char, Roil)
     }
     // Thinning as it goes. `°` is a ring with something still in it, `·` is the
     // last of it before it is gone — the fire's own two smallest marks, in the
-    // **liquid's** colours rather than the fire's, which is what keeps a bubble
-    // and a spark apart on a screen that holds both.
+    // The liquid's colours rather than the fire's, which keeps a bubble and a
+    // spark apart on a screen that holds both.
     Some(if ahead * 2 <= life {
         ('°', Roil::Stirred)
     } else {
@@ -259,12 +226,12 @@ pub(crate) fn escaping(lane: u16, ahead: u16, phase: f32) -> Option<(char, Roil)
 
 /// A shimmer that stays where it is, at `every` ticks a step.
 ///
-/// **Density is ordered as well as tempo**, and it has to be: a sweep of the
-/// cycle counts how many cells are moving at once, and a `Drifting` vessel that
-/// was *denser* than a `Bubbling` one would read as busier however slowly it
-/// changed. The first version mapped two of four shades to `Stirred` for the calm
-/// case and measured 16,500 moving cells against bubbling's 10,400 — calmer by
-/// the clock and busier to the eye.
+/// Density is ordered as well as tempo, and has to be: a sweep of the cycle
+/// counts how many cells move at once, so a `Drifting` vessel denser than a
+/// `Bubbling` one reads as busier however slowly it changes. The first version
+/// mapped two of four shades to `Stirred` for the calm case and measured 16,500
+/// moving cells against bubbling's 10,400 — calmer by the clock, busier to the
+/// eye.
 fn shift(lane: u16, step: u16, phase: f32, every: u16, calm: bool) -> Roil {
     let beat = tick_of(phase, lane, step) / every;
     let vigour = noise(lane, step, beat) >> 5;
@@ -317,12 +284,10 @@ mod tests {
 
         // ...and neither shifting state does.
         //
-        // **Only ticks where the bar has something to say.** A bar that is
-        // uniformly `Still` satisfies `now[s] == next[s+1]` trivially, and
-        // `Drifting` is sparse enough that most ticks are exactly that — so a
-        // naive count scored it as translating on 7 ticks when it was standing
-        // perfectly still on all of them. The claim is about ticks that carry a
-        // *pattern*.
+        // Only ticks where the bar has something to say. A uniformly `Still` bar
+        // satisfies `now[s] == next[s+1]` trivially and `Drifting` is sparse
+        // enough that most ticks are exactly that, so a naive count scored it as
+        // translating on 7 ticks while it stood still on all of them.
         for motion in [Motion::Stirring, Motion::Drifting] {
             let (mut translated, mut counted) = (0, 0);
             for tick in 0..TICKS_PER_CYCLE {

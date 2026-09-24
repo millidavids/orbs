@@ -1,23 +1,15 @@
 //! A room's mastery line, as a road under the pane's title (DESIGN.md §11.5).
 //!
-//! # Why every room draws it
+//! Every room draws it because the weave is where progression is acted on and
+//! this is where it is seen while working: a player grinding their fourth potion
+//! should not have to open a screen to learn there is a fifth worth grinding.
 //!
-//! The weave is where progression is *acted on*; this is where it is *seen
-//! while working*. A player grinding their fourth potion should not have to
-//! open a screen to learn there is a fifth worth grinding — so the room's own
-//! line runs under its title, in the same marks the weave uses, with the next
-//! deed and how much of it is done at the far end.
+//! One painter for seven rooms, with the geometry here rather than in each
+//! room's board — the row is taken off the top of the pane's body before the
+//! instrument panel, so it sits under the title whichever way the panel runs.
 //!
-//! One painter for seven rooms, and geometry decided here rather than in each
-//! room's board: the row is taken off the top of the pane's body before the
-//! instrument panel and the boards divide the rest, so it sits under the title
-//! whichever way the panel runs.
-//!
-//! # Rule 2
-//!
-//! Everything drawn arrives through [`Line`] — the stations, their walk, the
-//! next deed's count — and the sentence is `prose.toml`'s. What is decided here
-//! is where the cells go.
+//! Rule 2: everything drawn arrives through [`Line`] and the sentence is
+//! `prose.toml`'s. What is decided here is where the cells go.
 
 use orbs_render::{Painter, Pos, Rect, Span, Style};
 use orbs_sim::{Line, Prose};

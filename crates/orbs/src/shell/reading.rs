@@ -2,11 +2,10 @@
 //!
 //! Split out of `plugin.rs`, which CLAUDE.md restricts to registration.
 //!
-//! **How far a page moves is `orbs-shell`'s**, and deliberately: it is what the
-//! transcript would *fit*, measured with the same `RecordView` it is drawn with,
-//! so a second measure of the same stream would page by a different amount than
-//! it showed. What lives here is only this frontend's `Tower` being unwrapped
-//! for it.
+//! How far a page moves is `orbs-shell`'s, deliberately: it is what the
+//! transcript would fit, measured with the same `RecordView` it is drawn with,
+//! so a second measure would page by a different amount than it showed. What
+//! lives here is this frontend's `Tower` being unwrapped for it.
 
 use bevy::prelude::*;
 
@@ -24,9 +23,9 @@ pub(super) fn page_step(screen: &Screen, tower: &Tower, back: usize) -> usize {
 /// does for the editor — see `execute::unfurl`. `Sim::unfurling` takes rather
 /// than reads, so this fires once per `unfurl` rather than every frame.
 ///
-/// **It pages back on the way in.** Entering a reading mode that showed the same
-/// screen you were already looking at would leave the player pressing a key to
-/// find out whether the word did anything.
+/// It pages back on the way in: entering a reading mode showing the screen you
+/// were already looking at leaves the player pressing a key to find out whether
+/// the word did anything.
 pub(super) fn start_reading(
     mut tower: ResMut<Tower>,
     mut scroll: ResMut<orbs_shell::Scroll>,
@@ -46,10 +45,9 @@ pub(super) fn start_reading(
 
 /// Give the keyboard back to the prompt.
 ///
-/// **Escape, the same as the editor.** One meaning in every mode the game has:
-/// step out of the one you are in. It deliberately does *not* scroll back to the
-/// newest output — a player who read back and pressed Escape wants to type, not
-/// to lose their place, and `PgDn` is still there to walk forward.
+/// Escape, the same as the editor: one meaning in every mode, step out of the
+/// one you are in. It does not scroll back to the newest output — a player who
+/// read back and pressed Escape wants to type, not to lose their place.
 pub(super) fn stop_reading(mut scroll: ResMut<orbs_shell::Scroll>) {
     scroll.stop_reading();
 }
@@ -71,12 +69,11 @@ pub(super) fn scroll_forward(
     screen: Res<Screen>,
     tower: Res<Tower>,
 ) {
-    // **The real count, not a fabricated nought.** This passed `0` while the
+    // The real count, not a fabricated nought. This passed `0` while the
     // terminal build passes the record count into the same shared `Scroll::page`
-    // — two frontends calling one function with different arguments. It is inert
-    // only because the forward branch happens to ignore `total` today, so the
-    // next change to it (a clamp, a bounds check) would corrupt scrolling in
-    // this build alone while the other build's tests stayed green.
+    // — two frontends calling one function with different arguments. Inert only
+    // because the forward branch ignores `total` today, so the next change to it
+    // would corrupt scrolling in this build alone.
     let total = tower.sim().scrollback().records().drawn_len();
     let step = page_step(&screen, &tower, scroll.back());
     scroll.page(step, false, total);

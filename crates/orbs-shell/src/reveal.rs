@@ -3,55 +3,39 @@
 //! A command's answer used to appear whole on the frame the tick produced it.
 //! Now it prints, the way a terminal attached to something slow prints.
 //!
-//! # It is presentation, and that is load-bearing
+//! Presentation only: every record is in the
+//! [`Scrollback`](orbs_sim::Scrollback) the instant the tick makes it, and this
+//! draws fewer of their cells. The sim never learns a reveal happened
+//! (architectural rule 2) — `orbs-balance` would owe typewriter delays to stay
+//! in step (§13), offline catch-up would owe animation time, and §9's parity
+//! rule forbids a display setting becoming a difficulty choice.
 //!
-//! Every record is in the [`Scrollback`](orbs_sim::Scrollback) the instant the
-//! tick makes it; this draws fewer of their cells and nothing else. The sim
-//! never learns a reveal happened, and nothing may make it — architectural rule
-//! 2, for three concrete reasons:
+//! The cost it is meant to create arrives anyway: it spends the player's
+//! attention, and a player who automates stops spending it.
 //!
-//! - `orbs-balance` would have to simulate typewriter delays to stay in step
-//!   with the live game, which is the divergence §13 exists to prevent.
-//! - Offline catch-up is ~29k `step()` calls and would owe animation time.
-//! - §9's parity rule says a display setting must never become a difficulty
-//!   choice. Make waiting a *modelled* cost and turning the animation off
-//!   becomes a competitive advantage — the same failure pointed the other way,
-//!   and aimed at exactly the players §14 exists for.
-//!
-//! The detriment it is meant to create arrives anyway, because it costs the
-//! player seconds of attention and a player who automates stops spending them.
-//! That lands in Phase 1: a bound script running twenty commands is not a person
-//! watching twenty reveals.
-//!
-//! # The response is instant even though the reveal is not
-//!
-//! §19 settled this once already — *"a terminal that takes a second to answer
-//! reads as broken"*, and §6 makes the echo the thing players learn the
-//! vocabulary from. The first character lands on the same frame the record does.
-//! Only the rest of it takes time.
+//! The first character lands on the frame the record does — a terminal that
+//! takes a second to answer reads as broken (§19), and §6 makes the echo how
+//! players learn the vocabulary. Only the rest takes time.
 
 use bevy_ecs::prelude::*;
 
 /// Characters per second once a reveal is under way.
 ///
-/// A real teletype ran about 10 (110 baud) and is unusable; a 9600-baud VT100
-/// managed ~960 and is indistinguishable from instant. This is the useful
-/// middle, and it is a number to settle by looking rather than by reasoning.
+/// A teletype ran ~10 and is unusable; a 9600-baud VT100 managed ~960 and is
+/// indistinguishable from instant. Settled by looking, not by reasoning.
 const RATE: f32 = 420.0;
 
 /// The longest one burst of output may take to arrive, in seconds.
 ///
-/// Without a ceiling, `peruse orb.log` on a long session would take minutes and
-/// the reveal would stop being flavour and start being a wall. Past this the
-/// effective rate rises to fit, so a long dump prints fast while a one-line echo
-/// still types itself.
+/// Without a ceiling `peruse orb.log` takes minutes and stops being flavour.
+/// Past this the rate rises to fit, so a long dump prints fast while a one-line
+/// echo still types itself.
 const LONGEST: f32 = 1.4;
 
 /// How much of the newest output has arrived.
 ///
-/// Whole characters plus a fraction, rather than a float count: it keeps the
-/// budget an integer at every observation point and means no `f32` is ever cast
-/// to one.
+/// Whole characters plus a fraction rather than a float count: the budget stays
+/// an integer at every observation point, so no `f32` is ever cast to one.
 #[derive(Resource, Debug, Clone, Copy, Default)]
 pub struct Reveal {
     /// How many records the stream held when this burst began.
@@ -70,16 +54,13 @@ impl Reveal {
     /// Note that the stream now holds `records` records, the newest of which
     /// carry `cells` characters between them.
     ///
-    /// A burst begins when the record count grows. Any burst still in flight is
-    /// **abandoned rather than queued** — its records finish immediately and the
-    /// new one starts. Queueing would let a fast player build a backlog that
-    /// never drains, and the output on screen would fall further behind the
-    /// world with every command.
+    /// A burst begins when the record count grows, and any burst in flight is
+    /// abandoned rather than queued — queueing would let a fast player build a
+    /// backlog that never drains.
     pub const fn observe(&mut self, records: usize, cells: u16) {
         if records <= self.seen {
-            // The stream can also shrink — a test clearing it, a future `clear`
-            // command — and resyncing is better than revealing from a stale
-            // index forever.
+            // The stream can also shrink — a test, a future `clear` — and
+            // resyncing beats revealing from a stale index forever.
             self.seen = records;
             return;
         }
@@ -107,9 +88,8 @@ impl Reveal {
 
     /// Put all of it on screen now.
     ///
-    /// Any keystroke does this, which is what keeps the reveal from ever being a
-    /// mechanic: a player who does not want to wait never waits, and the ones
-    /// who most need that — §14's — are not paying for it in capability.
+    /// Any keystroke does this, so the reveal is never a mechanic: §14's
+    /// players do not pay for skipping it.
     pub const fn finish(&mut self) {
         self.shown = self.total;
         self.carry = 0.0;
@@ -123,8 +103,7 @@ impl Reveal {
 
     /// How many records were on screen when the current burst began.
     ///
-    /// What the caller measures the next burst's length from, so the two agree
-    /// about where one ends and the next starts.
+    /// The caller measures the next burst's length from it.
     #[must_use]
     pub const fn settled_len(&self) -> usize {
         self.seen
@@ -144,8 +123,8 @@ impl Reveal {
 
     /// Characters per second for the burst in flight.
     ///
-    /// Expressed as a rate rather than as a clamp on the elapsed time, so a long
-    /// burst is uniformly faster instead of printing slowly and then snapping.
+    /// A rate, not a clamp on elapsed time: a long burst prints uniformly
+    /// faster rather than slowly and then snapping.
     fn rate(&self) -> f32 {
         RATE.max(f32::from(self.total) / LONGEST)
     }
@@ -164,17 +143,15 @@ mod tests {
 
     #[test]
     fn nothing_to_reveal_is_already_settled() {
-        // The common case by a wide margin: most frames have no new output, and
-        // they must cost nothing and hand the view no budget at all.
+        // Most frames have no new output: they must cost nothing.
         assert!(Reveal::default().is_settled());
         assert_eq!(Reveal::default().budget(0), None);
     }
 
     #[test]
     fn the_first_character_is_available_on_the_frame_the_record_arrives() {
-        // §19: "a terminal that takes a second to answer reads as broken", and
-        // §6 makes the echo the teaching mechanism. The reveal may take time;
-        // the response may not.
+        // §19: a terminal that takes a second to answer reads as broken. The
+        // reveal may take time; the response may not.
         let mut reveal = burst(40);
         reveal.advance(1.0 / 60.0);
         let (_, cells) = reveal.budget(0).expect("mid-reveal");
@@ -183,8 +160,7 @@ mod tests {
 
     #[test]
     fn a_long_burst_still_finishes_inside_the_ceiling() {
-        // Without this a `peruse` of a long session takes minutes. The rate
-        // rises to fit rather than the reveal being truncated.
+        // The rate rises to fit rather than the reveal being truncated.
         let mut reveal = burst(u16::MAX);
         let mut elapsed = 0.0;
         while !reveal.is_settled() && elapsed < 10.0 {
@@ -200,8 +176,7 @@ mod tests {
 
     #[test]
     fn a_short_burst_still_types_itself() {
-        // The other end of the same rule: the ceiling must not make a one-line
-        // echo instant, or there is no animation at all on the most common case.
+        // The other end: the ceiling must not make a one-line echo instant.
         let mut reveal = burst(20);
         reveal.advance(1.0 / 60.0);
         assert!(!reveal.is_settled(), "a short line arrived all at once");
@@ -219,9 +194,8 @@ mod tests {
 
     #[test]
     fn a_second_burst_abandons_the_first_rather_than_queueing_behind_it() {
-        // Two ticks landing close together must not stack. Queueing would let a
-        // fast player build a backlog, and what is on screen would fall further
-        // behind the world with every command.
+        // Queueing would let a fast player build a backlog, and the screen
+        // would fall further behind the world with every command.
         let mut reveal = Reveal::default();
         reveal.observe(3, 300);
         reveal.advance(0.05);
@@ -246,9 +220,8 @@ mod tests {
 
     #[test]
     fn the_budget_is_relative_to_what_the_pane_actually_draws() {
-        // The pane skips the head of the stream to show the tail, and the view
-        // indexes from the first record it is handed — not from the first record
-        // that exists.
+        // The pane skips the head of the stream, and the view indexes from the
+        // first record it is handed, not the first that exists.
         let mut reveal = Reveal::default();
         // A settled session of 14 records, then a burst adding six more.
         reveal.observe(14, 200);

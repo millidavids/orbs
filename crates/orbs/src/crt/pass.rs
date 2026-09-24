@@ -1,6 +1,6 @@
 //! The full-screen pass.
 //!
-//! **This is not a port.** `court_wizard`'s version is a `ViewNode` wired into a
+//! This is not a port. `court_wizard`'s version is a `ViewNode` wired into a
 //! render graph, and Bevy 0.19 does not have one: `bevy_render::render_graph` is
 //! gone and post-process passes are ordinary systems in the `Core2d` schedule.
 //! §4 flagged the render-graph Rust as "Bevy's most volatile surface" and it was

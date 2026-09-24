@@ -1,12 +1,10 @@
 #!/usr/bin/env bash
 # Play the game under tmux, and read the screen back — including its colours.
 #
-# **This is how the game gets looked at without a person at the keyboard.**
-# `ORBS_DUMP` is a still photograph and needs an environment variable per thing
-# it cannot pose; it also throws colour away entirely, so a fault in
-# `orbs-tui/src/theme.rs` is invisible to it. This is the running game: real
-# clock, real keystrokes, real surfaces, and `ink` to see what the terminal was
-# actually told to draw.
+# How the game gets looked at without a person at the keyboard. `ORBS_DUMP` is a
+# still photograph and throws colour away, so a fault in `orbs-tui/src/theme.rs`
+# is invisible to it. This is the running game: real clock, real keystrokes, and
+# `ink` to see what the terminal was told to draw.
 #
 #     scripts/tui.sh start                     # 120x45, the game's own grid
 #     scripts/tui.sh start 177 38              # ...or any size
@@ -20,32 +18,24 @@
 #     scripts/tui.sh ink 158 159               # ...decoded, glyph and colour
 #     scripts/tui.sh stop
 #
-# **Pace typing to the tick.** `Sim::submit` queues a line for the *next* tick,
-# so two lines sent inside one second both land on the same tick with no time
-# passing between them — a `grind` and the `empty` that was meant to precede it
-# arrive together and the second refuses. `type` sleeps a tick for you; `key`
-# does not, because `Sim::walk` spends no world time at all.
+# Pace typing to the tick. `Sim::submit` queues a line for the *next* tick, so
+# two lines sent inside one second land on the same tick and the second refuses.
+# `type` sleeps a tick for you; `key` does not, `Sim::walk` spending no world
+# time.
 #
-# **Resizing a running session is fine**, and worth exercising: `tmux
-# resize-window -t orbs -x 90 -y 24` reflows the whole screen, drops the rail
-# into the border title when the columns run short, and draws the "too small"
-# card below the 80x22 floor. It did *not* used to be fine — see
+# Resizing a running session is fine and worth exercising: `tmux resize-window
+# -t orbs -x 90 -y 24` reflows the screen, drops the rail into the border title,
+# and draws the "too small" card below the 80x22 floor. See
 # `blit::Screen::resize`.
 set -euo pipefail
 
 session="${ORBS_TMUX_SESSION:-orbs}"
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# **A private socket, the way `play.sh` has one.** This drove the *default* tmux
-# server and unconditionally killed a session called `orbs` — the obvious name to
-# pick in this repository — so running it destroyed a developer's own long-lived
-# session with no warning and `|| true` hiding the complaint. Inheriting
-# `~/.tmux.conf` also meant `default-terminal`, `remain-on-exit` and the status
-# line differed per machine, so `see` and `ink` were not reproducible between
-# two people even though `dumps.sh` pins `ORBS_WIZARD` for exactly that reason.
-#
-# `-f /dev/null` is the other half: a server started from here must not read the
-# user's config either.
+# A private socket, the way `play.sh` has one. This drove the *default* server
+# and killed any session called `orbs`, destroying a developer's own with `||
+# true` hiding the complaint. `-f /dev/null` is the other half: inheriting
+# `~/.tmux.conf` made `see` and `ink` differ per machine.
 tmux() { command tmux -L orbs-tui -f /dev/null "$@"; }
 
 case "${1:-}" in
@@ -56,45 +46,33 @@ start)
   # "too small" card, which is a real screen rather than a refusal.
   cols="${1:-${ORBS_TMUX_COLS:-120}}"
   rows="${2:-${ORBS_TMUX_ROWS:-45}}"
-  # **Built first, and the binary run directly.** `cargo run` prints its own
-  # progress into the pane, which lands on top of the game.
+  # Built first, and the binary run directly: `cargo run` prints its own
+  # progress into the pane, on top of the game.
   cargo build -q -p orbs-tui --manifest-path "$root/Cargo.toml"
   tmux kill-session -t "$session" 2>/dev/null || true
-  # **`ORBS_BOOT=0` by default**, because this is the scripting tool and §4's
-  # sequence is nine and a half seconds. That is the *development* half of the
-  # instant-startup argument, and the switch is where it belongs — set
-  # `ORBS_BOOT=` to watch the game open properly instead.
-  # **`ORBS_SEALED=0` by default, for the same reason.** A fresh *game* is a
-  # laboratory and nothing else (§11.5); this is the tool that types `attend
-  # archive` on its first line. Set `ORBS_SEALED=1` to play the sealed start.
-  # **`ORBS_PASSAGE=0` by default**, because this is the tool that types a
-  # command and reads the screen straight back, and a screen part-way through
-  # leaving is not the screen anyone is asking about.
+  # Four defaults off, because this is the scripting tool: §4's boot is nine and
+  # a half seconds, a sealed start (§11.5) has no `archive` to attend, a screen
+  # part-way through leaving is not the one anyone asked about, and stopping at
+  # the orb's menu puts a screen in front of every See-it line. Set any of them
+  # back to watch the real thing — though `ORBS_PASSAGE=1` shows no crossing
+  # here, this build holding a settled `Passing` it never advances (no CRT, so
+  # no motion switch a player could reach). `cargo run -p orbs` for that.
   #
-  # **Setting it back does not show you a crossing** — this build holds a settled
-  # `Passing` and never advances it, deliberately: it has no CRT and so no motion
-  # switch a player could reach, and §14 will not have motion without one. The
-  # default is belt and braces against that ever changing. `cargo run -p orbs` is
-  # where a crossing can be watched.
-  #
-  # Passed here rather than exported, and that is not a style choice: tmux does
-  # not hand the client's environment to a session on an already-running server,
-  # and it fails *silently* — `tests/playing/play.rs` records the same trap.
+  # Passed rather than exported: tmux does not hand the client's environment to
+  # a session on an already-running server, and it fails *silently*.
   tmux new-session -d -s "$session" -x "$cols" -y "$rows" \
-    "$(printf 'ORBS_WIZARD=%q ORBS_SEED=%q ORBS_BOOT=%q ORBS_SEALED=%q ORBS_PASSAGE=%q %q/target/debug/orbs-tui' \
+    "$(printf 'ORBS_WIZARD=%q ORBS_SEED=%q ORBS_BOOT=%q ORBS_SEALED=%q ORBS_PASSAGE=%q ORBS_THRESHOLD=%q %q/target/debug/orbs-tui' \
       "${ORBS_WIZARD:-wizard}" "${ORBS_SEED:-181}" "${ORBS_BOOT-0}" "${ORBS_SEALED-0}" \
-      "${ORBS_PASSAGE-0}" "$root")"
+      "${ORBS_PASSAGE-0}" "${ORBS_THRESHOLD-0}" "$root")"
   sleep 1
   ;;
 type)
   shift
   for line in "$@"; do
-    # **`-l`, and Enter on a call of its own.** Without the literal flag tmux
-    # reads the argument as a *key name* wherever one matches: `end` becomes the
-    # End key, `up` an arrow, `home` Home. `end` closes every `repeat` and every
-    # `if` in the spell language, so typing a spell without this sent a cursor
-    # key where the word belonged and the block never closed. `-l` will not take
-    # a key name in turn, which is why Enter cannot ride along.
+    # `-l`, and Enter on a call of its own. Without the literal flag tmux reads
+    # the argument as a *key name* wherever one matches, and `end` closes every
+    # `repeat` and `if` in the spell language. `-l` will not take a key name in
+    # turn, which is why Enter cannot ride along.
     [ -n "$line" ] && tmux send-keys -t "$session" -l -- "$line"
     tmux send-keys -t "$session" Enter
     # One tick and a little, so each command gets its own.
@@ -122,9 +100,9 @@ see)
   ;;
 ink)
   shift
-  # **What the terminal was actually told to draw**, cell by cell. `see` throws
-  # the colour away and `see -e` hands back escapes nobody can read down a
-  # column, so this is the only way to check `theme.rs` from outside.
+  # What the terminal was told to draw, cell by cell. `see` throws the colour
+  # away and `see -e` hands back unreadable escapes, so this is the only way to
+  # check `theme.rs` from outside.
   tmux capture-pane -t "$session" -p -e |
     "$root/scripts/ink.py" --cols "${1:-0},${2:-40}" --skip-blank "${@:3}"
   ;;

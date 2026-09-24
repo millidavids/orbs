@@ -1,28 +1,18 @@
 //! The satchel: a queue of names, in the tower rather than in a spell.
 //!
-//! §8's spells could not tell each other anything. Two of them run at once
-//! already — `invoke` from inside a spell inserts a second `Running` and
-//! `run::advance` steps every one of them each tick, each with its own budget —
-//! but they shared no channel, so the concurrency was two solitary loops rather
-//! than a pipeline. This is the channel.
+//! §8's spells already ran two at a time but shared no channel, so the
+//! concurrency was two solitary loops rather than a pipeline. This is the
+//! channel.
 //!
-//! # Why a node, and not a field on `Running`
+//! A node, not a field on `Running`: state lives in the tower here. A queue
+//! inside a spell is reachable by one spell, invisible to `survey`, and outside
+//! every instrument. A node is reachable by two spells and by two cursors of
+//! one, saves by the usual path, and `survey satchel` shows what is waiting.
 //!
-//! **State lives in the tower in this game.** A queue held inside a spell would
-//! be reachable by exactly one spell, invisible to `survey`, and absent from
-//! every instrument the project uses to look at itself. A node is reachable by
-//! two spells *and* by two cursors of one spell, it saves through the same path
-//! every other node does, and `survey satchel` shows what is waiting — which is
-//! more than can be said for any other part of a running spell.
-//!
-//! # A component, not children
-//!
-//! Every other counted thing in the tower is children plus [`Stock`], and this
-//! deliberately is not. A queue is an **ordered multiset**: `heed` may be
-//! queued twice and the order is the entire point, and `Stock` collapses
-//! duplicates into a count and despawns at nought. So the names ride a
-//! `VecDeque` on the node, and `spell::watch` answers `is empty` from here
-//! rather than from `children_of`.
+//! A component, not children plus [`Stock`]: a queue is an ordered multiset —
+//! `heed` may be queued twice and the order is the point — while `Stock`
+//! collapses duplicates into a count and despawns at nought. So the names ride
+//! a `VecDeque` on the node, and `spell::watch` answers `is empty` from here.
 //!
 //! [`Stock`]: super::Stock
 
@@ -31,48 +21,42 @@ use std::collections::VecDeque;
 
 /// What the satchel is called, in every room that has one.
 ///
-/// One word for all of them, because a spell is written for a domain and the
-/// satchel it means is the one where it stands — the same rule `<room>.log`
-/// follows from the other side, where the name changes and the meaning does not.
+/// One word for all of them: a spell is written for a domain and means the
+/// satchel where it stands — the same rule `<room>.log` follows from the other
+/// side.
 pub const SATCHEL: &str = "satchel";
 
 /// The heading `survey satchel` puts over the queue.
 ///
-/// A **table entry, not prose** — the same exemption `NounKind::label` has, and
-/// for the same reason: every other section heading in a `survey` is a noun kind
-/// read off that const table, and this is the one section whose rows are not
-/// nodes. Keeping it beside them means the listing has one vocabulary.
+/// A table entry, not prose — the same exemption `NounKind::label` has: every
+/// other heading in a `survey` is a noun kind read off that const table, and
+/// this is the one section whose rows are not nodes.
 pub const QUEUED: &str = "queued";
 
 /// The most names one satchel will hold.
 ///
-/// **A cap rather than a refusal to grow**, and it is a runaway guard rather
-/// than a balance number: a producer that queues faster than its consumer pulls
-/// is the ordinary shape of a pipeline falling behind, and without a bound it
+/// A runaway guard, not a balance number: a producer outrunning its consumer
 /// grows the *save* by a line a tick until nothing can read it. `MAX_PARTS`
-/// makes the same argument for a descent, and a queued name is cheaper than a
-/// descent but arrives faster.
+/// makes the same argument for a descent.
 ///
-/// Sixteen is well past any pipeline the game has: the sanctum's `coursing`
-/// queues two stations a haul, and a work list of reagents is a handful.
+/// Sixteen is well past any pipeline the game has — the sanctum's `coursing`
+/// queues two stations a haul.
 pub const DEPTH: usize = 16;
 
 /// An ordered queue of names, on the node that is the satchel.
 ///
 /// Oldest first: [`take`](Satchel::take) pops the front and
-/// [`put`](Satchel::put) pushes the back, which is what makes it a queue rather
-/// than a pile. A pile is what the rest of the tower already has.
+/// [`put`](Satchel::put) pushes the back, which makes it a queue rather than
+/// the pile the rest of the tower has.
 #[derive(Component, Debug, Clone, Default, PartialEq, Eq)]
 pub struct Satchel(VecDeque<String>);
 
 impl Satchel {
     /// Put a name on the back.
     ///
-    /// **Refuses at [`DEPTH`] rather than dropping the oldest**, and the
-    /// direction matters: a queue that silently forgot its front would hand the
-    /// consumer a name out of order, which looks exactly like a solver with
-    /// a timing bug. Refusing is visible — the caller says so, and the pipeline
-    /// stalls where it actually went wrong.
+    /// Refuses at [`DEPTH`] rather than dropping the oldest: forgetting the
+    /// front hands the consumer a name out of order, which looks like a solver
+    /// with a timing bug. Refusing stalls the pipeline where it went wrong.
     pub fn put(&mut self, name: &str) -> bool {
         if self.0.len() >= DEPTH {
             return false;
@@ -94,10 +78,9 @@ impl Satchel {
 
     /// Whether nothing is waiting.
     ///
-    /// **This is what `if the satchel is empty` reads**, and it is the reason
-    /// the queue is a component rather than children: `spell::watch` answers
-    /// emptiness with `children_of(...).is_empty()`, and a satchel has none
-    /// either way.
+    /// What `if the satchel is empty` reads, and why the queue is a component:
+    /// `spell::watch` answers emptiness with `children_of(...).is_empty()`, and
+    /// a satchel has no children either way.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
@@ -120,11 +103,11 @@ impl Satchel {
         self.0.iter().cloned().collect()
     }
 
-    /// Read one back, **clamped to [`DEPTH`]**.
+    /// Read one back, clamped to [`DEPTH`].
     ///
-    /// A hand-edited save is a supported thing to have (§15), so the cap is
-    /// applied on the way in as well as on the way out — otherwise the one
-    /// guard against an unbounded queue is one a text editor can step over.
+    /// A hand-edited save is supported (§15), so the cap applies on the way in
+    /// too — otherwise a text editor steps over the one guard against an
+    /// unbounded queue.
     #[must_use]
     pub fn from_save(names: &[String]) -> Self {
         Self(names.iter().take(DEPTH).cloned().collect())
@@ -150,8 +133,7 @@ mod tests {
         for name in ["heed", "yoke", "heed"] {
             assert!(satchel.put(name));
         }
-        // **A name twice, in the order it was put.** This is the whole reason
-        // the queue is not children plus `Stock`: a count would say `heed 2`
+        // A name twice, in the order it was put — a count would say `heed 2`
         // and lose which one comes first.
         assert_eq!(satchel.len(), 3);
         assert_eq!(satchel.peek(), Some("heed"));
@@ -162,9 +144,8 @@ mod tests {
         assert!(satchel.is_empty());
     }
 
-    /// **Refused at the cap, and the front is kept.** Dropping the oldest would
-    /// hand the consumer a name out of order, which is indistinguishable from a
-    /// solver whose timing is wrong.
+    /// Refused at the cap, keeping the front: dropping the oldest hands the
+    /// consumer a name out of order, which looks like a solver with bad timing.
     #[test]
     fn a_full_satchel_refuses_rather_than_forgetting_its_front() {
         let mut satchel = Satchel::default();

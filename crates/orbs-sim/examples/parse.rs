@@ -75,10 +75,9 @@ fn main() {
     let want_tsv = std::env::args().any(|arg| arg == "--tsv");
 
     if std::env::args().any(|arg| arg == "--bench") {
-        // **Everything the content names, not the room anyone is standing in.**
-        // The slice scene below holds one reagent; the recipes name thirty-three,
-        // so expanding a corpus over it measured a thirtieth of the corpus and
-        // made the model's parameters-per-example ratio look far worse than it is.
+        // Everything the content names, not the room anyone stands in: the
+        // slice scene holds one reagent where the recipes name thirty-three, so
+        // a corpus expanded over it measured a thirtieth of itself.
         bench(&orbs_sim::content::corpus_scene());
         return;
     }
@@ -123,10 +122,9 @@ fn main() {
 
 /// What the spell language accepts of `spellings.toml`, before any reader.
 ///
-/// **The baseline, and it is expected to be near nought.** These are lines the
-/// language cannot read — that is the whole reason they were written down. A
-/// number climbing here means a phrasing was authored that already worked, which
-/// would teach a reader to rewrite what needed no rewriting.
+/// Expected near nought: these are lines the language cannot read. A number
+/// climbing here means a phrasing was authored that already worked, which would
+/// teach a reader to rewrite what needed no rewriting.
 fn spells(scene: &Scene) {
     let spellings = orbs_sim::content::Phrasings::spellings();
     let corpus = spellings.corpus(scene);
@@ -142,12 +140,10 @@ fn spells(scene: &Scene) {
     );
     println!("  {} lines that must come back untouched\n", refused.len());
 
-    // **Parsing is not understanding, and this is where the difference bites.**
-    // A loose line usually has no leading spell word and reads as a bare
-    // command. But `if the alembic has finished` *parses* — as "holds a thing
-    // called finished" — and means something else entirely. That is the class a
-    // reader has to fix and the class a re-parse can never catch, which is why
-    // the assembler's rule is span coverage rather than "does it parse".
+    // Parsing is not understanding: `if the alembic has finished` parses — as
+    // "holds a thing called finished" — and means something else. A re-parse
+    // can never catch that class, which is why the assembler's rule is span
+    // coverage rather than "does it parse".
     let already = corpus
         .iter()
         .filter(|example| orbs_sim::tower::spell::reads_cleanly(&example.said))
@@ -157,10 +153,8 @@ fn spells(scene: &Scene) {
         corpus.len(),
     );
 
-    // ...and the other side. Every refusal must already be a sound statement: a
-    // reader rewriting one would be breaking a line that worked, and a line here
-    // that does not parse is an authoring mistake in `spellings.toml` rather
-    // than anything about a reader.
+    // ...and the other side. Every refusal must already be a sound statement,
+    // so one that does not parse is an authoring mistake in `spellings.toml`.
     let unsound: Vec<&String> = refused
         .iter()
         .filter(|line| !orbs_sim::tower::spell::reads_cleanly(line))
@@ -182,20 +176,12 @@ fn spells(scene: &Scene) {
 
 /// Measure the parser against every authored phrasing (§19, *the augury*).
 ///
-/// # Not §15's gate, and the distinction is the whole honesty of it
+/// Not §15's gate: every line here was written by the person who wrote the
+/// synonym table, so it is a coverage lint — which authored phrasings the
+/// parser misses — rather than a tester's number.
 ///
-/// ROADMAP: *"the author cannot stand in for [a tester] — someone who knows the
-/// canonical vocabulary is measuring their memory. A number that looks like this
-/// one but was produced in-house would be worse than no number."* Every line
-/// here was written by the person who wrote the synonym table, so this is a
-/// **coverage lint**: which authored phrasings the parser misses. That is worth
-/// a great deal — each miss is either a one-line synonym fix or a phrasing only
-/// a reader will ever catch — and it is not a gate.
-///
-/// # The holdout is what is reported
-///
-/// `say` is the corpus a grammar or a model is built from, so measuring on it
-/// says only that the building worked. `holdout` is taught to nothing.
+/// The holdout is what is reported. `say` is the corpus a grammar or a model is
+/// built from, so measuring on it says only that the building worked.
 fn bench(scene: &Scene) {
     let phrasings = Phrasings::builtin();
     let corpus = phrasings.corpus(scene);
@@ -209,12 +195,10 @@ fn bench(scene: &Scene) {
         holdout.len(),
     );
 
-    // **A sentence taught as two commands is a label no reader can get right**,
-    // and no single template shows it: `put the {reagent} in the {place}` is
-    // `move`, `put the {reagent} in the alembic` is `distil`, and the first
-    // becomes the second the moment the alembic is a place. Counted over both
-    // populations, because a holdout line that is another command's taught
-    // sentence is scored a miss for being read exactly as it was taught.
+    // A sentence taught as two commands is a label no reader can get right, and
+    // no single template shows it: `put the {reagent} in the {place}` is `move`,
+    // the same line with `alembic` is `distil`. Counted over both populations,
+    // since such a holdout line is a miss for being read exactly as taught.
     let mut meant: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
     for example in corpus.iter().chain(&holdout) {
         let commands = meant.entry(example.said.as_str()).or_default();
@@ -260,10 +244,8 @@ fn bench(scene: &Scene) {
                 .any(|echo| reaches(echo, &example.canonical, scene))
         })
         .count();
-    // **And the reading the game would run**, which the corpus half below
-    // already scores by. The line above credits a hit when *any* of four
-    // readings reaches the command — the rule the corpus comment calls
-    // flattering — and `measure` prints the same pair for the trained reader.
+    // And the reading the game would actually run. The line above credits a hit
+    // when any of four readings reaches the command, which flatters.
     let grammar_ran = holdout
         .iter()
         .filter(|example| {
@@ -273,8 +255,7 @@ fn bench(scene: &Scene) {
         })
         .count();
 
-    // **What shipping the grammar as a reader would actually buy**, which is
-    // the only number that decides anything: `Sim::submit_reading` asks the
+    // What shipping the grammar would buy: `Sim::submit_reading` asks the
     // matcher first and a reader only for what it could not read, so the two
     // rates above are halves of this one rather than rivals.
     let together = holdout
@@ -304,30 +285,24 @@ fn bench(scene: &Scene) {
         "    the two together    {:>6.1}%   <- what shipping the grammar buys",
         percent(together, total),
     );
-    // **Not measured here, and it cannot be**: `orbs-sim` may never depend on
-    // `orbs-augury` (CLAUDE.md rule 1), so the trained reader's line is that
-    // crate's `measure` example, on these same holdouts.
+    // Not measurable here: `orbs-sim` may never depend on `orbs-augury`
+    // (CLAUDE.md rule 1), so the trained reader's line is that crate's
+    // `measure` example, on these same holdouts.
     println!(
         "    the trained reader     cargo run --release -p orbs-augury --example measure --features train\n"
     );
 
-    // **The corpus rate is the lint half.** A `say` line the parser already
-    // reads is one a reader need never see; one it misses is either a
-    // synonym-table fix costing one row of `vocabulary.rs`, or a phrasing no
-    // table can hold. Both are worth knowing before anything is trained.
+    // The corpus rate is the lint half: a `say` line the parser already reads
+    // is one a reader need never see, and one it misses is either a
+    // synonym-table fix or a phrasing no table can hold.
     let corpus_read = corpus
         .iter()
         .filter(|example| reaches(&example.said, &example.canonical, scene))
         .count();
-    // A grammar reading its *own* templates back is the sanity check on the
-    // matcher: well below 100% means `capture` is broken, and the holdout rate
-    // above would be measuring that rather than generalisation.
-    // **Two failures wear one number, and they mean opposite things.** The
-    // grammar may fail to match its own template — that is `capture` broken —
-    // or it may match, produce exactly the right command, and have *the parser*
-    // refuse it because this thin bench scene holds no such noun. The second is
-    // the scene's fault and says nothing about the reader, so it is counted
-    // apart rather than left to look like a bug.
+    // A grammar reading its own templates back is the sanity check on the
+    // matcher: well below 100% means `capture` is broken. Two failures wear
+    // that one number — `capture` broken, or a right command the thin bench
+    // scene cannot resolve — so they are counted apart.
     let mut grammar_corpus = 0usize;
     let mut unmatched = 0usize;
     let mut misread: Vec<(Misread, String)> = Vec::new();
@@ -336,10 +311,9 @@ fn bench(scene: &Scene) {
     let mut outranked: BTreeMap<(String, String), (usize, String)> = BTreeMap::new();
     let mut unresolvable: Vec<&str> = Vec::new();
     for example in &corpus {
-        // **The caller's rule, not a looser one.** `Sim::submit_reading` takes
-        // the reading `parser::reading_to_run` chooses, so that is what is
-        // measured here — scoring against *any* reading would flatter a reader
-        // that offers four and means none of them.
+        // The caller's rule: `Sim::submit_reading` takes the reading
+        // `reading_to_run` chooses, and scoring against any reading would
+        // flatter one that offers four and means none of them.
         let readings = grammar.read(&example.said);
         let taken = orbs_sim::parser::reading_to_run(&readings, scene, Mode::Calm);
         match (readings.is_empty(), taken) {
@@ -374,9 +348,8 @@ fn bench(scene: &Scene) {
         "      {} this thin scene cannot resolve  <- the bench's world, not the reader",
         unresolvable.len(),
     );
-    // **By cause, because the causes need opposite fixes.** One count hid all
-    // four, and a fix for one moved the total by less than the other three
-    // shifted under it.
+    // By cause, because the causes need opposite fixes: one count hid all four,
+    // and a fix for one moved the total less than the others shifted under it.
     for cause in Misread::ALL {
         let lines: Vec<&String> = misread
             .iter()
@@ -388,8 +361,8 @@ fn bench(scene: &Scene) {
             println!("              {line}");
         }
     }
-    // **Which command stood in front of which**, because the largest cause is
-    // one number over many different collisions, and each is its own fix.
+    // Which command stood in front of which: the largest cause is one number
+    // over many collisions, each its own fix.
     let mut pairs: Vec<_> = outranked.into_iter().collect();
     pairs.sort_by(|a, b| b.1.0.cmp(&a.1.0).then_with(|| a.0.cmp(&b.0)));
     println!("\n      outranked, by the command wanted <- the one that ran first:\n");
@@ -398,9 +371,8 @@ fn bench(scene: &Scene) {
     }
     println!();
 
-    // **The misses are the point, not the percentage.** §15 acts on the
-    // *clustering* of failures, and a rate with no examples beside it cannot be
-    // acted on at all.
+    // The misses are the point, not the percentage: §15 acts on the clustering
+    // of failures, and a bare rate cannot be acted on.
     println!("  what it misses, by command:\n");
     let mut by_command: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
     for miss in &misses {
@@ -626,9 +598,8 @@ fn repl(scene: &Scene, log: &mut ParseLog, mut tick: u64) -> u64 {
         print!("orbs:~$ ");
         let _ = std::io::stdout().flush();
 
-        // The lock is taken and released *before* the match rather than in its
-        // scrutinee, where the temporary would live to the end of the match and
-        // hold stdin across the arms.
+        // Taken and released before the match: in the scrutinee the temporary
+        // would live to the end of the match and hold stdin across the arms.
         let mut line = String::new();
         let read = stdin.lock().read_line(&mut line);
         match read {

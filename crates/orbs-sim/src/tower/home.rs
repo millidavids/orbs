@@ -1,38 +1,29 @@
 //! Where a thing lives, derived rather than listed.
 //!
-//! # Why this exists as a rule and not as a table
+//! A rule and not a table, because `debug_spawn`'s whole value is that a new
+//! item is testable the moment it is authored. A hand-kept list of where each
+//! thing goes is a promise kept until somebody is busy, and the person who finds
+//! out is the one who assumed the tool was right and went looking for the bug in
+//! the game.
 //!
-//! `debug_spawn` is how a state worth testing is reached without paying the
-//! forty ticks of grinding that reaching it costs — and its whole value is that
-//! **a new item is testable the moment it is authored**. A hand-kept list of
-//! "where does each thing go" is a promise kept until somebody is busy: the next
-//! material lands in whichever room the list happened to say, or in none, and
-//! the person who finds out is the one who assumed the tool was right and went
-//! looking for the bug in the game.
+//! So it is a rule over the content: add a material to `recipes.toml` and it has
+//! a home the same tick, read off the recipes that name it —
+//! `every_material_has_a_home_a_move_can_reach` fails the build otherwise.
 //!
-//! So it is a *rule over the content*. Add a material to `recipes.toml` and it
-//! has a home the same tick, because the home is read off the recipes that name
-//! it — and `every_material_has_a_home_a_move_can_reach` fails the build if any
-//! authored material somehow does not.
+//! The rule is where the game itself would leave it:
 //!
-//! # The rule
-//!
-//! **Where the game itself would leave it.**
-//!
-//! 1. **Finished work** — an [`Essence`](crate::parser::NounKind::Essence) or a
-//!    [`Scroll`](crate::parser::NounKind::Scroll) — goes to the arsenal. That is
-//!    the room it is *for*, and it is the one place reachable from every other.
-//! 2. **Anything a recipe produces** belongs to the domain that produces it. Dust
-//!    is the archive's leavings even though a mortar will grind it, because the
-//!    archive is where it comes from.
-//! 3. **Anything else** — a base reagent, a fuel — belongs to the domain that
+//! 1. Finished work — an [`Essence`](crate::parser::NounKind::Essence) or a
+//!    [`Scroll`](crate::parser::NounKind::Scroll) — goes to the arsenal, the
+//!    room it is *for* and the one place reachable from every other.
+//! 2. Anything a recipe produces belongs to the domain that produces it. Dust is
+//!    the archive's leavings even though a mortar will grind it.
+//! 3. Anything else — a base reagent, a fuel — belongs to the domain that
 //!    consumes it. Nothing makes sage; the laboratory is where it is wanted.
 //!
-//! ...and within a domain, the **store**, never an instrument. A shelf is inert:
-//! the thing sits there until it is `move`d or a per-instrument verb reaches in
-//! for it, which is what a tester wants. Dropped straight into an instrument it
-//! would charge the tool, and a mortar holding something no recipe wants reads
-//! `fouled` — a state to explain rather than a state to test from.
+//! ...and within a domain, the store, never an instrument. A shelf is inert, so
+//! the thing sits there until it is `move`d, which is what a tester wants.
+//! Dropped into an instrument it would charge the tool, and a mortar holding
+//! something no recipe wants reads `fouled`.
 
 use bevy_ecs::prelude::*;
 
@@ -49,21 +40,19 @@ use crate::parser::NounKind;
 pub fn home(world: &World, named: &str) -> Option<Entity> {
     // 1. Finished work keeps itself.
     //
-    // **A troop is finished work that no recipe makes**, which is the one shape
-    // rules 2 and 3 cannot see: `kind_of` derives a kind from the recipes that
-    // produce a name, and a held beast is not a recipe — so a troop reads as a
-    // `Reagent`, nothing makes it, nothing yet consumes it, and the rule would
-    // answer `None` for a material the game produces every time a beast is held.
+    // A troop is finished work that no recipe makes, the one shape rules 2 and 3
+    // cannot see: `kind_of` derives a kind from the recipes producing a name,
+    // and a held beast is not a recipe — so a troop reads as a `Reagent` that
+    // nothing makes and nothing yet consumes, and the rule answers `None` for a
+    // material the game produces every time a beast is held.
     //
-    // It is named here rather than given a recipe, because inventing a recipe
-    // nobody can fire to satisfy a lookup would put a lie in `recall troop`.
-    // When Phase 8's siege consumes them this stays true and stays the reason.
+    // Named here rather than given a recipe, because inventing a recipe nobody
+    // can fire would put a lie in `recall troop`.
     //
-    // **This also keeps it out of the verdant unlock.** `execute::scroll` derives
-    // a base reagent as one the vocabulary knows and nothing makes, *whose home
-    // is the laboratory's shelf* — so a troop answering `keep` here is what
-    // stops a scroll shelving troops as an inexhaustible herb. §19 records that
-    // exact defect shipping once, with dregs and ash on the dispensary.
+    // It also keeps troops out of the verdant unlock: `execute::scroll` derives
+    // a base reagent as one the vocabulary knows and nothing makes, whose home
+    // is the laboratory's shelf. §19 records that defect shipping once, with
+    // dregs and ash on the dispensary.
     if named == crate::execute::TROOP
         || matches!(
             world.resource::<Recipes>().kind_of(named),
@@ -103,9 +92,9 @@ fn wanting(world: &World, named: &str) -> Option<String> {
             .then(|| instrument.to_owned())
     });
     consumed.or_else(|| {
-        // **Fuel has no recipe**, because the athanor transforms nothing — the
-        // one instrument in the game with a content file of its own and no entry
-        // in `recipes.toml`. Without this arm charcoal has no home at all, and it
+        // Fuel has no recipe, because the athanor transforms nothing — the one
+        // instrument with a content file of its own and no entry in
+        // `recipes.toml`. Without this arm charcoal has no home at all, and it
         // is the reagent a tester reaches for first.
         world
             .resource::<Fuels>()
@@ -158,11 +147,11 @@ mod tests {
 
     #[test]
     fn every_material_has_a_home_a_move_can_reach() {
-        // **The structural guarantee, and the reason this module is a rule.** A
+        // The structural guarantee, and the reason this module is a rule: a
         // material authored tomorrow gets a home from the recipes that name it,
-        // and if it somehow does not, the build says which one and stops — rather
-        // than a tester finding out by typing `debug_spawn <thing>` and being
-        // told there is nowhere to put it.
+        // and if it does not the build says which one and stops — rather than a
+        // tester typing `debug_spawn <thing>` and being told there is nowhere to
+        // put it.
         let sim = Sim::new(1);
         let world = sim.world();
         for material in crate::content::Materials::builtin().names() {
@@ -198,9 +187,9 @@ mod tests {
         // Made in the laboratory, so it stays there.
         assert_eq!(home_of(&sim, "ground-sage"), "dispensary");
 
-        // **Made in the archive, so it stays there.** `fragment` is the archive's
-        // only stock now: the lectern's `dust` is gone with the byproduct
-        // mechanic, which §10.1 keeps in the laboratory.
+        // Made in the archive, so it stays there. `fragment` is the archive's
+        // only stock now: the lectern's `dust` went with the byproduct mechanic,
+        // which §10.1 keeps in the laboratory.
         assert_eq!(home_of(&sim, "fragment"), "cabinet");
 
         // Finished work keeps itself, wherever it was made.

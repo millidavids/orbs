@@ -1,28 +1,14 @@
 //! Every shipped dev spell, run against the game it claims to solve.
 //!
-//! # The gap this closes
+//! `dev_spells.toml` ships ten solvers and until this file nothing ran any of
+//! them, so one could stop compiling, spin for ever or silently do nothing with
+//! the gate green. §19 records it happening twice.
 //!
-//! `dev_spells.toml` ships ten solvers and, until this file, **nothing ran any
-//! of them.** They were reached only by See-it lines and by whichever integration
-//! test happened to `invoke` one — so a spell could stop compiling, spin for
-//! ever, or silently do nothing, with the whole gate green. §19 records exactly
-//! that happening twice: `chanting` — the menagerie's solver while it was a
-//! rhythm game — stopped compiling and was noticed by a person, and `besieging`
-//! shipped with a `repeat until` guard that could never come true on a loss.
-//!
-//! # What a solver has to do to pass here
-//!
-//! Four things, and the middle two are the ones a broken spell fails:
-//!
-//! 1. **Compile clean** — no line the orb cannot read, which is what a renamed
-//!    reading or a withdrawn word breaks.
-//! 2. **Terminate** — the loop guard must actually become true. A `repeat until`
-//!    that cannot be satisfied spins one instruction a tick for ever, quietly.
-//! 3. **Do its work** — a spell that runs and achieves nothing passes 1 and 2.
-//! 4. **Latch no fault** — `Mark::Fault` means the orb gave up or could not read
-//!    a line, and a shipped solver must never earn one.
-//!
-//! # Why the budget matters here and nowhere else
+//! Four things a solver must do here, and the middle two are what a broken
+//! spell fails: compile clean (a renamed reading or a withdrawn word breaks
+//! that); terminate (a `repeat until` that cannot be satisfied spins one
+//! instruction a tick for ever, quietly); do its work (running and achieving
+//! nothing passes the first two); and latch no `Mark::Fault`.
 //!
 //! `SCRIPT_BUDGET` is 1 until the weave grants more, and a solver may be *meant*
 //! to fall short at one step a tick — `tending_blindly` is — so each spell
@@ -43,30 +29,26 @@ struct Solver {
     ticks: u64,
     /// The log its work lands in.
     ///
-    /// **A spell's own records go to the log, never the transcript** — §19:
-    /// `prompt.rs` draws *"what the player did, not what their spells did"*, so
-    /// a test looking for a solver's output on the pane finds nothing and looks
-    /// broken. This is where the evidence actually is.
+    /// A spell's own records go to the log, never the transcript (§19), so a
+    /// test looking for a solver's output on the pane finds nothing.
     log: &'static str,
     /// A phrase the world says once it has worked, or `None` for *anything*.
     ///
-    /// **A sentence the world emits, never one the spell contains.** Matching
-    /// the spell's own text would pass for a spell that was merely cast.
+    /// A sentence the world emits, never one the spell contains — matching the
+    /// spell's own text would pass for a spell that was merely cast.
     ///
-    /// `None` where the domain's success is not one sentence — the lens's sweep
-    /// breaks as many wards as the ticks allow, and no one line says *done*.
+    /// `None` where success is not one sentence: the lens's sweep breaks as
+    /// many wards as the ticks allow, and no line says *done*.
     did: Option<&'static str>,
 }
 
 /// Every solver this file drives.
 ///
-/// **Not derived from `dev_spells.toml`**, deliberately: what counts as *done*
-/// is different for each domain and cannot be read off the file. A spell added
-/// there and not here is caught by
-/// [`every_shipped_solver_is_driven_by_this_file`].
+/// Not derived from `dev_spells.toml`: what counts as *done* differs per domain
+/// and cannot be read off the file. A spell added there and not here is caught
+/// by [`every_shipped_solver_is_driven_by_this_file`].
 const SOLVERS: &[Solver] = &[
-    // --- the bailey (§5.1). Four solvers, one domain, and the differences
-    // between them are the point rather than duplication: `besieging` is the
+    // --- the bailey (§5.1). Four solvers, one domain: `besieging` is the
     // ladder, `answering` reads the telegraph, `sparing` hoards, `bulwark`
     // composes with parts.
     Solver {
@@ -91,10 +73,9 @@ const SOLVERS: &[Solver] = &[
         log: "bailey.log",
         did: Some("the wall"),
     },
-    // **The one that spends the far side's arithmetic.** `for each die`, a
-    // comparison naming a different reading over there, and `double` — none of
-    // which any other shipped solver uses, so without this row the grammar has
-    // no worked example anything runs.
+    // The one that spends the far side's arithmetic: `for each die`, a
+    // comparison naming a different reading over there, and `double` — nothing
+    // else shipped uses them, so without this row that grammar runs nowhere.
     Solver {
         name: "sparingly",
         setup: &[
@@ -117,11 +98,10 @@ const SOLVERS: &[Solver] = &[
         log: "bailey.log",
         did: Some("the wall"),
     },
-    // The two that allocate dice. **`did` is a pledge landing**, not a win: a
-    // spell that fights well and never pledges passes every other check here,
-    // and that is exactly what `warding_off` did for its first draft — `if area
-    // is empty and no moot` mixes `is` with an elided `has no`, so the guard
-    // never fired and it pledged nothing, in all seventeen seeds.
+    // The two that allocate dice. `did` is a pledge landing, not a win: a spell
+    // that fights well and never pledges passes every other check, which is
+    // what `warding_off`'s first draft did — `if area is empty and no moot`
+    // mixes `is` with an elided `has no`, so the guard never fired.
     Solver {
         name: "steadfast",
         setup: &["attend bailey"],
@@ -149,11 +129,9 @@ const SOLVERS: &[Solver] = &[
     },
     // --- the forge.
     //
-    // **`did` is the charm binding**, which is the only claim worth making
-    // here: a spell that opens a lattice and snaps at it for ever passes
-    // *terminates* and *latches no fault* and has done nothing at all. What
-    // says the eight-rung table is right is that a glyph lattice actually
-    // lights.
+    // `did` is the charm binding: a spell that opens a lattice and snaps at it
+    // for ever terminates and latches no fault while doing nothing. What says
+    // the eight-rung table is right is a lattice actually lighting.
     Solver {
         name: "forging",
         setup: &["attend forge"],
@@ -161,10 +139,9 @@ const SOLVERS: &[Solver] = &[
         log: "forge.log",
         did: Some("every glyph holds"),
     },
-    // The maintenance spell, and it is driven **invoked** rather than bound
-    // because `bind` costs sixteen experience this fixture has not earned. One
-    // pass proves the cold-start rung fires and the charm lands; what a binding
-    // adds is the re-casting, which is `bind::stand`'s and is tested there.
+    // The maintenance spell, invoked rather than bound because `bind` costs
+    // sixteen experience this fixture has not earned. One pass proves the
+    // cold-start rung fires; the re-casting is `bind::stand`'s, tested there.
     Solver {
         name: "tending_forge",
         setup: &["attend forge"],
@@ -172,16 +149,11 @@ const SOLVERS: &[Solver] = &[
         log: "forge.log",
         did: Some("every glyph holds"),
     },
-    // **The one that is meant to fall short**, and the table says so rather
-    // than the file assuming one outcome. `tending_blindly` holds no residue
-    // table, so it anneals without reading the board — one attempt in eight
-    // lights it. What it must still do is *open a binding and spend on it*,
-    // which is the work; whether that work pays is the whole argument for
-    // writing the eight rungs.
-    //
-    // `chanting` was the precedent: a shipped solver that collapsed at the
-    // shipped budget, driven anyway, because a spell nothing runs can stop
-    // compiling with the gate green.
+    // The one meant to fall short, and the table says so rather than the file
+    // assuming one outcome. It holds no residue table, so it anneals without
+    // reading the board — one attempt in eight lights. It must still open a
+    // binding and spend on it, which is the work. `chanting` is the precedent:
+    // a shipped solver nothing ran, which stopped compiling, gate still green.
     Solver {
         name: "tending_blindly",
         setup: &["attend forge"],
@@ -208,8 +180,8 @@ const SOLVERS: &[Solver] = &[
         log: "sanctum.log",
         did: Some("wellspring"),
     },
-    // --- the archive. **`repeat 200` in `assembling` is ~500 ticks**, which is
-    // why this one is not given the same budget as the bailey's.
+    // --- the archive. `repeat 200` in `assembling` is ~500 ticks, so it does
+    // not get the bailey's budget.
     Solver {
         name: "assembling",
         setup: &["attend archive", "debug_spawn fragment 4"],
@@ -239,11 +211,10 @@ const SOLVERS: &[Solver] = &[
         log: "lens.log",
         did: None,
     },
-    // --- the menagerie. **`did` is a hold**, which is the whole claim: the
-    // search tries every circle in order, so a spell that summoned and limned
-    // for ever without the circle holding passes everything else here. The worst
-    // beast takes 656 steps at one a tick, so 900 is room for the worst and the
-    // tail after it.
+    // --- the menagerie. `did` is a hold: the search tries every circle in
+    // order, so a spell that summoned and limned for ever without one holding
+    // passes everything else. The worst beast takes 656 steps at one a tick,
+    // so 900 leaves room for it and the tail after.
     Solver {
         name: "taming",
         setup: &["attend menagerie"],
@@ -308,11 +279,10 @@ fn drive(solver: &Solver, seed: u64) -> Sim {
 
 #[test]
 fn every_shipped_solver_compiles_without_a_complaint() {
-    // **The failure this catches is silent.** A renamed reading or a withdrawn
-    // word leaves the spell casting perfectly and every question answering
-    // *"that question means nothing"* — the loop guard is then false from the
-    // first evaluation and the spell ends having done nothing. §19 records
-    // `besieging` shipping in exactly that state for one commit.
+    // A silent failure: a renamed reading leaves the spell casting perfectly
+    // and every question answering *"that question means nothing"*, so the loop
+    // guard is false from the first evaluation. §19 records `besieging`
+    // shipping in that state for one commit.
     for solver in SOLVERS {
         let sim = drive(solver, 11);
         let bad: Vec<String> = said(&sim)
@@ -329,12 +299,9 @@ fn every_shipped_solver_compiles_without_a_complaint() {
 
 #[test]
 fn every_shipped_solver_does_its_work() {
-    // A spell that casts, runs and achieves nothing passes every check that only
-    // asks whether it compiled.
-    //
-    // **The evidence is in the log, not the transcript** — §19: the pane draws
-    // *"what the player did, not what their spells did"*, so a `repeat` loop
-    // would otherwise push the player's own last line off screen in seconds.
+    // A spell that casts, runs and achieves nothing passes every check that
+    // only asks whether it compiled. The evidence is in the log, not the
+    // transcript (§19).
     for solver in SOLVERS {
         let mut sim = drive(solver, 11);
         run(&mut sim, &format!("peruse {}", solver.log));
@@ -385,13 +352,10 @@ fn no_shipped_solver_latches_a_fault() {
 
 #[test]
 fn every_shipped_solver_terminates_rather_than_spinning() {
-    // **A `repeat until` whose guard can never come true spins one instruction a
-    // tick for ever, silently.** `besieging` shipped asking `the enemy has routed`
-    // — true only on a *win* — so a lost siege left it looping and refusing
-    // `hold` for the rest of the session.
-    //
-    // A stopped spell is one nothing is running any more. Given generous time,
-    // every solver here should have run off the end.
+    // A `repeat until` whose guard can never come true spins one instruction a
+    // tick for ever. `besieging` shipped asking `the enemy has routed`, true
+    // only on a win, so a lost siege left it looping for the session. Given
+    // generous time, every solver here should have run off the end.
     for solver in SOLVERS {
         let mut sim = drive(solver, 11);
         sim.step_n(solver.ticks * 2);
@@ -420,9 +384,8 @@ fn a_solver_reaches_the_same_end_from_the_same_seed() {
 
 #[test]
 fn every_shipped_solver_is_driven_by_this_file() {
-    // **The lint that keeps the list honest.** A solver added to
-    // `dev_spells.toml` and not here is a shipped worked example nothing runs,
-    // which is the state every spell in that file was in until this file existed.
+    // The lint that keeps the list honest: a solver added to `dev_spells.toml`
+    // and not here is a shipped worked example nothing runs.
     let shipped = orbs_sim::execute::dev_spells();
     let mut missed: Vec<String> = shipped
         .iter()

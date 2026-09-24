@@ -49,22 +49,20 @@ pub(super) struct Filled {
     pub missing: Option<Missing>,
     /// Words the reading could not account for, once every slot was filled.
     ///
-    /// **Separate from [`score`](Self::score), which folds it in.** A fuzzy noun
+    /// Separate from [`score`](Self::score), which folds it in. A fuzzy noun
     /// match and an unexplained word both pull the score down, and the augury
     /// (§6) must route them oppositely: `brew clarty` is a typo the matcher
-    /// reaches `clarity` from and should keep, while `put the sage in the mortar
-    /// and grind it` is a sentence six words too long for any reading of it.
-    /// Score alone cannot tell those apart.
+    /// reaches `clarity` from, while `put the sage in the mortar and grind it`
+    /// is six words too long for any reading. Score cannot tell those apart.
     pub leftover: usize,
     /// An optional last slot that was handed a word and could use none of what
     /// it was handed, after an earlier slot filled.
     ///
-    /// **Not [`missing`](Self::missing), because the bare verb is legal** — and
-    /// that is exactly the trouble. `limn keystone` and `dial first` step round
-    /// to the next humour or sigil, so `limn keystone xyzzy` dropping `xyzzy`
-    /// did not run the command the player asked for less well: it ran a
-    /// *different* one, and changed the circle. `resolve` asks for the slot
-    /// instead (§19).
+    /// Not [`missing`](Self::missing), because the bare verb is legal — which is
+    /// the trouble. `limn keystone` and `dial first` step round to the next
+    /// humour or sigil, so `limn keystone xyzzy` dropping `xyzzy` did not run
+    /// the asked-for command less well: it ran a different one and changed the
+    /// circle. `resolve` asks for the slot instead (§19).
     pub refused: Option<Missing>,
 }
 
@@ -142,11 +140,11 @@ pub(super) fn fill(verb: Verb, words: &[Word<'_>], scene: &Scene) -> Filled {
                         kind: slot.kind,
                     });
                 }
-                // **Only the last slot, and only after one filled.** A first
-                // optional slot that explains nothing is `resolve`'s older rule
+                // Only the last slot, and only after one filled. A first
+                // optional slot explaining nothing is `resolve`'s older rule
                 // (`verify gibberish`), and a middle one steps aside for the
-                // required slot behind it, which is `move`'s whole design. Filler
-                // and bare punctuation are not a word handed over.
+                // required slot behind it, which is `move`'s design. Filler and
+                // bare punctuation are not a word handed over.
                 let said_something = head.iter().any(|word| {
                     word.matching.chars().any(char::is_alphanumeric)
                         && !super::normalise::is_filler(word.matching)
@@ -180,10 +178,9 @@ pub(super) fn fill(verb: Verb, words: &[Word<'_>], scene: &Scene) -> Filled {
 
     Filled {
         slots,
-        // **`penalise` keeps counting only `remaining`, deliberately.** Changing
+        // `penalise` keeps counting only `remaining`, deliberately: changing
         // what the score means would move every ranking in the parser and every
-        // number §19 records against it; `leftover` is a new fact carried
-        // beside it, not a correction to an old one.
+        // number §19 records against it. `leftover` is a new fact beside it.
         score: penalise(mean, remaining.len()),
         missing,
         leftover: remaining.len() + unused,
@@ -230,10 +227,10 @@ fn fill_one(kind: NounKind, slot: usize, words: &[Word<'_>], scene: &Scene) -> O
             // A pattern is whatever was typed, so it explains all of it.
             used: words.len(),
         }),
-        // A name the player is coining. **One word, and the raw one** — a spell
-        // called `night_watch` must keep its underscore and its case, and taking
-        // the whole tail the way `Pattern` does would make `scribe my new spell`
-        // a file with spaces in it.
+        // A name the player is coining: one word, and the raw one. A spell
+        // called `night_watch` must keep its underscore and case, and taking the
+        // whole tail the way `Pattern` does would make `scribe my new spell` a
+        // file with spaces in it.
         NounKind::Name => Some(Fit {
             argument: Argument {
                 kind,
@@ -356,8 +353,8 @@ mod tests {
     #[test]
     fn a_required_slot_with_nothing_to_fill_it_is_reported() {
         // This is what turns into the numbered prompt of §6.
-        // **`invoke`, not `divine`.** `divine` took a fragment while it was a
-        // twelve-tick command that consumed one; it opens the stacks now and
+        // `invoke`, not `divine`: `divine` took a fragment while it was a
+        // twelve-tick command that consumed one. It opens the stacks now and
         // takes nothing, so it stopped being an example of a required slot.
         let filled = fill(Verb::Invoke, &words(&[]), &tower());
         assert_eq!(filled.missing.map(|m| m.kind), Some(NounKind::Script));
@@ -411,10 +408,10 @@ mod tests {
         assert_eq!(filled.arguments().len(), 3);
     }
 
-    /// **A word an optional last slot could not use is refused, not dropped** —
-    /// `dial first qqqq` turning the socket to its next sigil was a different
-    /// command from the one typed. Bare, and with filler after it, is still
-    /// the bare verb.
+    /// A word an optional last slot could not use is refused, not dropped: `dial
+    /// first qqqq` turning the socket to its next sigil was a different command
+    /// from the one typed. Bare, and with filler after it, is still the bare
+    /// verb.
     #[test]
     fn an_optional_last_slot_handed_a_word_it_cannot_use_is_refused() {
         let scene = tower().with(NounKind::Place, "/tower/lens/first");

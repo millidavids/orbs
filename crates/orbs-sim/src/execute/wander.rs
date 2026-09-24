@@ -1,19 +1,15 @@
 //! `wander` — hand the arrow keys the archive's stacks (§10, §19).
 //!
-//! # It buys the keys, and nothing else
+//! It buys the keys and nothing else. The map draws whenever a maze is open,
+//! said or not — which is what makes watching a bound solver work. So unlike
+//! `scribe` and `weave`, this opens no surface: it changes *who owns the
+//! arrows*, and a player walking by hand sees the picture a spell walks.
 //!
-//! The map draws whenever a maze is open, whether or not anybody has said this
-//! word — that is what makes watching a bound solver work for nothing. So unlike
-//! `scribe` and `weave`, this opens no surface: it changes *who owns the arrows*,
-//! and a player walking the maze by hand sees the same picture a spell walks.
-//!
-//! # What the sim owns, and what it does not
-//!
-//! Only the request. Where the arrows are pointing, and whether the border is
-//! lit, are facts about a pane, and rule 2 keeps panes out of this crate. The
+//! The sim owns only the request. Where the arrows point and whether the border
+//! is lit are facts about a pane, and rule 2 keeps panes out of this crate. The
 //! *steps* are not: an arrow becomes an ordinary `follow <way>` submission, so
-//! walking by hand and walking by spell are the same code path and replay from
-//! `(seed, submissions)` is untouched by anybody having looked.
+//! by hand and by spell are one code path and replay from `(seed, submissions)`
+//! is untouched by anybody having looked.
 
 use bevy_ecs::prelude::*;
 use orbs_render::{FieldName, RecordKind, Role};
@@ -25,7 +21,7 @@ use crate::tower::Maze;
 
 /// Whether `wander` has asked for the arrow keys.
 ///
-/// **A request, not a state**, for the reason [`Opening`](super::Opening) and
+/// A request, not a state, for the reason [`Opening`](super::Opening) and
 /// [`Weaving`](super::Weaving) both give: the verb asks once, and a frontend
 /// polling a persistent flag would seize the keyboard again on the frame after
 /// the player let it go.
@@ -58,9 +54,8 @@ impl Wandering {
 
 /// `wander` — walk the stacks by hand.
 pub(super) fn wander(world: &mut World) {
-    // **Three answers, no bare error.** §6 forbids a command that fails without
-    // saying what would have worked, and the two refusals here are the two
-    // states a player reaches by typing this in the wrong place or too early.
+    // §6 forbids a refusal that does not say what would have worked, and these
+    // are the two a player reaches: wrong place, or too early.
     let Some(lectern) = super::stacks(world) else {
         say(world, "wander_nowhere", Role::Danger);
         return;
@@ -133,8 +128,7 @@ mod tests {
 
     #[test]
     fn there_is_nothing_to_walk_until_a_maze_is_open() {
-        // The one a player reaches by typing it too early, and it has to name
-        // the way in — a refusal that does not is §6's bare error.
+        // Typed too early, so the refusal has to name the way in (§6).
         let mut sim = Sim::new(1);
         sim.submit("attend archive");
         sim.step();
@@ -161,9 +155,8 @@ mod tests {
         sim.step();
 
         assert!(!sim.has_wandering());
-        // The **stacks**, which is where the maze lives since it moved off the
-        // lectern. §6 forbids a bare error, so the refusal has to name the thing
-        // the laboratory has not got rather than only saying no.
+        // The stacks, where the maze lives since it moved off the lectern —
+        // and §6 wants the refusal to name what the laboratory has not got.
         assert!(
             messages(&sim).iter().any(|line| line.contains("stacks")),
             "the refusal did not say what was missing: {:?}",
@@ -173,11 +166,10 @@ mod tests {
 
     #[test]
     fn a_spell_cannot_seize_the_keyboard() {
-        // **Driven rather than asserted against `may_issue`**, because that list
-        // is a `matches!` and nothing makes the compiler check it. `repeat 100 /
-        // wander` is a soft-lock — the prompt is dead while the arrows have the
-        // maze, so a spell re-taking them every lap would leave Escape racing a
-        // script for the keyboard.
+        // Driven, not asserted against `may_issue`: that list is a `matches!`
+        // nothing makes the compiler check. `repeat 100 / wander` is a
+        // soft-lock — the prompt is dead while the arrows have the maze, so
+        // Escape would race the script for the keyboard.
         let mut sim = opened();
         sim.write_spell("threading", &["wander".to_owned()]);
         sim.step();

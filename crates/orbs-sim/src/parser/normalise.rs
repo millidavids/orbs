@@ -1,20 +1,20 @@
 //! Step one of the pipeline: split, lowercase, strip filler.
 //!
-//! DESIGN.md §6. Three things make this less trivial than it sounds:
+//! §6. Three things make this less trivial than it sounds:
 //!
-//! - **Filler cannot be stripped before the verb is matched.** `to`, `for`,
-//!   `of`, `do`, and `it` are all filler in an argument and all load-bearing in a
-//!   verb phrase — `go to`, `look for`, `get rid of`, `how do i`, `take it back`.
-//!   So [`Tokens::split`] keeps everything and [`strip_filler`] runs afterwards, on
+//! - Filler cannot be stripped before the verb is matched. `to`, `for`, `of`,
+//!   `do` and `it` are filler in an argument and load-bearing in a verb phrase —
+//!   `go to`, `look for`, `get rid of`, `how do i`, `take it back`. So
+//!   [`Tokens::split`] keeps everything and [`strip_filler`] runs afterwards, on
 //!   the argument tail only.
-//! - **Punctuation is not uniformly noise.** `?` is a synonym for `recall` and
-//!   `./` is one for `invoke`, while `feed.log` and `/tower/laboratory` need their
+//! - Punctuation is not uniformly noise: `?` is a synonym for `recall` and `./`
+//!   one for `invoke`, while `feed.log` and `/tower/laboratory` need their
 //!   separators intact.
-//! - **Lowercasing must not destroy the input.** [`NounKind::Pattern`](super::NounKind::Pattern) is free
-//!   text by definition, so `sift ERROR feed.log` has to search for `ERROR` and
-//!   not `error`. Every token therefore carries **both** forms: `raw` as typed,
-//!   and `matching` folded for comparison. They travel together as a [`Word`] so
-//!   that filtering filler out of one cannot desynchronise it from the other.
+//! - Lowercasing must not destroy the input.
+//!   [`NounKind::Pattern`](super::NounKind::Pattern) is free text, so `sift
+//!   ERROR feed.log` has to search for `ERROR`. Every token carries both forms —
+//!   `raw` as typed and `matching` folded — travelling together as a [`Word`] so
+//!   filtering filler cannot desynchronise them.
 //!
 //! Quoted runs are held together, so `sift "march north" feed.log` searches for
 //! a two-word phrase rather than for `"march`.
@@ -32,12 +32,11 @@
 /// keeps what the player typed.
 /// Words dropped before matching, because they carry no slot.
 ///
-/// **`and` is here, and it is the conjunction.** `mix sage-tincture and
-/// ground-salt` fills `Mix`'s two reagent slots *positionally* once `and` is
-/// gone — which is precisely the mechanism `move sage to mortar_and_pestle` has
-/// always used, `to` and `from` being on this list for the same reason. A
-/// separate conjunction node in the parser would be a second way to say what
-/// slot order already says.
+/// `and` is here, and it is the conjunction. `mix sage-tincture and ground-salt`
+/// fills `Mix`'s two reagent slots positionally once `and` is gone — the
+/// mechanism `move sage to mortar_and_pestle` has always used, `to` and `from`
+/// being on this list for the same reason. A conjunction node in the parser
+/// would be a second way to say what slot order already says.
 ///
 /// It cannot swallow part of a name: `mortar_and_pestle` and `flask_and_rod` are
 /// single whitespace-delimited tokens, and this runs on tokens.

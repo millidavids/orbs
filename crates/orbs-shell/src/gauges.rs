@@ -1,28 +1,17 @@
 //! The tower's two standings, as bars at the top of the pane (DESIGN.md §11.5).
 //!
-//! # Why these two and nothing else
+//! These two and nothing else: experience and renown are the only numbers about
+//! the tower over its whole life rather than about a room, a run or a fight.
+//! Everything else on screen is local.
 //!
-//! Experience and renown are the only numbers that are about the **tower over
-//! its whole life** rather than about a room, a run or a fight. Everything else
-//! on screen is local: the road is the room you are in, the panel is the
-//! instruments in front of you, the rail is the seven domains. These two are the
-//! game's long arc, and until now the only way to see either was to open the
-//! weave or type `status`.
+//! Both fill from the tier *behind* to the tier *ahead*. The weave's bar
+//! measures the whole line to ten thousand, which is right for a screen about
+//! the whole line and wrong for a glance — at 8 experience it is a sliver that
+//! does not move for an hour. Tier to tier it fills visibly and empties once.
 //!
-//! # Toward the next tier, not toward the end
-//!
-//! Both bars fill from the tier *behind* to the tier *ahead*. The weave's own
-//! bar measures the whole line to ten thousand, which is the right picture for a
-//! screen about the whole line and the wrong one for a glance: at 8 experience
-//! it is a sliver that does not move for an hour. Measured tier to tier it fills
-//! visibly, and empties exactly once, when one is passed.
-//!
-//! # Two rows, and they are expensive
-//!
-//! §9's main window is *"fully rendered and fully functional"* and the road
-//! already argued for one row. These take two more, so they yield before the
-//! transcript does — [`split`] hands the body back untouched when a pane is
-//! short, exactly as `road::split` does and for the same reason.
+//! Two rows, and expensive ones: §9 wants the main window fully functional and
+//! the road already took one. These yield before the transcript does, so
+//! [`split`] hands the body back untouched when a pane is short.
 
 use orbs_render::{Painter, Pos, Rect, Span, Style};
 use orbs_sim::{Ahead, Prose, Toward};
@@ -41,15 +30,13 @@ const ROWS: u16 = 2;
 
 /// Rows the body must keep after they take theirs.
 ///
-/// **Higher than the road's, because these cost twice as much.** A transcript
-/// squeezed to nothing so two standing bars could draw would be the minimised
-/// half winning over the main window, which §9 forbids.
+/// Higher than the road's, because these cost twice as much: a transcript
+/// squeezed to nothing so two standing bars could draw is the minimised half
+/// beating the main window, which §9 forbids.
 ///
-/// **The guard subtracts [`ROWS`] and `road::split`'s does not, and that is the
-/// difference rather than an inconsistency.** The road takes one row, so a body
-/// of `KEEP + 1` leaves exactly `KEEP`; these take two, so the same shape of
-/// test let a body of nine draw and kept seven — one under the floor this
-/// constant declares, with the road then taking another and leaving six.
+/// The guard subtracts [`ROWS`] where `road::split`'s does not — the road takes
+/// one row, so a body of `KEEP + 1` leaves exactly `KEEP`, while these take two
+/// and the same test let a body of nine keep seven.
 const KEEP: u16 = 8;
 
 /// Cells the label takes, gap included: `ley line` is eight and `renown` six.
@@ -57,11 +44,10 @@ const LABEL: u16 = 9;
 
 /// The widest a gauge is drawn, however wide the pane.
 ///
-/// **A gauge is a column, not a banner.** Stretched to a 120-cell pane the bar
-/// became a solid rule with a number at the far end, and the eye could not tell
-/// a third full from a half — the thing a bar is for. htop sizes its bars to a
-/// column and puts the reading against them; this is that number. What is left
-/// over stays blank, which also keeps the two rows from reading as a wall.
+/// A gauge is a column, not a banner: stretched to a 120-cell pane the bar was a
+/// solid rule with a number at the end, and the eye could not tell a third full
+/// from a half. What is left over stays blank, which also keeps the two rows
+/// from reading as a wall.
 const WIDEST: u16 = 40;
 
 /// The narrowest bar there is: two brackets with one cell between them.
@@ -145,18 +131,17 @@ fn row(
     name: Option<&str>,
     prose: &Prose,
 ) {
-    // **The reading is measured before the gauge is placed**, so the bar takes
-    // whatever is left rather than the reading being truncated by it. A number
-    // cut in half is unreadable; a bar two cells shorter is not.
+    // The reading is measured before the gauge is placed, so the bar takes
+    // what is left rather than the reading being truncated: a number cut in half
+    // is unreadable where a bar two cells shorter is not.
     //
-    // **Relative on both sides of the slash.** `done` counts from the tier
-    // behind, so pairing it with the *absolute* total of the tier ahead would
-    // read as two different scales — `8/16` is honest where `8/10000` is not.
+    // Relative on both sides of the slash, because `done` counts from the tier
+    // behind — `8/16` is honest where `8/10000` is two scales in one reading.
     //
-    // **An unmeasured track draws no row at all**, rather than guessing. It is
-    // the state a `Panel` holds before its first refresh, and the two honest
-    // readings are both wrong for it: `0/1` claims a tier is one step away and
-    // `nothing more authored` claims the game is over.
+    // An unmeasured track draws no row rather than guessing. It is what a
+    // `Panel` holds before its first refresh, and both honest readings are wrong
+    // for it: `0/1` claims a tier is one step away, `nothing more authored`
+    // claims the game is over.
     let reading = match toward.ahead {
         Ahead::Tier(_) => prose.line(
             "gauge_toward",
@@ -175,12 +160,11 @@ fn row(
         room.saturating_sub(width.saturating_add(1)).min(WIDEST)
     };
 
-    // **The title goes before the bar does**, which is what this function's own
-    // doc promised and did not do. The rank was appended unconditionally and
-    // then charged to the bar, so the longest titles starved the thing they were
-    // annotating — at the endgame `nothing more authored  remembered` is 33
-    // cells and left no bar at all in a `LEAST`-wide pane. A bar with no title
-    // still says where the tower stands; a title with no bar is a word in a gap.
+    // The title goes before the bar does, which this function's doc promised and
+    // did not do: the rank was appended unconditionally and charged to the bar,
+    // so `nothing more authored  remembered` at 33 cells left no bar at all in a
+    // `LEAST`-wide pane. A bar with no title still says where the tower stands;
+    // a title with no bar is a word in a gap.
     let titled = name.map(|name| {
         let named = prose.line(&format!("renown_{name}"), &[]);
         format!("{reading}  {named}")
@@ -193,11 +177,10 @@ fn row(
     // Spoken as a sentence rather than as a row of pipes — §14 names progress
     // bars specifically, and `gauge` takes the sentence for exactly this.
     //
-    // **A topped track speaks what it draws.** `Toward::FULL` is `1/1` — a
-    // rendering convenience that fills the bar, not a count of anything — so the
-    // ordinary sentence told a listener the tower stood *one short of a next
-    // tier* on a track whose screen said `nothing more authored`. §14's stream
-    // has to carry the same fact the screen does, and those are opposite facts.
+    // A topped track speaks what it draws. `Toward::FULL` is `1/1`, a rendering
+    // convenience rather than a count, so the ordinary sentence told a listener
+    // the tower stood one short of a next tier on a track whose screen said
+    // `nothing more authored` — §14 wants the stream carrying the same fact.
     let spoken = if matches!(toward.ahead, Ahead::Nothing) {
         prose.line("gauge_spoken_topped", &[("name", label)])
     } else {
@@ -211,19 +194,15 @@ fn row(
         )
     };
 
-    // **The gauge is called even when it cannot draw, and that is the point.**
-    // `Painter::gauge` pushes its utterance *ahead of its own clip test* so
-    // §14's stream does not depend on what happened to fit; returning here on a
-    // narrow row would defeat that one level up, and silently — a reader would
-    // simply stop being told either standing. So the bar is offered whatever
-    // width is left and clips itself, and what a narrow row loses is ink.
+    // The gauge is called even when it cannot draw: `Painter::gauge` pushes its
+    // utterance ahead of its own clip test so §14's stream does not depend on
+    // what fit, and returning here on a narrow row would defeat that silently.
+    // The bar clips itself, so a narrow row loses ink and nothing else.
     //
-    // **No accent, and that is load-bearing.** The fill warms red through
-    // yellow to green as it climbs, and it carries that as a *depiction* — the
-    // only channel a colour may travel on, since this crate is forbidden to
-    // resolve one and a boundary test enforces it. `Style::depicted` drops a
-    // picture on any accented cell, so `Role::Success` here would have painted
-    // every gauge one flat green and swallowed the ramp.
+    // No accent, and that is load-bearing. The fill warms red through yellow to
+    // green as it climbs and carries that as a *depiction*, the only channel a
+    // colour may travel on here. `Style::depicted` drops a picture on any
+    // accented cell, so `Role::Success` would paint every gauge flat green.
     painter.gauge(
         Rect::new(start, at.row, bar, 1),
         u32::try_from(toward.done).unwrap_or(u32::MAX),
@@ -232,11 +211,9 @@ fn row(
         &spoken,
     );
 
-    // **Nothing is drawn at all below a drawable bar**, rather than a label with
-    // empty space after it. `LEAST` already says a row of brackets and a
-    // truncated number "says less than nothing"; a lone dim `ley line` with no
-    // reading and no bar says the same, and it drew before this whenever a
-    // second pane halved the body or the endgame reading took the width.
+    // Nothing at all below a drawable bar, rather than a label with empty space
+    // after it: a lone dim `ley line` with no reading says less than nothing,
+    // and it drew whenever a second pane halved the body.
     if bar < NARROWEST {
         return;
     }
@@ -272,14 +249,11 @@ mod tests {
         assert!(narrow.area.is_empty(), "the gauges drew in a narrow pane");
     }
 
-    /// **`KEEP` means what it says, on the row either side of the edge.**
-    ///
-    /// The guard was `body.rows <= KEEP` — the shape `road::split` uses, which
-    /// is exact there because the road takes one row. These take two, so a body
-    /// of `KEEP + 1` passed it and kept `KEEP - 1`, and the road then took
-    /// another and kept `KEEP - 2`. The test the fix needed is not that a short
-    /// pane bails but that the *first pane the gauges draw in* still leaves the
-    /// floor standing.
+    /// `KEEP` means what it says, on the row either side of the edge. The guard
+    /// was `body.rows <= KEEP`, which is exact for `road::split` because the
+    /// road takes one row; these take two, so a body of `KEEP + 1` kept
+    /// `KEEP - 1`. What needs testing is not that a short pane bails but that
+    /// the *first* pane the gauges draw in leaves the floor standing.
     #[test]
     fn the_body_keeps_its_floor_on_the_first_row_the_gauges_draw_in() {
         for rows in 0..=KEEP + ROWS - 1 {
@@ -297,14 +271,11 @@ mod tests {
         assert_eq!(least.rest.rows, KEEP, "the body kept less than its floor");
     }
 
-    /// **A row too narrow to draw a bar still says what the bar would have.**
-    ///
-    /// §14's rule, and `Painter::gauge` already keeps it by pushing its
-    /// utterance ahead of its own clip test. This row defeated that by returning
-    /// before calling it — so a reader lost both standings entirely, and a
-    /// sighted player got a dim orphan label with nothing after it. Reachable
-    /// today at the endgame reading, where `gauge_topped` plus a rank takes the
-    /// width a `LEAST`-wide pane has.
+    /// A row too narrow to draw a bar still says what the bar would have (§14).
+    /// `Painter::gauge` keeps that by pushing its utterance ahead of its own
+    /// clip test, and this row defeated it by returning before calling it — so a
+    /// reader lost both standings and a sighted player got an orphan label.
+    /// Reachable at the endgame reading in a `LEAST`-wide pane.
     #[test]
     fn a_row_with_no_room_for_a_bar_still_speaks_its_reading() {
         let prose = Prose::builtin();
@@ -353,13 +324,11 @@ mod tests {
         );
     }
 
-    /// **A track with nothing left to reach must not speak of a next tier.**
-    ///
-    /// `Toward::FULL` is `1/1` because that fills the bar, not because anything
-    /// is one short of anything. The sentence read those two numbers anyway, so
-    /// the screen said `nothing more authored` and a listener was told the tower
-    /// stood one step from a tier that does not exist — the two halves of §14's
-    /// one stream disagreeing about a fact.
+    /// A track with nothing left to reach must not speak of a next tier.
+    /// `Toward::FULL` is `1/1` because that fills the bar, and the sentence read
+    /// those numbers anyway — so the screen said `nothing more authored` while a
+    /// listener was told the tower stood one step from a tier that does not
+    /// exist, the two halves of §14's one stream disagreeing.
     #[test]
     fn a_topped_gauge_speaks_what_it_draws() {
         let prose = Prose::builtin();
@@ -396,14 +365,12 @@ mod tests {
         );
     }
 
-    /// **An unmeasured track says nothing rather than saying it has finished.**
-    ///
-    /// `Toward::default` is what a `Panel` holds before its first refresh, and
-    /// it used to be indistinguishable from a topped track — both were `at:
-    /// None` — so the emptiest possible tower drew and spoke as the most
-    /// finished one. Every frontend refreshes before it paints, so this was
-    /// never on screen; the type simply could not tell the two apart, and one
-    /// forgotten refresh was all it would have taken.
+    /// An unmeasured track says nothing rather than saying it has finished.
+    /// `Toward::default` is what a `Panel` holds before its first refresh and
+    /// used to be indistinguishable from a topped track — both `at: None` — so
+    /// the emptiest tower drew as the most finished one. Never on screen,
+    /// because every frontend refreshes before it paints; one forgotten refresh
+    /// was all it would have taken.
     #[test]
     fn an_unmeasured_track_draws_and_says_nothing() {
         let prose = Prose::builtin();
@@ -431,12 +398,10 @@ mod tests {
         );
     }
 
-    /// **The title yields to the bar, which is what the doc always promised.**
-    ///
-    /// The rank was appended to the reading and the whole tail charged to the
-    /// bar, so the longest titles starved it: at the endgame the renown tail is
-    /// `nothing more authored  remembered`, 33 cells against the 25 a
-    /// `LEAST`-wide pane leaves, and the row drew nothing at all.
+    /// The title yields to the bar, which is what the doc always promised. The
+    /// rank was appended to the reading and the whole tail charged to the bar,
+    /// so `nothing more authored  remembered` — 33 cells against the 25 a
+    /// `LEAST`-wide pane leaves — drew no row at all.
     #[test]
     fn a_long_title_yields_before_the_bar_does() {
         let prose = Prose::builtin();

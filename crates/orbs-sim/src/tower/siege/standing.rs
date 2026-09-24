@@ -1,9 +1,7 @@
 //! How big a siege arrives, and what buying it down costs (§11.5, §19).
 //!
-//! **Renown decides the ceiling; `petition` lowers it.** The two halves are one
-//! mechanic and belong in one file: standing is the thing that raises the tail
-//! and the thing you spend to shorten it, so a reader who changes one number
-//! here can see the other from where they are standing.
+//! Renown decides the ceiling and `petition` lowers it — one mechanic, so both
+//! halves live here and a reader changing one number can see the other.
 //!
 //! Nothing in here draws. The ceiling is a pure function of the tower's rank and
 //! what has been petitioned, so it composes with `Siege::begin_against` without
@@ -17,21 +15,18 @@ use super::{BASE_MOST, FEWEST, MOST, RANKS_PER_FOE};
 
 /// What one foe fewer costs in standing.
 ///
-/// **Priced against the stake a siege already carries.** `RENOWN_PER_FOE` is
-/// what a foe is *worth* when the wall holds, so buying one off for the same
-/// number is a wash on the night and a real cost across an evening: you are
-/// handing back exactly what that foe would have paid you.
+/// Priced at `RENOWN_PER_FOE`, what a foe is worth when the wall holds: buying
+/// one off hands back exactly what that foe would have paid you.
 ///
-/// It is also self-limiting without a second rule. Spending drops your rank,
-/// which lowers the ceiling anyway — so a player who petitions habitually stops
-/// needing to, and the mechanic quietly retires itself instead of becoming a tax
-/// on every siege.
+/// Self-limiting without a second rule — spending drops your rank, which lowers
+/// the ceiling anyway, so habitual petitioning retires the mechanic rather than
+/// becoming a tax on every siege.
 pub const PETITION_PER_FOE: u64 = super::RENOWN_PER_FOE;
 
 /// How many foes have been bought off the next siege to arrive.
 ///
-/// **A resource rather than a component**, because it outlives every siege: it
-/// is bought when no rampart is standing and spent by the next one that opens.
+/// A resource rather than a component, because it outlives every siege: bought
+/// when no rampart is standing, spent by the next one that opens.
 ///
 /// `#[serde(default)]` at its save site — absent reads as nought, which is the
 /// honest reading of a document written before anyone could petition, so no
@@ -67,18 +62,13 @@ impl Petitioned {
 /// The largest enemy this tower would meet, at `ranks` standing, having
 /// petitioned `bought` foes away.
 ///
-/// # The floor never moves
+/// The floor never moves: [`FEWEST`] is the answer at every standing, so fame
+/// lengthens the *tail* rather than shifting the band — a famous tower can
+/// still draw a quiet night, and an unknown one never meets the worst.
 ///
-/// [`FEWEST`] is the answer at every standing, so fame lengthens the *tail*
-/// rather than shifting the whole band: a famous tower can still draw a quiet
-/// night, and an unknown one never meets the worst. That is what keeps variance
-/// meaningful at both ends instead of squeezing it against the ceiling.
-///
-/// # And it can never fall below the floor
-///
-/// `petition` is refused once the ceiling is already at [`FEWEST`], which is why
-/// this saturates rather than wrapping: a player who has bought the tail away
-/// entirely is told so and keeps their renown.
+/// Saturating rather than wrapping, because `petition` is refused once the
+/// ceiling is already at [`FEWEST`]: a player who bought the tail away entirely
+/// is told so and keeps their renown.
 #[must_use]
 pub fn most_at(ranks: usize, bought: u32) -> u32 {
     let earned = u32::try_from(ranks / RANKS_PER_FOE).unwrap_or(u32::MAX);
@@ -95,8 +85,8 @@ mod tests {
 
     #[test]
     fn the_tail_lengthens_with_standing_and_the_floor_never_moves() {
-        // Ten ranks over three foes, and `FEWEST` is the answer at every one of
-        // them — which is the property that keeps a bad night survivable.
+        // Ten ranks buys three foes of tail, and the floor moves with none of
+        // them — which is what keeps a bad night survivable.
         assert_eq!(most_at(0, 0), BASE_MOST);
         assert_eq!(most_at(2, 0), BASE_MOST);
         assert_eq!(most_at(3, 0), BASE_MOST + 1);
@@ -107,8 +97,8 @@ mod tests {
     #[test]
     fn the_written_ceiling_holds_however_famous_the_tower() {
         // The garrison is six and `outnumbered` is `enemy >= garrison * 2`, so
-        // twelve is where that reading turns over. Past it the rung three
-        // shipped solvers branch on would be true in every fight.
+        // twelve is where that reading turns over — past it, the rung three
+        // shipped solvers branch on is true in every fight.
         for ranks in 0..100 {
             assert!(
                 most_at(ranks, 0) <= MOST,

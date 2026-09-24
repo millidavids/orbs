@@ -6,11 +6,11 @@
 //! what lies beyond — because a player who has learned the marks on one screen
 //! must find the same marks meaning the same things on the next.
 //!
-//! **All of these are in CP437 and were checked**, which is not a formality:
-//! `●` (U+25CF) is *not* in the table, and the renderer skips what it cannot
-//! draw — so "taken" would have rendered as nothing at all, collapsing the one
-//! distinction §14 says must not be carried by colour alone. `•` is 0x07, `○`
-//! is 0x09, `·` is 0xFA, and `─` is 0xC4.
+//! All of these are in CP437 and were checked, which is not a formality: `●`
+//! (U+25CF) is not in the table and the renderer skips what it cannot draw, so
+//! "taken" would have rendered as nothing at all — collapsing the one
+//! distinction §14 says colour must not carry alone. `•` is 0x07, `○` is 0x09,
+//! `·` is 0xFA, `─` is 0xC4.
 
 use orbs_render::{Intensity, Painter, Pos, Role, Style};
 use orbs_sim::{Standing, Walk};
@@ -27,11 +27,11 @@ pub const RUN: char = '\u{2500}';
 /// The frame around a station sitting on a line, and the frame around the
 /// aimed one.
 ///
-/// **Two pairs, because brightness could not do it.** An aimed `○` drawn Bright
-/// is identical to the sibling beside it — `NEXT` is already Bright — and §14
-/// forbids the difference being colour. So the aimed station changes its
-/// *cells*. `»` is CP437 0xAF, which the editor already uses to mark the line an
-/// invocation has reached; `«` is 0xAE beside it.
+/// Two pairs, because brightness could not do it: an aimed `○` drawn Bright is
+/// identical to the sibling beside it (`NEXT` is already Bright), and §14
+/// forbids the difference being colour. So the aimed station changes its cells.
+/// `»` is CP437 0xAF, which the editor uses to mark the line an invocation has
+/// reached; `«` is 0xAE beside it.
 pub const FRAME: (char, char) = ('[', ']');
 pub const AIMED: (char, char) = ('\u{ab}', '\u{bb}');
 
@@ -57,19 +57,17 @@ pub fn walk_mark(walk: Walk) -> (char, Style) {
 
 /// A mark in its frame — `[○]`, or `«○»` and Bright when aimed at.
 ///
-/// **A frame either side, always** — a station standing on a line needs to
-/// read as a station rather than as a break in it. The frame overwrites one
-/// cell of the run on each side, which is why a run is drawn before its
-/// stations.
+/// A frame either side, always, so a station on a line reads as a station rather
+/// than a break in it. The frame overwrites one cell of the run on each side,
+/// which is why a run is drawn before its stations.
 ///
-/// **Bright as well as framed, when aimed.** The frame is what survives
-/// greyscale; the brightness is what the eye finds first. Two carriers for one
-/// fact is what §14 asks for — neither is doing it alone.
+/// Bright as well as framed when aimed: the frame survives greyscale, the
+/// brightness is what the eye finds first. Two carriers for one fact is what §14
+/// asks for.
 ///
-/// **Silent.** `Painter::span` would push the glyph's own text into the speech
-/// stream, so a reader would hear "`○`" and be told nothing; the caller owes the
-/// listener an utterance in words, which is the division `Painter::meter`
-/// makes.
+/// Silent, because `Painter::span` would push the glyph's own text into the
+/// speech stream and a reader would hear "`○`" and be told nothing. The caller
+/// owes the listener an utterance in words — `Painter::meter`'s division.
 pub fn framed(painter: &mut Painter<'_>, x: u16, y: u16, mark: char, style: Style, aimed: bool) {
     let (open, close) = if aimed { AIMED } else { FRAME };
     let frame = if aimed {
@@ -93,11 +91,10 @@ pub fn framed(painter: &mut Painter<'_>, x: u16, y: u16, mark: char, style: Styl
 /// A mark with no frame of its own — for a line with more stations on it than
 /// the pane can frame.
 ///
-/// **The aimed one keeps its frame.** The frame is what carries "aimed" without
-/// colour (§14), so dropping it would leave brightness doing the job alone; and
-/// at the tight gap the two frame cells land on the run between marks rather
-/// than on a neighbour. Everything else about it is [`framed`]'s: silent, and a
-/// run drawn first.
+/// The aimed one keeps its frame, because the frame is what carries "aimed"
+/// without colour (§14) — dropping it leaves brightness doing the job alone —
+/// and at the tight gap the two frame cells land on the run between marks.
+/// Everything else is [`framed`]'s: silent, and a run drawn first.
 pub fn bare(painter: &mut Painter<'_>, x: u16, y: u16, mark: char, style: Style, aimed: bool) {
     if aimed {
         framed(painter, x, y, mark, style, true);

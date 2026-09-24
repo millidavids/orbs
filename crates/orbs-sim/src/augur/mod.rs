@@ -1,45 +1,27 @@
 //! The augury's seam — what reads a line the orb could not read itself (§6).
 //!
-//! # Why the trait lives here, with no dependency to show for it
+//! The trait lives here with no dependency to show for it: a reader takes a
+//! line and answers with a canonical command, and both are `str`. So it sits
+//! beside [`is_literal`] and [`Analysis::reads_outright`], the questions asked
+//! before it, and [`Sim::submit_divined`], which is what happens after. In a
+//! frontend it would split one rule across two crates; here `orbs-sim` owns the
+//! whole of *which lines go to a reader* and stays headless and synchronous.
 //!
-//! A reader takes a line and answers with a canonical command, and both are
-//! `str`. Nothing about the seam needs a tensor, a device, or a crate that
-//! knows what either is — so it sits beside [`is_literal`] and
-//! [`Analysis::reads_outright`], which are the two questions asked *before* it,
-//! and [`Sim::submit_divined`], which is what happens after.
+//! A reader never sees the world. [`Augur::read`] gets the line and nothing
+//! else, and answers with the player's own words in the slots: `smash the sage`
+//! becomes `grind sage`, not `grind /tower/laboratory/sage` — binding a name to
+//! something in the room is `parser::resolve`'s work. That is what makes a
+//! reader cheap: none needs a `Scene`, none goes stale between ticks, and none
+//! can disagree with the matcher about what a name means.
 //!
-//! Putting it in a frontend instead would have split one rule across two
-//! crates and given the headless driver nothing to hold. Here, `orbs-sim` owns
-//! the whole of *which lines go to a reader*, and the reader itself is somebody
-//! else's problem — which is the boundary that lets this crate stay headless,
-//! synchronous and testable in milliseconds.
+//! [`Fixture`] answers from a table and is how every headless instrument
+//! reaches a divined line at all. [`Grammar`] matches the authored templates in
+//! `content/phrasings.toml` and is the baseline a trained reader has to beat:
+//! within a point or two of it, the corpus was the whole feature.
 //!
-//! # A reader never sees the world
-//!
-//! [`Augur::read`] gets the line and nothing else, and answers with a canonical
-//! command carrying **the player's own words in its slots**: `smash the sage`
-//! becomes `grind sage`, not `grind /tower/laboratory/sage`. Binding a name to
-//! something that is actually in the room is `parser::resolve`'s work and stays
-//! deterministic, integer-scored and explainable.
-//!
-//! That is not a restriction, it is what makes a reader cheap: no reader needs
-//! a `Scene`, none can go stale between ticks, and none can disagree with the
-//! matcher about what a name means.
-//!
-//! # Two readers, and neither is a placeholder
-//!
-//! [`Fixture`] answers from a table and is how every headless instrument —
-//! `ORBS_DUMP`, `scripts/dumps.sh`, `scripts/play.sh` — can reach a divined
-//! line at all. [`Grammar`] matches the authored templates in
-//! `content/phrasings.toml` and is the **baseline a trained reader has to
-//! beat**: if it lands within a point or two, the corpus was the whole feature.
-//!
-//! # Nothing here is required
-//!
-//! A tower with no reader is the game exactly as it was: [`Sim::submit`] is
-//! still the path every literal line takes, and a line the deterministic
-//! pipeline cannot read still reaches §6's suggestions rather than a bare
-//! error.
+//! None of it is required. [`Sim::submit`] is still the path every literal line
+//! takes, and a line the deterministic pipeline cannot read still reaches §6's
+//! suggestions rather than a bare error.
 //!
 //! [`is_literal`]: crate::parser::is_literal
 //! [`Analysis::reads_outright`]: crate::parser::Analysis::reads_outright

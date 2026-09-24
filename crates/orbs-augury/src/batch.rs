@@ -30,11 +30,10 @@ pub struct Batch<B: Backend> {
     pub tags: Tensor<B, 2, Int>,
     /// `[sentences, MAX_LEN]`, true where a row is a real word.
     ///
-    /// **The metric needs this even when the loss does not.** A sentence is four
+    /// The metric needs this even when the loss does not. A sentence is four
     /// words in a thirty-two row buffer, so tagging accuracy counted over the
     /// whole buffer is seven-eighths a measure of how well the reader predicts
-    /// padding — which it learns in the first minute and which nobody cares
-    /// about.
+    /// padding — which it learns in the first minute.
     pub real: Tensor<B, 2, Bool>,
 }
 

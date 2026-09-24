@@ -14,17 +14,15 @@
 //! ```
 //!
 //! One texture rather than three keeps the renderer to a single bind group, and
-//! stacking by face means a cell's atlas coordinate is pure arithmetic on
-//! `(cp437_index, Presentation)` with no lookup table.
+//! stacking by face makes a cell's atlas coordinate pure arithmetic on
+//! `(cp437_index, Presentation)`.
 //!
-//! The texture is **white with coverage in alpha**, not a single-channel
-//! coverage map. Bevy's stock `ColorMaterial` multiplies the sampled texel by
-//! the vertex colour, so `(1, 1, 1, coverage) * (r, g, b, 1)` gives the glyph in
-//! the cell's colour with no custom shader at all. An `R8Unorm` atlas would
-//! sample as `(coverage, 0, 0, 1)` and tint the whole screen red.
+//! White with coverage in alpha, not a coverage map: `ColorMaterial` multiplies
+//! texel by vertex colour, so `(1, 1, 1, coverage) * (r, g, b, 1)` needs no
+//! custom shader, where an `R8Unorm` atlas would tint the screen red.
 //!
-//! Colour itself is resolved per cell from the phosphor theme, because
-//! `orbs-render` never emits one (architectural rule 2). See [`super::palette`].
+//! Colour is resolved per cell from the phosphor theme, because `orbs-render`
+//! never emits one (architectural rule 2). See [`super::palette`].
 
 use bevy::asset::RenderAssetUsages;
 use bevy::image::{ImageFilterMode, ImageSampler, ImageSamplerDescriptor};
@@ -65,19 +63,12 @@ pub(crate) struct GlyphAtlas {
 
 /// The UV rectangle for a glyph, as `(u0, v0, u1, v1)`.
 ///
-/// Half-texel insets are deliberately absent, and what that rests on has
-/// narrowed. It used to be that sampling was Nearest *and* the cell grid was
-/// integer-scaled, so no texel was ever interpolated at all. Magnification is
-/// still Nearest, so an upscaled glyph is exact whether or not the scale is a
-/// whole number — the sampler picks one texel per fragment and a cell edge falls
-/// where it falls.
-///
-/// **Minification is the case with no inset to protect it**, because bilinear
-/// there would reach a neighbouring glyph's column: the atlas packs 8×16 cells
-/// edge to edge with no padding. That is survivable only because it is
-/// unreachable above `MIN_SCALE` — below the floor the game draws the
-/// "window too small" card and nothing else. Adding padding here is the price of
-/// ever wanting a sub-native picture for real.
+/// No half-texel insets: magnification is Nearest, so an upscaled glyph is
+/// exact whatever the scale. Minification is the case with nothing protecting
+/// it — bilinear there reaches a neighbouring glyph's column, since the atlas
+/// packs 8×16 cells edge to edge — and it is survivable only because it is
+/// unreachable above `MIN_SCALE`. Padding is the price of ever wanting a
+/// sub-native picture.
 pub(crate) fn uv(index: u8, presentation: Presentation) -> (f32, f32, f32, f32) {
     let column = f32::from(u16::from(index) % 16);
     let row = f32::from(u16::from(index) / 16);
@@ -136,18 +127,12 @@ pub(crate) fn build(images: &mut Assets<Image>) -> GlyphAtlas {
         RenderAssetUsages::RENDER_WORLD,
     );
 
-    // **Nearest going up, Linear coming down**, and the asymmetry is the point.
-    //
-    // A bitmap font filtered bilinearly is a blurred bitmap font, and DESIGN.md
-    // §4 is explicit that legibility is the product — so magnification, which is
-    // every window at or above `MIN_SCALE`, stays Nearest.
-    //
-    // Minification is the opposite problem. Nearest *drops* whole source columns
-    // rather than softening them, so an 8-pixel glyph squeezed into 6 loses two
-    // of its strokes and which two depends on where the letter sits — the same
-    // word becomes a different smear at every position. That is only reachable
-    // below the floor, where all the game draws is the "window too small" card,
-    // and a soft card beats a broken one. See `uv` for what has no inset.
+    // Nearest going up, Linear coming down. A bitmap font filtered bilinearly
+    // is a blurred bitmap font and §4 makes legibility the product, so every
+    // window at or above `MIN_SCALE` stays Nearest. Going down, Nearest *drops*
+    // whole source columns — 8 pixels squeezed into 6 loses two strokes, and
+    // which two depends on where the letter sits — and that is only reachable
+    // below the floor, where all the game draws is the "too small" card.
     image.sampler = ImageSampler::Descriptor(ImageSamplerDescriptor {
         mag_filter: ImageFilterMode::Nearest,
         min_filter: ImageFilterMode::Linear,
@@ -212,8 +197,7 @@ mod tests {
 
     #[test]
     fn every_face_draws_every_glyph_the_frame_can_hold() {
-        // The whole point of the fallback. A blank slot here is a hole on screen
-        // that shows up only for characters nobody tested.
+        // A blank slot is a hole on screen, for characters nobody tested.
         for (index, face) in faces().iter().enumerate() {
             for code in 0..=u8::MAX {
                 if !glyphs::needs_glyph(code) {
@@ -244,8 +228,7 @@ mod tests {
 
     #[test]
     fn the_three_faces_are_actually_different() {
-        // If two bands were identical, Presentation would be carrying no
-        // information and the whole scheme would be silently inert.
+        // Two identical bands means `Presentation` carries no information.
         let [plain, eldritch, tampered] = faces();
         let letters: Vec<usize> = (b'a'..=b'z').map(usize::from).collect();
 
@@ -285,8 +268,8 @@ mod tests {
 
     #[test]
     fn unset_pixels_stay_fully_transparent() {
-        // The material multiplies texel by vertex colour, so a glyph's empty
-        // pixels must be alpha 0 — otherwise every cell draws a solid block.
+        // The material multiplies texel by vertex colour, so empty pixels must
+        // be alpha 0 or every cell draws a solid block.
         let mut pixels = blank_atlas();
         let mut face = [glyphs::BLANK; 256];
         face[0][0] = 0b1000_0000;
@@ -298,9 +281,8 @@ mod tests {
 
     #[test]
     fn uvs_tile_the_atlas_without_overlapping() {
-        // Every glyph must map to its own rectangle; an off-by-one here draws
-        // the neighbouring character, which is the kind of bug that only shows
-        // on the glyphs nobody tested.
+        // An off-by-one draws the neighbouring character — a bug that shows
+        // only on the glyphs nobody tested.
         let (u0, v0, u1, v1) = uv(0, Presentation::Plain);
         assert!((u0 - 0.0).abs() < 1e-6 && (v0 - 0.0).abs() < 1e-6);
         assert!((u1 - 1.0 / 16.0).abs() < 1e-6);

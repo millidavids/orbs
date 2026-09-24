@@ -1,22 +1,17 @@
 //! The reader itself.
 //!
-//! # Small because the corpus is small, not because a GPU is slow
+//! Small because the corpus is small, not because a GPU is slow. With no
+//! pretrained English underneath it (§19, *the augury*), the corpus is the only
+//! source of capability, so the model is sized against 11,243 examples rather
+//! than the hardware: `d_model` 128 and two layers is ~341k parameters, about
+//! 30 per example — the ratio that makes learning rather than memorising
+//! plausible. Most of it is the encoder: 466 words is a 60k table against 262k
+//! of attention.
 //!
-//! With no pretrained English underneath it (DESIGN.md §19, *the augury*), the
-//! corpus is the only source of capability — so the model is sized against
-//! 11,243 examples rather than against the hardware. At `d_model` 128 and two
-//! layers it is ~341k parameters, about **30 per training example**, which is
-//! the ratio that makes learning rather than memorising plausible.
-//!
-//! Most of that is the encoder, not the embedding table: the game speaks 466
-//! words, so the table is 60k parameters and the two attention layers are 262k.
-//!
-//! # Two heads, one pass
-//!
-//! `<cls>` carries *which command this is*; every other row carries *what this
-//! word is doing in it*. Both are read from the same encoding, because the verb
-//! and its arguments are not independent — *"put the sage in the mortar"* is
-//! `grind` **because** of where the sage went.
+//! Two heads, one pass. `<cls>` carries *which command this is*; every other
+//! row carries *what this word is doing in it*. Both read the same encoding,
+//! because the verb and its arguments are not independent — *"put the sage in
+//! the mortar"* is `grind` because of where the sage went.
 
 use burn::nn::transformer::{
     TransformerEncoder, TransformerEncoderConfig, TransformerEncoderInput,
@@ -40,12 +35,10 @@ pub struct ReaderConfig {
     pub rows: usize,
     /// How many things the classifying head chooses between.
     ///
-    /// **A number rather than [`VERBS`], so a second reader costs no second
-    /// model.** The spell register asks the identical question of an identical
-    /// sentence — *which statement is this, and which words are its argument* —
-    /// over a different set of answers: twelve spell words and *this is a
-    /// command* instead of the verbs. Everything else is the same, so what
-    /// differs is one width and one corpus.
+    /// A number rather than [`VERBS`], so a second reader costs no second
+    /// model: the spell register asks the identical question of an identical
+    /// sentence over a different set of answers, so what differs is one width
+    /// and one corpus.
     #[config(default = "VERBS")]
     pub classes: usize,
     /// Encoding width.
@@ -72,22 +65,21 @@ pub struct ReaderConfig {
 pub struct Reader<B: Backend> {
     /// One row per known word, plus one per hash bucket.
     words: Embedding<B>,
-    /// **Learned, not sinusoidal.** Position means something specific here —
-    /// the verb is usually at the front and the argument usually after it — and
-    /// with 32 positions there is nothing to extrapolate to.
+    /// Learned, not sinusoidal: position means something specific here — the
+    /// verb at the front, the argument after it — and with 32 positions there
+    /// is nothing to extrapolate to.
     places: Embedding<B>,
     body: TransformerEncoder<B>,
-    /// Reads `<cls>` **and a summary of what the tagger found**: which command.
+    /// Reads `<cls>` and a summary of what the tagger found: which command.
     ///
     /// See [`Reader::forward`] for why it is given both.
     verb: Linear<B>,
-    /// **Whether there is a command here at all**, as its own question.
+    /// Whether there is a command here at all, as its own question.
     ///
-    /// It was the forty-seventh row of [`verb`](Self::verb) and that was a
-    /// design fault: one softmax cannot express *"almost certainly `grind`"* and
-    /// *"almost certainly nothing"* independently, because raising either lowers
-    /// the other. The two accuracies traded against each other between adjacent
-    /// epochs — 38.6% refusing, then 93.2% (§19). Two outputs of their own,
+    /// It was the forty-seventh row of [`verb`](Self::verb), and one softmax
+    /// cannot express *"almost certainly `grind`"* and *"almost certainly
+    /// nothing"* independently — the two accuracies traded between adjacent
+    /// epochs, 38.6% refusing then 93.2% (§19). Two outputs of their own,
     /// competing with nothing.
     command: Linear<B>,
     /// Reads every row: what that word is doing.
@@ -118,14 +110,14 @@ impl ReaderConfig {
 /// What the reader concluded about one batch.
 #[derive(Debug, Clone)]
 pub struct Reading<B: Backend> {
-    /// Per sentence, a score for every verb. **No reject row** — see
+    /// Per sentence, a score for every verb. No reject row — see
     /// [`command`](Self::command).
     pub verb: Tensor<B, 2>,
     /// Per sentence, two scores: asks for nothing, or asks for something.
     ///
-    /// Row 1 is *"this is a command"*. Read this **before** `verb`: the verb
-    /// head always names its best guess, and on a sentence that asks for
-    /// nothing that guess means nothing.
+    /// Row 1 is *"this is a command"*. Read it before `verb`: the verb head
+    /// always names its best guess, and on a sentence that asks for nothing
+    /// that guess means nothing.
     pub command: Tensor<B, 2>,
     /// Per word, a score for every tag.
     pub tags: Tensor<B, 3>,
@@ -141,9 +133,9 @@ impl<B: Backend> Reader<B> {
         let [batch, length] = tokens.dims();
         let device = tokens.device();
 
-        // 0, 1, 2 … for every sentence in the batch, so each row knows where it
-        // sits. Built here rather than passed in: it is a fact about the shape,
-        // and a caller that got it wrong would be hard to notice.
+        // 0, 1, 2 … so each row knows where it sits. Built here rather than
+        // passed in: it is a fact about the shape, and a caller that got it
+        // wrong would be hard to notice.
         let places = Tensor::arange(0..length as i64, &device)
             .reshape([1, length])
             .repeat_dim(0, batch);
@@ -153,10 +145,9 @@ impl<B: Backend> Reader<B> {
             .body
             .forward(TransformerEncoderInput::new(encoded).mask_pad(pad.clone()));
 
-        // `<cls>` is row zero and belongs to no word, which is what makes it
-        // free to carry the sentence's kind. Reshaped rather than squeezed: the
-        // width is read off the tensor, so a change to `WIDTH` cannot leave a
-        // stale dimension behind here.
+        // `<cls>` is row zero and belongs to no word, so it is free to carry the
+        // sentence's kind. Reshaped rather than squeezed: the width is read off
+        // the tensor, so a change to `WIDTH` leaves no stale dimension here.
         let [_, _, width] = encoded.dims();
         let cls = encoded
             .clone()
@@ -165,21 +156,16 @@ impl<B: Backend> Reader<B> {
 
         let tags = self.tag.forward(encoded.clone());
 
-        // # The verb head is told what the tagger found
+        // The verb head is told what the tagger found, because the two were
+        // asymmetric: tagging reads 97.1% and verbs 72.3%, so the slot
+        // predictions are reliable evidence the verb head was never given.
+        // (Slot-gating, in the intent/slot literature.)
         //
-        // **Because the two heads were wildly asymmetric and one of them knew
-        // something.** Tagging reads 97.1% and verbs 72.3%: the model reliably
-        // knows *which words are the argument* and often not *what is being
-        // asked* — so the slot predictions are reliable evidence the verb head
-        // was never given. This is the joint-model pattern the intent/slot
-        // literature calls slot-gating or stack-propagation.
-        //
-        // It is aimed at a specific confusion. `can you take me over to the
-        // lectern` came back `move lectern` rather than `attend lectern`, and
-        // what separates those two commands is **how many slots are filled** —
-        // `attend` takes one, `move` takes two. Pooling per *slot* rather than
-        // over the sentence as a whole is what puts that fact in front of the
-        // head that needs it.
+        // Aimed at a specific confusion: `can you take me over to the lectern`
+        // came back `move lectern` rather than `attend lectern`, and what
+        // separates them is how many slots are filled. Pooling per *slot*
+        // rather than over the whole sentence puts that in front of the head
+        // that needs it.
         let weights = burn::tensor::activation::softmax(tags.clone(), 2);
         // Padding has an encoding like anything else and must not vote. `pad` is
         // true where a row is padding, so the mask is its inverse.
@@ -203,9 +189,8 @@ impl<B: Backend> Reader<B> {
             .repeat_dim(2, width);
         let summary = (pooled / mass).reshape([batch, width * Tag::COUNT]);
 
-        // Both heads read the same thing. What differs is the question, and
-        // that is the whole change: neither answer costs the other any of its
-        // probability mass now.
+        // Both heads read the same thing; only the question differs, so neither
+        // answer costs the other any probability mass.
         let read = Tensor::cat(vec![cls, summary], 1);
         Reading {
             verb: self.verb.forward(read.clone()),
@@ -244,10 +229,10 @@ mod tests {
 
     #[test]
     fn it_is_the_size_the_sizing_argument_claimed() {
-        // **The ratio is the whole reason the model looks like this**, so it is
-        // worth an assertion rather than a comment. ~341k against a corpus of
-        // 11,243 is about 30 parameters per example; ten times either way would
-        // mean the sizing argument in §19 no longer describes what is built.
+        // The ratio is why the model looks like this, so it is an assertion
+        // rather than a comment: ~341k against 11,243 examples is about 30
+        // apiece, and ten times either way means §19's sizing argument no
+        // longer describes what is built.
         let (reader, _) = reader();
         let parameters = reader.num_params();
         println!("{parameters} parameters");

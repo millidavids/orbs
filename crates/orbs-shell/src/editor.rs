@@ -1,75 +1,26 @@
 //! The spell editor: three states, and words rather than punctuation.
 //!
-//! DESIGN.md §8 has the player keeping their spellbook in their own editor and
-//! hot-reloading it. That needs files on disk and a watcher, which is later
-//! Phase 1 work; this is the in-game shape of the same thing, and building it
-//! first keeps the two aligned — what a save does here is what `:w` in vim will
-//! have to do there.
+//! The in-game shape of §8's hot-reloaded spellbook, built first so the two
+//! agree — what a save does here is what `:w` in vim will have to do there.
 //!
-//! # Three states, and you start in the one that cannot lose your work
+//! [`Mode::Command`] takes words, [`Mode::Editing`] takes keystrokes into the
+//! spell, and [`Mode::Reading`] shows the buffer as the orb hears it, which is
+//! where the orb's reading went when saving stopped rewriting the file (§19).
+//! Opening in command state means the first keystroke cannot damage anything.
 //!
-//! [`Mode::Command`] is where the editor opens. You type **words** — `edit`,
-//! `interpret` and `quit`, which is all of them — and they do what they say.
-//! [`Mode::Editing`] is where keystrokes go into the spell, and `Esc` comes
-//! back.
+//! No `save`: the buffer writes itself out a beat after the typing stops
+//! ([`Editor::settle`]), and a spell can be edited *while it is running* — so
+//! there is nothing to discard and nothing for `quit` to refuse over.
 //!
-//! [`Mode::Reading`] is the third and the newest. The file stopped being
-//! rewritten when it is saved (§19), which is what a player asked for — and it
-//! took away the only place the orb's reading was ever visible. `interpret`
-//! is where that went: the buffer, line for line, as the orb hears it.
-//!
-//! # There is no `save`
-//!
-//! The buffer writes itself out a beat after the typing stops — see
-//! [`Editor::settle`]. A spell can be edited **while it is running** and the orb
-//! picks the change up between steps, which makes saving part of the loop rather
-//! than a thing you finish with: you fix a line, and watch the next pass take
-//! it. A `save` word standing in the middle of that is a chore where the
-//! mechanic should be.
-//!
-//! It follows that there is nothing to discard, and nothing for `quit` to refuse
-//! over. Both of those words existed and both are gone.
-//!
-//! This replaces a single always-insert mode with a `:` command line, which was
-//! a worse shape for two reasons. The small one: `:` is punctuation you have to
-//! be told about, and the game around it is built on §6's *"you type what you
-//! mean and the orb works out what you meant"* — a modal surface that answers to
-//! `edit` and `quit` is the same game as the one outside it, while one that
-//! answers to `:wq` is a different program wearing its clothes.
-//!
-//! The large one: **opening in command state means the first keystroke cannot
-//! damage anything.** A player who does not yet know what this screen is presses
-//! a key and gets told what the words are, rather than silently editing a spell
-//! they thought they were reading.
-//!
-//! # Why the buffer is here and not in `orbs-sim`
-//!
-//! The same test that put [`Line`](super::Line) here. A keystroke reaches no
-//! decision: it never enters `Submissions`, never enters `ParseLog`, and cannot
-//! make two runs from one seed diverge. **The save is the decision**, and that
-//! goes through `Sim::write_spell` as a single entry carrying the whole buffer.
-//!
-//! Three things follow that would otherwise have to be worked around:
-//!
-//! - `orbs-sim` may not name a layout type at all — `tests/boundaries.rs`
-//!   enforces it by substring — so a buffer over there could not know its own
-//!   pane height, and scrolling would have to live on this side anyway.
-//! - `ORBS_DUMP` runs in this crate and already reaches into `Line` for
-//!   `ORBS_LINE`, so a frontend-side buffer is *easier* to drive from a dump,
-//!   not harder.
-//! - There is only one editor. The third reason used to be *"`orbs-tui` is a
-//!   stub with nothing to diverge from"*, and it expired the day that stopped
-//!   being true — which is why this file is in `orbs-shell` and not in a
-//!   frontend. The decision it supported did not change; what changed is that it
-//!   now rests on the crate boundary rather than on nobody having tested it.
-//!   Both frontends map their own keystrokes onto `orbs_shell::Key` and reach
-//!   the buffer through the same `enter`, `escape` and `type_text`.
+//! The buffer is here rather than in `orbs-sim` because a keystroke reaches no
+//! decision; the *save* is the decision, and goes through `Sim::write_spell`.
+//! `orbs-sim` also may not name a layout type (`tests/boundaries.rs`), so a
+//! buffer there could not know its pane height. In `orbs-shell` rather than a
+//! frontend because both map their keystrokes onto `orbs_shell::Key`.
 
 use orbs_render::arriving;
-// The spell language's own indentation rule, folded here as you type and by the
-// orb when it writes the file. **One definition, deliberately** — a buffer that
-// indented one way and a saved file that indented another would make every save
-// look like it had moved the player's work.
+// One indentation rule, folded here as you type and by the orb on save —
+// disagreeing would make every save look like it moved the player's work.
 use orbs_sim::parser::{INDENT, indent_around};
 
 /// Which state the editor is in.
@@ -82,34 +33,23 @@ pub enum Mode {
     Editing,
     /// Reading the orb's reading of it, rather than the spell itself.
     ///
-    /// # The one place a *wrong* reading can be seen
-    ///
-    /// The file is no longer rewritten when it is saved, which is what a player
-    /// asked for and is right — but it took away the only surface that ever
-    /// showed what the orb had heard. A resolution that **fails** is reported;
-    /// one that succeeds *wrongly* — `the shelf` reaching a different shelf, a
-    /// near-miss name landing on its neighbour — has nowhere to show at all.
-    ///
-    /// So `interpret` is a validation step the player asks for: the buffer, line
-    /// for line, as the orb reads it. `<esc>` comes back. It changes nothing and
-    /// saves nothing, which is what makes it safe to reach for.
+    /// The one place a reading that succeeds *wrongly* — a near-miss name
+    /// landing on its neighbour — can be seen. `interpret` changes nothing.
     Reading,
 }
 
 /// What the player is editing, if anything.
 ///
-/// Not `Eq`: the settle clock is a float. Comparing two editors was never a
-/// thing anything did, and `PartialEq` is enough for the tests that ask whether
-/// a keystroke changed the buffer.
+/// Not `Eq`: the settle clock is a float, and `PartialEq` is enough for the
+/// tests that ask whether a keystroke changed the buffer.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Editor {
     /// The spell's filename, extension included.
     name: String,
     /// The domain it is written for, and runs in.
     ///
-    /// On the title bar because a spell that does not say where it runs is a
-    /// spell you cannot read — and `grind sage` in a file with no room attached
-    /// gives no clue why it resolves.
+    /// On the title bar: `grind sage` in a file with no room attached gives no
+    /// clue why it resolves.
     domain: String,
     /// The buffer. Always at least one line, so there is somewhere to put the
     /// caret — an empty `Vec` would make every accessor a special case.
@@ -118,8 +58,8 @@ pub struct Editor {
     row: usize,
     /// Which **character** of that line the caret sits before.
     ///
-    /// Characters, never bytes. The CP437 work fixed this class of bug once
-    /// already; an editor indexing by byte panics on the first pasted `é`.
+    /// Characters, never bytes: an editor indexing by byte panics on the first
+    /// pasted `é`.
     column: usize,
     /// The first visible line — see [`scroll_to`](Self::scroll_to).
     top: usize,
@@ -138,58 +78,41 @@ pub struct Editor {
     /// Which line the running invocation is on, if one is running.
     ///
     /// Pushed in by the shell each frame rather than pulled: the buffer knows
-    /// nothing about the sim, which is what keeps it on this side of the
-    /// boundary at all.
+    /// nothing about the sim, which is what keeps it this side of the boundary.
     running_line: Option<u64>,
     /// How the orb reads the buffer, line for line.
     ///
-    /// Pushed in like [`running_line`](Self::running_line) and for the same
-    /// reason: what a line *means* is the sim's decision (rule 2), and a buffer
-    /// that worked it out for itself would be a second parser.
-    ///
-    /// Refreshed when the buffer settles rather than every frame — see
-    /// `editing::autosave`. One reading per line, so `reading[i]` belongs to
-    /// `lines[i]`; a buffer edited since the last refresh may be one line longer
-    /// than its reading, which is why every use of it is indexed rather than
-    /// zipped.
+    /// Pushed in like [`running_line`](Self::running_line): what a line *means*
+    /// is the sim's decision (rule 2). Refreshed when the buffer settles, not
+    /// every frame — see `editing::autosave`. `reading[i]` belongs to
+    /// `lines[i]`, and an edited buffer may be a line longer than its reading,
+    /// so every use is indexed rather than zipped.
     reading: Vec<orbs_sim::Reading>,
     /// Whether the scribing guide is showing beside the buffer.
     guiding: bool,
     /// What the guide is showing, refreshed on the keystroke beat.
     ///
-    /// **State, not something the painter works out.** Building it reaches
-    /// `scene_at`, which rebuilds every recipe, topic and node in the tower — at
-    /// 60 Hz that is the correction `offering` and `editing` have each already
-    /// paid for once (*"~59 frames in 60 rebuilt a string identical to the one
-    /// already on screen"*). It can only change when a key is pressed, so it is
-    /// computed when one is.
+    /// State, not something the painter works out: building it reaches
+    /// `scene_at`, which rebuilds every recipe, topic and node in the tower.
     guide: crate::Guide,
     /// A Tab cycle in progress, if the last thing pressed was Tab.
     ///
-    /// The prompt keeps one of these too, and the rules that walk it are shared
-    /// — see [`tabbing`](crate::tabbing). What is *not* shared is the listing:
-    /// the prompt reserves a layout row for `Offered`, and the editor has the
-    /// guide pane, which is already showing the same candidates as you type.
+    /// Walking rules shared with the prompt ([`tabbing`](crate::tabbing)); the
+    /// listing is not, since the guide pane already shows the candidates.
     cycle: Option<crate::tabbing::Cycle>,
 }
 
 /// How long the player must stop typing before the spell is written out.
 ///
-/// **Long enough to be a pause, short enough to be an edit.** A spell that saves
-/// mid-word would reload a running invocation onto a half-typed line; one that
-/// waits for a command has made saving a chore in a surface whose whole point is
-/// that the orb is reading along with you.
+/// Long enough to be a pause, short enough to be an edit: saving mid-word would
+/// reload a running invocation onto a half-typed line.
 const SETTLE: f32 = 0.6;
 
 /// Something the editor would not do.
 ///
-/// §6 forbids a bare error, so this has a sentence in `prose.toml` that says
-/// what to do instead.
-///
-/// **One variant, and that is the point.** It had a second, `Unsaved`, for
-/// quitting with work in the buffer — a state the editor can no longer be in now
-/// that it writes itself out after a pause. A refusal nothing can reach is a
-/// refusal nobody maintains.
+/// §6 forbids a bare error, so this has a sentence in `prose.toml` saying what
+/// to do instead. One variant: `Unsaved` went when the editor started saving
+/// itself.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Complaint {
     /// A word the editor does not know.
@@ -198,12 +121,8 @@ pub enum Complaint {
 
 /// What the editor wants the shell to do after a key.
 ///
-/// **There is no `Continue`.** Carrying on is `Option::None` at every call site,
-/// and a variant meaning the same thing would be a second way to say it that
-/// nothing constructs — the sort of arm a `match` grows and then gets wrong.
-///
-/// There is no bare `Close` either, for the same reason: closing without saving
-/// stopped being reachable when the buffer took over saving itself.
+/// No `Continue` — carrying on is `Option::None`. No bare `Close` either:
+/// closing without saving stopped being reachable.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Outcome {
     /// Write the buffer out, and stay open.
@@ -214,11 +133,9 @@ pub enum Outcome {
 
 /// The words the command state answers to, and the ones it shows.
 ///
-/// **Whole words, and a prefix of one will do.** §6's forgiveness does not stop
-/// at the editor's door: `e`, `ed`, `edi` all mean `edit`, for the same reason
-/// `sur` means `survey` outside. Kept unambiguous in their first letter, so no
-/// prefix is ever a coin flip — the property
-/// `no_two_editor_words_share_a_first_letter` holds them to.
+/// A prefix will do — §6's forgiveness does not stop at the editor's door.
+/// Unambiguous in their first letter, held there by
+/// `no_two_editor_words_share_a_first_letter`.
 const WORDS: &[(&str, Word)] = &[
     ("edit", Word::Edit),
     ("guide", Word::Guide),
@@ -228,27 +145,16 @@ const WORDS: &[(&str, Word)] = &[
 
 /// The vim shorthand, matched **exactly** and never advertised.
 ///
-/// # An easter egg, and why it is a separate table
-///
-/// [`WORDS`] is the vocabulary: plain English, prefix-matched, printed on the
-/// status row because a player who does not know it has nowhere else to look.
-/// These are for the hands that have typed `:wq` ten thousand times and will try
-/// it here — finding that it works is a small gift, and not finding it is no
-/// loss to anyone else.
-///
-/// **Exact, not prefixed**, which is what keeps the two tables from interfering:
-/// a prefix-matched `w` would shadow nothing today and shadow the first future
-/// word beginning with it silently. `no_shorthand_disagrees_with_the_word_it_
-/// abbreviates` holds the pair together — `q` reaches `quit` by prefix *and*
-/// sits here, and the two must never come to mean different things.
+/// A separate table from [`WORDS`] because it matches exactly — a
+/// prefix-matched `w` would silently shadow the first future word beginning
+/// with it. `no_shorthand_disagrees_with_the_word_it_abbreviates` keeps the two
+/// agreeing.
 const SHORTHAND: &[(&str, Word)] = &[
     ("w", Word::Save),
     ("q", Word::Quit),
     ("wq", Word::SaveAndQuit),
     ("x", Word::SaveAndQuit),
-    // `q!` was `discard`, and there is nothing left to discard: the buffer saves
-    // itself as you type. It quits, which is what a vim user means by it once
-    // "without saving" has stopped being a thing that can happen.
+    // `q!` was `discard`; with no unsaved state left it just quits.
     ("q!", Word::Quit),
 ];
 
@@ -263,11 +169,8 @@ enum Word {
     Quit,
     /// Write it out now rather than waiting for the pause.
     ///
-    /// **Not a word, only a shorthand.** Saving happens on its own, so `save`
-    /// would be a step the player is asked to remember for something the orb is
-    /// already doing — and a spell that runs while you edit it makes *when* it
-    /// saves a mechanic rather than a chore. `w` and `wq` still work for the
-    /// fingers that reach for them, and mean "now, do not wait for the pause".
+    /// A shorthand, not a word: saving happens on its own, so `save` would ask
+    /// the player to remember a step the orb is already doing.
     Save,
     SaveAndQuit,
 }
@@ -295,14 +198,11 @@ impl Editor {
             running_line: None,
             reading: Vec::new(),
             cycle: None,
-            // **Open, and that is the whole point of the item.** The language
-            // grew past the size one person holds in their head, and a guide
-            // nobody knows to ask for helps nobody. `guide` closes it for the
-            // hands that no longer need it.
+            // Open: a guide nobody knows to ask for helps nobody. `guide`
+            // closes it for the hands that no longer need it.
             guiding: true,
-            // Replaced by the first `refresh` a frontend does; an empty listing
-            // is the honest opening value rather than a world read from a
-            // constructor that has no world.
+            // Replaced by the first `refresh` a frontend does; a constructor
+            // with no world has no honest listing to offer.
             guide: crate::Guide::Vocabulary {
                 control: Vec::new(),
                 verbs: Vec::new(),
@@ -312,16 +212,8 @@ impl Editor {
 
     /// Let `delta` seconds pass, and say whether the spell should be written now.
     ///
-    /// # Why the buffer saves itself
-    ///
-    /// A spell can be edited **while it runs**, and the orb picks up the change
-    /// between steps. That makes saving part of the loop rather than a thing you
-    /// finish with — you fix a line and watch the next pass take it — and a
-    /// `save` word in the middle of that is a chore standing where the mechanic
-    /// should be.
-    ///
-    /// Debounced rather than per-keystroke because a spell that saved mid-word
-    /// would reload a running invocation onto a half-typed line.
+    /// Debounced rather than per-keystroke: saving mid-word would reload a
+    /// running invocation onto a half-typed line.
     pub fn settle(&mut self, delta: f32) -> bool {
         let Some(quiet) = self.quiet_for.as_mut() else {
             return false;
@@ -358,9 +250,8 @@ impl Editor {
 
     /// How many lines the orb cannot read.
     ///
-    /// The number on the status row: §14 will not have a mark in a gutter be the
-    /// only way to know, and *"one line the orb cannot read"* is the spoken form
-    /// of a column of them.
+    /// The number on the status row: §14 will not have a mark in a gutter be
+    /// the only way to know.
     #[must_use]
     pub fn unread(&self) -> usize {
         self.reading
@@ -431,25 +322,15 @@ impl Editor {
 
     /// Work out what the guide should show, now.
     ///
-    /// **Called on the keystroke beat by whoever owns the keyboard**, never from
-    /// a painter — see [`Editor::guide`] for the 60 Hz correction this avoids.
-    /// Cheap to call redundantly and wrong to call per frame.
-    ///
-    /// # The caret it asks about is not always the caret on screen
-    ///
-    /// In [`Mode::Reading`] the pane shows `interpret`'s reading rather than the
-    /// buffer, and in [`Mode::Command`] the caret is drawn on the command row
-    /// while this one still points into the text. Both would have the guide
-    /// describing a word that is not in front of the player, so **the guide only
-    /// follows the caret while the buffer has it** — in the other two modes it
-    /// falls back to the listing, which is true in every mode.
+    /// Called on the keystroke beat by whoever owns the keyboard, never from a
+    /// painter — see [`Editor::guide`]. The guide follows the caret only while
+    /// the buffer has it, and falls back to the listing otherwise.
     pub fn refresh(&mut self, sim: &orbs_sim::Sim) {
         let caret = if self.mode == Mode::Editing {
             (self.row, self.column)
         } else {
             // A position no line has a word at, so `guide` answers with the
-            // vocabulary rather than a page about wherever the buffer cursor
-            // happens to be resting.
+            // vocabulary rather than a page about wherever the cursor rests.
             (usize::MAX, 0)
         };
         self.guide = crate::guide(sim, &self.lines, caret, &self.domain);
@@ -457,17 +338,8 @@ impl Editor {
 
     /// Tab: finish the word the caret is on, the way the prompt does.
     ///
-    /// # The listing is the guide, and that is why this step is three lines
-    ///
-    /// The prompt needs `Offered` and a reserved layout row to show what it
-    /// found. The editor was going to need the same, and does not: the guide
-    /// pane is already showing exactly these candidates, live, as the line is
-    /// typed — so a Tab press here has nothing to *say*, only something to
-    /// write. Which is the argument for having built the guide first.
-    ///
-    /// **Editing state only.** In command state the caret is on the editor's own
-    /// word — `edit`, `guide`, `interpret`, `quit` — and completing four words
-    /// that are listed on screen a row below is help nobody needs.
+    /// Short because the guide pane already shows the candidates, so a Tab here
+    /// has nothing to *say*, only something to write. Editing state only.
     pub fn tab(&mut self, sim: &orbs_sim::Sim) {
         if self.mode != Mode::Editing {
             return;
@@ -488,8 +360,7 @@ impl Editor {
             return;
         };
         line.replace_range(replaces.clone(), &text);
-        // **Characters, never bytes** — the caret is a character count and an
-        // editor indexing by byte panics on the first pasted `é`.
+        // Characters, never bytes: the caret is a character count.
         let upto = replaces.start.saturating_add(text.len());
         self.column = line
             .get(..upto)
@@ -510,12 +381,9 @@ impl Editor {
 
     /// Mark the buffer saved.
     ///
-    /// **Disarms the settle clock too.** It cleared only `dirty`, and `settle`
-    /// keys off `quiet_for` alone — so an explicit `w` wrote the buffer and then
-    /// the debounce wrote it *again* half a second later: two submissions in the
-    /// replay stream and two program swaps under a running invocation, for one
-    /// save. It was two records in the transcript as well, back when a save said
-    /// anything at all — that noise is why saving is silent now (§19).
+    /// Disarms the settle clock too: it once cleared only `dirty`, so an
+    /// explicit `w` and the debounce both wrote — two program swaps under a
+    /// running invocation.
     pub const fn saved(&mut self) {
         self.dirty = false;
         self.quiet_for = None;
@@ -523,12 +391,8 @@ impl Editor {
 
     /// Note that the buffer just changed, restarting the settle clock.
     ///
-    /// **The reading goes with it.** `reading[i]` belongs to `lines[i]`, and
-    /// inserting or deleting a line shifts every reading below it — so the
-    /// danger marks in the gutter paint on the wrong lines, and `interpret`
-    /// shows the wrong sentences, until the next settle refreshes them. Half a
-    /// second of *no* marks is a pane catching up; half a second of marks
-    /// pointing at the wrong line is the pane lying.
+    /// The reading goes with it: inserting a line shifts every reading below
+    /// it, and no marks is a pane catching up where wrong marks is it lying.
     fn touched(&mut self) {
         self.dirty = true;
         self.quiet_for = Some(0.0);
@@ -537,9 +401,7 @@ impl Editor {
 
     /// Keep the caret inside a window `rows` tall.
     ///
-    /// Called by the painter, which is the only thing that knows how tall the
-    /// pane is. Scrolling lives on this side of the boundary for exactly that
-    /// reason — see the module docs.
+    /// Called by the painter, the only thing that knows how tall the pane is.
     pub const fn scroll_to(&mut self, rows: usize) {
         if rows == 0 {
             return;
@@ -571,16 +433,10 @@ impl Editor {
 
     /// Take one character of typing, wherever the mode sends it.
     ///
-    /// # Why the routing lives here rather than in the key handler
-    ///
-    /// It used to live there, and both the unit tests and `ORBS_DUMP` reached
-    /// past it — the tests by driving the command line directly, the dump by
-    /// splitting the script itself. So the one decision neither could see was
-    /// the one that was wrong. One function, called by the key handler and the
-    /// dump alike, is what makes the state machine reachable from a test.
+    /// Routed here rather than in the key handler, which both the unit tests
+    /// and `ORBS_DUMP` reached past.
     pub fn type_text(&mut self, text: &str) {
-        // Control characters are not text. Winit reports Enter and Tab with a
-        // `text` of "\r" and "\t", and letting either through would put a
+        // Winit reports Enter and Tab as "\r" and "\t"; either would put a
         // literal control byte in a spell.
         let text: String = text.chars().filter(|c| !c.is_control()).collect();
         if text.is_empty() {
@@ -589,9 +445,7 @@ impl Editor {
         match self.mode {
             Mode::Command => self.command.push_str(&text),
             Mode::Editing => self.insert(&text),
-            // **A reading takes no text.** It is a view of the buffer, not a
-            // second buffer, and a keystroke that appeared to go somewhere here
-            // would be a keystroke the player could not find again.
+            // A reading is a view, so a keystroke landing here would vanish.
             Mode::Reading => {}
         }
     }
@@ -601,12 +455,8 @@ impl Editor {
         let at = self.offset(self.column);
         self.lines[self.row].insert_str(at, text);
         self.column += text.chars().count();
-        // **Only for a line that is a control word.** `end` and `else` belong one
-        // level out from the body above them, and a player types them *in* that
-        // body — so the line moves as the word completes, the way a `}` does in
-        // every editor that indents. A command line is left alone: it is already
-        // where `Enter` put it, and a line that jumped while you typed ordinary
-        // text would be the editor fighting you.
+        // Control words only: `end` and `else` step out as the word completes,
+        // the way a `}` does. Ordinary text that jumped would fight the player.
         if orbs_sim::parser::spell_word(&self.lines[self.row]).is_some() {
             self.reindent();
         }
@@ -623,16 +473,10 @@ impl Editor {
             Mode::Editing => {
                 let at = self.offset(self.column);
                 let tail = self.lines[self.row].split_off(at);
-                // **Indented only when the split leaves nothing behind**, which
-                // is `Enter` at the end of a line — "start the next one", and
-                // the block says where that starts. Four spaces per level,
-                // eight two blocks deep, which is the whole point.
-                //
-                // Breaking a line *mid-text* moves the tail exactly as it was.
-                // Prepending an indent there, or trimming what the caret split,
-                // would stop `Enter` and `Backspace` being each other's inverse
-                // — `enter_splits_the_line_and_backspace_joins_it_again` pins
-                // that, and it caught this being written the other way round.
+                // Indented only when the split leaves nothing behind. Breaking
+                // mid-text moves the tail as it was, so `Enter` and `Backspace`
+                // stay each other's inverse
+                // (`enter_splits_the_line_and_backspace_joins_it_again`).
                 let next = if tail.trim().is_empty() {
                     INDENT.repeat(self.depths(self.row).1)
                 } else {
@@ -650,18 +494,15 @@ impl Editor {
                 self.touched();
                 None
             }
-            // Nothing to run and nothing to split. `<esc>` is the way out, which
-            // the status row says.
+            // Nothing to run and nothing to split; `<esc>` is the way out.
             Mode::Reading => None,
         }
     }
 
     /// The depth the line at `index` prints at, and the depth the next starts at.
     ///
-    /// Folded from the top of the buffer every time rather than cached. A spell
-    /// is tens of lines, and a cache would be a second answer to a question the
-    /// orb already answers on save — which is the disagreement this whole shared
-    /// rule exists to prevent.
+    /// Folded from the top every time rather than cached: a spell is tens of
+    /// lines, and a cache would be a second answer to the orb's own.
     fn depths(&self, index: usize) -> (usize, usize) {
         let mut depth = 0;
         let mut here = 0;
@@ -675,8 +516,8 @@ impl Editor {
     /// caret is sitting in a line's leading whitespace.
     ///
     /// `None` when it is not, which is the ordinary one-character case. Falls
-    /// back to the **previous multiple** of a level rather than a flat four, so
-    /// a hand-spaced line lands on the grid instead of being pushed off it.
+    /// back to the previous multiple of a level rather than a flat four, so a
+    /// hand-spaced line lands on the grid instead of off it.
     fn outdent(&self) -> Option<usize> {
         let width = INDENT.chars().count();
         if self.column == 0 || width == 0 {
@@ -699,10 +540,8 @@ impl Editor {
     /// Put the current line at the depth its block puts it, keeping the caret
     /// where it sits in the text.
     ///
-    /// **What makes `end` snap left as you type it.** Without it a player types
-    /// `end` at the body's indent, watches it sit one level too deep, and only
-    /// finds out it was right when the orb re-indents it on save — which reads
-    /// as the save having moved their work.
+    /// What makes `end` snap left as you type it; otherwise the orb moves it on
+    /// save, which reads as the save moving the player's work.
     fn reindent(&mut self) {
         let wanted = INDENT.repeat(self.depths(self.row).0);
         let line = &self.lines[self.row];
@@ -710,8 +549,8 @@ impl Editor {
         if line.len() == wanted.len() + body.len() && line.starts_with(&wanted) {
             return;
         }
-        // The caret keeps its place *in the text*, not its column: it is sitting
-        // in the word that just caused the shift.
+        // The caret keeps its place *in the text*, not its column: it sits in
+        // the word that caused the shift.
         let into = self
             .column
             .saturating_sub(line.chars().count() - body.chars().count());
@@ -722,22 +561,18 @@ impl Editor {
 
     /// Delete the character before the caret, joining lines at column zero.
     ///
-    /// **In the indent it deletes a whole level**, which is the other half of
-    /// auto-indent rather than a nicety: `Enter` inside a block leaves the caret
-    /// four columns in, and without this getting back out costs the four
-    /// keypresses the indent just saved.
+    /// In the indent it deletes a whole level — the other half of auto-indent:
+    /// `Enter` inside a block leaves the caret four columns in, and getting back
+    /// out would otherwise cost the four keypresses the indent just saved.
     pub fn backspace(&mut self) {
         match self.mode {
             Mode::Command => {
                 self.command.pop();
                 return;
             }
-            // **A reading deletes nothing**, the same rule `type_text` and
-            // `enter` already follow: it is a view of the buffer, not a second
-            // one. This fell through to the buffer, so a player who opened
-            // `interpret` to check the orb's reading and tapped Backspace out of
-            // habit deleted a character from a spell they could not see change —
-            // and the settle clock wrote the damage out a beat later.
+            // A reading deletes nothing, like `type_text` and `enter`. This
+            // fell through, so a habitual Backspace in `interpret` deleted from
+            // a spell the player could not see change.
             Mode::Reading => return,
             Mode::Editing => {}
         }
@@ -763,10 +598,7 @@ impl Editor {
 
     /// `Esc` — leave the buffer for the command line.
     ///
-    /// **One meaning, in both states.** In the buffer it steps back to the
-    /// command line; at the command line it clears whatever half-word is there.
-    /// It never leaves the editor and never discards anything, so a player who
-    /// presses it out of habit — or out of not knowing what else to press —
+    /// Never leaves the editor and never discards, so pressing it out of habit
     /// always lands somewhere the words are written down.
     pub fn escape(&mut self) {
         self.mode = Mode::Command;
@@ -776,8 +608,7 @@ impl Editor {
 
     /// Run whatever word is at the command line.
     ///
-    /// Unknown words complain rather than doing nothing: §6 forbids a bare
-    /// error, and a command line that silently clears is indistinguishable from
+    /// Unknown words complain: a command line that silently clears looks like
     /// one that worked.
     fn run_command(&mut self) -> Option<Outcome> {
         let typed = std::mem::take(&mut self.command);
@@ -796,17 +627,14 @@ impl Editor {
                 self.mode = Mode::Reading;
                 None
             }
-            // **A toggle rather than two words.** `guide`/`hide` would be two
-            // things to learn for one piece of state a player can see the answer
-            // to: the pane is either there or it is not.
+            // A toggle: `guide`/`hide` would be two words for one visible fact.
             Some(Word::Guide) => {
                 self.guiding = !self.guiding;
                 None
             }
             Some(Word::Save) => Some(Outcome::Save),
-            // **`quit` never refuses now.** It refused on unsaved work, and
-            // there is no such state: the buffer writes itself out after a
-            // pause, and quitting flushes whatever the pause has not caught yet.
+            // `quit` never refuses: there is no unsaved state, and quitting
+            // flushes what the pause has not caught.
             Some(Word::Quit | Word::SaveAndQuit) => Some(Outcome::SaveAndClose),
             None => {
                 self.complaint = Some(Complaint::Unknown(typed));
@@ -870,9 +698,7 @@ impl Editor {
     /// A line as it is drawn, clipped to `cells`.
     #[must_use]
     pub fn visible(&self, row: usize, cells: u16) -> &str {
-        // Through `arriving`, which cuts on a **character** boundary — the same
-        // helper the reveal and the POST card use, for the same reason: a byte
-        // slice can split `é` into something that is not a `str` and panic.
+        // Through `arriving`, which cuts on a character boundary.
         self.lines
             .get(row)
             .map_or("", |line| arriving(line, u32::from(cells)))
@@ -886,12 +712,8 @@ impl Editor {
 
     /// Whether the buffer has no lines at all.
     ///
-    /// **Never true through the editor's own doors**, and that is the point of
-    /// saying so rather than leaving it to be assumed: `Editor::open` seeds an
-    /// empty spell with one blank line, and `backspace` at the head of the first
-    /// line joins nothing. A zero here would mean the buffer was built some
-    /// other way, and every `visible` and `position` call reasons about a
-    /// caret row that exists.
+    /// Never true through the editor's own doors — `open` seeds one blank line
+    /// — and every `visible` and `position` call assumes the caret row exists.
     #[must_use]
     pub const fn is_empty(&self) -> bool {
         self.lines.is_empty()
@@ -900,11 +722,8 @@ impl Editor {
 
 /// The word `typed` names.
 ///
-/// **Shorthand first, exactly; then the vocabulary, by prefix.** That order is
-/// what lets `wq` mean save-and-quit while `w` alone means save — a single
-/// prefix pass over one merged table would resolve `w` and `wq` by whichever
-/// happened to be listed first, which is an ordering nobody would think to
-/// check.
+/// Shorthand first, exactly; then the vocabulary, by prefix. That order is what
+/// lets `wq` mean save-and-quit while `w` means save.
 fn word(typed: &str) -> Option<Word> {
     SHORTHAND
         .iter()
@@ -935,10 +754,7 @@ mod tests {
 
     #[test]
     fn the_editor_opens_in_command_state() {
-        // **The first keystroke must not be able to damage a spell.** A player
-        // who does not yet know what this screen is should be told what the
-        // words are, not silently start editing something they thought they were
-        // reading.
+        // The first keystroke must not be able to damage a spell.
         let mut editor = editor();
         assert_eq!(editor.mode(), Mode::Command);
 
@@ -982,9 +798,8 @@ mod tests {
 
     #[test]
     fn a_reading_is_a_view_and_never_a_second_buffer() {
-        // **The failure this exists to catch is silent.** A keystroke that
-        // appeared to land in the reading would be a keystroke the player cannot
-        // find again — the buffer is what gets saved, and it would not be in it.
+        // Silent failure: a keystroke that appeared to land in the reading is
+        // not in the buffer, which is what gets saved.
         let mut editor = editor();
         say(&mut editor, "edit");
         editor.type_text("grind sage");
@@ -999,11 +814,8 @@ mod tests {
         assert_eq!(editor.enter(), None, "the reading ran something");
         assert_eq!(editor.lines(), before, "a keystroke reached the buffer");
 
-        // **Backspace too**, which fell through to the buffer while `type_text`
-        // and `enter` did not: a player who opened `interpret` to check the orb's
-        // reading and tapped it out of habit deleted a character from a spell
-        // they could not see change, and the settle clock wrote the damage out.
-        // Twice, because the first would only reach the indent.
+        // Backspace too, which fell through where `type_text` and `enter` did
+        // not. Twice, because the first would only reach the indent.
         editor.backspace();
         editor.backspace();
         assert_eq!(editor.lines(), before, "backspace edited the buffer");
@@ -1016,10 +828,8 @@ mod tests {
 
     #[test]
     fn editing_drops_the_reading_rather_than_pointing_it_at_the_wrong_lines() {
-        // `reading[i]` belongs to `lines[i]`, and inserting a line shifts every
-        // reading below it. Half a second of *no* marks is a pane catching up;
-        // half a second of marks on the wrong lines is the pane lying, and the
-        // player is looking straight at it while they type.
+        // Inserting a line shifts every reading below it: no marks is a pane
+        // catching up, marks on the wrong lines is the pane lying.
         let mut editor = editor();
         say(&mut editor, "edit");
         editor.type_text("grind sage");
@@ -1038,8 +848,7 @@ mod tests {
 
     #[test]
     fn the_count_of_unread_lines_is_the_readings_and_nothing_else() {
-        // The number the status row says, and the one §14 needs because a mark
-        // on a line is otherwise carried by colour alone.
+        // §14 needs it: a mark on a line is otherwise carried by colour alone.
         let mut editor = editor();
         assert_eq!(editor.unread(), 0, "an unread buffer reported faults");
 
@@ -1069,8 +878,7 @@ mod tests {
 
     #[test]
     fn any_unambiguous_prefix_will_do() {
-        // §6's forgiveness does not stop at the editor's door. `sur` means
-        // `survey` outside it; `e` means `edit` inside.
+        // §6's forgiveness does not stop at the editor's door.
         for (typed, expected) in [
             ("e", None),
             ("ed", None),
@@ -1084,15 +892,13 @@ mod tests {
 
     #[test]
     fn the_vim_shorthand_is_there_for_the_hands_that_know_it() {
-        // An easter egg, not vocabulary: never printed on the status row, and
-        // nothing else in the editor mentions it.
+        // An easter egg, not vocabulary: never printed on the status row.
         for (typed, expected) in [
             ("w", Some(Outcome::Save)),
             ("wq", Some(Outcome::SaveAndClose)),
             ("x", Some(Outcome::SaveAndClose)),
             ("q", Some(Outcome::SaveAndClose)),
-            // Kept for the fingers that reach for it, and it can no longer mean
-            // "without saving" — there is no unsaved state to leave behind.
+            // Kept for the fingers that reach for it; no unsaved state left.
             ("q!", Some(Outcome::SaveAndClose)),
         ] {
             let mut editor = editor();
@@ -1102,14 +908,8 @@ mod tests {
 
     #[test]
     fn no_shorthand_disagrees_with_the_word_it_abbreviates() {
-        // **The invariant holding two tables together.** `q` is both a shorthand
-        // and a prefix of `quit`; they must never come to mean different things,
-        // or the same keystroke would do one thing today and another after
-        // someone reorders a list.
-        //
-        // Checked through `word` rather than by comparing the tables, because
-        // `word` is what the editor actually calls — a test that agreed with the
-        // tables and disagreed with the lookup would prove nothing.
+        // `q` is both a shorthand and a prefix of `quit`. Checked through
+        // `word`, which is what the editor calls, rather than the tables.
         for (typed, shorthand) in SHORTHAND {
             let Some(by_prefix) = WORDS
                 .iter()
@@ -1132,10 +932,8 @@ mod tests {
 
     #[test]
     fn a_longer_shorthand_is_not_shadowed_by_a_shorter_one() {
-        // `w` and `wq` differ by one character and mean different things. A
-        // single prefix pass over one merged table would resolve them by
-        // whichever was listed first — an ordering nobody would think to check,
-        // and a save-and-quit that silently only saved.
+        // One merged prefix pass would resolve them by listing order — a
+        // save-and-quit that silently only saved.
         let mut editor = editor();
         assert_eq!(say(&mut editor, "w"), Some(Outcome::Save));
         assert_eq!(say(&mut editor, "wq"), Some(Outcome::SaveAndClose));
@@ -1143,15 +941,10 @@ mod tests {
 
     #[test]
     fn the_status_row_names_every_word_and_never_the_easter_egg() {
-        // **Read out of `prose.toml`, not out of a literal here.** A copy of the
-        // row in the test is a copy that goes stale silently: this test held the
-        // string `"edit  save  quit  discard"` for two words that no longer
-        // exist, and passed the whole time.
-        //
-        // Two properties, and they pull opposite ways — which is why they are
-        // one test. The row is the entire interface in command state, so a word
-        // missing from it is a word with nowhere to be discovered; and the
-        // shorthand stops being an easter egg the moment it is printed.
+        // Read out of `prose.toml`: this test held `"edit save quit discard"`
+        // for two words that no longer existed, and passed throughout. Two
+        // properties pulling opposite ways — a word missing from the row has
+        // nowhere to be discovered, a shorthand on it stops being an egg.
         let shown = orbs_sim::Prose::builtin().line("editor_words", &[]);
         let listed: Vec<&str> = shown.split_whitespace().collect();
 
@@ -1165,9 +958,8 @@ mod tests {
 
     #[test]
     fn no_two_editor_words_share_a_first_letter() {
-        // What makes single-letter prefixes safe rather than a coin flip. The
-        // naming pass holds the game's verbs to the same rule; this is that rule
-        // applied to the four words inside the editor.
+        // What makes single-letter prefixes safe rather than a coin flip; the
+        // game's verbs are held to the same rule.
         let mut initials: Vec<char> = WORDS
             .iter()
             .filter_map(|(name, _)| name.chars().next())
@@ -1180,10 +972,8 @@ mod tests {
 
     #[test]
     fn typing_settles_into_a_save_and_a_keystroke_pushes_it_back() {
-        // **The whole point of the debounce.** A buffer that saved on every
-        // keystroke would hand a running invocation a half-typed line to reload
-        // from, and one that never saved on its own would put a chore in the
-        // middle of the loop this surface exists for.
+        // Saving per keystroke hands a running invocation a half-typed line;
+        // never saving puts a chore in the middle of the loop.
         let mut editor = editor();
         say(&mut editor, "edit");
 
@@ -1195,8 +985,7 @@ mod tests {
         editor.type_text("x");
         assert!(!editor.settle(SETTLE / 2.0), "saved mid-word");
 
-        // The keystroke that lands inside the pause restarts it, rather than
-        // topping up a clock that was already most of the way to firing.
+        // A keystroke inside the pause restarts it rather than topping it up.
         editor.type_text("y");
         assert!(
             !editor.settle(SETTLE / 2.0),
@@ -1206,18 +995,13 @@ mod tests {
         assert!(editor.settle(SETTLE), "the pause never produced a save");
         editor.saved();
 
-        // And it fires **once** — a settle that stayed armed would rewrite the
-        // spell every frame, reloading a running invocation each time.
+        // And it fires **once** — still armed, it would rewrite every frame.
         assert!(!editor.settle(10.0), "settled twice on one edit");
     }
 
     #[test]
     fn quitting_writes_the_buffer_out_rather_than_refusing() {
-        // `quit` used to refuse on unsaved work, with `discard` as the way out.
-        // Neither exists now: there is no reachable unsaved state to refuse for,
-        // and quitting flushes whatever the pause has not caught yet. The
-        // failure this guards is a `quit` that closes on the last few keystrokes
-        // typed before it.
+        // Guards a `quit` that closes on the last few keystrokes typed.
         let mut editor = editor();
         say(&mut editor, "edit");
         editor.type_text("x");
@@ -1229,10 +1013,9 @@ mod tests {
 
     #[test]
     fn the_running_line_is_said_as_well_as_marked() {
-        // §14: a `»` in a gutter column is exactly the kind of visual-only fact
-        // that is forbidden, so the title says it too — and `Painter::border`
-        // pushes a title to the speech stream. This holds the sentence's
-        // existence; `sheet.rs` holds where it is drawn.
+        // §14 forbids a visual-only fact, so the title says it too and
+        // `Painter::border` pushes it to the speech stream. `sheet.rs` holds
+        // where it is drawn.
         let mut editor = editor();
         assert_eq!(editor.running_line(), None);
         editor.set_running_line(Some(2));
@@ -1258,9 +1041,7 @@ mod tests {
 
     #[test]
     fn escape_never_leaves_the_editor_and_never_discards() {
-        // **One meaning in both states**, so a player pressing it out of habit —
-        // or out of not knowing what else to press — always lands where the
-        // words are written down.
+        // One meaning in both states, so habit always lands somewhere safe.
         let mut editor = editor();
         say(&mut editor, "edit");
         editor.type_text("x");
@@ -1283,8 +1064,7 @@ mod tests {
 
     #[test]
     fn the_caret_counts_characters_rather_than_bytes() {
-        // The bug class the CP437 work already fixed once. A byte-indexed editor
-        // panics the first time someone pastes a non-ASCII character.
+        // A byte-indexed editor panics on the first pasted non-ASCII character.
         let mut editor = Editor::open("x.spell", "laboratory", &["héllo".to_owned()]);
         say(&mut editor, "edit");
         editor.end();
@@ -1300,8 +1080,8 @@ mod tests {
 
     #[test]
     fn control_characters_never_reach_the_buffer() {
-        // Winit reports Enter as a `text` of "\r" and Tab as "\t". Either in a
-        // spell would be a control byte in a file a player reads back.
+        // Winit reports Enter as "\r" and Tab as "\t"; either would be a
+        // control byte in a file the player reads back.
         let mut editor = editor();
         say(&mut editor, "edit");
         editor.type_text("\r");
@@ -1315,7 +1095,7 @@ mod tests {
 
     /// Type a whole spell into an empty buffer, `Enter` between lines.
     ///
-    /// **No spaces typed anywhere**, which is the property under test: whatever
+    /// No spaces typed anywhere, which is the property under test: whatever
     /// indentation comes out was the editor's doing.
     fn typed(script: &[&str]) -> Editor {
         let mut editor = Editor::open("x.spell", "laboratory", &[]);
@@ -1331,8 +1111,8 @@ mod tests {
 
     #[test]
     fn a_block_indents_its_body_as_you_type_it() {
-        // The complaint this answers: four spacebar presses per line inside a
-        // block, eight two blocks deep, on every line of every spell.
+        // Otherwise: four spacebar presses per line inside a block, eight two
+        // blocks deep, on every line of every spell.
         let editor = typed(&[
             "repeat 2",
             "kindle charcoal",
@@ -1358,10 +1138,8 @@ mod tests {
 
     #[test]
     fn end_and_else_step_back_out_as_the_word_completes() {
-        // A player types `end` *in* the body, so the line has to move when the
-        // word lands — the way a `}` does in every editor that indents. Without
-        // it the line sits one level too deep until the orb re-indents it on
-        // save, which reads as the save having moved their work.
+        // A player types `end` *in* the body, so the line moves when the word
+        // lands — the way a `}` does.
         let mut editor = typed(&["repeat", "kindle charcoal"]);
         editor.enter();
         assert_eq!(editor.caret(), (2, 4), "the new line did not open indented");
@@ -1392,9 +1170,8 @@ mod tests {
 
     #[test]
     fn backspace_in_the_indent_falls_back_a_whole_level() {
-        // The other half of auto-indent rather than a nicety. `Enter` inside a
-        // block leaves the caret four columns in, and without this getting out
-        // costs the four keypresses the indent just saved.
+        // The other half of auto-indent: getting back out of a block would
+        // otherwise cost the four keypresses the indent just saved.
         let mut editor = typed(&["repeat", "if the mortar is idle"]);
         editor.enter();
         assert_eq!(editor.caret(), (2, 8), "two blocks deep is eight columns");
@@ -1412,9 +1189,7 @@ mod tests {
 
     #[test]
     fn backspace_lands_a_hand_spaced_line_on_the_grid() {
-        // A line spaced by hand to a column that is not a multiple of a level
-        // falls back **to** the grid rather than being pushed off it — one press
-        // gets you somewhere the next press behaves predictably from.
+        // Falls back *to* the grid rather than off it.
         let mut editor = Editor::open("x.spell", "laboratory", &["      grind sage".to_owned()]);
         say(&mut editor, "edit");
         editor.home();
@@ -1429,13 +1204,8 @@ mod tests {
 
     #[test]
     fn what_the_editor_indents_is_what_the_orb_writes_down() {
-        // **The invariant the shared rule exists for.** The buffer indents as
-        // you type and the orb re-indents when it saves; if those two disagreed,
-        // every save would look like it had moved your work.
-        //
-        // Checked through `parser::indent_around` — the function both fold —
-        // rather than by comparing two hand-written expectations, which would
-        // agree with each other and with neither implementation.
+        // Checked through `parser::indent_around`, the function both fold,
+        // rather than hand-written expectations that would agree with neither.
         let editor = typed(&[
             "repeat 2",
             "kindle charcoal",

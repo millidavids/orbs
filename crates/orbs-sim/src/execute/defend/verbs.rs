@@ -1,11 +1,9 @@
 //! The five words a player types at a wall (§5.1).
 //!
-//! **`hold` is the only one that advances the world.** Everything else here is
-//! free and instant, which is §5.0's *"no per-command tick cost"* preserved
-//! exactly — and it is what makes the siege turn-based rather than merely slow.
+//! `hold` is the only one that advances the world; the rest are free and
+//! instant (§5.0), which is what makes the siege turn-based rather than slow.
 //!
-//! What each word *costs* is `spending`; what a resolved round *says* is
-//! `report`. The `defend` module doc has the rest.
+//! What each word costs is `spending`; what a resolved round says is `report`.
 
 use std::cmp::Ordering;
 
@@ -26,22 +24,10 @@ use crate::tower::{
 /// `defend` — stand to the wall and let the enemy arrive.
 /// `petition` — spend standing so that fewer come up the road next time.
 ///
-/// # The first thing renown buys
-///
-/// Standing has been earned, lost and read for a whole phase and spent on
-/// nothing. This is the other half of *"renown sets how big a siege arrives"*:
-/// fame lengthens the tail, and this is how a wizard shortens it again — by
-/// letting some of that fame go.
-///
-/// **It lowers the ceiling; it does not subtract after the draw.** At the moment
-/// this word is typed there is no siege and no draw, so *"the enemy is already
-/// as small as it goes"* is only answerable against the ceiling. Subtracting
-/// afterwards would let a player pay four times, draw the floor anyway, and lose
-/// the lot in silence.
-///
-/// **Self-limiting without a second rule**: paying drops your rank, and a lower
-/// rank draws a shorter tail on its own — so the habit retires itself rather
-/// than becoming a tax on every fight.
+/// The first thing renown buys. It lowers the ceiling rather than subtracting
+/// after the draw, which would let a player pay four times and draw the floor
+/// anyway. Self-limiting: paying drops your rank, and a lower rank draws a
+/// shorter tail.
 pub(in crate::execute) fn petition(world: &mut World) {
     let Some(rampart) = fixture(world) else {
         say(world, Verb::Petition, "defend_nowhere", &[], Role::Cost);
@@ -53,15 +39,8 @@ pub(in crate::execute) fn petition(world: &mut World) {
         say(world, Verb::Petition, "defend_unarmed", &[], Role::Cost);
         return;
     }
-    // **Refused while they are already at the wall**, which §19 states as the
-    // word's whole shape: it *"resolves with the road empty — which is the only
-    // time it is any use."* What it buys is the size of the **next** siege, and
-    // the one in front of you has already been drawn.
-    //
-    // Allowing it mid-fight was worse than merely useless. `settle` measures the
-    // fight's movement from `Siege::standing`, the snapshot taken when the enemy
-    // arrived — so renown spent on a petition *inside* that window was silently
-    // charged to the fight, and a siege that moved +38 reported +31.
+    // Refused mid-fight (§19): it buys the *next* siege, and `settle` charged
+    // the spend to the fight — a siege that moved +38 reported +31.
     if world.get::<Siege>(rampart).is_some_and(Siege::running) {
         say(world, Verb::Petition, "petition_besieged", &[], Role::Cost);
         return;
@@ -70,8 +49,8 @@ pub(in crate::execute) fn petition(world: &mut World) {
     let bought = world.resource::<siege::Petitioned>().get();
     let ranks = tower::renown::reached(world);
 
-    // **Refused at the floor, having spent nothing.** The tail is already as
-    // short as it goes, so there is nothing left to buy.
+    // Refused at the floor, having spent nothing: the tail is already as short
+    // as it goes.
     if siege::most_at(ranks, bought) <= siege::FEWEST {
         say(
             world,
@@ -83,8 +62,8 @@ pub(in crate::execute) fn petition(world: &mut World) {
         return;
     }
 
-    // **The price is quoted from the same expression that charges it**, which is
-    // the forge's rule: a room may not quote one number and take another.
+    // The price is quoted from the same expression that charges it — the forge's
+    // rule: a room may not quote one number and take another.
     let held = world.resource::<tower::Renown>().get();
     if !tower::renown::spend(world, siege::PETITION_PER_FOE) {
         say(
@@ -102,12 +81,8 @@ pub(in crate::execute) fn petition(world: &mut World) {
 
     world.resource_mut::<siege::Petitioned>().add();
     let now = world.resource::<siege::Petitioned>().get();
-    // **Ranks read *again*, after the payment.** Spending drops standing, and
-    // dropping standing can cross a rank — which is the mechanic's own headline
-    // (§19: *"three petitions at 9,000 take the ceiling 11 → 9 → 8, because the
-    // first payment cost a rank on the way"*). Quoting the pre-payment ranks
-    // named a ceiling one higher than the one `defend` would actually draw
-    // against, so the sentence promised more than it had bought.
+    // Ranks read *again*, after the payment: spending can cross a rank (§19),
+    // and the pre-payment count quoted a ceiling one too high.
     let most = siege::most_at(tower::renown::reached(world), now);
     say(
         world,
@@ -130,18 +105,16 @@ pub(in crate::execute) fn defend(world: &mut World) {
         say(world, Verb::Defend, "defend_already", &[], Role::Cost);
         return;
     }
-    // **A siege against a tower with no wall is not a decision** (§11.5). The
+    // A siege against a tower with no wall is not a decision (§11.5). The
     // sanctum's first station arms it; until then the road stays empty.
     if !world.resource::<tower::Opened>().has(tower::opened::SIEGE) {
         say(world, Verb::Defend, "defend_unarmed", &[], Role::Cost);
         return;
     }
 
-    // **The cadence** (§11.5, `siege::CADENCE`). Without it `defend` is free and
-    // unlimited, and `orbs-balance` measured a back-to-back driver at 4.70
-    // experience a tick against clarity's 0.140 — thirty-three times the
-    // flagship, which says *ignore every other room*. §5.3's trace is what will
-    // eventually provoke a siege; until then this stands in for it.
+    // The cadence (§11.5, `siege::CADENCE`). Unlimited, `orbs-balance` measured
+    // a back-to-back driver at 4.70 experience a tick against clarity's 0.140.
+    // §5.3's trace will eventually provoke a siege; this stands in for it.
     let now = world.resource::<crate::tick::Tick>().get();
     if let Some(clear_at) = world.get::<Siege>(rampart).and_then(|siege| siege.clear_at)
         && now < clear_at
@@ -157,21 +130,13 @@ pub(in crate::execute) fn defend(world: &mut World) {
         return;
     }
 
-    // **A siege grants nothing.** The pool is the tower's, shared with the
-    // forge, and the player brings whatever they have — which is what makes
-    // enchanting during a siege cost something real, and what stops a fight
-    // being a fresh allowance that expires unspent (§19).
+    // A siege grants nothing: the player brings the tower's pool (§19).
     //
-    // **The domain's opening draw, and it is here rather than in a system**, for
-    // `muster`'s reason: `RngStream::Siege` advances when the player asks for a
-    // siege and never on a tick nobody asked for, which is what lets any future
-    // siege system be appended to the schedule without shifting a replay.
-    // **How big it is, decided before the draw and by what the tower is worth.**
-    // A famous tower draws a longer tail; the floor never moves, so a quiet night
-    // is possible at every standing. `petition` has already bought some of the
-    // tail away, and the allowance is spent whole by the siege that opens —
-    // taken here so a refused `defend` (the road still empty) cannot silently
-    // eat what was paid for.
+    // The draw is here rather than in a system, for `muster`'s reason:
+    // `RngStream::Siege` advances only when the player asks, so a future siege
+    // system can join the schedule without shifting a replay. Size is decided
+    // before it by what the tower is worth, and `petition`'s allowance is taken
+    // here so a refused `defend` cannot eat what was paid for.
     let ranks = tower::renown::reached(world);
     let bought = world.resource_mut::<siege::Petitioned>().take();
     let most = siege::most_at(ranks, bought);
@@ -182,8 +147,7 @@ pub(in crate::execute) fn defend(world: &mut World) {
     // The Ley Line's `edge`, read once for the whole fight (§11.5).
     siege.edge = tower::grant::edge_bonus(world);
     // ...and what the tower was worth before a blow was struck, so the settling
-    // sentence can say what the *fight* came to rather than what its last
-    // moment did.
+    // sentence says what the *fight* came to, not what its last moment did.
     siege.standing = Some(world.resource::<tower::Renown>().get());
     let arrived = siege.enemy.count;
     let intent = siege.intent.word();
@@ -211,14 +175,8 @@ pub(in crate::execute) fn quaff(intent: &Intent, world: &mut World) {
 
 /// `wield <scroll>` on the wall — spend it on the siege rather than the tower.
 ///
-/// Returns whether it took the command. **`pipeline::wield` asks this before
-/// anything else**, so a scroll reaches the siege when there is one and its
-/// ordinary effect when there is not.
-///
-/// §19 keeps `wield` for scrolls rather than giving them a fourth verb: a player
-/// who has spent one in the archive spends one here without learning anything
-/// new. What that costs is this interception, because the same word has to mean
-/// *set this going* in two places.
+/// Returns whether it took the command; `pipeline::wield` asks first. §19 keeps
+/// `wield` for scrolls rather than a fourth verb, and this is what that costs.
 pub(in crate::execute) fn wielded(intent: &Intent, world: &mut World) -> bool {
     let Some(rampart) = fixture(world) else {
         return false;
@@ -230,9 +188,8 @@ pub(in crate::execute) fn wielded(intent: &Intent, world: &mut World) -> bool {
         return false;
     };
     let named = crate::parser::leaf(&argument.value).to_owned();
-    // **Only what the wall can actually use.** Anything else falls through, so
-    // `wield mortar_and_pestle` still starts an instrument even mid-siege — the
-    // bailey has none, but the rule should not depend on that.
+    // Only what the wall can use. Anything else falls through, so `wield
+    // mortar_and_pestle` still starts an instrument mid-siege.
     if world
         .resource::<crate::content::Spendables>()
         .verb_for(&named)
@@ -246,9 +203,8 @@ pub(in crate::execute) fn wielded(intent: &Intent, world: &mut World) -> bool {
 
 /// `pledge <die> to <area>` — put one of your dice behind part of the wall.
 ///
-/// **Free and instant, like everything else on your turn.** The die is not
-/// *rolled* here; it is rolled when the round resolves, which is what lets the
-/// board print the range before the commitment.
+/// Free and instant, like everything else on your turn. The die is rolled when
+/// the round resolves, so the board can print the range before the commitment.
 pub(in crate::execute) fn pledge(intent: &Intent, world: &mut World) {
     let Some(rampart) = fixture(world) else {
         say(world, Verb::Pledge, "defend_nowhere", &[], Role::Cost);
@@ -268,17 +224,14 @@ pub(in crate::execute) fn pledge(intent: &Intent, world: &mut World) {
         say(world, Verb::Pledge, "pledge_incomplete", &[], Role::Cost);
         return;
     };
-    // **The leaf, for every sentence below.** A resolved place arrives as its
-    // full path, and prose that echoed it would read *"d20 goes to
-    // /tower/bailey/buckler"* — the tower's internals in a line meant for a
-    // player. `muster::haul` records the same trap.
+    // The leaf, for every sentence below: a resolved place arrives as a full
+    // path, so echoing it reads *"d20 goes to /tower/bailey/buckler"*.
     let die_word = crate::parser::leaf(first).to_owned();
     let area_word = crate::parser::leaf(second).to_owned();
 
-    // **Matched rather than re-asked.** Both slots are `NounKind::Place`, so
-    // `pledge buckler d20` parses and has to be refused here — and naming which
-    // half was wrong beats a generic refusal, because a player who swapped them
-    // is one word from right.
+    // Both slots are `NounKind::Place`, so `pledge buckler d20` parses and has
+    // to be refused here — naming which half was wrong, since a player who
+    // swapped them is one word from right.
     let (Some(die), Some(area)) = (Die::named(&die_word), siege::Area::named(&area_word)) else {
         let key = if Die::named(&die_word).is_none() {
             "pledge_not_a_die"
@@ -295,9 +248,8 @@ pub(in crate::execute) fn pledge(intent: &Intent, world: &mut World) {
         return;
     };
 
-    // **A die already pledged is refused, and it names where it went.** A
-    // silently ignored second pledge would be the worst shape here: the board
-    // would look right and the round would resolve weaker than the player read.
+    // A die already pledged is refused, and named where it went. Ignoring it
+    // would leave the board looking right and the round resolving weaker.
     let pool = world.resource::<tower::Quintessence>().get();
     let Some(mut siege) = world.get_mut::<Siege>(rampart) else {
         return;
@@ -320,10 +272,8 @@ pub(in crate::execute) fn pledge(intent: &Intent, world: &mut World) {
             );
             return;
         }
-        // **The decision the domain is about, said out loud.** It names what the
-        // die would have cost and what is left, because *"you cannot afford it"*
-        // without the two numbers is a refusal a player cannot plan around — and
-        // planning around it is the mechanic.
+        // Names the cost and what is left: *"you cannot afford it"* without the
+        // two numbers cannot be planned around, and that is the mechanic.
         siege::Pledged::Short { cost } => {
             let left = pool.to_string();
             say(
@@ -344,17 +294,13 @@ pub(in crate::execute) fn pledge(intent: &Intent, world: &mut World) {
     let wasted = !area.answers(siege.intent);
     let coming = siege.intent.word().to_owned();
     let _ = siege;
-    // **The tower pays, and only once the pledge is made.** `Siege::pledge` says
-    // whether the pool is enough and takes nothing; the spend is here, so the
-    // two refusals above return having touched no resource at all.
+    // The tower pays only once the pledge is made — `Siege::pledge` takes
+    // nothing, so the two refusals above touch no resource at all.
     world.resource_mut::<tower::Quintessence>().spend(cost);
     publish(world, rampart);
 
-    // **A pledge the intent will waste is still allowed, and still warned
-    // about.** Refusing it would be the game playing for you; saying nothing
-    // would be §5.1's fairness rule broken — you are told the odds *before* the
-    // commitment, and "this does nothing next round" is the starkest odds there
-    // are.
+    // A pledge the intent will waste is allowed and warned about: refusing it
+    // would be the game playing for you, and silence would break §5.1.
     let state = if wasted { coming } else { high.to_string() };
     say(
         world,
@@ -370,8 +316,7 @@ pub(in crate::execute) fn pledge(intent: &Intent, world: &mut World) {
             ("quantity", &low.to_string()),
             ("state", &state),
             // What it took. The board carries what is *left*; the sentence
-            // carries what this decision cost, which is the half a player is
-            // weighing at the moment they type it.
+            // carries the cost, which is what a player is weighing.
             ("kind", &cost.to_string()),
         ],
         if wasted { Role::Cost } else { Role::Success },
@@ -380,7 +325,7 @@ pub(in crate::execute) fn pledge(intent: &Intent, world: &mut World) {
 
 /// `hold` — end your turn and let one round resolve.
 ///
-/// **The only thing in this domain that moves the world.**
+/// The only thing in this domain that moves the world.
 pub(in crate::execute) fn hold(world: &mut World) {
     let Some(rampart) = fixture(world) else {
         say(world, Verb::Hold, "defend_nowhere", &[], Role::Cost);
@@ -395,22 +340,13 @@ pub(in crate::execute) fn hold(world: &mut World) {
         return;
     }
 
-    // **Taken out, resolved, put back**, because resolving needs `&mut Siege`
-    // and `&mut Rngs` at once and both live in the `World`. A clone of two
-    // `Band`s and a short `Vec` is cheaper than threading the stream through the
-    // model, and it keeps `Siege::resolve` a pure function of what it is handed —
-    // which is what lets `tower::siege`'s tests prove the arithmetic with no
-    // `World` at all.
-    // **A `whetted` rampart rolls a bigger die, staged like a potion.**
-    // `Effect::Upgrade` has shipped unused since the dice were built, with
-    // `siege.toml` reserving it in as many words for *"an enchantment"* — so
-    // this needs no new machinery at all, only the charm asked for at the same
-    // moment a quaffed potion would be.
+    // Taken out, resolved, put back, because resolving needs `&mut Siege` and
+    // `&mut Rngs` at once. Cloning keeps `Siege::resolve` pure, so
+    // `tower::siege`'s tests need no `World`.
     //
-    // **Staged every round while the charm holds**, not once when it is laid: a
-    // charm is a window, and a modifier that survived past it would be a buff
-    // that never expired. `resolve` clears `staged`, which is what makes that
-    // work without a second rule.
+    // A `whetted` rampart rolls a bigger die, staged every round while the charm
+    // holds rather than once when it is laid: `resolve` clears `staged`, so a
+    // modifier cannot outlive the window.
     if tower::charmed(world, rampart, tower::charm::Kind::Whetted)
         && let Some(mut siege) = world.get_mut::<Siege>(rampart)
     {
@@ -432,45 +368,27 @@ pub(in crate::execute) fn hold(world: &mut World) {
         .get_mut::<Siege>(rampart)
         .expect("the siege is still there") = siege;
 
-    // **A resolved round pays, and waiting inside one does not.** The calm
-    // trickle is suspended while a siege runs, so this lump is the only
-    // quintessence a fight produces — which means dawdling earns nothing and the
-    // one way to more is to advance the siege and take what the enemy does.
-    //
-    // **A lump per round rather than a rate**, and that is §14 rather than
-    // balance: the patient mode advances siege ticks on *player input*, so
-    // anything measured in ticks would mean more typing produces more resource
-    // for exactly the players that mode exists to serve. This reads no clock, so
-    // a patient siege and a played one grant identically.
+    // A resolved round pays and waiting inside one does not: the calm trickle is
+    // suspended while a siege runs. A lump per round rather than a rate, for
+    // §14 — the patient mode advances siege ticks on player input, so a rate
+    // would pay for typing.
     let ceiling = tower::ceiling(world);
     world
         .resource_mut::<tower::Quintessence>()
         .restore(tower::REGEN_PER_ROUND, ceiling);
 
-    // **Every roll into the log, with its die and its face.** Rule 4: the same
-    // record is the transcript line, the §14 utterance and what `sift` finds, so
-    // `peruse bailey.log` is a genuine postmortem — a player can see which
-    // potion earned its place, which is what makes the arsenal legible.
+    // Every roll into the log, with its die and its face. Rule 4: one record is
+    // the transcript line, the §14 utterance and what `sift` finds.
     log_rolls(world, &round);
     publish(world, rampart);
     announce(world, &round);
 
-    // **What the exchange was worth in standing** (§11.5, §19). After
-    // `announce`, so the round says what happened before anything says what it
-    // cost — the order `settle` and `done` both keep.
+    // What the exchange was worth in standing (§11.5, §19). After `announce`, so
+    // the round says what happened before what it cost.
     //
-    // **All five of the round's numbers, and `mended` is why it is five.**
-    // `taken` and `spent` are vigour lost and `mended` is vigour put back, so
-    // charging the first two without crediting the third bills a player twice
-    // for damage they repaired — and the play it would punish is quaffing a
-    // `mending` or pledging the `succour`, which is the domain's own headline
-    // move. Net vigour lost is the honest measure.
-    //
-    // **The sortie's trade survives netting, deliberately.** `sortied` is
-    // `sortie / 2` and `spent` is `sortie / 3`, so a sortie nets about a sixth
-    // of itself: it buys damage at a price in standing. That is the mechanic,
-    // not the defect `Round::sortied` records — that one was a *sentence*
-    // reading "take 2" for a round that had dealt twelve.
+    // All five numbers: `mended` is vigour put back, and netting it out bills a
+    // player twice for damage they repaired. The sortie's trade survives netting
+    // deliberately — `sortied` is `sortie / 2` against `spent`'s `sortie / 3`.
     let up = u64::from(round.dealt) + u64::from(round.sortied);
     let down = u64::from(
         round
@@ -479,22 +397,16 @@ pub(in crate::execute) fn hold(world: &mut World) {
             .saturating_sub(round.mended),
     );
     match up.cmp(&down) {
-        // **Quietly, both ways.** A round is elected by typing `hold` and has
-        // just narrated itself, so `renown::lose`'s sentence would be a second
-        // telling six to thirteen times a fight. `settle` says the whole
-        // movement once. `renown::slip` carries the argument.
+        // Quietly, both ways: the round has just narrated itself, so
+        // `renown::lose`'s sentence would retell it. `settle` says it once.
         Ordering::Greater => tower::renown::earn(world, up - down),
         Ordering::Less => tower::renown::slip(world, down - up),
         Ordering::Equal => {}
     }
 
-    // **The enemy attacks the automation** (§5.1), and this is the line that
-    // makes the premise true. It runs on a resolved round and nowhere else, so
-    // the calm layer stays genuinely safe — pillar 4.
-    //
-    // **Before `settle`**, so the last round of a siege can still sabotage: an
-    // enemy that stopped caring the moment it was losing would make the closing
-    // rounds the safe ones, which is backwards.
+    // The enemy attacks the automation (§5.1). It runs on a resolved round and
+    // nowhere else, so the calm layer stays safe — pillar 4. Before `settle`,
+    // so the last round can still sabotage rather than being the safe one.
     if let Some(reached) = tower::assault::strike(world) {
         say(
             world,

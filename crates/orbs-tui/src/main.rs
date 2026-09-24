@@ -5,11 +5,11 @@
 //! framebuffer and a keyboard. Same sim, same commands, same simulated tower;
 //! only the rasteriser differs.
 //!
-//! **Second-class by decision, not by neglect** (DESIGN.md §13, §19). The Bevy
-//! build is the product and never waits for this one. What this is for is
-//! §15's charter: *"a no-GPU, no-window, instant-startup, trivially scriptable
-//! target"* — and the scripting is `tmux send-keys`, which makes every screen in
-//! the game something a person or a script can drive and read back.
+//! Second-class by decision, not by neglect (DESIGN.md §13, §19). The Bevy
+//! build is the product and never waits for this one. This one is for §15's
+//! charter: *"a no-GPU, no-window, instant-startup, trivially scriptable
+//! target"* — the scripting being `tmux send-keys`, which makes every screen
+//! something a person or a script can drive and read back.
 //!
 //! ```bash
 //! cargo build -p orbs-tui
@@ -18,38 +18,21 @@
 //! tmux capture-pane -t orbs -p
 //! ```
 //!
-//! # It boots, and `ORBS_BOOT=0` is how you stop it
+//! It boots, and `ORBS_BOOT=0` stops it. §4's sequence runs here too, naming
+//! `crossterm` where the other build names `bevy` — the card is a diegetic
+//! inventory of the machine, and this is a different machine. Skipping it for
+//! *"instant-startup"* (§15) was really about the development loop, which
+//! `ORBS_BOOT=0` already answers. The clock and the card are `orbs-shell`'s;
+//! here is the frame that advances one and the engine line that fills the other.
 //!
-//! §4's sequence runs here too: a beat of dark, then the card drawing its own
-//! border while the logo prints itself and the dependencies report in — naming
-//! `crossterm` where the other build names `bevy`, because the card is a
-//! *diegetic inventory of the machine* and this is a different machine.
+//! No content watcher: `ORBS_CONTENT` is read once at startup. A watcher is
+//! `notify` and a background thread, and it belongs to the frontend that already
+//! has one. Edit `prose.toml` and restart.
 //!
-//! **It was skipped here for a version**, on the argument that a dev tool whose
-//! charter is *"instant-startup"* (§15) must not begin by making you wait. That
-//! was the wrong trade to make silently: the sequence is the game's opening
-//! image, and a second frontend that quietly omits it is not the same game with
-//! a different rasteriser. The argument was really about the **development**
-//! loop, and `ORBS_BOOT=0` already answered that — on both sides, for the same
-//! reason.
-//!
-//! The clock and the card are `orbs-shell`'s; what lives here is the frame that
-//! advances one and the engine line that fills the other.
-//!
-//! # One thing it does not do, and that is on purpose
-//!
-//! **No content watcher.** `ORBS_CONTENT` is read once at startup rather than
-//! watched: a watcher is `notify` and a background thread, and it belongs to the
-//! frontend that already has one. Edit `prose.toml` and restart — which costs
-//! nothing here, which is the point.
-//!
-//! # It installs no `tracing` subscriber, and that is deliberate
-//!
-//! `orbs_shell::read` warns through `tracing` when authored content will not
-//! parse. In raw mode a subscriber writing to stderr would scribble across the
-//! screen at the exact moment a writer is looking at their own edit. With no
-//! subscriber the macro compiles to nothing; the `--dump` path, which owns the
-//! terminal in the ordinary way, prints its own warning to stderr instead.
+//! No `tracing` subscriber either. In raw mode a subscriber writing to stderr
+//! would scribble across the screen at the moment a writer is looking at their
+//! own edit; with none, the macro compiles to nothing. The `--dump` path owns
+//! the terminal in the ordinary way and prints its own warning instead.
 
 mod blit;
 mod drive;
@@ -60,14 +43,15 @@ mod theme;
 use std::io::{IsTerminal, stdout};
 use std::process::ExitCode;
 
+use drive::default_settings;
 use orbs_shell::wizard;
 use orbs_sim::Sim;
 
 /// The crossterm version this binary is built against.
 ///
-/// A const held to `Cargo.toml` by a test, exactly as the Bevy build holds its
-/// own pin. Cargo exposes no `env!` for a dependency's version, and inventing
-/// one on the POST card would be the lie that card exists to avoid.
+/// Held to `Cargo.toml` by a test, as the Bevy build holds its own pin. Cargo
+/// exposes no `env!` for a dependency's version, and guessing one on the POST
+/// card would be the lie that card exists to avoid.
 const CROSSTERM: &str = "0.29";
 
 /// What this binary is built out of, for the POST card's third line.
@@ -80,15 +64,14 @@ fn engine() -> String {
 
 fn main() -> ExitCode {
     // `--dump "attend laboratory; grind sage"` prints one frame as text and
-    // exits, through the same painters the Bevy build's `ORBS_DUMP` uses. That
-    // agreement is the boundary proof: two binaries, one screen. **A dump chooses
-    // its own seed** — the instrument's, `orbs_shell::seed` — so nothing here can
-    // hand it a game's.
+    // exits, through the same painters the Bevy build's `ORBS_DUMP` uses: two
+    // binaries, one screen. A dump chooses its own seed — the instrument's,
+    // `orbs_shell::seed` — so nothing here can hand it a game's.
     let mut args = std::env::args().skip(1);
     if let Some(flag) = args.next() {
         if flag == "--dump" {
             let script = args.next().unwrap_or_else(|| "1".to_owned());
-            orbs_shell::dump_script(wizard(), &engine(), &script);
+            orbs_shell::dump_script(wizard(), &engine(), default_settings(), &script);
             return ExitCode::SUCCESS;
         }
         eprintln!("usage: orbs-tui [--dump <commands>]");
@@ -96,7 +79,7 @@ fn main() -> ExitCode {
     }
     // ...and `ORBS_DUMP` works here too, so a See-it line written for one
     // frontend runs against the other unchanged.
-    if orbs_shell::dump(wizard(), &engine()) {
+    if orbs_shell::dump(wizard(), &engine(), default_settings()) {
         return ExitCode::SUCCESS;
     }
 
@@ -105,7 +88,13 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    // **A game gets a seed of its own** unless `ORBS_SEED` names one — which the
+    // Before anything reads a save, and once — the same call the other build
+    // makes, with the same guards. See `orbs`'s `main`.
+    orbs_shell::migrate_saves();
+    // The same opt-in the other build makes. See `orbs`'s `main`.
+    orbs_shell::settings::keep();
+
+    // A game gets a seed of its own unless `ORBS_SEED` names one — which the
     // play harness always does, so its scenarios stay the worlds they were
     // written against. A save on disk outranks it inside `play`.
     match play(orbs_shell::new_game_seed()) {
@@ -121,10 +110,27 @@ fn main() -> ExitCode {
 
 /// Take the terminal, play, and give it back.
 fn play(seed: u64) -> std::io::Result<()> {
-    // **The save outranks the seed and the environment both**, as it does in the
-    // other build. `session::Wizard` puts it the other way round: a name is world
-    // state, so it is read from the machine only when there is no world yet.
-    let mut sim = match orbs_shell::read_save() {
+    // The game waits at its menu; `ORBS_THRESHOLD=0` does not. The switch is the
+    // harnesses': `scripts/play.sh` drives this binary under `tmux` to reach a
+    // *tower*, and a laboratory scenario that typed its way past a menu first
+    // would be testing the door.
+    let threshold = orbs_shell::Threshold::chosen(orbs_shell::Threshold::Waiting);
+
+    // The save outranks the seed and the environment both, as in the other
+    // build. `session::Wizard` goes the other way round: a name is world state,
+    // so it is read from the machine only when there is no world yet.
+    //
+    // At the threshold no save is read at all — the player has not asked for a
+    // tower, and putting one in front of them (then writing it back a minute
+    // later) is what the threshold exists to stop. This scratch world supplies
+    // the prose the menu is drawn from and never ticks; a chosen tower arrives
+    // through `drive::run`'s swap.
+    let opened = if threshold.is_waiting() {
+        orbs_shell::Opened::New
+    } else {
+        orbs_shell::read_save()
+    };
+    let mut sim = match opened {
         orbs_shell::Opened::Restored(save) => {
             let mut resumed = Sim::restored(&save);
             resumed.say_resumed(orbs_shell::away_for(&save));
@@ -146,17 +152,16 @@ fn play(seed: u64) -> std::io::Result<()> {
             fresh
         }
     };
-    // Authored content, if `ORBS_CONTENT` names a directory (rule 6). No
-    // watcher: that is `notify` and a background thread, and it belongs to the
-    // frontend that already has one. A terminal build reads the file once.
-    if std::env::var_os(orbs_shell::CONTENT_DIR).is_some()
-        && let Some(prose) = orbs_shell::load()
-    {
-        sim.set_prose(prose);
+    // Authored content, if `ORBS_CONTENT` names a directory (rule 6). Read once,
+    // not watched — a watcher belongs to the frontend that already has one.
+    // The complaint goes to `tracing`, which this build subscribes to; the dump
+    // prints its own line.
+    for file in orbs_shell::load(&mut sim) {
+        tracing::warn!("content: {file} did not load; running on the built-in text");
     }
 
     term::enter()?;
-    let result = drive::run(sim, engine());
+    let result = drive::run(sim, threshold, engine());
     term::leave();
     result
 }
@@ -167,10 +172,8 @@ mod tests {
 
     #[test]
     fn the_crossterm_version_is_the_one_the_manifest_asks_for() {
-        // The POST card names what the machine is made of, and `tower/boot.rs`
-        // exists because "a boot report that could go stale would be a lie the
-        // player reads first". This is that rule one screen earlier — and it is
-        // the same test the Bevy build keeps beside its own pin.
+        // A boot report that could go stale is a lie the player reads first.
+        // The same test the Bevy build keeps beside its own pin.
         let manifest = include_str!("../Cargo.toml");
         assert!(
             manifest.contains(&format!("crossterm = \"{CROSSTERM}\"")),

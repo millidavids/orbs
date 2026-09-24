@@ -1,21 +1,13 @@
 //! The canonical command set.
 //!
-//! DESIGN.md §6.1 fixes the Phase 0 vocabulary at sixteen commands, and fixes
-//! the naming rule that shapes them: **canonical verbs are one short word,
-//! ideally ≤7 characters.** Players graduate to typing the canonical form, so it
-//! is what expert players type all day — `auspicate --sign=march` would lose to
-//! `grep march` every time, which would punish the exact progression the echo
-//! mechanism exists to create.
-//!
-//! The canonical form is **arcane**. Whichever register is canonical is the one
-//! players absorb, so making it arcane means the mastery arc is literally
-//! learning to speak as a wizard.
+//! §6.1: one short word each, ≤7 characters, arcane register. Experts type the
+//! canonical form all day, so it has to be short — and arcane, because whichever
+//! register is canonical is the one players absorb.
 
 /// What a command slot expects to be filled with.
 ///
-/// This is what lets the parser resolve `clarity` against essences rather than
-/// against every noun in the tower, and what lets it reject a plausible-sounding
-/// argument in the wrong category.
+/// Lets the parser resolve `clarity` against essences rather than every noun in
+/// the tower, and reject a plausible argument in the wrong category.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum NounKind {
     /// A location in the tower. `attend /tower/laboratory`.
@@ -33,182 +25,86 @@ pub enum NounKind {
     Essence,
     /// Crafting stock: an ingredient, a part-made material, a byproduct, or fuel.
     ///
-    /// §11.5's Resources table names **reagents** as the crafting economy, and
-    /// §10.1's pipeline is entirely the business of moving them between
-    /// instruments — so this is the kind `move` takes and the one the laboratory
-    /// is mostly full of.
-    ///
-    /// One kind rather than four: a husk is only litter until a recipe wants it
-    /// (§10.1's *every byproduct has at least one use*), so a noun kind that
-    /// sorted ingredients from waste would be encoding a judgement the recipes
-    /// are meant to keep changing.
+    /// One kind rather than four. A husk is only litter until a recipe wants it,
+    /// so sorting ingredients from waste would encode a judgement the recipes
+    /// keep changing.
     Reagent,
     /// A vessel holding a finished brew. `siphon retort`.
     Vessel,
     /// A scroll, which is finished work you spend. `wield gleaning-scroll`.
     ///
-    /// **A kind of its own, beside [`Essence`](Self::Essence) rather than inside
-    /// it.** A potion is §10.1's *quality* a recipe yields; a scroll is an
-    /// object with an effect, and the two answer different questions — a slot
-    /// that took "finished work" would let `wield clarity` resolve at full
-    /// confidence and then find nothing to do, which is §15's dead end reached
-    /// through a kind that was merely convenient.
-    ///
-    /// Not [`Reagent`](Self::Reagent) either, which is *"crafting stock: an
-    /// ingredient, a part-made material, a byproduct, or fuel"* — every one of
-    /// those is something a recipe consumes, and a scroll is something the
-    /// player spends.
+    /// Its own kind, not [`Essence`](Self::Essence) — otherwise `wield clarity`
+    /// resolves and finds nothing to do. Not [`Reagent`](Self::Reagent) either:
+    /// a recipe consumes those, a player spends this.
     Scroll,
     /// A script. `invoke night_watch`.
     Script,
     /// A count of ticks. `meditate 30`.
     Count,
-    /// A name the player is **coining**, not one the world already holds.
+    /// A name the player is coining, not one the world holds. `scribe morning`.
     ///
-    /// `scribe morning` — the spell does not exist yet, which is the whole point
-    /// of the command, so it cannot resolve against the scene the way every
-    /// other argument does. Free text, like [`Pattern`](Self::Pattern), and one
-    /// word.
-    ///
-    /// §6.1 writes the command as `scribe <name>`; the signature said
-    /// `NounKind::Script` and therefore **could not parse the create case at
-    /// all** — a required slot with nothing in the world to fill it. The two
-    /// other script verbs are right to keep `Script`, because `bind` and
-    /// `invoke` name a spell that exists.
-    ///
-    /// Not [`Any`](Self::Any): `Any` searches every category, so `scribe sage`
-    /// would quietly create a spell named after a reagent.
+    /// Free text like [`Pattern`](Self::Pattern), because the spell does not
+    /// exist yet and cannot resolve against the scene. `bind` and `invoke` keep
+    /// `Script` — they name a spell that is there. Not [`Any`](Self::Any), or
+    /// `scribe sage` would quietly name a spell after a reagent.
     Name,
-    /// What the archive's maze reports about the cell you are reading.
+    /// What a room reports about its own state — `passage`, `wall`, `marks`.
     ///
-    /// `passage`, `wall`, `exit`, plus `back`, `spoil`, `marks` and the errand
-    /// words — the vocabulary a solver's `if` names, and `tower::maze::readings`
-    /// is the one list of it. **A kind of their own, and no slot asks for one**,
-    /// so a sense can never fill a `Reagent` or an `Essence` by accident while
-    /// [`Any`](Self::Any) still finds it. That last part is the whole reason the
-    /// kind exists: `spell::compile` resolves a condition's names against the
-    /// room *as it is at that instant*, and no way has been walked at the moment
-    /// a solver is cast — so without a kind the scene always offers, every `if` in
-    /// it would compile to a branch that takes neither half.
-    ///
-    /// **A kind of its own, and now a `Topic` as well.** This said *"not
-    /// [`Topic`](Self::Topic), which `recall` reads: `recall walked` would
-    /// resolve and then find no manual entry"* — and both halves have since
-    /// stopped being true. `walked` was replaced by the counted `marks`, and
-    /// every reading has a `recall_` page, so each one *does* find an entry. The
-    /// kind still matters for the reason above it: no slot asks for a `Sense`,
-    /// so one can never fill a `Reagent` by accident, while `Any` still finds it.
+    /// The vocabulary a solver's `if` names; `tower::maze::readings` is the one
+    /// list. No slot asks for a `Sense`, so one can never fill a `Reagent` by
+    /// accident, while [`Any`](Self::Any) still finds it — which is what lets
+    /// `spell::compile` resolve a condition before the way has been walked.
     Sense,
     /// Anything with text in it — `peruse orb.log`, `peruse night_watch.spell`.
     ///
-    /// A **slot** kind, never a noun's own: nothing in the tower *is* a
-    /// readable, the way something is a [`File`](Self::File) or a
-    /// [`Script`](Self::Script). It says what a slot will take, which is what
-    /// makes `peruse` reach a spell without `peruse` reaching a reagent.
-    ///
-    /// The alternative was [`Any`](Self::Any), and it is wrong in a way that
-    /// passes the whole suite: `peruse sage` resolves at full confidence and
-    /// reports a zero-line read of a reagent, and a bare `peruse` offers the
-    /// four *places* as things to read. `execute::files` already records why
-    /// resolution goes by kind, and `peruse` — `read`, `cat`,
-    /// `open`, `show` — is the verb a shell-naive tester reaches for first, so
-    /// the dead end would land where §15 weighs it heaviest.
+    /// A *slot* kind, never a noun's own: nothing in the tower *is* a readable.
+    /// Not [`Any`](Self::Any), which would let `peruse sage` report a zero-line
+    /// read of a reagent.
     Readable,
-    /// Anything you can **pick up** — stock, a potion, a scroll.
+    /// Anything you can pick up — stock, a potion, a scroll.
     ///
-    /// A slot kind, never a noun's own, like [`Readable`](Self::Readable) and
-    /// [`Stoppable`](Self::Stoppable).
-    ///
-    /// # `move` could not carry a potion at all
-    ///
-    /// Its first slot was [`Reagent`](Self::Reagent), and `produce::transmute`
-    /// gives a finished potion [`Essence`](Self::Essence) — so `move clarity to
-    /// dispensary` failed to fill a required slot, silently, for as long as
-    /// there have been potions. It went unnoticed because `empty` turns an
-    /// instrument out wholesale and never asks what kind anything is, so the one
-    /// route that mattered in the laboratory worked.
-    ///
-    /// The arsenal is what made it matter: carrying finished work between rooms
-    /// is the whole point of the room, and every route into it goes through this
-    /// slot.
-    ///
-    /// **Not [`Any`](Self::Any)**, which reaches places, files, topics and
-    /// spells — `move laboratory to arsenal` would resolve at full confidence.
-    /// What this names is the set of things that are *stuff*.
-    ///
-    /// **There is no `Fragment` in the list, and there was.** A fragment *is*
-    /// crafting stock — the lectern's recipe consumes four of them — so it is a
-    /// [`Reagent`](Self::Reagent) like every other input, and the separate kind
-    /// went with the sigils it was invented for.
+    /// A slot kind, like [`Readable`](Self::Readable). `move`'s first slot was
+    /// `Reagent` and a finished potion is an `Essence`, so `move clarity to
+    /// dispensary` silently failed to fill a required slot until the arsenal
+    /// made it matter. Not [`Any`](Self::Any), or `move laboratory to arsenal`
+    /// resolves.
     Portable,
-    /// Anything you can **set going** — an instrument, or a scroll.
+    /// Anything you can set going — an instrument, or a scroll.
     ///
-    /// A slot kind, never a noun's own, like [`Readable`](Self::Readable) and
-    /// [`Stoppable`](Self::Stoppable), and it exists for the reason those two
-    /// do: `wield` had to reach a second sort of thing and the alternative was a
-    /// 23rd tower-wide verb, which `the_vocabulary_is_the_tower_wide_verbs_plus_
-    /// the_laboratory_s_own` refuses in advance.
-    ///
-    /// **`empty` keeps [`Place`](Self::Place)**, and the split is the point:
-    /// both verbs used to share one signature, and widening it would have made
-    /// `empty gleaning-scroll` a sentence the parser accepts and the executor
-    /// cannot answer.
+    /// A slot kind. `empty` keeps [`Place`](Self::Place) rather than sharing
+    /// this, or `empty gleaning-scroll` parses and the executor cannot answer.
     Workable,
-    /// Anything that can be **running** — an instrument, or a spell.
+    /// Anything that can be running — an instrument, or a spell.
     ///
-    /// A slot kind, never a noun's own, like [`Readable`](Self::Readable).
-    ///
-    /// `stop` took a [`Place`](Self::Place) and so could only ever reach an
-    /// instrument. An invoked spell was therefore **unstoppable**: nothing but
-    /// running out of program removes it, so `repeat` with no count ran for ever
-    /// and `stop <spell>` did not resolve to it. A player who wrote one had no
-    /// way back — §6's dead end, arrived at from a direction the parser could
-    /// not see.
+    /// A slot kind. `stop` took a [`Place`](Self::Place), which left an invoked
+    /// spell unstoppable: `repeat` with no count ran for ever and `stop <spell>`
+    /// did not resolve.
     Stoppable,
     /// A verb's own name, so `recall grind` can be asked about.
     ///
-    /// # Why not [`Topic`](Self::Topic), which `recall` already reads
-    ///
-    /// Because [`Any`](Self::Any) reaches `Topic`, and registering 27 canonicals
-    /// there would have leaked them into three places at once:
-    ///
-    /// - **Tab** would offer `purge grind`. `complete::nouns` filters by
-    ///   `accepts`, and offering a word the parser would refuse is the dead end
-    ///   §15 weighs above the raw resolution rate.
-    /// - **`spell::compile`** resolves a condition's names through `Any`, so
-    ///   `if the dispensary has grind` would compile clean and answer *no* for
-    ///   ever — verbatim the `has ground-slat` defect that module was rewritten
-    ///   to kill.
-    /// - **The numbered prompt** for a bare `purge` would reorder: `Argument`'s
-    ///   `Ord` is (kind, value, slot), so inserting a kind moves which four
-    ///   readings surface, silently.
-    ///
-    /// This is the same argument [`Sense`](Self::Sense) makes, one step further:
-    /// `Sense` needs `Any` to find it so a spell's `if` can name a reading, and
-    /// this needs `Any` **not** to. So the kind is reachable from exactly one
-    /// slot kind, [`Subject`](Self::Subject), and from nothing else.
+    /// Reachable from [`Subject`](Self::Subject) and nothing else — deliberately
+    /// *not* from [`Any`](Self::Any), which would leak 27 canonicals into Tab
+    /// (`purge grind` offered), into `spell::compile` (`if the dispensary has
+    /// grind` compiling to a branch that never takes), and into the numbered
+    /// prompt's ordering.
     Command,
     /// Anything nameable — `verify` and `purge` accept any surface.
     Any,
     /// What the manual can answer on: a topic, or a command.
     ///
-    /// A **slot** kind, never a noun's own, like [`Readable`](Self::Readable)
-    /// and [`Stoppable`](Self::Stoppable). It is what lets `recall` reach both
-    /// `recall brewing` and `recall grind` without widening `Any`.
+    /// A slot kind. Lets `recall` reach both `recall brewing` and `recall grind`
+    /// without widening [`Any`](Self::Any).
     Subject,
 }
 
 /// Which part of the manual a verb belongs under.
 ///
-/// **A table, not a derivation.** The predicates that already exist — the ones a
-/// reader might reach for — group by the wrong thing: `is_operation` is about
-/// *scope*, `transmutes` about the pipeline. What a lost player wants is sorted
-/// by what they are trying to do, and that is a judgement rather than a
-/// consequence, so it is written down.
+/// A table, not a derivation: `is_operation` is about scope and `transmutes`
+/// about the pipeline, where a lost player wants sorting by what they are
+/// trying to do.
 ///
-/// Order here is the order the overview prints, which is the order a player
-/// needs them: find your way about, then do the work, then teach the orb, then
-/// ask the orb, and last the two that destroy something.
+/// Order here is the order the overview prints: find your way about, do the
+/// work, teach the orb, ask the orb, and last the two that destroy something.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Group {
     /// Reaching and reading: where you are, what is here, what it says.
@@ -249,12 +145,11 @@ impl Group {
 impl NounKind {
     /// The kinds a [`Noun`](super::Noun) in the scene can actually be.
     ///
-    /// **Not every variant is one.** `Pattern`, `Count` and `Name` are free
-    /// text and never touch the world; `Readable`, `Portable`, `Workable`,
-    /// `Stoppable`, `Subject` and `Any` are *sets* a slot accepts, named by
-    /// [`accepts`](Self::accepts) and never carried by a noun. Asking for the
-    /// concrete list used to mean writing it out again, and
-    /// `content::Phrasings` would have been the second copy.
+    /// Not every variant: `Pattern`, `Count` and `Name` are free text and never
+    /// touch the world; `Readable`, `Portable`, `Workable`, `Stoppable`,
+    /// `Subject` and `Any` are sets a slot accepts, named by
+    /// [`accepts`](Self::accepts) and never carried by a noun. One list, so
+    /// `content::Phrasings` is not a second copy.
     ///
     /// `Command` is here because `tower::scene_at` registers every verb word as
     /// one — `recall` takes a `Subject`, which is a topic *or* a command.
@@ -315,17 +210,14 @@ impl NounKind {
 
     /// Whether a noun of kind `noun` may fill a slot wanting `self`.
     ///
-    /// **The one definition of that question.** It was three copies of
-    /// `kind == NounKind::Any || noun.kind == kind` — in
-    /// [`Scene::best_match`](super::Scene::best_match), in `resolve::fillers`
-    /// and in `complete::nouns` — which is three chances for a slot kind to be
-    /// understood by the matcher and not by the numbered prompt, or by both and
-    /// not by Tab. A slot that accepts a *set* has to agree in all three or the
-    /// three surfaces disagree about what a command takes.
+    /// One definition, because three surfaces ask it — `Scene::best_match`,
+    /// `resolve::fillers` and `complete::nouns`. They had a copy each, which is
+    /// three chances for the matcher, the numbered prompt and Tab to disagree
+    /// about what a command takes.
     #[must_use]
     pub const fn accepts(self, noun: Self) -> bool {
         match self {
-            // **Everything except a command.** `Any` is `verify` and `purge`,
+            // Everything except a command. `Any` is `verify` and `purge`,
             // and a verb's own name is not a surface either can act on — see
             // [`Command`](Self::Command) for the three places that leak through
             // if it is.
@@ -389,24 +281,13 @@ const PATTERN_AND_FILE: &[Slot] = &[
 /// `recall [topic]` — optional, and it is `survey`'s shape rather than a
 /// weakening.
 ///
-/// # Why the slot gave up being required
+/// A required slot with fillers can never yield an argument-less intent, so
+/// bare `recall` — and `help`, `man`, `?` — opened a numbered prompt offering
+/// four arbitrary manual subjects. §6 forbids a bare error, and that was it
+/// failing at the one command whose job is answering the question.
 ///
-/// A required slot with fillers can never yield an argument-less intent:
-/// `resolve::collect` pushes one candidate per filler, they all tie, and
-/// `analyse` returns `Ambiguous`. The scene always has topics, so **bare
-/// `recall` opened a numbered prompt offering the four alphabetically-first
-/// manual subjects** — and `help`, `man` and `?` are all synonyms of it. §6
-/// forbids a bare error; a lost player typing `help` and being asked to pick
-/// between `archive`, `brewing`, `clarified-draught` and `clarity` is that rule
-/// failing at the one command whose whole job is answering the question.
-///
-/// **§19 declined exactly this for bare `follow`, and the difference is
-/// `survey`.** `follow` bare and `follow east` are categorically different acts
-/// — one walks a cell, one seizes the keyboard — where `survey` bare and
-/// `survey alembic` are the *same act at two scopes*, which is what `recall` and
-/// `recall grind` are. The numbered prompt a required slot is said to buy was
-/// never a disambiguation here either: nothing was typed to disambiguate, so it
-/// offered four arbitrary subjects rather than four readings of an input.
+/// §19 declined the same for bare `follow`, where bare and argumented are
+/// different acts. Here they are the same act at two scopes, like `survey`.
 const TOPIC_OPTIONAL: &[Slot] = &[Slot::optional(NounKind::Subject)];
 const ANYTHING: &[Slot] = &[Slot::required(NounKind::Any)];
 /// `verify`'s, and the second optional slot in the game — see its `signature`
@@ -443,11 +324,9 @@ const MOVE: &[Slot] = &[
 ];
 /// What §10.1's per-instrument verbs take.
 ///
-/// **Optional**, so `grind` on its own still starts a mortar that is already
-/// charged. The whole point of these verbs is to spend fewer keystrokes; making
-/// the reagent compulsory would have `grind sage` beat `move sage to
-/// mortar_and_pestle; wield mortar_and_pestle` while bare `grind` lost to bare
-/// `wield mortar_and_pestle`.
+/// Optional, so bare `grind` still starts a mortar that is already charged.
+/// These verbs exist to save keystrokes; a compulsory reagent would make bare
+/// `grind` lose to bare `wield mortar_and_pestle`.
 const ONE_REAGENT: &[Slot] = &[Slot::optional(NounKind::Reagent)];
 
 /// Two, for the one instrument that combines.
@@ -467,23 +346,14 @@ const WAY: &[Slot] = &[Slot::required(NounKind::Place)];
 
 /// `seat <socket> <sigil>` — which dial, and what to turn it to.
 ///
-/// **Both `Place`, and no new `NounKind`.** The lens's sockets and sigils are
-/// `Role::Reading` fixtures exactly as the archive's compass bearings are, so
-/// they resolve against the kind `WAY` already uses. verbs.md warns that a new
-/// kind leaks into tab completion, `compile::fix` and the bare-argument prompt;
-/// the cheapest new kind is the one you did not need.
+/// Both `Place`, no new `NounKind`: sockets and sigils are `Role::Reading`
+/// fixtures like the archive's bearings, so they resolve against the kind `WAY`
+/// uses. A new kind leaks into Tab, `compile::fix` and the bare-argument prompt.
+/// The cost is that `seat laboratory nitre` parses and the handler refuses it.
 ///
-/// The cost is that `seat laboratory nitre` parses, and the handler refuses it
-/// in voice — the same shape `research::named` already has for `follow`.
-/// **The sigil is optional, and bare means *try something else here*.**
-///
-/// A variable-free script cannot name the sigil it has not tried yet — that is
-/// what forced a ladder to spell all six out per socket, twenty-four rungs using
-/// a mark count as an index. `dial first` asks the ward instead, which is the one
-/// sentence the language could not otherwise form. `Ward::advance` has the rest.
-///
-/// Optional rather than a second verb, on `recall`'s precedent (`TOPIC_OPTIONAL`):
-/// bare and argumented are the same act — turning that dial — at two scopes.
+/// The sigil is optional, and bare means *try something else here* — a
+/// variable-free script cannot name a sigil it has not tried, which forced
+/// twenty-four ladder rungs per socket. `Ward::advance` has the rest.
 const SOCKET_AND_SIGIL: &[Slot] = &[
     Slot::required(NounKind::Place),
     Slot::optional(NounKind::Place),
@@ -491,16 +361,11 @@ const SOCKET_AND_SIGIL: &[Slot] = &[
 
 /// `haul <from> <to>` — which station the ward leaves, and which it arrives at.
 ///
-/// **Both required, and both `Place`**, on `SOCKET_AND_SIGIL`'s reasoning: the
-/// sanctum's three stations are `Role::Reading` fixtures exactly as the lens's
-/// sockets are, so they need no kind of their own.
+/// Both required, both `Place`, on `SOCKET_AND_SIGIL`'s reasoning.
 ///
-/// **Neither is optional, and that is the difference from `dial`.** A bare
-/// `dial first` exists because a variable-free script cannot name a sigil it has
-/// not tried; a haul has no such gap — a spell that knows which two stations it
-/// means knows both of them, and between any two stations there is exactly one
-/// legal move. What a spell must work out is the *direction*, which is what
-/// `potency` is published for.
+/// Neither is optional, unlike `dial`: a spell that knows which two stations it
+/// means knows both, and between any two there is exactly one legal move. The
+/// *direction* is what it must work out, which is why `potency` is published.
 const STATION_AND_STATION: &[Slot] = &[
     Slot::required(NounKind::Place),
     Slot::required(NounKind::Place),
@@ -528,9 +393,8 @@ const DIE_AND_AREA: &[Slot] = &[
 /// and `imbue mortar_and_pestle hurried` are the same command and the longer one
 /// is what a person types.
 ///
-/// **Both are `Place`.** A charm is a `Role::Reading` fixture in the forge, so
-/// it resolves the way an area does — and the tool is a place anywhere in the
-/// tower, which is the one widening this domain makes to §7.
+/// Both `Place`. A charm is a `Role::Reading` fixture in the forge; the tool is
+/// a place anywhere in the tower, which is this domain's one widening of §7.
 const TOOL_AND_CHARM: &[Slot] = &[
     Slot::required(NounKind::Place),
     Slot::required(NounKind::Place),
@@ -563,12 +427,9 @@ pub enum Verb {
     Status,
     /// The in-world manual — what the orb remembers about a subject.
     ///
-    /// **Was `grimoire`, and the word was released** (§19). A grimoire is a
-    /// wizard's book of *spells*, which is what `/grimoire` now holds, so using
-    /// the same word for the manual made the one word mean both the reference
-    /// you read and the book you write in. §6.1's *"a released word does not
-    /// stop resolving"* rule protects **shipped** vocabulary; nothing has
-    /// shipped, and unclaimed `grimoire` now reads as the directory it names.
+    /// Was `grimoire` and released (§19): a grimoire is a book of *spells*,
+    /// which is what `/grimoire` holds, so one word meant both the reference you
+    /// read and the book you write in.
     Recall,
     /// Detect tampering.
     Verify,
@@ -576,48 +437,24 @@ pub enum Verb {
     Undo,
     /// Read back through what the orb has said.
     ///
-    /// # A verb for a key that already worked
+    /// A word for a key that already worked. `PageUp` has always scrolled the
+    /// transcript, but the border only says `PgDn newest` once you are already
+    /// scrolled back — so in a mouseless game the key announced itself only to
+    /// players who had found it. Using the word once teaches the key.
     ///
-    /// `PageUp` has scrolled the transcript since the transcript existed. The
-    /// problem is that nothing says so: the border advertises `PgDn newest` only
-    /// once you are *already* scrolled back, so the affordance announces itself
-    /// exclusively to players who have found it. In a game with no mouse and no
-    /// menus, a key nobody can discover is a key nobody has.
-    ///
-    /// So the way in is a word, like everything else here — and using it once
-    /// teaches the keys, which is the part that survives after the player stops
-    /// needing the word.
-    ///
-    /// **Not `recollect`**, which was the first name and collides: `rec` is
-    /// claimed by `recall`, and `rec_is_pinned_as_a_prefix_before_anything_else_
-    /// wants_it` names this exact scenario a word in advance. `und` and `unf`
-    /// part at the third character, which is the length the naming pass governs.
+    /// Not `recollect`: `rec` is `recall`'s.
     Unfurl,
     /// Put the orb down and leave.
     ///
-    /// **A word for a key that already worked**, which is `unfurl`'s argument
-    /// exactly: `F10` has always left and nothing on screen says so. §6 makes
-    /// this a game played by typing, so the way out should be a word like every
-    /// other way through it.
-    ///
-    /// The name is free of the naming pass's traps — no other verb begins with
-    /// `q`, so `qui` names one verb and always will. It is also the word the
-    /// spell editor and the weave screen already use for *close this*, which
-    /// makes it mean one thing at three depths rather than three things.
+    /// `unfurl`'s argument again: `F10` has always left and nothing says so.
+    /// Also the word the spell editor and the weave screen use for *close
+    /// this*, so it means one thing at three depths. No other verb begins `q`.
     Quit,
     /// Open the orb's menu.
     ///
-    /// # Why this is not `quit`
-    ///
-    /// It was, for one iteration, on the argument that *"the word means leave
-    /// the thing you are in, whichever thing that is"*. **Superseded** (§19):
-    /// leaving the game and stepping out to a menu are two things, and one word
-    /// for both meant a player who wanted to stop had to learn that stopping was
-    /// two steps. `quit` leaves and asks first; this opens the screen.
-    ///
-    /// The name is free of the naming pass's traps: `meditate` is the only other
-    /// verb beginning `me` and neither prefixes the other, so `men` names this
-    /// one and always will.
+    /// Was `quit` for one iteration, superseded (§19): leaving the game and
+    /// stepping out to a menu are two things, and one word for both made
+    /// stopping a two-step operation. `quit` leaves and asks first.
     Menu,
     /// Fast-forward the clock.
     Meditate,
@@ -665,60 +502,37 @@ pub enum Verb {
     Invoke,
     /// Move the archive's reading one cell through a maze (§10, `tower::maze`).
     ///
-    /// **Not `step`, which scores 750 against `stop`** — over `MIN_SIMILARITY`,
-    /// and a typo that stopped a run instead of advancing it would cost the
-    /// whole maze. `tread` was the next candidate and scores **800 against
-    /// `read`**, which `peruse` claims. `follow` is 429 against its nearest and
-    /// shares no three-character prefix with anything.
+    /// Not `step`: 750 against `stop`, and a typo that stopped a run instead of
+    /// advancing it would cost the whole maze. `tread` is 800 against `read`.
     Follow,
     /// Look at what the work has bought (§11.5).
     ///
-    /// **The twentieth tower-wide word, and it needs the argument `unfurl`
-    /// made.** §6.1 wants this set smaller, not larger, and `unfurl` earned its
-    /// seat by being the only way to reach a surface that already existed.
-    /// Progression is the opposite case and lands in the same place: the surface
-    /// does *not* exist, `status` prints two numbers with no sense of what they
-    /// are for, and §11.5's own turn — buying the first Concentration — arrives
-    /// as one line that was never chosen. A track nobody can look at is a track
+    /// The twentieth tower-wide word. §6.1 wants the set smaller, and this earns
+    /// a seat the way `unfurl` did: without it `status` prints two numbers with
+    /// no sense of what they are for. A track nobody can look at is a track
     /// nobody is on.
     ///
-    /// **Not `ascend`**, which was the obvious name and collides: two edits from
-    /// `attend` in a six-letter word is 667, over `MIN_SIMILARITY`. `weave`
-    /// scores 200 against `wield` and 400 against `write` — the only other `w`
-    /// words in the vocabulary — and `wea` is a free three-character prefix.
+    /// Not `ascend`: 667 against `attend`.
     Weave,
     /// Give the arrow keys the archive's stacks (§10, §19).
     ///
-    /// **The twenty-second tower-wide word, and it is `unfurl`'s argument
-    /// again**: the surface has no other way in, and in a mouseless game a word
-    /// is the only way to reach one. What it reaches is a maze a player would
-    /// otherwise walk with a hundred `follow` lines — the map is on screen the
-    /// whole time either way, so this buys the *keys* and nothing else.
+    /// `unfurl`'s argument again: the surface has no other way in. It buys the
+    /// *keys* for a maze a player would otherwise walk with a hundred `follow`
+    /// lines — the map is on screen either way.
     ///
-    /// **The naming sweep was unusually brutal here**, and the near misses are
-    /// worth keeping because every one of them is the obvious word: `thread` is
-    /// 667 against `read`, `stride` 667 against `scribe`, `delve` 600 against
-    /// `weave`, `trace` 600 against `twice` — a reading permanently in scope in
-    /// the very room this works in — and `pace` 750 against `page`. `enter` and
-    /// `walk` are already taken, by `attend` and by `follow`. `wander` is 500 at
-    /// worst and `wan` is a free three-character prefix.
+    /// Every obvious word collided: `thread` 667 against `read`, `stride` 667
+    /// against `scribe`, `delve` 600 against `weave`, `trace` 600 against
+    /// `twice`, `pace` 750 against `page`; `enter` and `walk` are taken.
     Wander,
     /// `probe` — press the aperture against a far orb's ward, opening a reading
     /// if none is open.
     ///
-    /// **Two acts in one word, which is §19's per-instrument idiom**: `grind
-    /// sage` is a `move` and a `wield`, and this is a `scry` and a press. It
-    /// collapses the command a player types most, and it costs nothing in
-    /// clarity here because the aperture opens on a fixed figure — so the first
-    /// press means the same thing every time and there is nothing to set before
-    /// it.
+    /// Two acts in one word, §19's per-instrument idiom: a `scry` and a press,
+    /// the way `grind sage` is a `move` and a `wield`. Costs nothing in clarity
+    /// because the aperture opens on a fixed figure.
     ///
-    /// **`scry` was the opener and never shipped.** It is §10's word for the
-    /// domain and it had to go: `tests/naming.rs` forbids two canonicals sharing
-    /// a three-character prefix outright, with the exemption it once had deleted
-    /// on the grounds that *"an exemption that outlives its cause is how a guard
-    /// quietly stops guarding"* — and `scr` reaches `scribe`. The domain is still
-    /// scrying; the room is `lens/`; the word you type is `probe`.
+    /// `scry` was the opener and lost to the prefix rule — `scr` reaches
+    /// `scribe`. The domain is still scrying; the word you type is `probe`.
     Probe,
     /// `dial <socket> <sigil>` — turn one dial of the aperture.
     ///
@@ -734,63 +548,45 @@ pub enum Verb {
     /// `muster` — draw a fresh course of wards up out of the wellspring
     /// (§10, `sanctum/`).
     ///
-    /// Free and instant, exactly as [`Probe`](Self::Probe) is: drawing a course
-    /// is not work, and what costs the tower is the hauling. §19 records the
-    /// pricing this follows and why a domain that takes no production slot is
-    /// *additive* rather than competing.
+    /// Free and instant like [`Probe`](Self::Probe): drawing a course is not
+    /// work, the hauling is. §19 has the pricing.
     ///
-    /// **How tall a course is, is the whole of what erosion does.** A tower left
-    /// alone musters more wards, so the same word is a minute's work on a kept
-    /// tower and a quarter of an hour on a neglected one — see `tower::erosion`.
+    /// How tall a course is, is the whole of what erosion does — a neglected
+    /// tower musters more wards, so the same word is a minute's work or a
+    /// quarter of an hour. See `tower::erosion`.
     ///
-    /// The near misses: `fortify` is 914 against `for`, `restore` 935 against
-    /// `rest`, `mend` 935 against `mending`, `rally` 600 against `wall` and
-    /// `raise` 600 against `cause`. `muster` is clean and `mus` is a free
-    /// three-character prefix.
+    /// Near misses: `fortify` 914 against `for`, `restore` 935 against `rest`,
+    /// `mend` 935 against `mending`.
     Muster,
     /// `haul <from> <to>` — carry the topmost ward from one station to another.
     ///
-    /// **Directional, and it refuses.** Between any two stations exactly one
-    /// move is legal, so a symmetric word would have been unambiguous — and it
-    /// was declined, because it would leave a spell with nothing to *read*. The
-    /// refusal is what makes `potency` worth publishing and the comparison worth
-    /// writing (§19).
+    /// Directional, and it refuses. A symmetric word would have been
+    /// unambiguous — exactly one move between any two stations is legal — and
+    /// was declined because it leaves a spell nothing to *read*. That refusal is
+    /// what makes `potency` worth publishing (§19).
     ///
-    /// A refusal here is an ordinary one, never a fault: a spell that hauls the
-    /// wrong way is told so and carries on, which is `say_failure`'s line
-    /// between a refused command and `Role::Danger`.
+    /// A wrong haul is an ordinary refusal, not a fault: the spell is told and
+    /// carries on. See `say_failure`.
     ///
-    /// `shift` was the first name and is 800 against `sift`. `heave` is 800
-    /// against `weave`, `drag` 935 against `dragged`, `bring` 600 against
-    /// `grind`. `haul` is clean at 500 against `wall`.
+    /// `shift` is 800 against `sift`, `heave` 800 against `weave`.
     Haul,
     /// `summon` — draw a beast up at the circle, or call the waiting one in (§10,
     /// `menagerie/`).
     ///
-    /// **Two acts in one word**, which is [`Probe`](Self::Probe)'s: opening a
-    /// reading and pressing it. Free and instant, as `probe` and
-    /// [`Muster`](Self::Muster) are — a balked call costs the call and nothing
+    /// Two acts in one word, like [`Probe`](Self::Probe): opening a reading and
+    /// pressing it. Free and instant — a balked call costs the call and nothing
     /// else, so trying is never a resource decision.
     ///
-    /// **Takes nothing**, for the reason `muster` and `probe` do: there is one
-    /// circle, and naming it would be naming the only thing there is.
-    ///
-    /// `summon` is clean. `call` is 750 against `wall`, `invoke` is taken, and
-    /// `conjure` was not tried because `summon` came back free on the first
-    /// sweep — which is the opposite of what happened to `chant`, and §19 says
-    /// so.
+    /// Takes nothing: there is one circle, and naming it would be naming the
+    /// only thing there is. `call` is 750 against `wall`.
     Summon,
     /// `defend` — let the enemy arrive, and stand to meet it.
     ///
-    /// **Takes nothing**, for the reason `muster`, `probe` and `summon` do:
-    /// there is one rampart, and naming it would be naming the only thing there
-    /// is.
+    /// Takes nothing, like `muster` and `summon`: there is one rampart.
     ///
-    /// Swept clean at 500 (`attend`, `decant`, `find`) against a floor of 600,
-    /// with no three-character prefix collision. `siege` itself scored **600
-    /// against `sing`** while the menagerie was a chant, and so was not made a
-    /// word the player types — the domain keeps the name and the verb does not.
-    /// `sing` is gone (§19, `0.15.0`); the split stands on its own.
+    /// Clean at 500. `siege` itself scored 600 against `sing` when the menagerie
+    /// was a chant, so the domain keeps that name and the verb does not — `sing`
+    /// is gone (§19, `0.15.0`) and the split still stands.
     Defend,
     /// `deploy <troop>` — send what the menagerie summoned into the line.
     ///
@@ -798,44 +594,31 @@ pub enum Verb {
     Deploy,
     /// `quaff <potion>` — spend a potion on the coming round.
     ///
-    /// **A potion needed its own word and a scroll did not.** §19: *"spending a
-    /// scroll is setting a thing going, which is what `wield` already means"* —
-    /// so scrolls keep `wield` and this is the drinking verb beside it. Swept
-    /// completely clean: nothing in the vocabulary scores against it at all.
+    /// A potion needed its own word and a scroll did not — spending a scroll is
+    /// setting a thing going, which is `wield` (§19). Nothing scores against it.
     Quaff,
     /// `pledge <die> to <area>` — put one of your dice behind part of the wall.
     ///
-    /// **The domain's central decision.** Three dice against four areas, so the
-    /// board can never be covered and every round leaves something dark. Which
-    /// area is urgent is what §5.1's telegraph tells you a round ahead, which is
-    /// what turns that announcement from advice into the thing the turn is
+    /// The domain's central decision: three dice against four areas, so the
+    /// board can never be covered and every round leaves something dark. §5.1's
+    /// telegraph names the urgent area a round ahead, which is what the turn is
     /// spent on.
     ///
-    /// A die is *rolled* when the round resolves, so a `d20` is a gamble with a
-    /// high ceiling and a `d6` is a floor you can rely on. The board prints the
-    /// range before the commitment — §5.1's fairness rule, carried from a roll
-    /// to an allocation.
-    ///
-    /// Swept clean against verbs, synonyms, spell words, every domain's
-    /// readings, every material and every spell name. `commit` prefixes
-    /// `combine` and `assign` prefixes `assembling`.
+    /// A die is rolled when the round resolves — a `d20` is a gamble, a `d6` a
+    /// floor. The board prints the range before you commit (§5.1).
     Pledge,
     /// `imbue` — open a lattice to bind a charm onto a tool.
     ///
     /// §10's Enchanting, and the verb the whole domain hangs on. It names the
     /// tool and the charm; what it opens is the puzzle that binds them.
     ///
-    /// **It names a tool in another room**, which is the one place this domain
-    /// widens §7's *"you can only name what is where you are"*. The widening is
-    /// smaller than it looks: an instrument is a `NounKind::Place` and
-    /// `tower::scene` already registers every place from everywhere, so
-    /// `tower::reach`'s existing `Scope::Tower` axis is all it takes.
+    /// It names a tool in another room — this domain's one widening of §7's
+    /// *"you can only name what is where you are"*. Cheap, because an
+    /// instrument is a `NounKind::Place` and `tower::scene` already registers
+    /// every place from everywhere.
     ///
-    /// Swept clean against verbs, synonyms, spell words, every domain's
-    /// readings, every material and every spell name, **and against the other
-    /// words this domain adds** — which the first sweep did not do, and
-    /// `imbue`/`imbued` came back at 975 by the prefix rule. The reading is
-    /// `graced` for that reason.
+    /// The first sweep missed this domain's own words: `imbue`/`imbued` came
+    /// back at 975 by the prefix rule, which is why the reading is `graced`.
     Imbue,
     /// `snap` — flip one column's glyph on the lattice's working row.
     ///
@@ -844,22 +627,18 @@ pub enum Verb {
     Snap,
     /// `anneal` — let the lattice cascade, and bind the charm if it lights.
     ///
-    /// **The operation, and the only one this domain has.** §10's scarcity for
-    /// Enchanting is *"the buff's own lifetime, and the slot"*, so this holds
-    /// the tower's one production slot while it runs — which is what makes
-    /// maintaining a charm compete with making things.
+    /// The domain's only operation, so it holds the tower's one production slot
+    /// while it runs — which is what makes maintaining a charm compete with
+    /// making things (§10).
     ///
-    /// **It was `settle`, and the sweep is why it is not.** `settle` scores
-    /// **834 against `mettle`**, a live siege reading a spell can name, and
-    /// `set` — already a `dial` synonym — prefixes it outright, which is a
-    /// collision `spellword.rs` records refusing once before. The word was
-    /// chosen after the design was settled and then never swept; three pinned
-    /// tables went red at once and every one of them was right.
+    /// Was `settle`: 834 against `mettle`, a live siege reading, and `set` is
+    /// already a `dial` synonym that prefixes it. Chosen before it was swept;
+    /// three pinned tables went red at once.
     Anneal,
     /// `petition` — spend standing so that fewer come up the road.
     ///
-    /// **The first thing renown buys.** Fame lengthens the tail of what arrives;
-    /// this is how a wizard shortens it again, by letting some of that fame go.
+    /// The first thing renown buys. Fame lengthens the tail of what arrives;
+    /// this is how a wizard shortens it again, by letting some of it go.
     ///
     /// It is eight characters, which is exactly [`Verb::MAX_CANONICAL_LEN`] and
     /// the third word in the game to sit on the limit after `meditate` and
@@ -868,65 +647,42 @@ pub enum Verb {
     Petition,
     /// `hold` — end your turn and let one round resolve.
     ///
-    /// **The only thing in the domain that advances the world**, which is what
-    /// makes the siege turn-based rather than merely slow: §5.0's *"no
-    /// per-command tick cost"* is preserved because everything else on your turn
-    /// is free, and the clock moves here and nowhere else.
+    /// The only thing in the domain that advances the world, which is what makes
+    /// the siege turn-based rather than merely slow: §5.0's *"no per-command
+    /// tick cost"* holds because everything else on your turn is free.
     ///
     /// Swept clean at 500 (`halt`, `help`, `odd`).
     Hold,
     /// `limn <glyph> [<humour>]` — limn one of the circle's glyphs; bare, step it
     /// round the six (§10, `menagerie/`).
     ///
-    /// **The lens's `dial`, one room over**, and for `dial`'s reason the humour
-    /// is optional: a spell has no variables, so it cannot name the humour it has
-    /// not tried, and `limn keystone` asks the circle for the next one. Three
-    /// literal `repeat 6` loops around that are a search over every circle there
-    /// is — which is what makes the room scriptable at all.
+    /// The lens's `dial`, one room over, and optional for `dial`'s reason: a
+    /// spell cannot name the humour it has not tried, so `limn keystone` asks
+    /// the circle for the next one. Three `repeat 6` loops around that search
+    /// every circle there is, which is what makes the room scriptable.
     ///
     /// Free and instant: limning is not the work, holding the beast is.
     ///
-    /// # It replaced `sing` and `chorus`, and the names that did not survive
-    ///
-    /// The menagerie was a rhythm game and is a logic puzzle now (§19). `etch`
-    /// was the first word and is 750 against `each`, a spell word; `carve` is
-    /// 600 against `carry`, `haul`'s plain synonym; `inscribe` is 750 against
-    /// `scribe`; `trace` 667 against the forge's `graced`; `engrave` 715 against
-    /// `engage`. `limn` — to draw, to paint a likeness — is clean, and `lim` is
-    /// a free prefix. The plain word is `fashion`, because `draw`, `sketch`,
-    /// `pick` and `choose` are phrasing words of other verbs already — see the
-    /// sweep in `vocabulary.rs`.
+    /// Replaced `sing` and `chorus` when the menagerie stopped being a rhythm
+    /// game (§19). `etch` is 750 against `each`, `carve` 600 against `carry`,
+    /// `inscribe` 750 against `scribe`, `engrave` 715 against `engage`.
     Limn,
     /// `queue <name>` — put a name in the satchel (§8, `tower::satchel`).
     ///
-    /// **The push half of the channel between two spells.** The pull half is
-    /// `pull`, and it is a [`SpellWord`](super::SpellWord) rather than a verb —
-    /// an asymmetry that is not arbitrary: pulling *binds a name*, and `let` is
-    /// the only shape in the language that does. A verb cannot bind.
-    ///
-    /// This one is a verb because it does what verbs do — it changes a node —
-    /// and because a player who cannot load a satchel by hand cannot watch a
-    /// consumer drain one. `queue heed` at the prompt is the See-it line for
+    /// The push half of the channel between two spells. The pull half is `pull`,
+    /// a [`SpellWord`](super::SpellWord) rather than a verb, because pulling
+    /// *binds a name* and only `let` does that. This half changes a node, which
+    /// is what verbs do — and `queue heed` at the prompt is the See-it line for
     /// the whole mechanic.
     ///
-    /// **Unanchored, like `move` and `wield`.** Every domain has a satchel, so
-    /// there is no fixture to scope it to and no room where it is meaningless
-    /// except the arsenal, which refuses in voice.
+    /// Unanchored, like `move` and `wield`: every domain has a satchel, so there
+    /// is no fixture to scope it to.
     ///
-    /// # `que` reaches `quench`, and that is accepted rather than missed
-    ///
-    /// A sweep of both axes clears `queue` on similarity and catches it on the
-    /// three-character prefix: `quench` is a live `stop` synonym, so exactly
-    /// `que` offers both. The full word is exact and unambiguous, and `quench`
-    /// is not a word anybody types often — which is what separates this from
-    /// §19's `leave`/`exit` refusal, where the ambiguity would have put *ending
-    /// the session* beside a verb people type constantly.
-    ///
-    /// The alternatives are worse on the same axes: `stow` shares `sto` with
-    /// `stop` **and** scores 750 against it, and `stash` shares `sta` with
-    /// `status`. `draw` is clean in the parser and wrong in the prose — the game
-    /// already uses it for producing a new random thing (`Beast::draw`, `muster`
-    /// *"draws a course"*, `summon` drawing a beast).
+    /// `que` offers both this and `quench`, a live `stop` synonym, and that is
+    /// accepted: the full word is exact, and nobody types `quench` often. The
+    /// alternatives are worse — `stow` shares `sto` with `stop` and scores 750
+    /// against it, `stash` shares `sta` with `status`, and `draw` already means
+    /// producing a random thing (`Beast::draw`, `muster`, `summon`).
     Queue,
 }
 
@@ -959,9 +715,9 @@ impl Verb {
         Self::Scribe,
         Self::Bind,
         Self::Invoke,
-        // **Appended, deliberately.** `the_tolerated_collision_set_is_pinned`
-        // walks pairs in this order, so inserting anywhere else would reorder
-        // the pinned set without changing a single score.
+        // Appended, deliberately: `the_tolerated_collision_set_is_pinned` walks
+        // pairs in this order, so inserting mid-table reorders the pinned set
+        // without changing a score.
         Self::Weave,
         Self::Follow,
         Self::Wander,
@@ -970,71 +726,47 @@ impl Verb {
         Self::Muster,
         Self::Haul,
         Self::Summon,
-        // **In `sing`'s place**, which it replaced along with `chorus` when the
-        // menagerie stopped being a rhythm game (§19). Where it sits changes
-        // which pairs `the_tolerated_collision_set_is_pinned` walks in what
-        // order, and the chant's two words were in this slot.
+        // In `sing`'s place, which it replaced along with `chorus` (§19) — the
+        // chant's two words held this slot, and the slot decides pair order.
         Self::Limn,
         Self::Queue,
-        // **Appended, for the reason the block above gives.**
-        // `the_tolerated_collision_set_is_pinned` walks pairs in this order, so
-        // inserting anywhere else would reorder the pinned set without changing
-        // a single score.
+        // Appended, for the reason the block above gives.
         Self::Defend,
         Self::Deploy,
         Self::Quaff,
         Self::Hold,
         Self::Pledge,
-        // **The forge's three, appended.** `the_tolerated_collision_set_is_pinned`
-        // walks pairs in this order, so a word slipped into the middle would
-        // re-order every pair after it and turn a pinned table into noise.
+        // The forge's three, appended for the same reason.
         Self::Imbue,
         Self::Snap,
         Self::Anneal,
-        // **The bailey's sixth, appended for the same reason the forge's three
-        // were.** It belongs beside `defend` by anchor and by subject, and it
-        // goes at the end regardless: the pinned collision table walks pairs in
-        // this order.
+        // The bailey's sixth. It belongs beside `defend` by anchor and subject,
+        // and goes at the end regardless — same pair-order reason.
         Self::Petition,
     ];
 
     /// The longest a canonical verb may be.
     ///
-    /// §6.1 wrote the rule as "one short word, ideally ≤7 characters". The
-    /// Phase 0 naming pass settled the "ideally" at **8**: `grimoire` and
-    /// `meditate` were the two most in-world names in the set and carried the
-    /// game's identity, abbreviation covered the typing cost (`grim`, `medit`),
-    /// and the two 8-character names that had *no* such defence — `decipher`
-    /// and `inscribe` — were shortened instead.
-    ///
-    /// **`meditate` and `research` are the two that spend the eighth
-    /// character.** `meditate` kept it because it is the name that makes the
-    /// verb feel like a thing a wizard does; `research` because the archive is
-    /// a room of shelves and the word for what you do at a lectern is not
-    /// shorter. Both are words you type occasionally rather than a thousand
-    /// times, which is what §6.1's rule was always about — and `res` reaches
-    /// this one, so the typing cost is three characters either way.
-    ///
-    /// The limit stays at 8 rather than tightening to 7: tightening would
-    /// forbid a word no verb currently wants, at the cost of two that do.
+    /// §6.1 says "ideally ≤7 characters"; the Phase 0 naming pass settled the
+    /// "ideally" at 8. `meditate` and `research` are the two that spend the
+    /// eighth — both carry the game's voice, both are typed occasionally, and a
+    /// prefix (`medit`, `res`) covers the cost. Names with no such defence
+    /// (`decipher`, `inscribe`) were shortened instead.
     pub const MAX_CANONICAL_LEN: usize = 8;
 
     /// Which part of the manual this verb is listed under.
     ///
-    /// **No wildcard**, like every other table here: a verb added later is a
-    /// compile error in this file rather than one silently missing from the
-    /// overview. That matters more than usual, because a verb assigned to a
-    /// group nobody prints would compile and simply not be there.
+    /// No wildcard, like every table here: a verb added later is a compile
+    /// error rather than one silently missing from the overview.
     #[must_use]
     pub const fn group(self) -> Group {
         match self {
             Self::Attend | Self::Survey | Self::Peruse | Self::Sift | Self::Verify => {
                 Group::Getting
             }
-            // Everything that moves or makes, including the archive's: `research`
-            // and `follow` are the lectern's work exactly as `grind` is the
-            // mortar's, and a player looking for what to *do* here wants them in
-            // one place rather than sorted by which room they happen to be in.
+            // Everything that moves or makes, every room's together: a player
+            // looking for what to *do* wants one list, not one sorted by which
+            // room a verb belongs to or whether it costs a tick.
             Self::Move
             | Self::Wield
             | Self::Empty
@@ -1046,36 +778,28 @@ impl Verb {
             | Self::Research
             | Self::Follow
             | Self::Wander
-            // The lens's two are work for the same reason the archive's are:
-            // a player looking for what to *do* in this room wants them
-            // together, not sorted by which of them happens to cost a tick.
+            // the lens's two
             | Self::Probe
             | Self::Dial
-            // ...and the sanctum's two, on the same reading. Drawing a course up
-            // and hauling a ward are the whole of what this room does.
+            // the sanctum's two
             | Self::Muster
             | Self::Haul
-            // ...and the menagerie's two, on the same reading. Calling a beast
-            // and limning the circle for it are the whole of what this room does.
+            // the menagerie's two
             | Self::Summon
             | Self::Limn
-            // ...and the bailey's six, on the same reading. Standing to a
-            // siege, buying one down, pledging dice, spending the arsenal on it,
-            // and ending a turn are the whole of what this room does.
+            // the bailey's six
             | Self::Defend
             | Self::Petition
             | Self::Deploy
             | Self::Quaff
             | Self::Hold
             | Self::Pledge
-            // ...and the forge's three. Opening a lattice, working it, and
-            // letting it cascade are the whole of what that room does.
+            // the forge's three
             | Self::Imbue
             | Self::Snap
             | Self::Anneal
-            // ...and the satchel's push. It is §8's channel rather than any one
-            // room's puzzle, but it stands in every domain and it changes the
-            // world, which is what `Group::Work` collects.
+            // and the satchel's push — §8's channel, not a room's puzzle, but
+            // it changes the world, which is what `Group::Work` collects.
             | Self::Queue => Group::Work,
             Self::Scribe | Self::Bind | Self::Invoke => Group::Spells,
             Self::Status
@@ -1086,8 +810,7 @@ impl Verb {
             | Self::Quit
             | Self::Menu
             | Self::Meditate => Group::Orb,
-            // Kept in step with `is_destructive`, which had no reader until now
-            // — a test asserts the two agree rather than trusting this list.
+            // Kept in step with `is_destructive` by a test, not by trust.
             Self::Purge | Self::Stop => Group::Careful,
         }
     }
@@ -1164,24 +887,16 @@ impl Verb {
     /// one: it names the tool explicitly, works anywhere there is a tool, and is
     /// what a script writes when the instrument is the variable.
     ///
-    /// **The lens's two are here, and that is what stops a third debt.** §19
-    /// records `follow` and `wander` as tower-wide words waiting on a mechanism
-    /// that does not exist — a fixture carries exactly one `Operation`, and the
-    /// archive's one fixture had spent it. The lens has five fixtures that can
-    /// carry one, so `probe` and `dial` are both scoped without any new
-    /// mechanism, and neither means anything in the laboratory.
+    /// The lens's two are here, which stops a third debt: §19 records `follow`
+    /// and `wander` as tower-wide words waiting on a mechanism that does not
+    /// exist, because a fixture carries one `Operation` and the archive's one
+    /// fixture had spent it. The lens has five, so `probe` and `dial` scope
+    /// without one. The sanctum's follow the lens for the same reason — a sixth
+    /// domain copying the archive would have doubled the tower-wide count that
+    /// `the_tolerated_collision_set_is_pinned` defends.
     ///
-    /// **It is not the same question as "does this take the production slot"**,
-    /// and the lens is where the two came apart: `dial` is a scoped operation
-    /// that schedules nothing. See `spell::block::begins_work`.
-    ///
-    /// **The sanctum's two follow the lens and deliberately not the archive.**
-    /// `research`, `follow` and `wander` are absent from this list, which puts
-    /// all three into `the_tolerated_collision_set_is_pinned`'s tower-wide count
-    /// — a count that test calls *"a number to defend, not a budget to spend"*,
-    /// and which names `follow` as the debt. A sixth domain copying that shape
-    /// would have doubled it. `muster` and `haul` are scoped instead, by the
-    /// pylon and by the three stations, and take no slot.
+    /// Not the same question as "does this take the production slot": `dial` is
+    /// a scoped operation that schedules nothing. See `spell::block::begins_work`.
     #[must_use]
     pub const fn is_operation(self) -> bool {
         matches!(
@@ -1197,43 +912,27 @@ impl Verb {
                 | Self::Haul
                 | Self::Summon
                 | Self::Limn
-                // **The forge takes the slot, and it is the first domain since
-                // brewing to do so.** §10's scarcity for Enchanting is *"the
-                // buff's own lifetime, **and the slot**"* — maintaining a charm
-                // is meant to compete with making things, which is what stops
-                // idle buff-time being free.
+                // The forge takes the slot, the first domain since brewing to
+                // do so: §10 wants maintaining a charm to compete with making
+                // things, or idle buff-time is free.
                 | Self::Anneal
         )
     }
 
     /// The fixture verb that must stand in the room for this one to mean anything.
     ///
-    /// # This is the mechanism §19 recorded as missing
+    /// The mechanism §19 recorded as missing. [`Scene::offers`](super::Scene::offers)
+    /// used to ask [`is_operation`](Self::is_operation), the *production slot*
+    /// question, so `research`, `follow` and `wander` were offered in every room.
+    /// The two are separate now: a verb can be scoped and take no slot (`dial`),
+    /// or take the slot and be scoped (`grind`).
     ///
-    /// [`Scene::offers`](super::Scene::offers) used to ask
-    /// [`is_operation`](Self::is_operation), which is the *production slot*
-    /// question — so every verb that did not take the slot was offered in every
-    /// room. `research`, `follow` and `wander` were therefore listed by `help` in
-    /// the laboratory and the lens, where none of them can do anything: §19 called
-    /// two of them a debt *"waiting on one missing mechanism"* and said that a
-    /// third would be the argument for building it. `research` was the third.
-    ///
-    /// The two questions are now genuinely separate. A verb can be **scoped to a
-    /// fixture and take no slot** (`research`, `follow`, `wander`, `dial`), or take
-    /// the slot and be scoped (`grind`), and neither implies the other.
-    ///
-    /// # Most of it is derived, and the test is what keeps it that way
-    ///
-    /// A verb that some `Branch` in `tower::build` declares as its `operation` is
-    /// *self-anchored* — the content already says which room it belongs to, so
-    /// nothing here needs a list of rooms. `every_self_anchored_verb_is_declared_by
-    /// _a_fixture` fails the build if this arm and `BRANCHES` disagree, which is
-    /// what stops the pair drifting the way three entangled lists already did.
-    ///
-    /// `follow` and `wander` are the exception and are spelled out: they act on the
-    /// *reading inside* the stacks rather than on a fixture of their own, and a
-    /// fixture carries exactly one `Operation`, which the stacks had spent on
-    /// `research`.
+    /// Mostly derived — a verb some `Branch` in `tower::build` declares as its
+    /// `operation` is self-anchored, and
+    /// `every_self_anchored_verb_is_declared_by_a_fixture` fails the build if
+    /// this arm and `BRANCHES` disagree. `follow` and `wander` are spelled out:
+    /// they act on the reading *inside* the stacks, and the stacks' one
+    /// `Operation` went to `research`.
     #[must_use]
     pub const fn anchor(self) -> Option<Self> {
         match self {
@@ -1246,8 +945,7 @@ impl Verb {
             | Self::Probe
             | Self::Dial
             // The pylon declares `muster`; each of the three stations declares
-            // `haul`, which is the sockets' shape — a station is a place the
-            // player names anyway, so scoping the verb to it costs nothing.
+            // `haul` — a station is a place the player names anyway.
             | Self::Muster
             | Self::Haul
             // The circle declares `summon`.
@@ -1255,72 +953,56 @@ impl Verb {
             // The rampart declares `defend`.
             | Self::Defend
             | Self::Research => Some(self),
-            // **The bailey's other four are anchored to the rampart**, which is
-            // the circle's shape rather than the sanctum's: a band is something
-            // you *read*, not somewhere you stand, and there is one rampart to
-            // fight from.
-            // **`petition` anchors to `defend` though it runs *before* a siege.**
-            // The anchor names the fixture that offers the word, not a live
-            // component: the rampart declares `defend` whether or not a `Siege`
-            // is on it, so this resolves at the bailey with the road empty —
-            // which is the only time it is any use.
+            // The bailey's other four anchor to the rampart: a band is something
+            // you *read*, not somewhere you stand. `petition` too, though it
+            // runs *before* a siege — the anchor names the fixture that offers
+            // the word, not a live component, so it resolves with the road
+            // empty, which is the only time it is any use.
             Self::Deploy | Self::Quaff | Self::Hold | Self::Pledge | Self::Petition => {
                 Some(Self::Defend)
             }
-            // **The bailey's shape, not the sanctum's.** `imbue` is declared by
-            // the lattice and the other two anchor *to it*, because a column is
-            // something you read and snap rather than somewhere you stand.
+            // The bailey's shape: `imbue` is declared by the lattice and the
+            // other two anchor to it, because a column is read, not stood at.
             Self::Imbue => Some(self),
             Self::Snap | Self::Anneal => Some(Self::Imbue),
             // The maze's other two words, anchored to the stacks.
             Self::Follow | Self::Wander => Some(Self::Research),
-            // **`limn` is anchored to the circle, not to a glyph** — the forge's
-            // shape rather than the sanctum's. A glyph is something you name in
-            // an argument, not somewhere you stand, and there is one circle.
+            // `limn` anchors to the circle, not to a glyph: a glyph is named in
+            // an argument, not stood at, and there is one circle.
             Self::Limn => Some(Self::Summon),
-            // **`wield` is deliberately not anchored**, and neither is `empty`,
-            // `stop` or `move`: they name their target explicitly and work
-            // wherever one stands, which is what a script writes when the
-            // instrument is the variable.
+            // `wield`, `empty`, `stop` and `move` are deliberately unanchored —
+            // they name their target and work wherever one stands, which is
+            // what a script writes when the instrument is the variable.
             _ => None,
         }
     }
 
     /// Whether finishing this turns an instrument's contents into something.
     ///
-    /// `divine` also occupies the production slot but produces no material, so
+    /// `divine` holds the production slot too but produces no material, so
     /// `finish` has to tell them apart. It asked `verb == Wield` until §10.1's
-    /// per-instrument verbs arrived — at which point a completed `grind` would
-    /// have released the slot, said nothing, and left the sage sitting whole in
-    /// the mortar. Naming the property rather than the one verb is what stops the
-    /// next one added from doing the same.
+    /// per-instrument verbs arrived, at which point a completed `grind` released
+    /// the slot and left the sage whole in the mortar. Naming the property, not
+    /// the one verb, stops the next one doing the same.
     #[must_use]
     pub const fn transmutes(self) -> bool {
         matches!(
             self,
-            // **`Kindle` is deliberately absent.** Lighting the athanor is not a
-            // run: it takes no Focus slot (§10.1), inserts no `Working`, and
-            // produces nothing to transmute. `start` returns at the `HeatSource`
-            // branch long before this is asked.
+            // `Kindle` is absent: lighting the athanor takes no Focus slot
+            // (§10.1), inserts no `Working`, and produces nothing. `start`
+            // returns at the `HeatSource` branch before this is asked.
             Self::Wield | Self::Grind | Self::Digest | Self::Mix | Self::Distil
         )
     }
 
     /// The `-ing` form, for a refusal that names what holds a slot.
     ///
-    /// **Spelled out, not `{state}ing` in a template.** `content/prose.toml` built
-    /// this by appending a literal `ing` to [`canonical`](Self::canonical), which
-    /// reads fine for `wield` and produced **"divineing"** for the one other verb
-    /// that can hold the production slot. English inflection is not string
-    /// concatenation, and the authored-line tests lint the template rather than
-    /// the interpolated result, so nothing caught it.
-    ///
-    /// That verb is `research` now, whose naive form happens to be right — which
-    /// is exactly why the table stays: the next `-e` verb would bring the bug
-    /// back and the example that proves it is a rename away from vanishing.
-    ///
-    /// It lives here beside `canonical` because it is the same class of thing —
-    /// a form of the vocabulary word — rather than an authored sentence.
+    /// Spelled out, not `{state}ing` in a template. `prose.toml` appended a
+    /// literal `ing` to [`canonical`](Self::canonical) and produced "divineing";
+    /// the authored-line lint checks templates, not interpolated results, so
+    /// nothing caught it. That verb is `research` now, whose naive form happens
+    /// to be right — which is why the table stays: the next `-e` verb brings the
+    /// bug back. Beside `canonical` because it is a form of the word, not prose.
     #[must_use]
     pub const fn participle(self) -> &'static str {
         match self {
@@ -1382,11 +1064,9 @@ impl Verb {
             Self::Survey => PLACE_OPTIONAL,
             Self::Peruse => READABLE,
             Self::Sift => PATTERN_AND_FILE,
-            // **`divine` takes nothing now.** It named a fragment while it was
-            // a twelve-tick command that consumed nothing; it opens the stacks
-            // on the lectern, and there is only one lectern to open one at.
-            // `wander` joins them for the reason `weave` did: it opens a
-            // surface, and a surface is not something you name an argument for.
+            // `divine` takes nothing now: it opens the stacks, and there is one
+            // lectern to open them at. `wander` joins for `weave`'s reason — it
+            // opens a surface, and a surface takes no argument.
             Self::Status
             | Self::Undo
             | Self::Unfurl
@@ -1395,55 +1075,35 @@ impl Verb {
             | Self::Weave
             | Self::Research
             | Self::Wander
-            // **`probe` takes nothing**, for the reason `research` does: there
-            // is one prism to press, so naming it would be naming the only
-            // thing there is. What changes between presses is the *aperture*,
-            // and `dial` is what changes it.
+            // One prism, one lattice, one circle, one pylon, one rampart — so
+            // naming it would be naming the only thing there is. What varies is
+            // set by another verb (`dial`, `snap`). `hold` ends your turn, so
+            // there is nothing to name; `petition` is one foe a word, because
+            // `petition 3` would have to say what a partial refusal does when
+            // the third is already at the floor.
             | Self::Probe
-            // **`settle` takes nothing**, for the reason `probe` does: there is
-            // one lattice open at a time, so naming it would be naming the only
-            // thing there is. What changes between settles is which columns are
-            // snapped, and `snap` is what changes them.
             | Self::Anneal
-            // **`muster` takes nothing**, for the reason `probe` does: there is
-            // one pylon, and naming it would be naming the only thing there is.
-            // **`summon` takes nothing**, for the reason `muster` does: there is
-            // one circle, and naming it would be naming the only thing there is.
             | Self::Summon
-            // **`defend` takes nothing** for the reason `muster` and `summon` do
-            // — one rampart — and **`hold` takes nothing** for `wander`'s: it
-            // names no argument because what it does is end your turn.
             | Self::Defend
-            // **`petition` takes nothing**, and it is one foe a word rather than
-            // a count for `pledge`'s reason: the price is only worth paying
-            // against a number you can see move, and paying it again is one more
-            // word. A `petition 3` would also have to answer what a partial
-            // refusal does when the third is at the floor.
             | Self::Petition
             | Self::Hold
             | Self::Muster => NOTHING,
-            // **What the arsenal holds**, which is `wield`'s shape rather than
-            // `limn`'s: a troop and a potion are things you *have*, carried from
-            // another room, not readings the board publishes. The slot refuses
-            // free text, so `deploy asdfgh` is caught here rather than a round
-            // later.
+            // What the arsenal holds — `wield`'s shape, not `limn`'s: a troop is
+            // something you *have*, not a reading the board publishes. Refusing
+            // free text catches `deploy asdfgh` here, not a round later.
             Self::Deploy | Self::Quaff => ANYTHING,
             // A glyph and, optionally, a humour — the socket-and-sigil shape,
             // and bare for `dial`'s reason: the circle steps a glyph a spell
             // cannot name the next humour for.
             Self::Limn => GLYPH_AND_HUMOUR,
-            // **Anything the room can name**, which is `verify`'s slot and is
-            // chosen for what it *refuses*: `NounKind::Name` would take free
-            // text, so `queue asdfgh` would store a word nothing can resolve and
-            // the consumer's `limn keystone note` would fail one tick later, a room away
-            // from the mistake. Resolving here also canonicalises an
-            // abbreviation, so what comes out of the satchel is a word the game
-            // knows however it went in.
+            // Anything the room can name, chosen for what it *refuses*:
+            // `NounKind::Name` takes free text, so `queue asdfgh` would fail a
+            // tick later and a room away. Resolving here also canonicalises an
+            // abbreviation, so the satchel holds a word the game knows.
             Self::Queue => ANYTHING,
-            // **A die and an area, both `Role::Reading` places** — the lens's
-            // socket-and-sigil shape exactly, and for its reason: a spell's
-            // condition resolves its place half against `NounKind::Place`, so
-            // `if the buckler is empty` needs the word to be one.
+            // A die and an area, both `Role::Reading` places — socket-and-sigil,
+            // for its reason: a spell's condition resolves its place half
+            // against `NounKind::Place`, so `if the buckler is empty` needs one.
             Self::Pledge => DIE_AND_AREA,
             Self::Imbue => TOOL_AND_CHARM,
             Self::Snap => COLUMN,
@@ -1454,35 +1114,25 @@ impl Verb {
             // A way, which is a place — see `Role::Reading`.
             Self::Follow => WAY,
             Self::Recall => TOPIC_OPTIONAL,
-            // **`verify` bare is the audit, so its slot is optional** — the
-            // second verb to take `recall`'s shape, and for the reason §19 gives
-            // there: *"bare and argumented are the same act at two scopes"*.
-            // `verify laboratory.log` asks about one thing; `verify` asks about
-            // everything, which is §8.1's expensive form.
+            // `verify` bare is the audit, so its slot is optional — `recall`'s
+            // shape, for §19's reason: bare and argumented are the same act at
+            // two scopes. §8.1 writes the wide form `verify --all`, but the
+            // parser has no flag syntax and one word is no reason to invent one.
             //
-            // This is also what settles what that form is *called*. §8.1 writes
-            // it `verify --all`, and **the parser has no flag syntax at all** —
-            // adding one for a single word would be a grammar nobody else in the
-            // game uses. Bare is the widening every other verb already spells
-            // this way.
-            //
-            // `purge` keeps `ANYTHING`: bare, it would be a scour of everything,
-            // which §7 protects against rather than prices.
+            // `purge` keeps `ANYTHING`: bare, it would scour everything, which
+            // §7 protects against rather than prices.
             Self::Verify => ANYTHING_OPTIONAL,
             Self::Purge => ANYTHING,
             Self::Meditate => COUNT,
             Self::Move => MOVE,
-            // An instrument is a place (§10.1), and you always name the
-            // instrument rather than what is inside it.
-            //
-            // **`wield` split from `empty` when scrolls arrived.** Setting a
-            // thing going reaches both an instrument and a scroll; turning a
-            // thing out reaches only somewhere that holds something. Sharing one
-            // signature would have made `empty gleaning-scroll` parse.
+            // An instrument is a place (§10.1), and you name it, not its
+            // contents. `wield` split from `empty` when scrolls arrived: setting
+            // a thing going reaches a scroll too, and one shared signature would
+            // have made `empty gleaning-scroll` parse.
             Self::Wield => WORKABLE,
             Self::Empty => PLACE,
-            // **A spell counts.** `stop` reaching only instruments made an
-            // invoked spell unstoppable — see `NounKind::Stoppable`.
+            // A spell counts: `stop` reaching only instruments made an invoked
+            // spell unstoppable. See `NounKind::Stoppable`.
             Self::Stop => STOPPABLE,
             // §10.1's per-instrument verbs name the *material*, not the tool —
             // the tool is what the verb means.
@@ -1499,14 +1149,11 @@ impl Verb {
     /// Whether the command destroys something and therefore confirms when the
     /// target is not routine (§6, *Undo*).
     ///
-    /// `stop` qualifies: §10.1 refunds an instrument's inputs but the work done
-    /// so far is gone, and at capacity 1 that is the tower's only slot spent.
+    /// `stop` qualifies: §10.1 refunds the inputs but the work done is gone, and
+    /// at capacity 1 that was the tower's only slot.
     ///
-    /// **Nothing reads this yet.** §6's *"destructive commands additionally
-    /// confirm when the target is not routine"* is unbuilt, and this flag was
-    /// once described as earning that confirmation "for free" — it does not. The
-    /// classification is correct and cheap to keep true; the confirming is
-    /// separate work.
+    /// Nothing reads this yet — §6's confirm-when-not-routine is unbuilt. The
+    /// classification is cheap to keep true; the confirming is separate work.
     #[must_use]
     pub const fn is_destructive(self) -> bool {
         matches!(self, Self::Purge | Self::Stop)
@@ -1572,141 +1219,31 @@ mod tests {
 
     #[test]
     fn the_vocabulary_is_the_tower_wide_verbs_plus_the_laboratory_s_own() {
-        // §6.1's sixteen, plus `move`/`wield`/`stop` for §10.1's pipeline, minus
-        // `decoct` — retired because a verb claiming to brew a potion, when
-        // brewing is four stages, teaches the player something false through the
-        // one mechanism §6 uses to teach.
-        //
-        // The four on top are the laboratory's **own**, and they are the reason
-        // this count is not a ceiling: §10's five further domains each coin the
-        // verbs their tools need, and none of them is in scope anywhere else.
-        // What must stay bounded is the vocabulary a *single place* offers.
-        // ...plus `empty`, which turns an instrument out into the store rather
-        // than destroying what is in it (§10.1's byproduct rule).
-        // **`anchor`, not `is_operation`, and that is a correction.** §19 records
-        // the two questions separating: `anchor` is *which fixture must stand
-        // here* — the scope question, and the one `Scene::offers` asks — where
-        // `is_operation` is *does this spend the production slot*. This metric
-        // kept asking the slot question and calling the answer "tower-wide", so
-        // `follow` and `wander` counted against a ceiling they are not near:
-        // both are scoped to the stacks and neither appears in another room.
-        //
-        // The ceiling is about **vocabulary a player meets everywhere**, which
-        // is what `anchor` answers.
+        // The vocabulary a player meets in *every* room, which is what §6.1's
+        // ceiling is about. `anchor`, not `is_operation`: the first asks which
+        // fixture must stand here (the scope question `Scene::offers` asks), the
+        // second asks whether the verb spends the production slot. This metric
+        // asked the slot question for a while and counted scoped words like
+        // `follow` against a ceiling they are nowhere near (§19).
         let tower_wide = Verb::ALL.iter().filter(|verb| verb.anchor().is_none());
-        // 19 until `siphon` retired (§19), then 18, and 19 again for `unfurl`.
-        // The per-instrument verbs reach into idle instruments, so drawing a
-        // stage's output onto the bench had stopped doing anything — and with it
-        // gone, the bench and the shelf are one place.
+        // 22 is a number to defend, not a budget to spend: a new word here needs
+        // an argument of the shape §19 records for `unfurl`, `weave`, `quit` and
+        // `menu` — each reaches something that was otherwise only a keystroke,
+        // or addresses the orb rather than the tower.
         //
-        // **`unfurl` is the first word added back**, and it earns the seat by
-        // being the only way to reach a surface that already existed: `PageUp`
-        // has always scrolled the transcript and nothing ever said so. A
-        // vocabulary getting smaller is the direction §6.1 wants, and a word
-        // that makes a mouseless game navigable is the exception it allows for.
-        //
-        // **`weave` is the second, and it is the opposite case landing in the
-        // same place.** `unfurl` reached a surface that existed; this one has no
-        // surface at all. Progression is two numbers in `status` with nothing
-        // saying what they are for, and §11.5's own turn — buying the first
-        // Concentration — arrives as a single line that was never chosen. A
-        // track nobody can look at is a track nobody is on, and in a mouseless
-        // game a word is the only way to look.
-        //
-        // **`follow` is the third, and it is the first that is a *domain's* word
-        // wearing a tower-wide coat.** It walks the archive's maze and means
-        // nothing anywhere else, so by rights it would be an operation scoped to
-        // the lectern — except `Scene::offering` derives scope from the
-        // `Operation` component and a fixture carries exactly one, which the
-        // lectern spends on `divine`. Scoping a *second* verb to one instrument
-        // is the missing mechanism, and until it exists this word is global and
-        // should be counted as a debt rather than a seat earned.
-        //
-        // **`wander` is the fourth, and it is both of the above at once** — so
-        // it is worth saying which half buys the seat and which half is owed.
-        //
-        // The seat is `unfurl`'s: the map draws whenever a maze is open, but
-        // *who owns the arrow keys* has no other way to be said, and a maze
-        // walked by typing `follow east` a hundred times is a chore rather than
-        // a minigame. That is the same exception §6.1 allows — a word that makes
-        // a mouseless game navigable.
-        //
-        // The debt is `follow`'s, unchanged and not doubled: this is a domain's
-        // word wearing a tower-wide coat for exactly one reason, that
-        // `Scene::offering` derives scope from the `Operation` component and the
-        // lectern spends its only one on `divine`. Both retire together the day
-        // a second verb can be scoped to an instrument. Two words waiting on one
-        // mechanism is an argument for building the mechanism; it is not an
-        // argument for a third.
-        //
-        // **22 is a number to defend, not a budget to spend**: the next word
-        // added here needs an argument of this shape, or the count is a ceiling
-        // nobody kept. `wander` is the last one this reasoning stretches to —
-        // the archive now has both the word it needs and the debt it owes, and a
-        // fifth would mean the missing mechanism had been deferred once too
-        // often.
-        // **Still 22, and the lens is the argument holding.** Phase 2 added two
-        // verbs and neither is tower-wide: the lens has five fixtures that can
-        // carry an `Operation`, so `probe` and `dial` are both scoped without
-        // the missing mechanism and without a third debt. A domain that needs
-        // more words than it has fixtures is the case that would finally force
-        // it.
-        //
-        // **23, and `quit` is the one word the ceiling was never about.** Every
-        // entry above it acts on the tower or reports on it, and the budget
-        // exists to stop a *domain's* vocabulary sprawling because it lacked the
-        // mechanism to scope a word to a fixture. `quit` is not waiting on that
-        // mechanism and never could be: it addresses the orb rather than the
-        // tower, it touches no world state, and there is no fixture in any room
-        // that leaving the game could be scoped to. It is `Group::Orb`'s, beside
-        // `status` and `unfurl`, and like `unfurl` it exists because the thing it
-        // does was previously reachable only by a key nobody could discover.
-        //
-        // The ceiling still stands for the case it was drawn for. A domain verb
-        // arriving here is still the argument for building the mechanism.
-        //
-        // **20, and the drop is the metric being fixed rather than words being
-        // removed.** `follow`, `wander` and `chorus` are scoped to a fixture and
-        // were counting here because the filter above asked the *slot* question,
-        // which they answer no to. Nothing a player meets in every room has
-        // gone; three things they meet in exactly one room have stopped being
-        // counted as if they did, which is why a phase that added three verbs
-        // lowered this number.
-        //
-        // **`sing` was named here and never counted**, which is the opposite
-        // mistake: it was in `is_operation`, so the old filter excluded it too.
-        // The three above are the ones the old filter got wrong. (`chorus` and
-        // `sing` went with the chant; `limn` took `sing`'s place and changes
-        // neither number.)
-        //
-        // **21 with `queue`**, and it belongs in this number rather than the one
-        // below: every domain has a satchel, so it is anchored to no fixture and
-        // a player meets it in every room. That is exactly what this metric
-        // counts, and the paragraph below says why a *domain's* verb must not
-        // move it.
-        //
-        // **22 with `menu`, and it is the kind of word this ceiling is *for*.**
-        // It is the way out of the game rather than a thing done inside one, and
-        // the alternative was the one it replaced: `quit` meaning both, which
-        // kept the count at 21 by making one word do two jobs and made stopping
-        // a two-step operation (§19). A ceiling that buys its number that way is
-        // measuring the wrong thing.
+        // `follow` and `wander` are the standing debt: they are the archive's
+        // words wearing a tower-wide coat, because a fixture carries one
+        // `Operation` and the lectern spends its on `research`. Both retire the
+        // day a second verb can be scoped to an instrument. A domain verb
+        // arriving here is the argument for building that, not for a third debt.
         assert_eq!(tower_wide.count(), 22);
 
-        // One per instrument that has a word of its own: the laboratory's
-        // `grind`, `digest`, `mix`, `distil` and `kindle`, the lens's `probe`
-        // and `dial`, the sanctum's `muster` and `haul`, and the menagerie's
-        // `summon` and `limn` — which replaced `sing` and left the number where
-        // it was, since `chorus` was anchored and never counted here.
-        //
-        // **This is the number a new domain is meant to move**, and the one
-        // above is not. A domain that scopes its verbs pays here and leaves the
-        // vocabulary of every *other* room exactly as it was, which is what the
-        // paragraph above means by what must stay bounded.
+        // One per instrument with a word of its own. This is the number a new
+        // domain is meant to move, and the one above is not: a domain that
+        // scopes its verbs leaves every other room's vocabulary as it was.
         let scoped = Verb::ALL.iter().filter(|verb| verb.is_operation());
-        // **Twelve, and the forge moved it by one.** Enchanting adds three verbs
-        // and only `settle` takes the production slot — `imbue` opens a lattice
-        // and `snap` flips a glyph, neither of which is work the tower does.
+        // Twelve; the forge moved it by one, because of its three verbs only
+        // `anneal` takes the production slot.
         assert_eq!(scoped.count(), 12);
 
         assert!(

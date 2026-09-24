@@ -47,9 +47,8 @@ fn limning_the_solution_holds_and_says_every_row_agreed() {
     }
 }
 
-/// **A call's answer is what the glyphs as they stand answer, turned wires and
-/// all**, and a balk counts the rows that differ — over every limning of a beast
-/// with a turned wire.
+/// A call answers what the glyphs as they stand answer, turned wires and all,
+/// and a balk counts the rows that differ — over every limning.
 #[test]
 fn a_call_answers_what_the_circuit_answers_under_its_turned_wires() {
     let (turned, _) = turned_and_untouched();
@@ -96,7 +95,7 @@ fn par_is_a_count_of_calls_and_the_fourth_is_past_it() {
     assert_eq!(beast.troops(), 3);
 }
 
-/// **One call at a lesser circle**, and one troop whichever side of it.
+/// One call at a lesser circle, and one troop whichever side of it.
 #[test]
 fn a_lesser_beast_pays_one_troop_and_its_par_is_one_call() {
     let mut beast = lesser();
@@ -142,8 +141,8 @@ fn a_save_with_a_word_no_humour_has_is_no_beast() {
     );
 }
 
-/// **The temper's length and the wiring have to agree** — a lesser temper
-/// with wiring, or a whole one without, is no beast rather than a guess.
+/// The temper's length and the wiring must agree: a lesser temper with wiring,
+/// or a whole one without, is no beast rather than a guess.
 #[test]
 fn a_save_whose_temper_and_wiring_disagree_is_no_beast() {
     let mut save = waiting().to_save();
@@ -179,9 +178,8 @@ fn turned_and_untouched() -> (Beast, Beast) {
     )
 }
 
-/// **The turned wires travel, and a beast with none writes none** — so a
-/// format-13 document, which never had the field, is exactly a beast with
-/// nothing turned.
+/// The turned wires travel, and a beast with none writes none — so a format-13
+/// document, which never had the field, reads as nothing turned.
 #[test]
 fn a_turned_beast_comes_back_turned_and_an_untouched_one_writes_no_mask() {
     let (mut turned, mut untouched) = turned_and_untouched();
@@ -200,9 +198,9 @@ fn a_turned_beast_comes_back_turned_and_an_untouched_one_writes_no_mask() {
     assert_eq!(Beast::from_save(&spelled), Some(untouched));
 }
 
-/// **A mask is refused unless it is one a circuit could carry, on a beast it
-/// could carry it on** — a malformed string, both of a glyph's wires, a mask
-/// on a lesser beast, and a mask the temper does not answer under.
+/// A mask is refused unless a circuit could carry it, on a beast that could:
+/// malformed, both of a glyph's wires, a lesser beast, a temper it disagrees
+/// with.
 #[test]
 fn a_mask_the_beast_could_not_have_is_no_beast() {
     let (turned, untouched) = turned_and_untouched();
@@ -218,9 +216,8 @@ fn a_mask_the_beast_could_not_have_is_no_beast() {
         "a lesser beast held a mask"
     );
 
-    // The turned beast's temper under no turned wire is, for this seed, a
-    // circuit nobody drew — or it is one somebody did, and then the restore
-    // is right to accept it. Either way it is `is_puzzle` that decides.
+    // Either the plain circuit was never drawn, or it was and accepting it is
+    // right; `is_puzzle` decides which.
     let mut save = turned.to_save();
     save.turned = None;
     let Shape::Whole(puzzle) = turned.shape() else {
@@ -248,8 +245,7 @@ fn a_restore_refuses_what_no_circle_answers() {
     assert!(Beast::restored(Shape::Lesser(opening), OPENING, 0, None).is_none());
 }
 
-/// **An answer of the other circle's length is forgotten, not fatal** — it only
-/// draws the last call's row, and the next call writes it again.
+/// A wrong-length answer is forgotten, not fatal — the next call rewrites it.
 #[test]
 fn a_restored_answer_of_the_wrong_length_is_forgotten() {
     let beast = waiting();

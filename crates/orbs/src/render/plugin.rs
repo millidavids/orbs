@@ -34,6 +34,21 @@ pub(crate) struct Theme(pub(crate) Phosphor);
 
 impl Default for Theme {
     fn default() -> Self {
+        // What the player last chose, if they chose. `F2` cycles and writes
+        // back, so this is the other half of one setting seen twice.
+        //
+        // A name this build does not have falls through rather than failing: a
+        // settings file written by a later build can name a phosphor this one
+        // has never heard of, and a game that refused to start over a colour
+        // would be the worst possible answer to it.
+        if let Some(chosen) = orbs_shell::settings::get(crate::shell::THEME)
+            && let Some(phosphor) = palette::ALL
+                .iter()
+                .find(|phosphor| phosphor.name == chosen)
+                .copied()
+        {
+            return Self(phosphor);
+        }
         // Deliberately `ALL[0]` rather than the constant by name: the list's
         // order is what `F2` cycles, and a default that is not the thing the
         // cycle starts from makes the first keypress do nothing visible.
@@ -150,6 +165,8 @@ fn cycle_theme(mut theme: ResMut<Theme>) {
         .map_or(0, |index| (index + 1) % palette::ALL.len());
     theme.0 = palette::ALL[next];
     info!("phosphor: {}", theme.0.name);
+    // One setting seen twice — see `crt::plugin::cycle`.
+    crate::shell::remember_setting(crate::shell::THEME, theme.0.name);
 }
 
 /// Frames to wait before the automatic capture, so the first drawn frame is not
@@ -221,6 +238,10 @@ struct ShellState<'w> {
     /// The orb's menu. `Res`, because unlike the two above it there is nothing
     /// here for the painter to hand back.
     menuing: Res<'w, crate::shell::Standing>,
+    /// The manual. `ResMut` for the editor's reason: a chapter is wrapped to the
+    /// pane and scrolled within it, and only the painter knows how wide and how
+    /// tall the pane is.
+    reading_manual: ResMut<'w, crate::shell::Reading>,
     /// Whether the arrows are walking the archive's stacks.
     ///
     /// `Res`, not `ResMut`: this one owns no pane, so there is nothing for the
@@ -259,13 +280,13 @@ fn repaint(
         ref mut weaving,
         walk,
         menuing,
+        ref mut reading_manual,
     } = shell;
     let frame = &mut canvas.frame;
-    // **Before the reset, which is the last moment last frame exists.** A
-    // crossing departs from the screen it is replacing, and nothing can ask for
-    // that screen once the line below has blanked it. Refused while a crossing is
-    // already running, or it would overwrite its own source — see
-    // `Passing::keep`.
+    // Before the reset, the last moment last frame exists. A crossing departs
+    // from the screen it is replacing, and nothing can ask for that screen once
+    // the line below has blanked it. Refused while a crossing is already
+    // running, or it would overwrite its own source — see `Passing::keep`.
     passing.keep(frame);
     frame.reset(screen.grid);
 
@@ -294,6 +315,7 @@ fn repaint(
                 weaving: weaving.get_mut().map(|screen| &*screen),
                 walking: walk.is_open(),
                 menuing: menuing.get(),
+                reading_manual: reading_manual.get_mut(),
             },
         );
     } else {
@@ -319,23 +341,19 @@ fn rasterise(
         return;
     };
 
-    // **An empty screen must not rebuild the mesh.** `Assets::get_mut` marks the
+    // An empty screen must not rebuild the mesh. `Assets::get_mut` marks the
     // asset changed whether or not anything is written, so a blank frame
     // re-uploaded a zero-vertex mesh every frame — and Bevy 0.19's slab
-    // allocator answers that with a stream of `use-after-free: attempted to copy
-    // element data for an unallocated key`. The boot sequence is the first thing
-    // in this game to hold a blank screen for more than one frame, and it
-    // produced ~250 of them in 1.3 seconds.
+    // allocator answers that with `use-after-free: attempted to copy element
+    // data for an unallocated key`, ~250 of them in 1.3 seconds of boot.
     //
-    // The `Local` is what keeps this correct rather than merely quiet: the
-    // transition *into* blank still writes once, so a screen that empties really
-    // does clear instead of leaving the last mesh on the tube.
-    // "Nothing to draw" has to mean *no geometry*, which includes the caret —
-    // and the caret is only geometry on the half of its blink where it is
-    // showing. Checking `cursor().is_some()` alone let a screen with no glyphs
-    // yet rebuild an empty mesh on every off-phase, which is the same
-    // `use-after-free` from the other direction and is exactly what the boot
-    // sequence's typing prompt does for its first second.
+    // The `Local` keeps this correct rather than merely quiet: the transition
+    // into blank still writes once, so a screen that empties really does clear.
+    //
+    // "Nothing to draw" must mean no geometry, which includes the caret — and
+    // the caret is geometry only on the showing half of its blink. Checking
+    // `cursor().is_some()` alone let a glyphless screen rebuild an empty mesh
+    // every off-phase, which is the same fault from the other direction.
     let caret = blink.showing() && canvas.frame.cursor().is_some();
     let nothing = canvas.frame.is_blank() && !caret;
     if nothing && !*drew_something {

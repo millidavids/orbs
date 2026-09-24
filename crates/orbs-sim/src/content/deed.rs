@@ -5,22 +5,14 @@
 //! reached when its count is met. Authored in `progression.toml`, read against
 //! [`Tally`](crate::tower::Tally).
 //!
-//! # Five spellings, one key
+//! Five spellings, one key: `done = "clarity"` · `{ potions = 5 }` ·
+//! `{ scrolls = 1 }` · `{ at = "stacks", times = 3 }` ·
+//! `{ event = "figure", times = 1 }`. Each names one tally key, which is all
+//! the sim reads; the spellings let an author write *"brew a clarity"*, and a
+//! typo in one is a load failure rather than an unreachable station.
 //!
-//! `done = "clarity"` · `{ potions = 5 }` · `{ scrolls = 1 }` ·
-//! `{ at = "stacks", times = 3 }` · `{ event = "figure", times = 1 }`. Each
-//! names exactly one tally key, and the key is the whole of what the sim reads —
-//! the spellings exist so an author writes *"brew a clarity"* rather than a
-//! namespaced string, and so a typo in one is a load failure rather than a
-//! station nothing can reach.
-//!
-//! # Not a second currency
-//!
-//! A deed counts things done; it is never a number that accrues per run the way
-//! experience does. §11.5 keeps experience the one unspendable total, and a
-//! per-domain total beside it would be a second curve to balance and a second
-//! number to save. The user's two examples — *"a certain number of potions"* and
-//! *"certain potions"* — are one count each, which is what this is.
+//! Not a second currency: a deed counts things done and never accrues per run.
+//! §11.5 keeps experience the one unspendable total.
 
 use serde::Deserialize;
 
@@ -58,12 +50,9 @@ pub enum Deed {
         times: u32,
         /// `fixed = true` — the same count at every length.
         ///
-        /// **For a lesson, not a grind**, which is [`Made`](Deed::Made)'s reason
-        /// for never stretching, given a count. `menagerie_2` opens the whole
-        /// circle after five lesser beasts, and five is the lesson's size: each
-        /// lesser temper about once. Ramped as its place on the line, it asked
-        /// eleven at the default length and thirty-five at the longest — a
-        /// tutorial that grew with the game it was teaching (§19).
+        /// For a lesson, not a grind: `menagerie_2`'s five lesser beasts are
+        /// each lesser temper about once, and ramping asked thirty-five at the
+        /// longest length (§19).
         #[serde(default)]
         fixed: bool,
     },
@@ -77,14 +66,10 @@ const fn once() -> u32 {
 impl Deed {
     /// This deed as the `index`th of `count` on its line, at `length`.
     ///
-    /// **[`Made`](Self::Made) has no count and is returned untouched** — it is
-    /// *make this thing once*, a reveal gate rather than a grind, and there is no
-    /// field in it to stretch. That is a property of the variant rather than an
-    /// exemption someone has to remember.
-    ///
-    /// Every other variant stretches its own count, except an event marked
-    /// `fixed`, which is a lesson's size rather than a grind's. The `at` and
-    /// `event` names are what the tally is keyed by and are never touched.
+    /// [`Made`](Self::Made) is *make this thing once* — a reveal gate with no
+    /// count to stretch, so it comes back untouched. Every other variant
+    /// stretches its count, except an event marked `fixed`. The `at` and
+    /// `event` names key the tally and are never touched.
     #[must_use]
     pub fn stretched(&self, length: crate::content::Length, index: usize, count: usize) -> Self {
         let grown = |n: u32| -> u32 {
@@ -118,9 +103,9 @@ impl Deed {
 impl Deed {
     /// The tally key this deed reads.
     ///
-    /// **One key per deed, and the key is the contract.** `Tally` is written by
-    /// the completion seams under exactly these names, so an author's spelling
-    /// and a seam's spelling meet here and nowhere else.
+    /// The key is the contract: `Tally` is written by the completion seams
+    /// under exactly these names, so an author's spelling and a seam's meet
+    /// here and nowhere else.
     #[must_use]
     pub fn key(&self) -> String {
         match self {
@@ -209,9 +194,8 @@ mod tests {
         }
     }
 
-    /// **A lesson keeps its size at every length**, and a deed not marked keeps
-    /// growing with the line — the pair, since either alone passes against a
-    /// `stretched` that ignored the flag in one direction.
+    /// Both directions, since either alone passes against a `stretched` that
+    /// ignored the flag one way.
     #[test]
     fn a_fixed_event_is_the_same_count_at_every_length() {
         use crate::content::Length;
@@ -228,9 +212,8 @@ mod tests {
 
     #[test]
     fn a_misspelled_field_fails_rather_than_defaulting() {
-        // **The trap `deny_unknown_fields` is for.** `{ at = "stacks", tims = 3 }`
-        // would otherwise parse as `At { times: 1 }` — a station met three
-        // times too early, with the file correct on its face.
+        // Without `deny_unknown_fields`, `{ at = "stacks", tims = 3 }` parses
+        // as `At { times: 1 }` — a station met three times too early.
         assert!(parse("done = { at = \"stacks\", tims = 3 }").is_err());
         assert!(parse("done = { potion = 5 }").is_err());
     }

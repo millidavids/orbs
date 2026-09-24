@@ -2457,6 +2457,457 @@ they are re-pointed at the phases that now need them rather than quietly dropped
 
 ## 19. Decisions log
 
+### The orb wakes to a menu, not a tower (`0.16.0`)
+
+**The game had no front door.** Launching read `orbs-save.toml` and put a world
+in front of the player before they had asked for one — at a length they had not
+chosen, with no way to see what else was on disk. The menu that answers all three
+shipped at `0.12` and is reachable only from **inside** a game, so starting a
+second tower meant first standing in the first one. Three open *Ship* items were
+waiting on the same screen: the sticky boot skip, *"Options, remapping, all
+toggles"*, and the accommodation that has **no in-game control** at all.
+
+**One menu, two stances — not two menus.** `Stance::{Threshold, InTower}` is a
+field on the screen that already exists. A front-of-house screen of its own would
+have duplicated the vocabulary, the prefix invariant, the complaint sentences,
+the floor and the swap in order to change four words, and this section is largely
+a record of what two expressions of one rule cost.
+
+**The stance gates the way *out*, and that is the half that is not cosmetic.**
+`Menu::escape` answered the top page with `Outcome::Close` unconditionally, and
+both frontends answer *that* by taking the menu down. Over a tower it is right —
+the tower is behind it. At the threshold there is nothing behind it but a scratch
+world that never ticks and is never kept, so closing would strand the player at a
+prompt with no way back and no way out. `resume` is therefore filtered out of the
+**vocabulary** and not merely out of the listing: a choice you cannot see but can
+still type is the worse half of both.
+
+**A tower is raised only when it is chosen, and `Kept` is the guarantee.** At the
+threshold no save is read and `Kept` is `None`; `keep_now` and `keep` both return
+early without a path, in both builds. So a tower nobody played cannot be written
+by an autosave, by the way out, or by a swap, whatever else goes wrong above
+them. Every entry into a game — continue *and* new — goes through the swap the
+menu already used to trade one tower for another.
+
+**`threshold` is a flag of its own, and not `SimPlugin::persist: false`.** They
+look like the same thing and are not: `persist` decides whether `autosave` and
+`keep_on_the_way_out` are **registered at all**, for the life of the `App`. A
+threshold session that ran with them unregistered would reach a tower through the
+menu and then never save it — which is worse than not saving, because it looks
+exactly like saving until you come back.
+
+**`new` with nowhere to save is a tower, not a refusal.** `open_lengths` refused
+with `Complaint::Unkept` when `save::path()` was `None`. For the *listing* that
+is the truth; for a new game it is not — the tower is playable, it simply will
+not be remembered. The refusal only ever reached a player through the threshold,
+and there it was fatal: `ORBS_SAVE=off` is what `scripts/dumps.sh` exports for
+all 147 captures and the played suite for every scenario, so the threshold would
+have been unreachable-past from the project's own instruments. `Outcome::Begin`
+carries `Option<PathBuf>` now.
+
+**`ORBS_DUMP` is structurally blind to this feature, and saying so is the point.**
+It is answered *before* the `App` is built and makes its own `Sim`, so
+`Threshold`, the clock gate, the keyboard routing and the swap do not exist in a
+capture at all — all 147 stay byte-identical whatever this does. The usual
+proof-of-no-change proves nothing here. The gate is
+`routing::the_threshold_reaches_a_tower`, which launches without
+`ORBS_THRESHOLD=0` and is the only thing in the project that opens the game the
+way a player does.
+
+**It earned its place on the first run.** The terminal build notices a swap
+inside `Session::tick`; the threshold stops the clock, so `tick` does not run,
+so the menu could ask for a tower that **nothing ever heard** — type `new`,
+choose a length, and the lengths page stays up for ever. Every unit test passed,
+`orbs-shell`'s passed, and the dump drew a correct menu throughout, because a
+dump hosts no loop. `Session::answered` runs once per pass now, which is also
+strictly better than it was: a swap or a `quit` lands on the frame the key
+arrived rather than waiting up to a second for the next tick.
+
+**A safety net that catches silently hides what pushed.**
+`open_at_the_threshold` puts the menu back on the frame anything closes it —
+kept, because the alternative is a stranded player. But the close and the
+re-open land in the same frame, so a plugin-level test written to hold *"nothing
+closes the menu"* **passed with `Stance::may_close` deliberately broken**. The
+net stays and now logs when it fires; the property is held where it can fail, in
+`orbs-shell`'s own test, and the plugin test says in its doc what it does and
+does not prove. §15's *"tests prove code does what it was written to do; they
+cannot prove it is the code worth writing"* has a corollary: a test that cannot
+fail is not one.
+
+**`playing` gates the function keys too, and not the whole tuple.** `F6` at the
+threshold would write a parse trace of a session that has not happened, which is
+the justification `booted` was written with. But the same tuple holds
+`drive_passing`, which animates the boot card *leaving* — onto the menu — so
+gating the set would freeze that crossing half-drawn with nothing to finish it.
+The systems that must not run carry `playing` individually. `F4`, `F5` and `F10`
+stay on `booted` deliberately: the display mode and the linear stream are about
+the screen, the menu is on it, and a way out that only works once you are in is
+not one.
+
+**`Threshold` is deliberately not in `shell_resources!`.** That macro is the
+reset list and `reset_for_swap` blanks every type in it to its default — which
+for this one would put the player straight back out of the tower the swap had
+just chosen. It is lifted out for the reason `Screen` and `Standing` are, and the
+swap sets `Playing` explicitly as its last step.
+
+**A new game keeps `ORBS_WIZARD` in both builds now.** `orbs-tui`'s swap called
+`Sim::begun` with no rename where the Bevy build's `Tower::begun` takes one, so
+the same new game came up as `orbs $ ` in one build and the player's name in the
+other. It was a corner while launching always restored a save; the threshold
+makes *every* new game go through that path.
+
+#### The manual's depth is generated, and the ~10k estimate was wrong in an interesting direction (`0.16.8`)
+
+The plan budgeted **~10k authored words**. What shipped is **4,773 authored
+across sixteen chapters**, in a book a player reads as **7,345 words across
+nineteen**. The difference is not prose left unwritten: it is a **third
+generated chapter**.
+
+`inside` builds every room's three lines out of the thirty
+`man_here_/man_start_/man_solve_` keys `recall`'s `primer` has answered with
+since Phase 1. An authored per-room walkthrough was on the plan's list of ways
+to reach 10k, and it would have been a second copy of thirty sentences that
+already exist — §12's worst place to hold one, because a room's page would then
+say one thing to `man` and another to the manual. The difference from `man` is
+the one `commands` has from `help`: `man` answers *where am I*, and is no answer
+at all to *what is behind a door a sealed tower has not opened*.
+
+**Coverage was the promise, and it grew rather than shrank.** Three chapters
+that were not on the plan's list are ones a manual reached from the *front door*
+has to answer and one reached from a room never did: `entering` (starting,
+continuing, abandoning, and where saves live now), `yours` (the three settings
+pages, and that a function key and a settings row are one setting seen twice),
+and `upkeep` (the arsenal, quintessence, and why experience, quintessence and
+renown are three numbers rather than one).
+
+Writing `inside` also surfaced a stale line: `man_solve_arsenal` still said
+*"nothing spends them yet. a siege will be what does"*, which stopped being true
+at `0.8.7`. It had been wrong in `man` for seven minors and nothing read it
+twice; gathering the primers into one chapter is what made it obvious.
+
+#### The threshold's review — fifteen findings, and one pattern behind the worst of them
+
+A `/code-review max` over the whole uncommitted feature found fifteen defects
+and reproduced four in a running build. **The gate was entirely green
+throughout** — `fmt`, clippy, 2,224 tests, rustdoc, the link, 187 dump captures
+and 144 played scenarios — which is §15's argument restated with a bigger
+number: *tests prove code does what it was written to do; they cannot prove it is
+the code worth writing.*
+
+**The pattern behind the top findings is one shape: an enum grew and the places
+that must enumerate it were not made to follow.**
+
+| What grew | What did not follow | What it cost |
+|---|---|---|
+| `orbs_shell::Key` gained `PageUp`/`PageDown` | Neither frontend's key mapper — both end in a catch-all arm | The manual drew *pgdn for more* and **paging did nothing at all**, in both shipping builds, for a whole version |
+| `Focus` gained `Manual` | `type_into_menu`'s guard | Every keystroke reached the manual **and** the menu underneath: `q` at a chapter quit the game, one Escape closed both |
+| `settings` gained `focus` | `orbs-tui` reads it and writes it nowhere | A dead row on a settings page |
+| The book grew past fifteen chapters | The contents page's `break` | Five chapters invisible at the floor |
+
+In every case an exhaustive `match` instead of a `_ =>` fallthrough would have
+**failed to compile**. That is the correction worth carrying: a fallthrough arm
+in a mapper is not a convenience, it is a silent handler for everything somebody
+adds later.
+
+**The two that could lose a player's work:**
+
+- **A dump could rename a real save.** `dump.rs` guarded the *world* load on
+  `ORBS_SAVE` under the comment *"a dump neither loads nor saves unless
+  `ORBS_SAVE` names a path"* — true of that one line and of nothing else. The
+  menu's play page calls `save::path()`, `save::saves()` and `save::abandon()`
+  itself, and `ORBS_MENU` drives the menu. Reproduced: a capture listed the
+  profile's real towers, and `ORBS_MENU=$'play\nabandon 1\nabandon 1'` renamed
+  one. `scripts/dumps.sh` exporting `ORBS_SAVE=off` was the only thing
+  preventing it and nothing in the code required it to. **The `dirs` move is what
+  raised the stakes**: before it, the blast radius was the working directory.
+  `save::seal()` now makes the claim true of the whole process.
+- **`migrate()` tested slot 1 alone.** `from.exists()`, where `from` *is* slot 1
+  by construction — so a player whose slot 1 was missing lost the whole
+  migration, slots 2 to 6 and their settings, and no marker was written so it
+  retried every launch and never succeeded. `abandon` is what made it easy to
+  reach: it renames slot 1 aside.
+
+**Two tests could not fail**, and both were counted as coverage:
+`a_cue_never_clips_by_accident` measured samples from `Ringing::next`, whose last
+act is the clamp; and the played scenario for manual paging waited three seconds
+for *any* screen difference, which the 1 Hz clock supplies on its own. The first
+now measures the pre-clamp sum, the second the chapter's own first line. A test
+that cannot fail is worse than no test, because nobody goes looking for the one
+it replaced.
+
+**And the bed was a 2 Hz tremolo, not a hum.** The cue envelope — a raised
+cosine across the tone's whole length — was applied to a half-second looping
+drone, so it swelled from silence to full and back twice a second for the
+session. `Cue::sustained` separates a drone from a gesture. It also made `LAP`'s
+whole-cycle rule load-bearing again: while the envelope was there, the amplitude
+was nought at both loop edges regardless, so the reasoning that chose `LAP` was
+decoration over a defect.
+
+#### The second review — and three of its findings were the first review's fixes
+
+The same `/code-review max` pass, run again over the corrected tree, found
+fifteen more. **Three were defects introduced by the previous round's fixes**,
+and that is the part worth recording rather than the count:
+
+| The fix | The hole in it |
+|---|---|
+| `save::seal()` stopped a dump reaching real saves | It asked `var_os(ORBS_SAVE).is_some()`, so an exported-but-**empty** `ORBS_SAVE=` skipped the seal — while `save::chosen` resolved that same empty value through to the app-data directory. A dump overwrote a real tower again, reproduced with a changed checksum |
+| `type_into_menu` declined while the manual was open | It checked `is_open()`, and `type_into_manual` runs *first* and had already closed the reader. So the one keystroke that mattered most — the Escape leaving the manual — was read a second time and closed the menu too |
+| The audio burst cap | `asked.pop()` kept **one** cue, not `BURST`. A five-record tick was quieter than a four-record one, and the test asserted `<= burst()`, which one satisfies |
+
+**The empty-value hole is the same bug in a third place.** `crt::seeded` and
+`sight::seeded` had it and were fixed in the first round; `dump.rs` had it and
+was not looked at, because it was reading a different variable for a different
+reason. `save::named` is the one expression of the rule now, and `migrate` —
+which had always had it right — uses it too. `chosen` is pinned to agree by
+`an_empty_value_is_not_a_path_anybody_named`.
+
+**The general lesson is about verification, not about care.** Each of the three
+was verified when it was written: the seal was reproduced closed, the guard had
+a falsified test, the cap had a test that passed. What none of them had was a
+check of the *adjacent* case — the empty string, the frame after the close, the
+count rather than the bound. A fix verified only on the case that prompted it is
+a fix with an untested edge, and a review that runs again is what finds it.
+
+**Two more that had been true since before the feature:**
+
+- **The manual's hot reload never reached an open reader.** The book is
+  assembled at open, `Tower::set_manual` claimed *"a reader already open keeps
+  the chapter it is showing until the next keystroke re-assembles the book"*,
+  and nothing re-assembled it at any point — while the log printed `content:
+  reloaded manual.toml`. A log line asserting the opposite of what happened is
+  worse than silence. `ManualChangedMessage` and `Reader::restock` make the doc
+  true, keeping the reader's place **by chapter name** so a writer who reorders
+  the book is not thrown into whichever chapter inherited the index.
+- **`migrate()` wrote its one-shot marker even when copies failed.** Its own doc
+  said *"the marker last, so a run that died half way through tries again"* —
+  which covered a crash and not a failed `fs::copy`, and the marker's entire job
+  is to make this never happen again. An unreadable slot or a full disk left
+  towers behind permanently.
+
+**And `skip` was the one settings row read from the file rather than from a
+resource**, which cost two things at once: `follow_the_keys` rebuilds the rows
+while the menu is up, and at the threshold the menu *cannot be closed* — so the
+game did a blocking read and a TOML parse about sixty times a second from launch
+until a tower was chosen. Wherever the write did not land, the same system then
+rebuilt the row from the file and snapped it back with no complaint. Invisible
+to every instrument, because `ORBS_DUMP` builds no `App` and runs no frames.
+
+#### The findings below the cap, which are the ones easiest to leave (`0.16.13`)
+
+A review reports its worst fifteen. The rest it lists in prose, and prose is
+what gets skimmed — so these are recorded together, because what they have in
+common is that **none of them would ever have failed the gate, and none would
+ever have looked wrong on screen.**
+
+- **The manual painter re-wrapped every line on every paint.** It cloned the
+  whole `Chapter` and wrapped it again sixty times a second — for a `language`
+  chapter of nearly two thousand words — while the reader sat perfectly still.
+  Only the painter knows the width, which is why the wrapping is there; nothing
+  said it had to happen again when neither the chapter nor the width had moved.
+  Cached on `(chapter, width)`, and thrown away by `restock`, because a stale
+  wrap would paint one chapter's rows under another's title.
+- **The key click fired for bare modifiers and through the boot card.** Shift
+  held to reach a capital clicked twice; Ctrl and Alt clicked for chords that
+  never reach the prompt. And the card takes no keys at all, so a click during
+  it was the orb answering a keystroke it had ignored — which reads as the
+  sequence being skippable when §19 deliberately removed that.
+- **`orbs-tui` had neither `follow_the_keys` nor `open_at_the_threshold`.** Its
+  settings rows went stale the moment `F4` or `F5` was pressed with a page open,
+  and the threshold's one hard guarantee — *you cannot be left outside a tower
+  with no way back* — was enforced in one frontend and merely hoped for in the
+  other. A guarantee that holds in one build is a guarantee with a version
+  number on it.
+- **`authored_lines_do_not_shout` never saw `manual.toml`.** It iterates
+  `Prose::builtin().lines`, so an ALL-CAPS line in the manual would have
+  shipped. The manual has its own lint now, and it **records why the two
+  registers differ** rather than flattening them: `prose.toml` is the orb
+  speaking and is lower case by §3; the manual is a book written *about* the
+  game and its sentences are capitalised. Holding the book to the orb's rule
+  would make it read like a machine describing itself.
+- **The content watcher's tests leaked a scratch directory per run**, keyed on
+  the process id and removed by nothing. A `Drop` guard tidies up, which a line
+  at the end of each test would not have done on a failing assertion.
+- **`Menu::escape` left an open `abandon` question armed** with its text rubbed
+  off the pane. Latent — `answered` takes the latch on the next line, so the
+  wrong slot could not be abandoned — and exactly the kind of state that stops
+  being latent the moment something else reads it.
+
+**And the changelog block was headed `[v0.16.0]` against a `0.16.12` manifest.**
+`release.yml` matches the heading against `Cargo.toml` *exactly*, so a push to
+`main` would have run green having published nothing. That is the opt-in working
+as designed and it is also how a release silently fails to happen; SETUP.md §4
+calls the format load-bearing, and this is the load.
+
+#### The new surfaces went to `dumps.sh` and not to `screens.rs`
+
+The plan said to add the manual and the settings pages to
+`orbs-render/examples/screens.rs`, on CLAUDE.md's standing rule: *"add a screen
+to it whenever a new surface is built."* **They went to `scripts/dumps.sh`
+instead, and the rule is served better by it.**
+
+`screens.rs` lives in `orbs-render`, which by rule 1 has no dependencies — so it
+cannot call the painters. Everything in it is **hand-built from render
+primitives**: a replica of the siege board, a replica of the ward sheet. That is
+exactly right for what the example is for, which is proving the *cell layer*
+works, and exactly wrong for a surface whose whole risk is the painter's own
+wrapping and padding. A replica of the manual would be a second opinion about a
+layout `dumps.sh` can simply draw with the real painter on the real book.
+
+Recorded because the instruction is a standing one and this is a deliberate
+exception rather than an omission. `dumps.sh` carries the same paragraph where
+the captures are.
+
+#### The orb has a voice, and rule 2 is a function signature (`0.16.9`)
+
+**Every cue is chosen from a record's `kind`, `role` and `outcome`** — the same
+three things the transcript's own styling is chosen from, drawn on screen in the
+same instant. `voice_of` takes nothing else, so a cue *cannot* come to know
+something the Frame does not; rule 2 is enforced by what the function can reach
+rather than by a promise in a doc comment. A player with the sound off has lost a
+channel and not a fact, and the terminal build loses the channel entirely, which
+is what rule 2 permits.
+
+**Only records the transcript draws.** `Records::drawn` already skips a spell's
+output and anything marked quiet, on the grounds that both are *"in the log, not
+in the pane"* — and a cue for a line nobody can see is information the Frame does
+not have. It is also the difference between a tower with six bound spells being
+atmospheric and being unusable.
+
+| Decision | Why |
+|---|---|
+| **Generated, never sampled** | `assets/README.md`: every asset carries a `PROVENANCE.md`, and *"the cost of discovering an unclear licence at submission time is the release date."* A cue generated in code has no provenance question, no file to ship and nobody to credit. §13 permitted either |
+| **Six cues, not twenty** | Six a player can learn apart is worth more than twenty they cannot, and §14 wants an ambient channel that does not compete with speech |
+| **The envelope is a raised cosine with no parameters** | A square gate on a sine starts and ends mid-cycle, which is a step in the waveform and audible as a click at *both* edges. On an eight-millisecond cue the clicks are most of what you hear |
+| **Every key sounds the same except Enter** | A click that differed by key would be letter-by-letter feedback the Frame does not carry. The one split is *committed or not*, which the prompt line shows |
+| **The watermark is a `sequence`, not a length** | `clear` empties the stream between commands and a restored save opens with a truncated tail, so a length-based mark would play somebody's entire last session at them on load. `Records::since` is `drawn` with that watermark, added for this and kept general |
+| **`RingMessage` carries the `Voice`, not the `Handle`** | One place decides how loud a cue is and what becomes of the entity, so the sound page has one thing to change |
+| **The bed loops at a whole number of cycles** | 0.5s is 25 cycles at 50 Hz, 50 at 100 Hz, 35 at 70 Hz. A lap that is not a whole number steps the waveform at the loop point, once every half second, forever |
+
+**The register moves the bed**, gaining a detuned tritone when the orb speaks in
+the eldritch register (§3). That is rule 2 again: the register is already on
+screen — it is the whole reason the eldritch *rendering* exists.
+
+**`ORBS_SOUND=1` names every cue on stderr as it plays.** You cannot diff a
+sound, `dumps.sh` builds no `App` and so is blind to this subsystem entirely, and
+`bevy_log` caps the subscriber at `INFO` so a `trace!` is invisible in an
+ordinary run. Without a switch the only gate audio has is a person with speakers
+— which §15 calls *"a debug affordance nobody will maintain"* when invented late,
+and *"the instrument before the thing it measures"* when it is not. The bed
+announces itself through it too, because an idle launch makes no cues and a
+switch that says nothing about a game nobody has typed at answers nothing.
+
+**The Bevy 0.19 audio API was compiled before it was used**, per CLAUDE.md:
+`.claude/skills/bevy-idioms/verify/src/audio.rs` holds the verified snippet. The
+traps it caught are worth naming, because all three are silent type errors rather
+than missing methods: `rodio` 0.22's `SampleRate` is `NonZero<u32>` and
+`ChannelCount` is `NonZero<u16>` where both were plain integers before;
+`Decodable::Decoder` must be `Source + Send + Iterator<Item = Sample>`; and
+`AudioPlayer::new` is **hard-coded to `AudioSource`**, so a custom type is
+constructed with tuple syntax.
+
+#### Two volumes, four words, and §14's third tone (`0.16.10`)
+
+**The sound page was left out of `0.16.4` on purpose and arrived with the thing
+it controls.** A page of volumes for a game that makes no sound is the dead
+affordance §15 weighs heaviest, and `values.rs`'s own rule — *"a page with
+nothing this frontend can honour is not offered"* — made the omission free
+rather than special-cased. `orbs-tui` still builds no sound rows and so still
+does not show the page.
+
+| Decision | Why |
+|---|---|
+| **Two levels, `voice` and `hum`** | The reasons to turn each down are different and a single slider forces a choice nobody should make: the hum is atmosphere some people find tiring within a minute, and the cues are §14's ambient channel, which is the part a screen-reader player is *using*. *Hum off, voice full* has to be reachable |
+| **Four words, not a number** | The menu is typed and has no slider to drag. `voice 0.35` is a value nobody can guess, cycle through, or read back off the page. `off` is first because it is the one people go looking for, and cycling from `full` wraps straight to silence |
+| **The word→gain table is in `orbs-shell`** | So a terminal build gaining audio one day cannot pick different numbers for the same words. Perceived loudness is closer to logarithmic than linear, which is why `half` is 0.4 |
+| **`off` spawns nothing at all** | Not an `AudioPlayer` at zero gain, which is an entity, a decode and a mixer slot per keystroke for a sound nobody hears. The message is still *read*, so `ORBS_SOUND` still reports it — which is what makes the switch usable for checking the table rather than the speakers |
+| **The bed's volume is part of *which bed is playing*** | `PlaybackSettings` changes do not reach audio already playing, so turning the hum down means starting a different one. The level belongs in the comparison that decides whether to |
+| **A level this build does not know falls back to `full`** | A settings file from a later build would otherwise give a gain of nought: a silently mute game, and a settings page showing a word that explains it to nobody. `Theme::default` answers a stranger phosphor the same way |
+
+**§14's third tone is `wrong`**, and finding a distinguisher for it was the only
+part of this that needed thought. A breach and a sabotage tell are both
+`Role::Danger`; what separates them is the **kind**. Both of `verify`'s tampered
+tells — the single-surface check and the sweep — push `RecordKind::Status`, and
+nothing else in the game pairs `Status` with `Danger`. So sabotage is *a reading
+that came back wrong*, which is also what it is: a breach is something happening
+to you now, and a tell is something you went looking for and found. The cue is
+two notes a semitone apart sounding **together** — a beat rather than a rise or a
+fall, which is what a surface saying one thing and being another sounds like.
+
+**A lint came out of it that should have existed since `0.16.4`.**
+`menu_setting_row` puts `[value]` straight after the row's text, so every
+`menu_set_*` line is hand-padded to the same width — and `voice` came out at 28
+against everything else's 27, putting one bracket out of line down the whole
+page. It looks like a rendering bug and is a typo in a string, which is the worst
+ratio of appearance to cause. `every_settings_row_is_padded_to_the_same_width`
+now measures them.
+
+#### The contents page stopped being "one screen by construction"
+
+`Reader::scroll` said the contents does not scroll because *"it is one screen by
+construction, and `paint` refuses to draw a pane too small to hold it"*. The
+first half was true of a fifteen-chapter book at §4's 80×22 floor — fifteen
+entries fit **exactly** — and the second half was never true at all: `paint`
+refuses below `MIN_ROWS = 10` and above that the loop simply `break`s.
+
+Adding four chapters took the book to nineteen, and the floor silently dropped
+the last five: `awry`, `notices`, and all three generated chapters, including the
+licences the BSD-2-Clause obligation lives in. A player could still *type*
+`commands`, because the list is prefix-matched over the whole book — they just
+had no way to learn it was there.
+
+The contents pages now, exactly as a chapter does, and says `pgdn for more` only
+when there is. Its position lives on the `Reader` rather than in
+`Showing::Contents`, so reading a chapter and coming back does not lose your
+thumb. Three tests, and the first is the one that matters: *every chapter in the
+book is reachable from the contents at the floor* — a bound loop rather than an
+arithmetic claim, so a broken clamp fails instead of hanging.
+
+**A list that is sometimes complete is worse than one that always pages**, which
+is the general form and the reason this is recorded rather than just fixed.
+
+#### The content watcher was feeding itself, and had been since it shipped
+
+**One `touch` of `prose.toml` reloaded it on every tick for the life of the
+run.** Measured: 8 reloads from one edit in an 18-second run, 11 in another. The
+log said `content: reloaded prose.toml` once a second, the game looked perfectly
+fine, and `cargo test`, clippy, rustdoc and the build were all green throughout
+— CLAUDE.md's *read the log, not only the screen*, exactly.
+
+The loop is structural. `reload` drains the change channel, and then **re-reads
+files inside the directory it is watching**; the read lands in the watch, queues
+another event, and the next tick drains it and reads again. It is stable at one
+reload per tick forever, which is why nothing ever noticed: the rate is bounded
+and the output is correct.
+
+Found by putting a second file on that path (`manual.toml`, above) and reading
+the log to check the new leg worked. **Confirmed pre-existing** rather than
+assumed: pointing `ORBS_CONTENT` at a directory holding only `prose.toml` — no
+manual at all — reproduced it.
+
+| Fix | Why not the other one |
+|---|---|
+| **Each live file carries the mtime already applied** (`Live::moved`), and a reload that finds it unmoved does nothing | Draining the channel *after* the read also breaks the loop, and silently swallows an edit saved during it. A stamp cannot: a spurious event costs one `stat`, and a real edit is one whose mtime moved |
+
+It also improved the log, which is the part a writer sees: the line now names
+the file that actually changed rather than both of them. The hazard accepted is
+two writes inside one filesystem timestamp tick — nanoseconds here, and the next
+save corrects it. Three tests hold it, including the one that matters: *a file
+that has not moved is not read again.*
+
+#### `ORBS_CONTENT` is one call now, and it reports what it could not read
+
+Rule 6's reach was expressed in three places — the dump, `orbs-tui`'s startup and
+the Bevy watcher — each opening `prose.toml` by hand. A second live file would
+have made that three places to forget. `orbs_shell::load` takes the `Sim` and
+pours both in; the watcher keeps its own paths because it re-reads them without
+consulting the environment again.
+
+It returns **the live files it could not read**, which is not a nicety: a dump
+installs no `tracing` subscriber, so the loader's own warning goes nowhere, and
+without a line of its own a writer with malformed TOML sees their edit quietly
+not happen — indistinguishable from the built-in fallback working.
+
 ### The circle's second review — fourteen corrections (`0.15.7`)
 
 **The rules, first: a call against par is never spent on a guess; a word the orb
@@ -5526,7 +5977,10 @@ purpose — *"a screen that needed one could never be dumped as text"* — and s
 regardless. That is not a new inconsistency: the border drawing itself and the
 report lines typing were already ungated, and gating only the two motions added
 here would be arbitrary. The boot sequence's own switch is `ORBS_BOOT=0`, and
-reduce-motion covering all of it is Phase 15's, with the persisted setting.
+reduce-motion covering all of it is still open, and not for want of somewhere to
+persist it: the threshold's `access` page shipped at `0.16.5` and deliberately
+carries no motion row, because one a player could turn on while the tube said
+off is the state §14 must not reach.
 
 #### A second interlude, and no fifth renumber
 
@@ -7994,8 +8448,10 @@ reference with no kind of its own would be recited continuously. `Guide` is what
 lets a reader drop the lot, exactly as `Hint` does.
 
 **The toggle is session-scoped and does not persist.** A save carries no editor
-state, and adding some for a view preference is Phase 14's settings item. Stated
-here rather than left to be noticed as an omission.
+state, and adding some for a view preference is a settings item. Stated here
+rather than left to be noticed as an omission. *(The threshold's pages shipped at
+`0.16.4` and this is not among them: the store exists now, so the work is one row
+and a read, not a mechanism.)*
 
 #### Escape and a letter in one read were arriving as one keystroke
 
@@ -8852,7 +9308,7 @@ document and touches no filesystem. Decisions worth keeping:
 
 | Question | Decision |
 |---|---|
-| Where | `orbs-save.toml`, **beside the binary**, on `TRACE_PATH`'s argument. `dirs` is §13's stack and Phase 14's settings screen is where it arrives with Steam Cloud; until then this is one function rather than a path in two frontends. The cost is named: an install directory can be read-only |
+| Where | `<app-data>/orbs/orbs-save.toml`, on the platform's own data directory — `~/.local/share`, `Application Support`, `AppData\Roaming` — resolved by `dirs` in **one** function, `save::chosen`, rather than a path in two frontends. **Arrived with the threshold's settings screen (`0.16.3`)**, which is what this row and PRIVACY_POLICY.md both promised. `ORBS_SAVE` still outranks it and the working directory is still the fall-back, so a platform that names no data directory keeps a game that saves. The cost this row used to name — an install directory can be read-only — is what the move answers. Steam Cloud is still owed |
 | How | Written to `<path>.writing` and **renamed**. A save lands every sixty ticks for as long as the game is open, so a crash catching a half-written file is not theoretical; the rename turns *"the tower is corrupt"* into *"the tower is one minute stale"*. The scratch file is a **sibling**, because `rename` is only atomic within a filesystem |
 | What a dump does | **Neither loads nor saves unless `ORBS_SAVE` names a path** — the opposite of the running game's default. Otherwise every See-it line in CLAUDE.md becomes order-dependent on whether anyone has played in that directory, and `scripts/dumps.sh`'s baseline stops being one. Both it and the played-game suite pin `off` besides |
 | A save that will not open | **Kept, not deleted**, and said in voice. A later build may read it — the format refuses a *newer* file precisely so it is not half-read — and the next autosave overwrites it anyway. Losing a tower is bad; losing it silently and destroying the evidence is worse |
@@ -14070,8 +14526,10 @@ an obstacle.
 
 **This does not touch §4's sticky skip**, which is a different mechanism for a
 different person: a remembered setting for someone on their fortieth launch,
-chosen once. It still waits on Phase 14's settings screen, and `Boot::finished` is
-the state it will select.
+chosen once. ~~It still waits on Phase 14's settings screen, and `Boot::finished`
+is the state it will select.~~ **Shipped at `0.16.5`**, with the threshold's
+`habits` page: `settings::skips_boot()` is the answer, `Boot::default` is what
+asks, and `Boot::finished` is indeed the state it selects.
 
 **What was actually gained by removing it:** the `booted` run condition stops
 being a guard against the skip keystroke doing two things at once, and becomes a
@@ -14150,8 +14608,10 @@ than the prompt appearing after a bang.
 
 **The consequence worth recording: no part of this game flashes any more.** The
 only photosensitivity exposure Phase 0.5 ever created is retired, which is also
-why §14's health warning stops being urgent — it lands with the Phase 14 settings
-screen alongside the persisted CRT toggle rather than ahead of it.
+why §14's health warning stops being urgent — it lands with the settings screen
+alongside the persisted CRT toggle rather than ahead of it. *(The persisted
+toggle shipped at `0.16.5`; the warning itself is still owed, and is now a line
+of prose rather than a dependency.)*
 
 The two entries below are kept because the **reasoning** was wrong twice, in
 opposite directions, and that is the part worth not repeating. `CrtSettings`
@@ -14391,8 +14851,11 @@ the same band covers.
 **It rides `CrtSettings::on`.** An env var is not a switch a player can reach,
 and the entry below is precisely the failure of gating motion on something
 indirect. F3 cycles the tube to `OFF`; that now stops the fire too. The
-persistent per-effect toggle stays with Phase 14's settings item — and at this
-rate that item has a real dependency rather than a nominal one.
+persistent per-effect toggle stays with a settings item still open — and at this
+rate that item has a real dependency rather than a nominal one. *(The threshold's
+`access` page at `0.16.5` deliberately did not add it: a motion row a player
+could turn on while the tube said off is the one state §14 must not reach, so it
+needs the crossings separated from `Passing::enabled`'s one input first.)*
 
 #### The fire's shape, and what it cost at the boundary
 
@@ -15118,9 +15581,11 @@ commit.
 | Question | Decision |
 |---|---|
 | Licence | **GPL-3.0-or-later.** Declared in the workspace manifest, full text at the repository root |
-| Dependency tree | **Audited and compatible.** Every crate in the tree is MIT, Apache-2.0, BSD-2/3, Zlib, ISC, Unicode-3.0, CC0, 0BSD, MIT-0, or Unlicense; all are FSF-listed as GPL-compatible. The only copyleft entry, `r-efi`, offers MIT/Apache-2.0 alternatives and does not build on our targets |
+| Dependency tree | **Audited and compatible**, and re-run at `0.16.10` over all 887 lockfile entries rather than assumed. The bulk is MIT, Apache-2.0, BSD-2/3, Zlib, ISC, Unicode-3.0, CC0, 0BSD, MIT-0, Unlicense, BSL-1.0, NCSA and CDLA-Permissive-2.0; all are FSF-listed as GPL-compatible |
+| ⚑ The copyleft entries, corrected | This row used to say *"the only copyleft entry, `r-efi`, offers MIT/Apache-2.0 alternatives and does not build on our targets."* **That was wrong, and had been for some time.** `r-efi` is dual `MIT OR Apache-2.0 OR LGPL-2.1-or-later` and is indeed taken permissively — but there are **two MPL-2.0 crates**: `colored` (via `burn-tensor` → `orbs-augury`, in the default build) and `option-ext` (via `dirs-sys` → `dirs`, which `0.16.3` made a direct dependency of `orbs-shell`). Both were already in the tree; neither was noticed. **Neither is a problem**: MPL-2.0 is FSF-listed GPL-compatible, and the incompatibility only attaches when a file carries the *"Incompatible With Secondary Licenses"* notice — checked, and neither does. MPL's obligation is file-level source availability for the MPL files themselves, which are unmodified and published |
+| How it was found | Auditing `dirs` because `0.16.3` promoted it to a direct dependency. The plan said the check *"should be a confirmation"*; it was not, which is the argument for running the audit rather than reasoning about it. A sweep over every lockfile entry costs one script and is the only thing that can find the entry nobody added on purpose |
 | One-way constraint | Apache-2.0 is compatible with GPL-**3**.0 but **not** GPL-2.0. Bevy is `MIT OR Apache-2.0`, so 3.0-or-later works and 2.0 would not have |
-| Assets | Both font licences survive the combination. CC0 imposes nothing; Spleen's BSD-2 notice requirement **persists** and still has to reach the shipped build (Phase 14) |
+| Assets | Both font licences survive the combination. CC0 imposes nothing; Spleen's BSD-2 notice requirement **persists** and now reaches the shipped build — the manual's `notices` chapter carries it verbatim, from `0.16.8`. A `LICENSES.txt` in the Steam depot is still owed and is a packaging task |
 | Commercial release | Unaffected — §15's demo-then-1.0 Steam posture stands. Selling GPL software is permitted; the obligation is to offer source to those you distribute binaries to |
 
 ### Parser corrections — post-review
@@ -16432,7 +16897,7 @@ moved under them, and half a dozen constants existed only to manage that motion.
 | `INPUT_ROWS` is a constant, and it is **1** | It used to be derived: a second row bought back the pixel height a finer tier took away, `32s ≤ 16(s+1) ⇔ s ≤ 1`. With one grid there is no tier to compensate for, so a second row stopped being compensation and became magnification — a prompt twice the transcript's size at *every* window and three times again at 4K. Shipped at 2 and reverted on sight, which is what the risk register predicted. It also cost the player half the line: at 2× the text is written into half the columns, so a 120-column grid gave 60 cells to type into and now gives 118 |
 | The magnified path has no caller now | `Frame::set_magnified` and the renderer's 2× pass are reachable only by setting `INPUT_ROWS` back to 2. Kept rather than deleted **because that is the whole retreat** — one constant — and not on the grounds of a future consumer: the font-scale setting this owes would change the *grid* (80×30, also on the 8:3 line) rather than magnify one row, so it is not the mechanism that would revive this. If the prompt size is settled, deleting it is the honest follow-up |
 | A resize constraint | **Considered and dropped.** `WindowResizeConstraints` is logical pixels while `WindowResolution::new` is physical, so on a 2× display a floor expressed in it would exceed the initial window and the game could not open at its stated size. `paint_too_small` is the guard, and it is physical-unit correct |
-| The debt this owes | §4 justified reflow with *"fixed scaling without reflow would make large accessibility font scales unreadable"*, and that objection is correct. The game now has **one text size per window size and no way to ask for another**. The replacement is a font-scale setting choosing between authored grids on the 8:3 line — 80×30 is the large-text one — which is a Phase 14 settings item, not a tier |
+| The debt this owes | §4 justified reflow with *"fixed scaling without reflow would make large accessibility font scales unreadable"*, and that objection is correct. The game now has **one text size per window size and no way to ask for another**. The replacement is a font-scale setting choosing between authored grids on the 8:3 line — 80×30 is the large-text one — which is a settings item, not a tier. **Still open after the threshold's pages shipped**: `0.16.4` built the store and `access` carries hue and the linear stream, but a grid choice needs `Screen` to accept an authored size, which is more than a row |
 
 ~~`INITIAL_WINDOW` stays 1280×720: it is ×1.0 exactly, so the game opens at
 native cell size *and* with visible bars, exercising the letterbox on every

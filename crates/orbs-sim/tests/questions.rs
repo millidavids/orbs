@@ -1,28 +1,19 @@
 //! The `if` grammar, exhaustively — every shape, every refusal, and the two
 //! properties that catch the shapes nobody thought to write down.
 //!
-//! # Why this is a table and not thirty tests
+//! A table rather than thirty tests: a grammar is a claim about *every* input,
+//! so rows make the coverage countable and the properties at the bottom cover
+//! what rows cannot.
 //!
-//! A grammar is a claim about *every* input, so the interesting failures are the
-//! ones outside the cases anyone chose. Rows make the coverage countable and put
-//! a wrong answer next to the right one in the failure message; the properties at
-//! the bottom cover what rows cannot.
-//!
-//! # Never `a`, `b`, `c`
-//!
-//! `a` is on §6's filler list — `mix a potion` — so a grammar table written with
-//! the usual metasyntactic names silently tests the empty question. The names
-//! here are real instruments for exactly that reason, and it cost an afternoon
-//! to learn.
+//! Never `a`, `b`, `c`: `a` is on §6's filler list — `mix a potion` — so the
+//! usual metasyntactic names silently test the empty question.
 
 use orbs_sim::parser::{Bound, Condition, SpellState, condition, write_condition};
 
 /// The question `text` asks, written back out — or `-` for one the orb refuses.
 ///
-/// Comparing written forms rather than trees keeps a fifty-row table readable,
-/// and the round-trip property below is what makes that safe: the written form
-/// is a faithful rendering of the tree, so two questions that write the same are
-/// the same question.
+/// Comparing written forms rather than trees keeps the table readable; the
+/// round-trip property below is what makes that safe.
 fn read(text: &str) -> String {
     condition(text)
         .as_ref()
@@ -124,9 +115,8 @@ fn precedence_is_not_and_then_and_then_or() {
 
 #[test]
 fn the_precedence_rows_are_the_trees_they_claim_to_be() {
-    // **The written form is a rendering, so at least once it has to be checked
-    // against the thing itself.** Otherwise a writer that dropped a bracket and
-    // a reader that ignored one would agree with each other for ever.
+    // Checked against the tree at least once: a writer that dropped a bracket
+    // and a reader that ignored one would agree with each other for ever.
     assert_eq!(
         condition("mortar is idle and flask is idle or alembic is idle"),
         Some(Condition::Any(vec![
@@ -145,11 +135,9 @@ fn the_precedence_rows_are_the_trees_they_claim_to_be() {
 
 #[test]
 fn either_is_the_bracket_and_reaches_what_precedence_cannot() {
-    // **The row this whole grammar turns on.** Give the bracket words full
-    // sub-questions instead of operands and the inner disjunction swallows the
-    // following `and` — `either … or … and …` then means exactly what it means
-    // without the `either`, and the one grouping the language has stops
-    // grouping.
+    // The row the grammar turns on: give the bracket words full sub-questions
+    // instead of operands and the inner disjunction swallows the following
+    // `and`, so `either` stops grouping.
     assert_eq!(
         condition("either mortar is idle or flask is idle and alembic is idle"),
         Some(Condition::All(vec![
@@ -190,9 +178,8 @@ fn either_is_the_bracket_and_reaches_what_precedence_cannot() {
 
 #[test]
 fn both_is_a_courtesy_that_changes_no_meaning() {
-    // Kept because a player who reaches for it should get what they meant, and
-    // refusing a word someone would reasonably write is the dead end §6 forbids.
-    // Pinned as **inert** so it cannot quietly acquire a meaning later.
+    // Kept because refusing a word someone would reasonably write is §6's dead
+    // end. Pinned as inert so it cannot quietly acquire a meaning.
     for (with, without) in [
         (
             "both mortar is idle and flask is idle",
@@ -288,10 +275,9 @@ fn an_operand_that_brings_its_own_question_is_a_clause() {
 
 #[test]
 fn everything_must_be_read_or_nothing_is() {
-    // **The bug the whole rewrite exists to close.** The parser before this took
-    // the first `is`, read one word after it and dropped the rest of the line —
-    // so the first row here was saved into the player's file as
-    // `if mortar is idle`, permanently, with the other half gone.
+    // The bug the rewrite exists to close: the old parser took the first `is`,
+    // read one word after it and dropped the rest of the line into the player's
+    // file for good.
     table(&[
         ("the mortar is idle the athanor is working", "-"),
         ("the mortar is idle rubbish", "-"),
@@ -368,9 +354,8 @@ fn layout_and_case_and_punctuation_do_not_change_a_question() {
 
 #[test]
 fn nothing_a_file_can_hold_makes_the_parser_panic() {
-    // **§8.1: script text is a sabotage surface**, so the parser is something an
-    // enemy writes into. It may refuse anything; it may not fall over, and it may
-    // not go quadratic on a long word.
+    // §8.1: script text is a sabotage surface. The parser may refuse anything;
+    // it may not fall over or go quadratic on a long word.
     let long = "x".repeat(4096);
     let deep = "not ".repeat(200) + "mortar is idle";
     let brackets = "either ".repeat(200) + "mortar is idle";
@@ -395,9 +380,8 @@ fn nothing_a_file_can_hold_makes_the_parser_panic() {
 
 #[test]
 fn a_question_too_long_to_read_is_refused_rather_than_shortened() {
-    // The tokeniser caps at `MAX_WORDS`, which is right for a typed command and
-    // would be the original bug all over again here: a question quietly cut to
-    // its first thirty-two words, with the rest deciding nothing.
+    // The tokeniser caps at `MAX_WORDS`, which here would be the original bug
+    // again: a question cut to thirty-two words with the rest deciding nothing.
     let long = std::iter::repeat_n("mortar is idle", 20)
         .collect::<Vec<_>>()
         .join(" and ");
@@ -422,40 +406,30 @@ fn every_shape() -> Vec<String> {
         for thing in things {
             out.push(format!("the {place} has {thing}"));
             out.push(format!("the {place} has no {thing}"));
-            // **Counted, or the writer half of `has <count>` is unverified.**
-            // These three properties all run off this generator, so a shape
-            // missing here is a shape nothing round-trips, nothing checks for a
-            // dropped name, and nothing pins as deterministic — while all three
-            // stay green. `2` and `4` because 1 is the default and writes back
-            // *without* the number, which is its own case below.
+            // All three properties run off this generator, so a shape missing
+            // here is one nothing checks while all three stay green. `2` and
+            // `4` because 1 is the default and writes back bare.
             out.push(format!("the {place} has 2 {thing}"));
             out.push(format!("the {place} has 4 {thing}"));
             out.push(format!("the {place} has no 2 {thing}"));
-            // Both comparator spellings. `or more` round-trips **through** the
-            // bare form rather than back to itself, which the property allows
-            // because it compares conditions and not text.
+            // Both spellings. `or more` round-trips through the bare form, not
+            // back to itself — the property compares conditions, not text.
             out.push(format!("the {place} has 2 or more {thing}"));
             out.push(format!("the {place} has 2 or fewer {thing}"));
             out.push(format!("the {place} has 0 or fewer {thing}"));
-            // **The row that was missing.** `0 or more` is kept uncollapsed by
-            // the reader, so the writer has to keep its words too — writing
-            // `has 0 X` handed it back as `not has X`, and the round-trip
-            // property could not see it because no row generated the shape.
+            // The row that was missing: `0 or more` is kept uncollapsed by the
+            // reader, so the writer must keep its words — and no row generated
+            // the shape, so the round-trip could not see it.
             out.push(format!("the {place} has 0 or more {thing}"));
             out.push(format!("the {place} has no 2 or fewer {thing}"));
         }
-        // `has 1 X` and `has 0 X` are the two that do **not** round-trip
-        // literally, by design: 1 is written back bare and 0 is `no`. They are
-        // asserted by name in A7 rather than fed through the round-trip, which
-        // would only be able to say they differ.
+        // `has 1 X` and `has 0 X` do not round-trip literally by design: 1 is
+        // written back bare and 0 is `no`. Asserted by name in A7 instead.
     }
-    // **The far side, in every shape it can take.** These three properties are
-    // the only thing standing between a new `Quantity` variant and a question
-    // the orb can read and cannot write back — which `interpret` would show as
-    // a *different sentence* than the one that was typed.
-    //
-    // Multi-word places on both sides deliberately: `balneum mariae` is what
-    // proves the far side still stops at a stopper rather than at a space.
+    // The far side, in every shape it can take: these properties are all that
+    // stands between a new `Quantity` variant and a question the orb can read
+    // and cannot write back. Multi-word places on both sides deliberately —
+    // `balneum mariae` proves the far side stops at a stopper, not a space.
     for near in ["mortar", "balneum mariae"] {
         for far in ["flask", "balneum mariae"] {
             for thing in ["sage", "ground-sage"] {
@@ -478,9 +452,8 @@ fn every_shape() -> Vec<String> {
                     out.push(format!("{head} the {far} has charcoal plus 3"));
                     out.push(format!("{head} double the {far} plus 4"));
                     out.push(format!("{head} double the {far} has charcoal plus 5"));
-                    // `plus 0` is worth generating on its own: it is the value
-                    // that would be invisible if `strict` were ever derived from
-                    // the variant rather than from the grammar.
+                    // `plus 0` on its own: the value that would be invisible if
+                    // `strict` were derived from the variant, not the grammar.
                     out.push(format!("{head} the {far} plus 0"));
                     // Negated, so the tree survives being wrapped.
                     out.push(format!("not {head} double the {far} plus 1"));
@@ -506,10 +479,8 @@ fn every_shape() -> Vec<String> {
 
 #[test]
 fn every_question_the_orb_can_write_it_can_read_back() {
-    // **The property that keeps the writer honest.** `interpret` and the line
-    // that names a place it could not find both quote a question back, and a
-    // written form the parser cannot read is a sentence the game shows a player
-    // and then refuses.
+    // Keeps the writer honest: `interpret` quotes a question back, and a
+    // written form the parser cannot read is a sentence shown and then refused.
     let mut checked = 0;
     for text in every_shape() {
         let Some(first) = condition(&text) else {
@@ -532,14 +503,11 @@ fn every_question_the_orb_can_write_it_can_read_back() {
 
 #[test]
 fn no_name_in_a_question_is_ever_dropped() {
-    // **The property that would have caught the original bug**, and the one
-    // worth more than any single row above: every *name* the player typed must
-    // survive into what the orb reads. A question that loses one is the failure
-    // this whole change exists to prevent, whatever shape it arrives in.
+    // The property that would have caught the original bug: every name the
+    // player typed must survive into what the orb reads.
     //
-    // Names, not words — the notation is allowed to change, and does: `no`
-    // becomes `not`, `free` becomes `idle`, `both` disappears because it never
-    // meant anything. What may not change is what the question is *about*.
+    // Names, not words — the notation may change (`no` becomes `not`, `free`
+    // becomes `idle`), but not what the question is about.
     let names = [
         "mortar",
         "flask",
@@ -566,10 +534,8 @@ fn no_name_in_a_question_is_ever_dropped() {
 
 #[test]
 fn reading_a_question_is_deterministic() {
-    // Twice from the same text is the same tree — pinned because a resolution
-    // that depended on iteration order would make two runs from one seed differ,
-    // which §13's determinism spine forbids and which no other test here would
-    // notice.
+    // Twice from the same text is the same tree: a resolution depending on
+    // iteration order would make two runs from one seed differ (§13).
     for text in every_shape() {
         assert_eq!(condition(&text), condition(&text), "{text:?}");
     }
@@ -581,12 +547,9 @@ fn reading_a_question_is_deterministic() {
 
 #[test]
 fn a_bare_has_is_a_count_of_one_and_writes_back_bare() {
-    // **The compatibility claim, both ways.** Every spell written before
-    // counting existed says `has sage`, and it has to keep meaning exactly what
-    // it meant — so the default is 1 on the way in, and 1 is invisible on the
-    // way out. Quoting `has 1 sage` back at a player who typed `has sage` would
-    // be the orb inventing a notation, which is what `write_condition` exists
-    // not to do.
+    // The compatibility claim, both ways: every spell written before counting
+    // says `has sage`, so the default is 1 in and 1 is invisible out. Quoting
+    // `has 1 sage` back would be the orb inventing a notation.
     assert_eq!(
         condition("the dispensary has sage"),
         Some(counted("dispensary", "sage", 1)),
@@ -596,10 +559,8 @@ fn a_bare_has_is_a_count_of_one_and_writes_back_bare() {
 
 #[test]
 fn a_count_of_nought_is_the_way_no_is_spelled_with_a_digit() {
-    // **`has 0 sage` is `has no sage`**, and it is a decision rather than a
-    // reading. Taken literally, "at least nought" is satisfied by an empty
-    // shelf — a guard that always fires, which is the last thing a player
-    // expects from a number they wrote to restrict something.
+    // `has 0 sage` is `has no sage`, a decision rather than a reading: "at
+    // least nought" is satisfied by an empty shelf, so it always fires.
     assert_eq!(
         condition("the dispensary has 0 sage"),
         condition("the dispensary has no sage"),
@@ -609,12 +570,9 @@ fn a_count_of_nought_is_the_way_no_is_spelled_with_a_digit() {
 
 #[test]
 fn a_number_the_orb_cannot_count_to_is_not_a_count() {
-    // Past `u32` it is not a count, and it is **not** silently clamped either.
-    // It stays where it was written — part of the thing's name — so the question
-    // is about something called `99999999999999 sage`, which nothing is. The
-    // spell's compile step then reports that name as one it cannot place, and
-    // §8.1 gets its culprit. Saturating to `u32::MAX` would turn a typo into a
-    // guard that never fires and never says why.
+    // Past `u32` it is not a count and is not clamped: it stays part of the
+    // thing's name, so `compile` reports a name it cannot place and §8.1 gets
+    // its culprit. Saturating would turn a typo into a silent guard.
     assert_eq!(
         condition("the dispensary has 99999999999999 sage"),
         Some(counted("dispensary", "99999999999999 sage", 1)),
@@ -626,10 +584,9 @@ fn a_number_the_orb_cannot_count_to_is_not_a_count() {
 
 #[test]
 fn or_more_is_the_default_said_out_loud_and_or_fewer_is_not() {
-    // **`2` and `2 or more` are one question**, so the bare form is canonical
-    // and the spoken one collapses to it. `or fewer` has no other spelling, so
-    // it keeps its words — and that asymmetry is what `interpret` shows a player
-    // to tell them which direction a bare count means.
+    // `2` and `2 or more` are one question, so the bare form is canonical. `or
+    // fewer` has no other spelling and keeps its words, and that asymmetry is
+    // what tells a player which direction a bare count means.
     assert_eq!(
         condition("the cabinet has 2 or more fragment"),
         condition("the cabinet has 2 fragment"),
@@ -650,13 +607,10 @@ fn or_more_is_the_default_said_out_loud_and_or_fewer_is_not() {
 
 #[test]
 fn every_spelling_of_a_comparison_reads_and_none_is_swallowed() {
-    // **The table this feature is for.** `has at least 2 X` used to become
-    // `has X` — the count *and* the words gone, no fault raised — because `at`
-    // is §6 filler and the rest resolved down to the noun. Every row here was a
-    // sentence a player would reasonably type and the orb silently rewrote.
-    //
-    // The right-hand side is the canonical form, so the collapses are visible:
-    // at-least writes bare, and a strict comparator becomes the count it means.
+    // `has at least 2 X` used to become `has X` — `at` is §6 filler and the
+    // rest resolved down to the noun, so the count and the words went with no
+    // fault raised. The right-hand side is the canonical form, so the collapses
+    // are visible.
     table(&[
         // At least, six ways.
         ("the cabinet has 2 fragment", "cabinet has 2 fragment"),
@@ -720,13 +674,10 @@ fn every_spelling_of_a_comparison_reads_and_none_is_swallowed() {
 fn the_far_sides_operators_bind_left_to_right_and_only_once() {
     use orbs_sim::parser::Quantity;
 
-    // **Round-tripping does not prove this.** `double east plus 2` writes back
-    // as itself whichever way it nested, so the property below is invisible to
-    // `every_question_the_orb_can_write_it_can_read_back` — and the two trees
-    // are *different arithmetic*: `2·east + 2` against `2·(east + 2)`.
-    //
-    // Left to right is what the module doc claims and what makes the absence of
-    // brackets honest, so `plus` must be the outer node.
+    // Round-tripping does not prove this: `double east plus 2` writes back as
+    // itself whichever way it nested, and the two trees are different
+    // arithmetic — `2·east + 2` against `2·(east + 2)`. Left to right is what
+    // the module doc claims, so `plus` must be the outer node.
     let read = |text: &str| match condition(text) {
         Some(Condition::Has { count, .. }) => count,
         other => panic!("{text:?} did not read as a comparison: {other:?}"),
@@ -755,11 +706,9 @@ fn the_far_sides_operators_bind_left_to_right_and_only_once() {
         },
     );
 
-    // **One `plus`, and a second is refused rather than silently dropped.**
-    // There is no associativity to learn because there is nothing to chain: a
-    // trailing term the reader cannot consume fails the whole line, which is
-    // `condition`'s all-or-nothing rule doing the work an operator table would
-    // otherwise have to.
+    // One `plus`, and a second is refused rather than dropped: there is no
+    // associativity to learn, because `condition`'s all-or-nothing rule fails
+    // the whole line.
     assert_eq!(
         condition("mortar has more sage than flask plus 2 plus 3"),
         None,
@@ -772,12 +721,9 @@ fn the_far_sides_operators_bind_left_to_right_and_only_once() {
 
 #[test]
 fn a_comparison_can_name_another_place_instead_of_a_number() {
-    // **The sentence the language could not say**, and the reason `threading`
-    // is six tiers unrolled by hand: every quantity in the tower is read the
-    // same way, but only one side of a comparison could ever be a world read.
-    //
-    // The canonical form is the words, so it round-trips through `interpret`
-    // exactly as the numeric spellings do.
+    // The sentence the language could not say, and why `threading` is six tiers
+    // unrolled by hand: only one side of a comparison could be a world read.
+    // The canonical form is the words, so it round-trips as the numbers do.
     table(&[
         (
             "north has fewer marks than east",
@@ -799,10 +745,9 @@ fn a_comparison_can_name_another_place_instead_of_a_number() {
             "north has as much marks as east",
             "north has as many marks as east",
         ),
-        // The place compared against may be several words, like any other name.
-        // **`balneum mariae` and not `mortar and pestle`**: a name carrying an
-        // `and` is one token in the tower (`mortar_and_pestle`) precisely
-        // because `and` is a connective here — the module docs say so.
+        // The place compared against may be several words. `balneum mariae`
+        // and not `mortar and pestle`: a name carrying an `and` is one token in
+        // the tower, because `and` is a connective here.
         (
             "the mortar_and_pestle has more sage than the balneum mariae",
             "mortar_and_pestle has more sage than balneum mariae",
@@ -822,11 +767,9 @@ fn a_comparison_can_name_another_place_instead_of_a_number() {
 
 #[test]
 fn a_comparative_exists_for_every_bound() {
-    // **What holds the table complete**, and the reason the writer falls back
-    // instead of panicking: a `Bound` with no comparative row would otherwise
-    // write a question the reader cannot read, so the round-trip breaks
-    // silently — or, with an `expect`, takes the game down in front of a player.
-    // Neither is a thing to discover at runtime.
+    // What holds the table complete, and why the writer falls back instead of
+    // panicking: a `Bound` with no comparative row writes a question the reader
+    // cannot read, breaking the round-trip silently.
     for bound in [Bound::AtLeast, Bound::AtMost, Bound::Exactly] {
         let question = Condition::Has {
             place: "north".to_owned(),
@@ -845,12 +788,10 @@ fn a_comparative_exists_for_every_bound() {
 
 #[test]
 fn a_comparative_with_nothing_to_compare_against_refuses_the_line() {
-    // **The half-written one, and it must not fall through to the count path.**
-    // Falling through gives `fewer` to the thing's name, and `spell::compile`'s
-    // fuzzy resolution then drops it — so `north has fewer marks` silently
-    // becomes `north has marks`, which answers *yes* wherever the player's
-    // question answers *no*. That is §19's "the orb writes down a shorter
-    // command than it heard", one grammar wider than where counting closed it.
+    // The half-written one must not fall through to the count path: `fewer`
+    // would go to the thing's name and `spell::compile` would drop it, so
+    // `north has fewer marks` becomes `north has marks` and answers the
+    // opposite (§19).
     for half in [
         "north has fewer marks",
         "north has more marks",
@@ -860,9 +801,8 @@ fn a_comparative_with_nothing_to_compare_against_refuses_the_line() {
         assert_eq!(read(half), "-", "{half:?} was read as something");
     }
 
-    // **And the numeric spellings that share their first word still read.**
-    // `more than 1 fragment` is `BOUNDS`, not a comparison: nothing sits
-    // between the comparative and its closer, which is the whole discriminator.
+    // And the numeric spellings sharing their first word still read: `more than
+    // 1 fragment` is `BOUNDS`, with nothing between comparative and closer.
     assert_eq!(
         read("the cabinet has more than 1 fragment"),
         "cabinet has 2 fragment",
@@ -875,14 +815,10 @@ fn a_comparative_with_nothing_to_compare_against_refuses_the_line() {
 
 #[test]
 fn a_bound_with_no_number_keeps_its_words_rather_than_dropping_them() {
-    // **Nothing vanishes, which is the whole property.** A bound with no number
-    // is not a comparison, so the words go back and `span` takes them into the
-    // thing's name — a question about something called `least fragment`, which
-    // nothing is, so `compile` reports that name and §8.1 gets its culprit.
-    //
-    // The same shape as a number too large to count. What must **not** happen is
-    // the words disappearing and leaving `has fragment`, which is what
-    // `at least 2 fragment` did before comparators were spelled out.
+    // Nothing vanishes: a bound with no number is not a comparison, so the
+    // words go back into the thing's name and `compile` reports it (§8.1). What
+    // must not happen is `has fragment`, which is what `at least 2 fragment`
+    // did before comparators were spelled out.
     for (text, kept) in [
         ("the cabinet has at least fragment", "least fragment"),
         ("the cabinet has >= fragment", ">= fragment"),
@@ -895,9 +831,8 @@ fn a_bound_with_no_number_keeps_its_words_rather_than_dropping_them() {
 
 #[test]
 fn a_bare_or_is_still_a_disjunction() {
-    // **The lookahead takes two tokens or neither.** `or` followed by anything
-    // but `more`/`fewer`/`less` is left exactly where it was, so a question with
-    // a count on its left half still joins.
+    // The lookahead takes two tokens or neither: `or` followed by anything but
+    // `more`/`fewer`/`less` is left where it was.
     assert_eq!(
         condition("the dispensary has 2 sage or the mortar is idle"),
         Some(Condition::Any(vec![
@@ -909,10 +844,9 @@ fn a_bare_or_is_still_a_disjunction() {
 
 #[test]
 fn a_count_of_nought_collapses_only_when_it_is_not_a_comparison() {
-    // `has 0 X` is `has no X` — "at least nought" is satisfied by an empty shelf
-    // and is a guard that always fires. `has 0 or fewer X` is a **comparison**
-    // asking for an empty shelf and saying so, and collapsing it would make the
-    // explicit spelling pointless.
+    // `has 0 X` is `has no X` — "at least nought" always fires. `has 0 or fewer
+    // X` is a comparison asking for an empty shelf, and collapsing it would
+    // make the explicit spelling pointless.
     assert_eq!(
         condition("the dispensary has 0 sage"),
         condition("the dispensary has no sage"),
@@ -929,9 +863,8 @@ fn a_count_of_nought_collapses_only_when_it_is_not_a_comparison() {
 
 #[test]
 fn a_count_survives_a_short_form_and_a_join() {
-    // The short form (`shared`) looks ahead for a question word, not for a
-    // number, so a counted operand on the right of an `and` must still find its
-    // subject. This is the interaction the count's parse position was chosen for.
+    // The short form looks ahead for a question word, not a number, so a
+    // counted operand right of an `and` must still find its subject.
     assert_eq!(
         condition("the cabinet has 4 fragment and 2 sage"),
         Some(Condition::All(vec![

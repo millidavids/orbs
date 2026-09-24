@@ -1,21 +1,18 @@
 //! The course of wards, beside the transcript (DESIGN.md §10, `tower::pylon`).
 //!
-//! The ward sheet's shape, one room over, and it follows the same three rules.
-//! **It is not gated on a word**: it draws whenever a course is standing, which
-//! is what makes a bound solver watchable — watching and doing are different
-//! activities and only one of them owns the keyboard. There is no full-pane mode,
-//! because unlike a maze there is nothing to walk: a course is played from the
-//! prompt with `muster` and `haul`.
+//! The ward sheet's shape, one room over, following the same three rules. Not
+//! gated on a word: it draws whenever a course is standing, which is what makes
+//! a bound solver watchable. There is no full-pane mode, because unlike a maze
+//! there is nothing to walk — a course is played with `muster` and `haul`.
 //!
-//! **Columns, never rows**, and it splits *after* the instrument panel. §19
-//! records getting that order backwards once.
+//! Columns, never rows, splitting after the instrument panel. §19 records
+//! getting that order backwards once.
 //!
-//! It **refuses rather than truncating**, and here that rule is at its
-//! strongest. A clipped maze is a smaller view of the same maze and a clipped
-//! sheet loses old presses, but half a Hanoi position is not a position at all —
-//! a board missing its bottom row shows wards resting on nothing, which is a
-//! picture of an illegal state. So this one is refused in **both** directions,
-//! where the sheet windows its rows.
+//! It refuses rather than truncating, and here that rule is at its strongest: a
+//! clipped maze is a smaller view of the same maze and a clipped sheet loses old
+//! presses, but a board missing its bottom row shows wards resting on nothing,
+//! which is a picture of an illegal state. So this one refuses in both
+//! directions, where the sheet windows its rows.
 
 use orbs_render::{Painter, Pos, Pylon, Rect, Role, Style, UtteranceKind, Wash};
 use orbs_sim::content::Prose;
@@ -55,11 +52,10 @@ pub fn paint(painter: &mut Painter<'_>, at: Rect, course: &Pylon, prose: &Prose)
                 break;
             }
             let at = Pos::new(inside.col + col, inside.row + row);
-            // **`glyphs`, so the picture is silent**, and the summary below says
-            // what it means. A reader hearing twenty-seven cells of block and
-            // rule read out gets box-drawing noise, which is what §19's frame
-            // rule puts structure on one channel and content on the other to
-            // prevent.
+            // `glyphs`, so the picture is silent and the summary below says what
+            // it means. A reader hearing twenty-seven cells of block and rule
+            // gets box-drawing noise, which is what §19's frame rule —
+            // structure on one channel, content on the other — prevents.
             painter.glyphs(at, &glyph.to_string(), style);
             if let Some(tint) = tint {
                 painter.tint(Rect::new(at.col, at.row, 1, 1), Wash::plain(tint));
@@ -72,16 +68,15 @@ pub fn paint(painter: &mut Painter<'_>, at: Rect, course: &Pylon, prose: &Prose)
 
 /// What the board says, for a reader.
 ///
-/// **Spoken once as a summary, never cell by cell**, which is the sheet's rule.
-/// What a reader needs from a Hanoi position is how much is home and what it has
-/// cost — the per-haul detail is already in the transcript, where it was said as
-/// a sentence.
+/// Spoken once as a summary, never cell by cell — the sheet's rule. What a
+/// reader needs from a Hanoi position is how much is home and what it cost; the
+/// per-haul detail is already in the transcript as a sentence.
 ///
-/// **A longer line than the board's, and deliberately.** The foot of the picture
-/// is 33 cells and has the rail two columns away saying how the barrier stands; a
-/// reader has neither constraint nor that glance, so `pylon_spoken` says the
-/// whole thing where `pylon_tally` says what fits. Both are authored, which is
-/// what rule 6 asks — the painter composes prose, it does not invent it.
+/// A longer line than the board's, deliberately: the foot of the picture is 33
+/// cells with the rail two columns away saying how the barrier stands, and a
+/// reader has neither constraint nor that glance. So `pylon_spoken` says the
+/// whole thing where `pylon_tally` says what fits. Both are authored — rule 6:
+/// the painter composes prose, it does not invent it.
 fn speak(painter: &mut Painter<'_>, course: &Pylon, prose: &Prose) {
     painter.announce(
         UtteranceKind::Progress,
@@ -158,9 +153,9 @@ mod tests {
 
     #[test]
     fn a_pane_too_short_is_refused_rather_than_clipped() {
-        // **The rule this board holds harder than its siblings.** A sheet windows
-        // its rows and a maze pans; a Hanoi position clipped at the bottom draws
-        // wards resting on nothing, which is a picture of an illegal state.
+        // The rule this board holds harder than its siblings: a sheet windows
+        // its rows and a maze pans, where a Hanoi position clipped at the bottom
+        // draws wards resting on nothing.
         let (_, tall) = block();
         let area = Rect::new(0, 0, 104, tall - 1);
         assert!(split(area, Some(&course())).area.is_empty());
@@ -173,15 +168,11 @@ mod tests {
 
     #[test]
     fn the_board_still_fits_the_authoring_floor() {
-        // **Unlike the maze and the sheet**, and worth pinning because it was a
-        // surprise. Both of those yield at 80x22 — a maze is 33 squares across
-        // and a twelve-press sheet is 41 columns and fourteen rows. A course is
-        // three stations and seven storeys, which is 35 by 12 with its border,
-        // and still fits beside a 24-column transcript on the narrowest grid the
-        // game supports.
-        //
-        // So the sanctum is the one domain whose picture is never absent, and a
-        // See-it line at the floor shows a board rather than a refusal.
+        // Unlike the maze and the sheet, and worth pinning because it surprised:
+        // both of those yield at 80x22, where a course is 35 by 12 with its
+        // border and still fits beside a 24-column transcript. So the sanctum is
+        // the one domain whose picture is never absent, and a See-it line at the
+        // floor shows a board rather than a refusal.
         assert!(
             !split(Rect::new(0, 0, 78, 20), Some(&course()))
                 .area

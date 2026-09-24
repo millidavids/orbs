@@ -14,19 +14,18 @@ use orbs_sim::Sim;
 
 /// §10.1's instrument panel, as the sim last reported it.
 ///
-/// **Rebuilt on tick, not per frame.** `tower::instruments` walks the room's
-/// children, then each fixture's children, cloning a `String` per name and
-/// allocating a `Vec` per lookup — roughly twenty allocations for the
-/// laboratory's five instruments, at 60 Hz, for state that changes at most once a
-/// second. The sim is the authority either way; this is where the answer waits
-/// between ticks.
+/// Rebuilt on tick, not per frame. `tower::instruments` walks the room's
+/// children then each fixture's, cloning a `String` per name and allocating a
+/// `Vec` per lookup — roughly twenty allocations for the laboratory's five
+/// instruments, at 60 Hz, for state that changes once a second. The sim is the
+/// authority either way; this is where the answer waits between ticks.
 #[derive(Resource, Debug, Default)]
 pub struct Panel {
     /// The instruments where the player is standing.
     pub instruments: Vec<orbs_sim::tower::Instrument>,
     /// That place's leaf name, for the panel's spoken summary.
     pub domain: String,
-    /// The **room** the player is standing in, which is not the same thing.
+    /// The room the player is standing in, which is not the same thing.
     ///
     /// `Sim::domain` walks up to the room and `domain` above is the leaf, so a
     /// player standing at the alembic has `domain: "alembic"` and
@@ -34,16 +33,16 @@ pub struct Panel {
     /// the room: keyed on the leaf, `attend alembic` would play a whole crossing
     /// for a fixture inside the room already on screen.
     ///
-    /// **On the tick clock with everything else here**, because `Sim::domain`
-    /// clones a `String` per call and the answer changes at most once a second.
-    /// `line` below already had to make the same distinction and says so.
+    /// On the tick clock with everything else here, because `Sim::domain` clones
+    /// a `String` per call and the answer changes at most once a second. `line`
+    /// below makes the same distinction.
     pub room: String,
     /// The stacks the player is standing over, if they are open.
     ///
-    /// **On the same tick clock as the instruments, and it belongs here for the
-    /// same reason.** A 49-cell `Vec` rebuilt at 60 Hz would be the allocation
-    /// this resource exists to stop; rebuilt once a second it is exactly as
-    /// fresh as the world it describes, because the world moves at 1 Hz too.
+    /// On the same tick clock as the instruments, for the same reason: a 49-cell
+    /// `Vec` rebuilt at 60 Hz is the allocation this resource exists to stop,
+    /// and rebuilt once a second it is exactly as fresh as the world it
+    /// describes.
     pub stacks: Option<orbs_render::Stacks>,
     /// The ward the player is standing over, if a reading is open.
     ///
@@ -90,22 +89,20 @@ pub struct Panel {
     pub line: Option<orbs_sim::Line>,
     /// Every domain at a glance, for §9's rail.
     ///
-    /// **Here rather than asked from the painter, and it is the most expensive of
-    /// the four.** `Sim::briefs` walks every top-level room, builds two
-    /// `QueryState`s, and runs `instruments_in` — with its per-recipe `matching`
-    /// and `gathering` allocations — once per built room. Called from `rail::paint`
-    /// it ran all of that at 60 Hz for data that changes at 1 Hz, which is
-    /// precisely what this resource was created to stop.
+    /// Here rather than asked from the painter, and the most expensive of the
+    /// four: `Sim::briefs` walks every top-level room, builds two `QueryState`s
+    /// and runs `instruments_in` — with its per-recipe allocations — once per
+    /// room. From `rail::paint` that ran at 60 Hz for data that changes at 1 Hz.
     pub briefs: Vec<orbs_sim::tower::Brief>,
 }
 
 impl Panel {
     /// Re-read the panel from the world.
     ///
-    /// **A method, not a system.** Every frontend needs this exact set of five
-    /// questions asked in this exact order once a tick; only the Bevy build has
-    /// a `resource_changed` guard to hang it on, and a guard is not a reason for
-    /// the answer to live somewhere a terminal cannot reach.
+    /// A method, not a system. Every frontend needs this set of questions asked
+    /// in this order once a tick; only the Bevy build has a `resource_changed`
+    /// guard to hang it on, and a guard is not a reason for the answer to live
+    /// somewhere a terminal cannot reach.
     pub fn refresh(&mut self, sim: &Sim) {
         self.instruments = sim.instruments();
         self.domain = orbs_sim::parser::leaf(&sim.location()).to_owned();
@@ -120,8 +117,8 @@ impl Panel {
         self.rampart = sim.rampart();
         self.lattice = sim.lattice();
         self.briefs = sim.briefs();
-        // **The room, not the leaf.** A player standing in the alembic is in
-        // the laboratory, and the laboratory's line is the road they should see.
+        // The room, not the leaf: a player standing in the alembic is in the
+        // laboratory, and the laboratory's line is the road they should see.
         self.line = sim
             .domain()
             .and_then(|domain| sim.mastery().into_iter().find(|line| line.domain == domain));

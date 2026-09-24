@@ -13,9 +13,9 @@ fn a_bare_verify_audits_the_tower_and_stops_the_work() {
     if !available() {
         return;
     }
-    // **The price, on screen.** §8.1 makes the audit Production-class precisely
-    // so that *which surface do I inspect first* is a decision — and the way a
-    // player learns it is a decision is by being refused a grind while it runs.
+    // The price, on screen. §8.1 makes the audit Production-class so that *which
+    // surface do I inspect first* is a decision, and the way a player learns it
+    // is one is by being refused a grind while it runs.
     let game = Game::seeded(QUIET);
     game.does("attend laboratory", "/tower/laboratory")
         .does("verify", "the whole tower")
@@ -32,10 +32,10 @@ fn checking_a_log_leaves_the_shelves_open() {
     if !available() {
         return;
     }
-    // **The whole point of rationing.** §8.1: *"four free instant checks **are**
-    // `verify --all` by another name."* One look costs you that *kind* of
-    // surface and nothing else, so the player still has somewhere to look — and
-    // choosing where is the mechanic.
+    // The whole point of rationing. §8.1: *"four free instant checks are
+    // `verify --all` by another name."* One look costs you that kind of surface
+    // and nothing else, so the player still has somewhere to look — and choosing
+    // where is the mechanic.
     let game = Game::seeded(QUIET);
     game.does("attend laboratory", "/tower/laboratory")
         .does("verify laboratory.log", "sound")

@@ -1,22 +1,13 @@
 //! Scrolls, and what spending one does.
 //!
-//! Four walks of the stacks assemble into a scroll at the lectern (§10, §19), and
-//! until now that was where the archive stopped: an object with a name, a colour
-//! and no use. This is the other half.
+//! Four walks of the stacks assemble into a scroll at the lectern (§10, §19);
+//! this is the other half, the scroll having had a name and no use.
 //!
-//! # `wield`, not a word of its own
+//! Spent with `wield` rather than a word of its own: spending a scroll is
+//! *setting a thing going*, so the verb learned a second argument kind
+//! ([`NounKind::Workable`]) instead of the tower gaining a twenty-third word.
 //!
-//! `verb.rs`'s vocabulary test argues the case and refuses the alternative in
-//! advance — *"22 is a number to defend, not a budget to spend: the next word
-//! added here needs an argument of this shape"*. Spending a scroll is *setting a
-//! thing going*, which is what `wield` already means, so the verb learned a
-//! second argument kind ([`NounKind::Workable`])
-//! instead of the tower gaining a twenty-third word.
-//!
-//! # No prose here
-//!
-//! Rule 6, as everywhere else in `execute`: this emits facts and looks its
-//! sentences up by key.
+//! Rule 6, as everywhere in `execute`: facts here, sentences looked up by key.
 
 use bevy_ecs::prelude::*;
 use orbs_render::{FieldName, RecordKind, Role};
@@ -32,24 +23,22 @@ use super::missing;
 
 /// How many spoils a gleaning errand scatters.
 ///
-/// **Five against the four a scroll costs, and profitable on purpose.** Gleaning
-/// is what keeps scrolls in circulation and makes automating the maze worth
-/// doing; the walk's own hundreds of ticks and the fact that the replacement is
-/// *drawn* rather than chosen are what stop it running away.
+/// Five against the four a scroll costs, profitable on purpose: gleaning keeps
+/// scrolls in circulation and makes automating the maze worth doing. The walk's
+/// hundreds of ticks and the *drawn* rather than chosen replacement stop it
+/// running away.
 ///
-/// A placeholder like every other number here, and the largest balance exposure
-/// in the feature: `orbs-balance` is still a stub, so nothing would catch this
-/// drifting. If it runs hot, this is the one line that changes.
+/// A placeholder, and the largest balance exposure in the feature —
+/// `orbs-balance` is still a stub, so nothing would catch it drifting.
 const SPOILS: usize = 5;
 
 /// A scroll the archive can assemble, and what it does.
 ///
-/// **A table of facts, not prose** — the same shape as `Verb::canonical` and
-/// [`Errand::word`]. The words themselves are authored in `recipes.toml`; this
-/// says which of them the game can act on, and
-/// `every_scroll_the_lectern_makes_can_be_spent` fails the build if the two
-/// disagree. A scroll in the content file with no arm here would be drawn,
-/// carried, wielded and refused — which reads exactly like a bug in the verb.
+/// A table of facts, not prose — the shape of `Verb::canonical` and
+/// [`Errand::word`]. The words are authored in `recipes.toml`; this says which
+/// the game can act on, and `every_scroll_the_lectern_makes_can_be_spent` fails
+/// the build if the two disagree. A scroll with no arm here would be drawn,
+/// carried, wielded and refused, which reads like a bug in the verb.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Scroll {
     /// Sets the open stacks to gather rather than to escape.
@@ -83,17 +72,17 @@ impl Scroll {
 
 /// The scroll this `wield` spends, if it spends one rather than charging a tool.
 ///
-/// **The one expression of that question**, and it has two callers on two paths:
-/// [`spend`] below, and `tower::spell::block`, which must *not* charge a spend to
-/// the production slot. Asking it twice is what went wrong — `begins_work` is
-/// keyed on the verb alone, so the slot tier saw `Verb::Wield` and made a
-/// scripted `wield quickening-scroll` wait out the very brew it was meant to
-/// hurry, burn `PATIENCE` and give up. A typed line never reaches that tier, so
-/// the two paths disagreed and only one of them was ever looked at.
+/// The one expression of that question, for [`spend`] below and for
+/// `tower::spell::block`, which must *not* charge a spend to the production
+/// slot. Asking it twice went wrong: `begins_work` is keyed on the verb alone,
+/// so the slot tier saw `Verb::Wield` and made a scripted `wield
+/// quickening-scroll` wait out the brew it was meant to hurry, burn `PATIENCE`
+/// and give up. A typed line never reaches that tier, so only one of the two
+/// disagreeing paths was ever looked at.
 ///
-/// Branching on the argument's **kind** rather than on its name is what keeps
-/// this from being a string comparison in the executor: `Recipes::kind_of`
-/// decides what a scroll is, from the content file.
+/// Branches on the argument's *kind*, not its name, so this is not a string
+/// comparison in the executor: `Recipes::kind_of` decides what a scroll is,
+/// from the content file.
 pub(crate) fn spending(intent: &Intent) -> Option<&str> {
     intent
         .arguments
@@ -112,8 +101,8 @@ pub(super) fn spend(intent: &Intent, world: &mut World) -> bool {
     };
     let name = name.to_owned();
 
-    // Where the scroll is, which is where the player is standing. §7 governs
-    // this exactly as it governs a reagent: you can only spend what is to hand.
+    // Where the player is standing. §7, as for a reagent: you can only spend
+    // what is to hand.
     let cwd = world.resource::<Cwd>().0;
     let Some(holder) = super::pipeline::holder(world, cwd, &name) else {
         missing(Verb::Wield, &name, world);
@@ -121,8 +110,8 @@ pub(super) fn spend(intent: &Intent, world: &mut World) -> bool {
     };
 
     let Some(scroll) = Scroll::of(&name) else {
-        // Authored but unimplemented: the lint below is what stops this
-        // shipping, and saying so beats acknowledging in silence.
+        // Authored but unimplemented: the lint below stops this shipping, and
+        // saying so beats acknowledging in silence.
         refuse(world, &name, "scroll_inert");
         return true;
     };
@@ -136,9 +125,8 @@ pub(super) fn spend(intent: &Intent, world: &mut World) -> bool {
         return true;
     }
 
-    // **Taken only once the effect landed.** A refusal that had already consumed
-    // the scroll would be the trap §7 refuses — four walks of the stacks spent
-    // on a sentence explaining why nothing happened.
+    // Taken only once the effect landed: consuming it on a refusal is the trap
+    // §7 refuses — four walks of the stacks spent on a sentence.
     tower::take(world, holder, &name, 1);
     true
 }
@@ -163,12 +151,12 @@ fn glean(world: &mut World, name: &str) -> bool {
         return false;
     }
 
-    // **Drawn in one go, on the archive's own stream.** A maze that grew as it
-    // was walked would issue its squares at a rate depending on how the ticks
-    // were consumed, so a live-watched run and a `meditate`-collapsed one would
-    // differ from one seed — `heat.rs` records the hazard and `Maze::new` the
-    // rule. `RngStream::Archive` because this is an archive roll: §19 records
-    // the shard draw once rolling `Yield` and changing a player's brew yields.
+    // Drawn in one go, on the archive's own stream. Growing it as the maze was
+    // walked would tie the draw to how the ticks were consumed, so a
+    // live-watched run and a `meditate`-collapsed one would differ from one
+    // seed — `heat.rs` records the hazard, `Maze::new` the rule.
+    // `RngStream::Archive` because it is an archive roll; §19 records the shard
+    // draw once rolling `Yield` and changing a player's brew yields.
     let mut floor = world
         .get::<Maze>(stacks)
         .map(Maze::scatterable)
@@ -200,11 +188,9 @@ fn glean(world: &mut World, name: &str) -> bool {
         "scroll_gleaning",
         &[("name", name), ("count", &SPOILS.to_string())],
     );
-    // **No `Detail`**, which `produce::transmute` records the reason for one
-    // field along: it is prose a view draws *in front of* the message, so the
-    // scroll's own name would be printed before the sentence written to explain
-    // it. The scroll is the `Name`, the errand it set is a `State`, and both are
-    // facts a `sift` can find.
+    // No `Detail`: a view draws it *in front of* the message, so the scroll's
+    // own name would print before the sentence explaining it. `Name` and
+    // `State` instead, both facts a `sift` can find.
     world
         .resource_mut::<Scrollback>()
         .records_mut()
@@ -223,31 +209,21 @@ fn glean(world: &mut World, name: &str) -> bool {
 ///
 /// Returns whether the scroll was spent.
 ///
-/// # It never refuses for want of something to hurry
-///
-/// The first version halved what was left of the run in hand and refused when
-/// nothing was running — which made it unusable at exactly the moment a player
-/// would reach for one. *Quicken the laboratory, then brew* is the obvious play
-/// and it was the one thing the scroll could not do. Four walks of the stacks also
-/// bought a single stage, where a window buys a stretch of work and rewards
-/// lining it up.
-///
+/// It never refuses for want of something to hurry: the first version halved
+/// the run in hand and refused when nothing ran, so *quicken, then brew* — the
+/// obvious play — was the one thing it could not do, and four walks of the
+/// stacks bought a single stage rather than a stretch of work worth lining up.
 /// So it sets [`Quickened`](tower::Quickened) on the laboratory for
-/// [`QUICKENED_TICKS`](tower::QUICKENED_TICKS), and `tower::begin` reads it when
-/// a run starts — the same moment §10.1 checks the athanor, and for the same
-/// reason: a run that starts inside the window stays short even if the window
-/// closes under it.
+/// [`QUICKENED_TICKS`](tower::QUICKENED_TICKS), and `tower::begin` reads it
+/// when a run starts — where §10.1 checks the athanor, and for the same reason:
+/// a run starting inside the window stays short even if the window closes.
 ///
-/// # And what is already running is hurried too
-///
-/// One rule, not two. The state means *this room works at double speed*, and a
-/// run in flight is something the room is doing — so leaving it alone would make
-/// wielding the scroll mid-brew look like it had done nothing. Halved from
-/// **now** rather than from the start: halving the whole interval would refund
-/// time already spent and, past the half-way point, land the end in the past.
-///
-/// Set once, never re-derived per tick, which is what keeps `meditate 60`
-/// identical to sixty `meditate 1`s.
+/// What is already running is hurried too — one rule, not two, or wielding the
+/// scroll mid-brew would look like it had done nothing. Halved from *now*
+/// rather than from the start: halving the whole interval refunds time already
+/// spent and, past half way, lands the end in the past. Set once, never
+/// re-derived per tick, which keeps `meditate 60` identical to sixty
+/// `meditate 1`s.
 fn quicken(world: &mut World, name: &str) -> bool {
     let Some(shelf) = tower::home(world, SAGE) else {
         refuse(world, name, "scroll_nowhere");
@@ -265,18 +241,17 @@ fn quicken(world: &mut World, name: &str) -> bool {
     });
 
     // Whatever the room is already doing, at the new rate. `in_flight` is the
-    // production pool and `CAPACITY` is 1, so this is at most one run — and it
-    // is only hurried if it is in the room the scroll just quickened.
+    // production pool and `CAPACITY` is 1, so at most one run, and only if it
+    // is in the room the scroll just quickened.
     let hurried = tower::in_flight(world)
         .into_iter()
         .map(|(_, at)| at)
         .find(|at| tower::domain_of(world, *at) == Some(domain));
     if let Some(at) = hurried
         && let Some(mut working) = world.get_mut::<tower::Working>(at)
-        // **Only ever earlier**, and the guard is not belt-and-braces —
-        // `tower::hurried_from` carries the reason, beside the rate it shares
-        // with `hastened`. It was written out here a second time, which is one
-        // rule in two places and the shape §19 keeps finding defects in.
+        // Only ever earlier. `tower::hurried_from` carries the reason, beside
+        // the rate it shares with `hastened`; it was written out here a second
+        // time, which is one rule in two places.
         && let Some(ends) = tower::hurried_from(now, working.ends)
     {
         working.ends = ends;
@@ -310,32 +285,23 @@ fn quicken(world: &mut World, name: &str) -> bool {
 ///
 /// Returns whether the scroll was spent.
 ///
-/// # One herb per scroll, not all of them
+/// One herb per scroll, not all of them: unlocking the lot would leave the
+/// lectern assembling a scroll with nothing left to give, which is the dead end
+/// this item exists to close. One each means the first three are all worth
+/// having and the laboratory visibly grows three times.
 ///
-/// The plan said *unlock the reagents* and one scroll doing all of it would have
-/// been a single dud draw for ever after — the lectern would go on assembling a
-/// scroll with nothing left to give, which is the dead end this whole item
-/// exists to close. One each means the first three are all worth having and the
-/// laboratory visibly grows three times.
+/// What is unlockable is derived, never listed. A *base reagent* is one the
+/// vocabulary knows and no recipe produces — sage and rock-salt are the two the
+/// tower opens with — so authoring a new one in `recipes.toml` makes it
+/// unlockable the same tick, with no arm to add here; a hand-kept list is a
+/// promise kept until somebody is busy. Fuel is excluded: the athanor's
+/// charcoal passes that test and is not a herb, and unlocking what the
+/// laboratory already burns gives the player nothing.
 ///
-/// # What is unlockable is derived, never listed
-///
-/// A **base reagent** is one the vocabulary knows and no recipe produces: sage
-/// and rock-salt are the two the tower opens with, and anything else in that set
-/// is a herb waiting for a shelf. So authoring a new one in `recipes.toml` makes
-/// it unlockable the same tick, with no arm to add here — the same rule
-/// `tower::home` follows, for the same reason a hand-kept list is a promise kept
-/// until somebody is busy.
-///
-/// Fuel is excluded: the athanor's charcoal is a base reagent by that test and is
-/// not a herb, and unlocking what the laboratory already burns would give a
-/// player nothing.
-///
-/// **Alphabetical, and that is a decision.** `Recipes::vocabulary` is sorted, so
-/// which herb arrives first is fixed for every seed — a *roll* here would be a
-/// second draw stacked on the lectern's, and §19 has already refused one layer of
-/// that in the archive's yield. What the player chooses is when to spend it, not
-/// what they get.
+/// Alphabetical: `Recipes::vocabulary` is sorted, so which herb arrives first
+/// is fixed for every seed. A roll here would stack a second draw on the
+/// lectern's, and §19 has refused one layer of that in the archive's yield —
+/// what the player chooses is when to spend it, not what they get.
 fn flower(world: &mut World, name: &str) -> bool {
     let Some(shelf) = tower::home(world, SAGE) else {
         refuse(world, name, "scroll_nowhere");
@@ -370,20 +336,18 @@ const SAGE: &str = "sage";
 
 /// Base reagents the laboratory has not been given yet, alphabetically.
 ///
-/// *Base* is "the vocabulary knows it and **nothing in the tower makes it**", and
-/// getting that wrong is visible rather than subtle: the first version asked only
-/// `Recipes::outputs`, which is a recipe's `output` and not its `leaves` — so
-/// every byproduct in the game read as a herb, and four scrolls put `dregs`,
-/// `ash` and a `fragment` on the shelf as inexhaustible stock. It took one dump
-/// to see and no test would have said a word.
+/// *Base* is "the vocabulary knows it and nothing in the tower makes it". The
+/// first version asked only `Recipes::outputs` — a recipe's `output`, not its
+/// `leaves` — so every byproduct read as a herb and four scrolls put `dregs`,
+/// `ash` and a `fragment` on the shelf as inexhaustible stock; one dump showed
+/// it and no test would have said a word. So *made* is everything with a
+/// source: a recipe's output, a recipe's leaving, a fuel, and what a fuel
+/// leaves behind when it burns.
 ///
-/// So *made* is everything with a source: a recipe's output, a recipe's leaving,
-/// a fuel, and what a fuel leaves behind when it burns.
-///
-/// And *the laboratory's*, by [`tower::home`] — which is what keeps the archive's
-/// `fragment` out without naming it. A fragment is a base reagent by every test
-/// above; it is simply not a herb, and the rule that already knows which room a
-/// thing belongs to is the one to ask rather than a second list here.
+/// And *the laboratory's*, by [`tower::home`], which keeps the archive's
+/// `fragment` out without naming it: a fragment is base by every test above and
+/// simply not a herb. Asking the rule that already knows which room a thing
+/// belongs to beats a second list here.
 fn locked(world: &World, shelf: Entity) -> Vec<String> {
     let recipes = world.resource::<Recipes>();
     let fuels = world.resource::<crate::content::Fuels>();

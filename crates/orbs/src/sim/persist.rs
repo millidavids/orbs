@@ -17,18 +17,16 @@ use super::driver::Tower;
 
 /// The file the tower in front of the player is kept in.
 ///
-/// # Why the path is state rather than a function call
+/// The path is state rather than a function call, and that is what stops loading
+/// a second game destroying the first. The autosave fires every sixty ticks and
+/// again on the way out; while there was one game that path could be
+/// `save_path()`, read afresh. With a menu that can put a different tower in
+/// front of the player, a path read at the moment of writing is read *after* the
+/// swap — so the game you just left is written into the file of the one you just
+/// opened.
 ///
-/// **This is the resource that stops loading a second game destroying the
-/// first.** The autosave fires every sixty ticks and again on the way out,
-/// against whatever path it is given; while there was one game that could be
-/// `save_path()`, read afresh each time. With a menu that can put a *different*
-/// tower in front of the player, a path read at the moment of writing is a path
-/// read after the swap — so the game you just left would be written into the
-/// file of the game you just opened, and the one you left would be gone.
-///
-/// So the path travels **with** the `Sim`: `shell::menuing::swap` replaces both
-/// in one operation and nothing in between can observe one without the other.
+/// So the path travels with the `Sim`: `shell::menuing::swap` replaces both in
+/// one operation and nothing between can observe one without the other.
 ///
 /// `None` when this session keeps nothing at all — `ORBS_SAVE=off`, which
 /// `scripts/dumps.sh` and the played-game suite both pin.
@@ -49,9 +47,9 @@ impl Kept {
 
 /// Write `tower` to `kept` immediately, before anything else moves.
 ///
-/// **The half of a swap that must happen first**, and the reason it is a free
-/// function rather than a method: it is called with the *outgoing* pair, at a
-/// point where the incoming one has already been read off disk and is waiting.
+/// The half of a swap that must happen first, and why it is a free function
+/// rather than a method: it is called with the outgoing pair, at a point where
+/// the incoming one has already been read off disk and is waiting.
 pub(crate) fn keep_now(tower: &Tower, kept: &Kept) {
     let Some(path) = kept.path() else {
         return;
@@ -74,11 +72,9 @@ const AUTOSAVE_TICKS: u64 = 60;
 
 /// Whether this tick is one that writes.
 ///
-/// **Read from the sim's own clock, not from a counter of our own.** A counter
-/// here would drift from world time the moment `meditate` ran three hundred
-/// ticks inside one `step` — which is the same trap §19 records the instrument
-/// animations falling into, and the reason the tick is a *sample* rather than a
-/// quantity.
+/// Read from the sim's own clock, not a counter of our own: a counter drifts
+/// from world time the moment `meditate` runs three hundred ticks inside one
+/// `step`, which is the trap §19 records the instrument animations falling into.
 fn due(tower: &Tower) -> bool {
     let tick = tower.sim().tick().get();
     tick > 0 && tick.is_multiple_of(AUTOSAVE_TICKS)
@@ -91,11 +87,10 @@ fn due(tower: &Tower) -> bool {
 /// moment `Pending` and `Skip` are both empty, which is what lets the document
 /// leave them out.
 pub(super) fn autosave(mut tower: ResMut<Tower>, kept: Res<Kept>, mut said: Local<bool>) {
-    // **Peeked before it is taken.** Reaching for `ResMut` unconditionally
-    // stamps `Tower`'s change tick every second, which re-arms its own
-    // `resource_changed` run condition for ever and drags the panel, the
-    // suggestions and the four surface watchers back to frame rate. `quit`
-    // shipped without this peek once; `driver` records it.
+    // Peeked before it is taken: reaching for `ResMut` unconditionally stamps
+    // `Tower`'s change tick every second, re-arming its own `resource_changed`
+    // run condition for ever and dragging the panel, the suggestions and the
+    // four surface watchers back to frame rate. `driver` records it.
     if !due(&tower) {
         return;
     }
@@ -104,16 +99,13 @@ pub(super) fn autosave(mut tower: ResMut<Tower>, kept: Res<Kept>, mut said: Loca
 
 /// Write the tower out because the game is closing.
 ///
-/// # Every way out, not the one with a word
+/// Every way out, not the one with a word: `F10` writes an `AppExit` directly
+/// and the window's close button produces one from `bevy_window`, neither
+/// touching the `Quitting` flag — so ordering against `quit_requested` covers
+/// one exit in three.
 ///
-/// `quit` is a verb and it is *not* the only exit: `F10` writes an `AppExit`
-/// directly, the window's close button produces one from `bevy_window`, and
-/// neither touches the `Quitting` flag. Ordering this against `quit_requested`
-/// would therefore have covered one exit in three.
-///
-/// So it reads `AppExit` itself, in `Last`, which is the one place every route
-/// out has converged by. `quit`'s own §19 entry records the mirror-image bug —
-/// the first attempt checked the flag at `submit` time and did nothing.
+/// So it reads `AppExit` itself, in `Last`, the one place every route out has
+/// converged by. `quit`'s §19 entry records the mirror-image bug.
 pub(super) fn keep_on_the_way_out(
     leaving: MessageReader<AppExit>,
     mut tower: ResMut<Tower>,
@@ -126,23 +118,19 @@ pub(super) fn keep_on_the_way_out(
     keep(&mut tower, &kept, &mut said);
 }
 
-/// Write it, and complain **once** if it will not go.
+/// Write it, and complain once if it will not go.
 ///
-/// # Why once
+/// Once, because there is no `save` verb (§19): a player never asks for one and
+/// never sees one refused, so a silent failure is the session's work gone with
+/// nothing said. But a read-only directory fails all sixty attempts an hour,
+/// which is the noise §19 deleted the editor's per-save announcement over.
 ///
-/// There is no `save` verb (§19), so a player never asks for one and never sees
-/// one refused — which makes a silent failure the whole session's worth of work
-/// gone with nothing said. But a save is attempted every sixty ticks, and a
-/// read-only directory fails every one of them: a line per attempt would be
-/// sixty an hour, which is the same noise §19 deleted the editor's per-save
-/// announcement over.
-///
-/// One line, then quiet. `Local<bool>` rather than a resource because the two
-/// callers fail for the same reason and neither needs to know about the other.
+/// `Local<bool>` rather than a resource, because the two callers fail for the
+/// same reason and neither needs to know about the other.
 fn keep(tower: &mut Tower, kept: &Kept, said: &mut bool) {
-    // **The path this game came from**, never `save_path()` — see `Kept`. A path
-    // resolved here is a path resolved *after* a swap, which is how loading a
-    // second tower writes the first one into the second one's file.
+    // The path this game came from, never `save_path()` — see `Kept`. A path
+    // resolved here is resolved after a swap, which is how loading a second
+    // tower writes the first one into the second one's file.
     let Some(path) = kept.path() else {
         *said = false;
         return;
@@ -154,9 +142,9 @@ fn keep(tower: &mut Tower, kept: &Kept, said: &mut bool) {
     if !*said {
         *said = true;
         bevy::log::error!("the tower could not be written out: {error}");
-        // **And in voice, not only in the log.** §3 makes the record stream the
-        // output; a player never reads `tracing`, and with no `save` verb they
-        // have no reason to go looking for a failure they did not ask for.
+        // And in voice, not only in the log: §3 makes the record stream the
+        // output, a player never reads `tracing`, and with no `save` verb they
+        // have no reason to look for a failure they did not ask for.
         tower.say_save_failed();
     }
 }

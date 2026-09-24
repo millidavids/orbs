@@ -4,19 +4,14 @@
 //! is. All that is left is writing the cells out, and the only decisions here
 //! are how a glyph is encoded and what colour it takes.
 //!
-//! # Only what changed
+//! Only the differences are written: a full 120×45 repaint is 5,400 cells of
+//! escape sequences thirty times a second, which is nothing over a local pty
+//! and a visible smear over `ssh`. A shadow buffer holds what is on screen.
 //!
-//! A full 120×45 repaint is 5,400 cells of escape sequences thirty times a
-//! second. Over a local pty that is nothing; over `ssh` it is a visible smear.
-//! So a shadow buffer holds what is on screen and only the differences are
-//! written.
-//!
-//! **The diff key is `(glyph, ink)`, not `Cell`.** `Cell` derives `PartialEq`
-//! and comparing it would look right and be wrong in a way only this game's
-//! screens show: a **tint is a region**, so a cell can be byte-identical while
-//! the wash over it changed. The flask's `green+bone` band growing is exactly
-//! that — one `█` at a time, the same glyph, a different colour. Resolve first,
-//! then compare.
+//! The diff key is `(glyph, ink)`, not `Cell`, which derives `PartialEq` and
+//! would look right: a tint is a *region*, so a cell can be byte-identical
+//! while the wash over it changed. The flask's `green+bone` band growing is one
+//! `█` at a time, same glyph, new colour. Resolve first, then compare.
 
 use std::io::Write;
 
@@ -37,10 +32,8 @@ pub(crate) struct Screen {
     /// See [`crate::term::symbols_are_narrow`]. `false` swaps the at-risk glyphs
     /// for ASCII the terminal cannot disagree about.
     narrow: bool,
-    /// Whether the terminal must be wiped before the next draw.
-    ///
-    /// See [`Screen::resize`] — this is the half of a resize the buffer alone
-    /// cannot express.
+    /// Whether the terminal must be wiped before the next draw — the half of a
+    /// resize the buffer alone cannot express. See [`Screen::resize`].
     wipe: bool,
 }
 
@@ -54,9 +47,8 @@ impl Screen {
             cells: vec![BLANK; grid.area()],
             grid,
             narrow,
-            // The alternate screen arrives blank, so the opening frame needs no
-            // wipe — and paying for one would put a visible clear between
-            // entering it and the first paint.
+            // The alternate screen arrives blank, and a wipe here would put a
+            // visible clear between entering it and the first paint.
             wipe: false,
         }
     }
@@ -64,23 +56,14 @@ impl Screen {
     /// Forget everything, because the terminal is a different size or has been
     /// scribbled on.
     ///
-    /// **Every resize calls this.** The diff is addressed by `(col, row)`, so a
-    /// buffer sized for the old grid would write this frame's cells at last
-    /// frame's coordinates — which is not a smear but a scramble.
+    /// Every resize calls this: the diff is addressed by `(col, row)`, so a
+    /// buffer sized for the old grid writes this frame's cells at last frame's
+    /// coordinates.
     ///
-    /// # Resetting the buffer is only half of it
-    ///
-    /// The first version did just that, and it was wrong in the way a diff is
-    /// always wrong: **it told the truth about the buffer and a lie about the
-    /// screen.** Saying "every cell is blank" makes every cell the new frame
-    /// leaves blank compare *equal*, so it is skipped — and the glyph the
-    /// terminal is still showing there stays. Shrink a full screen and the
-    /// result is a scramble of two layouts, because only the cells that happen
-    /// to be non-blank get overwritten.
-    ///
-    /// So the terminal is wiped too, and then "everything is blank" is true of
-    /// both. The wipe is queued into the same flush as the redraw, so there is
-    /// no frame in between for anyone to see it empty.
+    /// The terminal is wiped too, because "every cell is blank" is a lie about
+    /// the screen: cells the new frame leaves blank compare equal and are
+    /// skipped while the old glyph is still showing. Queued into the same flush
+    /// as the redraw, so no frame in between is empty.
     pub(crate) fn resize(&mut self, grid: GridSize) {
         self.grid = grid;
         self.cells.clear();
@@ -98,9 +81,8 @@ impl Screen {
         if frame.size() != self.grid {
             self.resize(frame.size());
         }
-        // **In the same flush as the cells that follow.** A wipe on its own
-        // write would put one empty frame on screen, which is the flicker this
-        // whole shadow buffer exists to avoid.
+        // In the same flush as the cells that follow: a wipe on its own write
+        // would put one empty frame on screen.
         if std::mem::take(&mut self.wipe) {
             queue!(out, Clear(ClearType::All))?;
         }
@@ -118,11 +100,8 @@ impl Screen {
                 let Ok(col) = u16::try_from(col) else {
                     break;
                 };
-                // **Both side-tables, read per cell while blitting.** A cell can
-                // be byte-identical while the region over it changed — the
-                // flask's mixture band growing, or a spell line re-lexed after a
-                // keystroke — so a diff keyed on `Cell` alone would miss every
-                // frame of it.
+                // Both side-tables, read per cell: a cell can be byte-identical
+                // while the region over it changed.
                 let here = Pos::new(col, row);
                 let ink = theme::resolve(cell.style, frame.tint_at(here), frame.lit_at(here));
                 let glyph = self.glyph(cell.glyph);
@@ -145,9 +124,8 @@ impl Screen {
             }
         }
 
-        // **The real terminal cursor, from the Frame.** `orbs-render` keeps this
-        // off `Cell` for exactly this: it is what makes the input line work with
-        // the user's own line editing, and what a screen reader tracks.
+        // The real terminal cursor, which `orbs-render` keeps off `Cell` so the
+        // input line works with line editing and a screen reader can track it.
         if let Some(pos) = frame.cursor() {
             queue!(out, cursor::MoveTo(pos.col, pos.row), cursor::Show)?;
         } else {
@@ -169,45 +147,20 @@ impl Screen {
 /// An ASCII stand-in for a glyph a wide-ambiguous terminal would give two
 /// columns to.
 ///
-/// Only the symbols the painters actually use are listed. Anything not named
-/// here is left alone.
+/// Only the symbols the painters actually use are listed; anything else is left
+/// alone.
 ///
-/// # The borders and the bars are left out, and not for the reason once given
+/// The borders and the bars stay out although `─ │ ═ ║ ╔ ╗ ╚ ╝` and `█ ▓ ▒` all
+/// measure East Asian Ambiguous (only `░` is Neutral), on the bet that a
+/// terminal widening box drawing would break every full-screen program on the
+/// system. So the wide-ambiguous path is partial: `term::PROBE` firing means
+/// the symbols are safe, not the screen.
 ///
-/// This used to say box drawing and the block elements *"are Neutral or
-/// Ambiguous-but-universally-narrow"*. The first half is false: measured,
-/// `─ │ ═ ║ ╔ ╗ ╚ ╝` and `█ ▓ ▒` are **all** East Asian Ambiguous — only `░` is
-/// Neutral — so under `ambiguous = wide` every border rule, every meter bar and
-/// the whole boot logo take two columns while the 23 symbols below are swapped
-/// to one.
-///
-/// They stay out anyway, on the *second* half of that claim, which is the one
-/// that was doing the work: a terminal that widened box drawing would break
-/// every full-screen program on the system, so in practice they are drawn
-/// narrow even in that mode. That is an empirical bet rather than a property of
-/// the code page, and it is worth stating as one — swapping `─` for `-` would
-/// wreck the borders this exists to keep straight, and a half-substituted
-/// screen is worse than an honestly-unhandled one.
-///
-/// **So the wide-ambiguous path is partial**, and `term::PROBE` firing means the
-/// symbols are safe rather than that the screen is. A terminal that really does
-/// widen box drawing is not supported, and that is now written down.
-///
-/// # Every substitution is distinct, and that is §14
-///
-/// **The first version of this table collapsed three meanings into `.`**, and it
-/// is worth being specific about how bad that was. `loom.rs` draws a progression
-/// node as `•` taken, `○` open, `·` locked; `board.rs` draws a ward socket as
-/// `■` held, `·` loose, `•` aligned, `○` astray. Mapping `•` and `·` both to `.`
-/// made *taken* indistinguishable from *locked*, and *aligned* from *loose* — on
-/// the two surfaces whose entire content is those glyphs.
-///
-/// That is precisely the failure §14 forbids: **the glyph carries the identity**
-/// here, because the colour cannot. A fallback that merges two glyphs is worse
-/// than no fallback, because the row still lines up and nothing looks wrong.
-///
-/// So the map is **injective**, and `every_substitution_is_its_own_character`
-/// holds it that way — which is the test that was missing when this was written.
+/// Every substitution is distinct (§14): the glyph carries the identity where
+/// the colour cannot. The first version mapped `•` and `·` both to `.`, merging
+/// *taken* into *locked* on a surface made entirely of those glyphs, and
+/// invisibly — the row still lines up.
+/// `every_substitution_is_its_own_character` holds the map injective.
 const SUBSTITUTIONS: [(char, char); 24] = [
     // The rail's fault marker and its "this room is automated" arrow.
     ('‼', '!'),
@@ -219,9 +172,8 @@ const SUBSTITUTIONS: [(char, char); 24] = [
     ('♀', 'f'),
     ('♦', 'd'),
     ('♠', 's'),
-    // **The three states, kept three.** Filled, hollow, faint — a taken node
-    // from an open one from a locked one, and an aligned peg from an astray one
-    // from a loose socket.
+    // The three states, kept three: filled, hollow, faint — taken from open
+    // from locked, aligned from astray from loose.
     ('•', '+'),
     ('○', 'o'),
     ('·', '.'),
@@ -240,22 +192,15 @@ const SUBSTITUTIONS: [(char, char); 24] = [
     ('⌂', 'A'),
     ('⌐', '='),
     ('∟', 'L'),
-    // **Endless stock, and it was missing.** `Stock::label` draws `∞` for every
-    // inexhaustible pile, so `survey dispensary` prints three of them on an
-    // ordinary screen — and it is Ambiguous, so on the very terminal the probe
-    // exists to detect it takes two columns and shifts the row. `8` for the
-    // shape, and nothing else claims it.
+    // Endless stock, and it was missing: `Stock::label` draws `∞` for every
+    // inexhaustible pile, and it is Ambiguous, so it took two columns and
+    // shifted the row. `8` for the shape; nothing else claims it.
     ('∞', '8'),
 ];
 
 const fn narrowed(glyph: char) -> char {
-    // **The table and the test's copy of it are one thing now.** They were two
-    // literals a human kept aligned, and they had already drifted: the match had
-    // 23 arms and the array 21, so `⌐` and `∟` were covered by no test at all.
-    // That is precisely how the first version shipped `•` and `·` both mapping
-    // to `.`, collapsing *taken* into *locked* and *aligned* into *loose* — the
-    // defect the injectivity test exists to prevent, on arms the test could not
-    // see.
+    // One table, not two literals: as a match of 23 arms beside an array of 21,
+    // `⌐` and `∟` were covered by no test at all.
     let mut index = 0;
     while index < SUBSTITUTIONS.len() {
         if SUBSTITUTIONS[index].0 == glyph {
@@ -266,13 +211,11 @@ const fn narrowed(glyph: char) -> char {
     glyph
 }
 
-/// Every glyph the substitution table covers, for the tests below.
-///
-/// `●` is deliberately absent: it is **not in CP437**, so `Cell::new` replaces it
-/// with `?` before a frame ever reaches here (§19 records it being rejected for
-/// the progression tree). A stand-in for a glyph that cannot occur would be a
-/// row in a table nobody can reach.
 /// Every glyph the table covers — derived, not retyped.
+///
+/// `●` is deliberately absent: not in CP437, so `Cell::new` replaces it with `?`
+/// before a frame reaches here (§19). A stand-in for a glyph that cannot occur
+/// is a row nobody can reach.
 #[cfg(test)]
 fn substituted() -> Vec<char> {
     SUBSTITUTIONS.iter().map(|(from, _)| *from).collect()
@@ -280,9 +223,8 @@ fn substituted() -> Vec<char> {
 
 /// Set the terminal's pen to `ink`.
 ///
-/// `Attribute::Reset` first, because dim and bold are not opposites — SGR 22
-/// clears both and there is no "not dim" that leaves bold alone. Resetting is
-/// one sequence and cannot leave a cell wearing the previous run's weight.
+/// `Attribute::Reset` first, because dim and bold are not opposites: SGR 22
+/// clears both and there is no "not dim" that leaves bold alone.
 fn set_pen(out: &mut impl Write, ink: Ink) -> std::io::Result<()> {
     queue!(out, SetAttribute(Attribute::Reset))?;
     match ink.weight {
@@ -317,11 +259,10 @@ mod tests {
 
     /// A lit run reaches the wire as a colour.
     ///
-    /// **The end of the chain, tested end to end**, because every link in it is
-    /// somewhere else: `parser::lexeme` classifies, `sheet` registers the region,
-    /// `Frame` stores it, `theme` picks the colour and this writes it. A break
-    /// anywhere shows up as a spell drawn in the base hue, which is exactly what
-    /// a spell looked like before any of it existed — the failure is invisible.
+    /// End to end, because every link is somewhere else: `parser::lexeme`
+    /// classifies, `sheet` registers the region, `Frame` stores it, `theme`
+    /// picks the colour and this writes it. A break anywhere looks like a spell
+    /// before any of it existed.
     #[test]
     fn a_lit_run_is_written_in_its_own_colour() {
         let grid = GridSize::new(20, 3);
@@ -337,12 +278,9 @@ mod tests {
 
         let mut screen = Screen::new(grid, true);
         let written = drawn(&mut screen, &frame);
-        // **`38;5;13`, not `35`.** crossterm writes every named colour through
-        // the 256-colour form, so `Color::Magenta` is index 13 rather than the
-        // SGR 35 an ANSI table would predict. Worth pinning: an ad-hoc reader
-        // written against `3x` sees no colour here at all and reports the whole
-        // feature missing, which is what `scripts/tui.sh ink` exists to stop
-        // anyone doing by hand — including me, ten minutes ago.
+        // `38;5;13`, not `35`: crossterm writes every named colour through the
+        // 256-colour form, so a reader written against `3x` sees no colour at
+        // all and reports the feature missing.
         assert!(
             written.contains("\x1b[38;5;13m"),
             "a control word reached the terminal with no colour on it:\n{written:?}",
@@ -351,9 +289,8 @@ mod tests {
 
     #[test]
     fn an_unchanged_frame_writes_no_cells() {
-        // The whole point of the shadow buffer. A second identical frame should
-        // cost a cursor placement and nothing else — over `ssh` this is the
-        // difference between a readable game and a smear.
+        // A second identical frame costs a cursor placement and nothing else —
+        // over `ssh`, a game rather than a smear.
         let mut screen = Screen::new(GridSize::new(20, 3), true);
         let frame = frame_saying("clarity");
 
@@ -369,10 +306,8 @@ mod tests {
 
     #[test]
     fn a_changed_tint_redraws_a_cell_whose_glyph_did_not_change() {
-        // **The trap this file exists to avoid.** Tint is a region, so the
-        // flask's mixture band changes colour under an unchanged `█`. A diff
-        // keyed on `Cell` would call that no change and leave the old colour on
-        // screen for ever.
+        // Tint is a region, so the flask's band changes colour under an
+        // unchanged `█` and a `Cell` diff leaves the old colour on screen.
         use orbs_render::{Tint, Wash};
 
         let grid = GridSize::new(20, 3);
@@ -399,15 +334,10 @@ mod tests {
 
     #[test]
     fn a_resize_wipes_what_the_new_frame_leaves_blank() {
-        // **The case the first test of this missed.** It grew a nearly-empty
-        // screen, where every cell that mattered was non-blank and therefore
-        // redrawn anyway. Shrinking a *full* one is the failure: the buffer says
-        // "all blank", so every cell the new frame leaves blank compares equal
-        // and is skipped — while the terminal is still showing the old glyph.
-        //
-        // Asserted on the wipe rather than on the cells, because that is the
-        // half the buffer cannot express: no amount of per-cell writing can undo
-        // a glyph nobody writes over.
+        // Shrinking a *full* screen is the failure, and growing a sparse one
+        // misses it: the buffer says "all blank", so cells the new frame leaves
+        // blank compare equal and are skipped. Asserted on the wipe, because no
+        // per-cell writing undoes a glyph nobody writes over.
         let wide = GridSize::new(40, 3);
         let mut screen = Screen::new(wide, true);
 
@@ -434,8 +364,8 @@ mod tests {
 
     #[test]
     fn a_resize_forgets_everything() {
-        // The buffer is addressed by (col, row). Carrying it across a resize
-        // would write this frame's cells at last frame's coordinates.
+        // Addressed by (col, row), so a carried buffer writes this frame's
+        // cells at last frame's coordinates.
         let mut screen = Screen::new(GridSize::new(20, 3), true);
         let frame = frame_saying("clarity");
         let _ = drawn(&mut screen, &frame);
@@ -455,8 +385,7 @@ mod tests {
 
     #[test]
     fn a_wide_terminal_gets_glyphs_it_can_draw_in_one_column() {
-        // Every substitution is one column, or the table is making the problem
-        // it exists to solve.
+        // Or the table makes the problem it exists to solve.
         for glyph in substituted() {
             let swapped = narrowed(glyph);
             assert!(
@@ -469,11 +398,9 @@ mod tests {
 
     #[test]
     fn the_width_probe_is_a_glyph_this_table_substitutes() {
-        // **The two halves of the fallback, tied together.** `term::PROBE` asks
-        // the terminal a question and this table is the only thing that acts on
-        // the answer — so a probe glyph absent from here would fire correctly
-        // and change nothing on screen, which is the same dead path as a probe
-        // that cannot fire at all, arriving from the other side.
+        // `term::PROBE` asks the question and this table is the only thing that
+        // acts on the answer, so a probe glyph absent from here fires correctly
+        // and changes nothing on screen.
         let probe = crate::term::PROBE;
         assert!(
             substituted().contains(&probe),
@@ -485,12 +412,9 @@ mod tests {
 
     #[test]
     fn every_substitution_is_its_own_character() {
-        // **§14, and the test that was missing when this table was written.**
-        // Two glyphs sharing a stand-in merges two meanings, and does it
-        // invisibly: the row still lines up and nothing looks wrong. The first
-        // version sent `•` and `·` both to `.`, which made a *taken*
-        // progression node identical to a *locked* one and an *aligned* ward peg
-        // identical to a *loose* socket.
+        // §14. Two glyphs sharing a stand-in merges two meanings invisibly, the
+        // row still lining up: `•` and `·` both went to `.`, making a *taken*
+        // node identical to a *locked* one.
         let mut seen: Vec<char> = Vec::new();
         for glyph in substituted() {
             let swapped = narrowed(glyph);
@@ -504,12 +428,9 @@ mod tests {
 
     #[test]
     fn the_states_a_surface_is_made_of_stay_distinct() {
-        // The general rule above, aimed at the two surfaces that are *entirely*
-        // these glyphs — so a future edit to the table is checked against what
-        // the glyphs actually mean rather than only against each other.
-        //
-        // `loom.rs`: taken / open / locked. `board.rs`: held / loose / aligned
-        // / astray.
+        // The rule above aimed at the two surfaces made *entirely* of these
+        // glyphs. `loom.rs`: taken / open / locked. `board.rs`: held / loose /
+        // aligned / astray.
         let weave = ['\u{2022}', '\u{25cb}', '\u{b7}'].map(narrowed);
         assert_eq!(
             weave.iter().collect::<std::collections::HashSet<_>>().len(),
@@ -527,9 +448,8 @@ mod tests {
 
     #[test]
     fn the_wards_six_sigils_stay_six() {
-        // §14 again, and `board.rs` says it outright: *"six glyphs, never six
-        // colours"*. A terminal that gives them two columns each still has to
-        // hand back six things a player can tell apart.
+        // `board.rs`: *"six glyphs, never six colours"*. A terminal that
+        // widens them still has to hand back six distinguishable things.
         let sigils = orbs_render::SIGILS.map(narrowed);
         assert_eq!(
             sigils
@@ -543,8 +463,7 @@ mod tests {
 
     /// Reconstruct the grid from what was written to the terminal.
     ///
-    /// Follows `MoveTo` and `Print` and ignores every colour sequence, which is
-    /// exactly the half of the output this is asserting about.
+    /// Follows `MoveTo` and `Print` and ignores every colour sequence.
     fn as_seen(written: &str, grid: GridSize) -> Vec<String> {
         let mut cells = vec![' '; grid.area()];
         let (mut col, mut row) = (0u16, 0u16);
@@ -592,14 +511,10 @@ mod tests {
 
     #[test]
     fn the_terminal_shows_the_frame_and_nothing_else() {
-        // **The boundary claim for this frontend, as an assertion.** Rule 2 says
-        // a frontend decides only how a cell is drawn — so every glyph the Frame
-        // holds must reach the terminal at the Frame's own coordinates, and no
-        // glyph the Frame does not hold may appear.
-        //
-        // It is checked against `Frame::to_text`, which is `orbs-render`'s own
-        // reading of the same buffer. A rasteriser that agreed with itself and
-        // not with that would be the whole failure this exists to catch.
+        // Rule 2 as an assertion: every glyph the Frame holds reaches the
+        // terminal at the Frame's own coordinates, and no other glyph appears.
+        // Checked against `Frame::to_text`, so a rasteriser cannot pass by
+        // agreeing only with itself.
         use orbs_shell::{Bench, Line, Linear, Offered, PaneTransition, Panel, Reveal, Screen};
 
         let grid = GridSize::new(120, 45);
@@ -609,9 +524,8 @@ mod tests {
             sim.step();
         }
 
-        // **The same constructor the running loop uses**, so this test cannot
-        // be checking a frame drawn in a mode the terminal is never in. The
-        // three open-coded copies of this disagreed on exactly that field.
+        // The running loop's own constructor, so this cannot check a frame
+        // drawn in a mode the terminal is never in.
         let screen = Screen::windowless(grid, None);
         let mut panel = Panel::default();
         panel.refresh(&sim);
@@ -637,12 +551,12 @@ mod tests {
                 weaving: None,
                 walking: false,
                 menuing: None,
+                reading_manual: None,
             },
         );
 
         let mut out = Vec::new();
-        // `narrow`, so no substitution runs: this test is about placement, and
-        // the swap table has a test of its own.
+        // `narrow`, so no substitution runs: this is about placement.
         super::Screen::new(grid, true)
             .draw(&frame, &mut out)
             .expect("a Vec cannot fail");
@@ -662,8 +576,8 @@ mod tests {
 
     #[test]
     fn the_substitutions_are_drawable_by_the_bevy_build_too() {
-        // A stand-in outside the CP437 repertoire would be a glyph the *other*
-        // frontend cannot draw, which is the boundary running backwards.
+        // A stand-in outside CP437 is a glyph the *other* frontend cannot draw,
+        // which is the boundary running backwards.
         for glyph in ['‼', '►', '☼', '♀', '♦', 'Ω', '√', '→'] {
             assert!(orbs_render::is_renderable(narrowed(glyph)));
         }

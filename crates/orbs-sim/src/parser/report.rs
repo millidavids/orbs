@@ -5,21 +5,15 @@
 //! downstream — the scrollback pane, a screen reader, `sift`, the balance
 //! harness — reads what this writes, and none of them reads a rendered string.
 //!
-//! # No prose lives here
+//! No prose lives here. Rule 6 and §12 put authored prose in hot-reloadable
+//! content files, so this emits only facts already in the [`Resolution`] — a
+//! canonical command form, a verb name, the category a slot wants. The sentence
+//! around them is composed by a content file from these fields.
 //!
-//! Rule 6 and §12's second mitigation put all authored prose in hot-reloadable
-//! content files, never in Rust. So this module emits **only facts already in
-//! the [`Resolution`]** — a canonical command form, a verb name, the category a
-//! slot wants. The sentence wrapped around them (*"did you mean"*, *"I need a
-//! file"*) is composed by a content file in Phase 1, from these fields.
-//!
-//! # Every record says which of these it is
-//!
-//! [`FieldName::Outcome`] is not decoration. A numbered disambiguation prompt is
-//! **selectable** — §6 has the player answer it with a number — and a suggestion
-//! list is not; a forced echo needs a correction affordance and a clear one does
-//! not. All four look alike as text, so a view that had only the text could not
-//! draw any of those differences.
+//! Every record says which of these it is, and [`FieldName::Outcome`] is not
+//! decoration: a numbered disambiguation prompt is selectable where a suggestion
+//! list is not, and a forced echo needs a correction affordance where a clear
+//! one does not. All four look alike as text.
 //!
 //! | Resolution | Records | `Outcome` |
 //! |---|---|---|
@@ -46,9 +40,8 @@ use crate::content::Prose;
 /// carry it and the orb cannot say *"I do not know that word"* without naming
 /// the word, so it is threaded in rather than reconstructed.
 ///
-/// Always emits **at least one record**: §6 forbids a bare error, and a parser
-/// that resolved nothing and suggested nothing would otherwise produce silence —
-/// the one outcome the design rules out.
+/// Always emits at least one record: §6 forbids a bare error, and a parser that
+/// resolved nothing and suggested nothing would otherwise produce silence.
 ///
 /// Roles stay [`Role::Normal`](orbs_render::Role) throughout. The accent triad
 /// is danger, cost, and success (§4), and a parser needing one more word is none
@@ -61,11 +54,10 @@ use crate::content::Prose;
 pub fn report(input: &str, resolution: &Resolution, prose: &Prose, records: &mut Records) {
     match resolution {
         Resolution::Resolved { intent, confidence } => {
-            // **`Divined` draws as `Forced` does, on purpose.** Both mean *the
-            // orb acted on its best reading and invites correction*, which is
-            // one fact and deserves one marker — `Outcome` is a closed six with
-            // `markers_are_distinct` over it, and a seventh glyph would teach a
-            // player a second symbol for something they already understand.
+            // `Divined` draws as `Forced` does, on purpose: both mean *the orb
+            // acted on its best reading and invites correction*, which is one
+            // fact and deserves one marker. A seventh glyph would teach a second
+            // symbol for something the player already understands.
             let outcome = match confidence {
                 Confidence::Clear => Outcome::Resolved,
                 Confidence::Forced | Confidence::Divined => Outcome::Forced,
@@ -142,12 +134,12 @@ pub fn report(input: &str, resolution: &Resolution, prose: &Prose, records: &mut
         // (rule 6); §6 forbids a bare error, and "I do not know that word" would
         // be a lie about a word the game taught next door.
         Resolution::Elsewhere { verb } => {
-            // **And it names the fixture, which is the other half of the answer.**
-            // *"there is nothing here to wander with"* says the verb is real and
-            // does not apply, which satisfies §6 — but a player who has been told
-            // *"there is no stacks here to wander with"* has been told where to go.
-            // Drawn from the content by `tower::fixture_of`, so a new domain's
-            // refusal reads correctly the day its branch is authored.
+            // And it names the fixture, the other half of the answer. *"there is
+            // nothing here to wander with"* says the verb is real and does not
+            // apply, which satisfies §6; *"there is no stacks here to wander
+            // with"* tells the player where to go. Drawn from the content by
+            // `tower::fixture_of`, so a new domain reads correctly the day its
+            // branch is authored.
             let (key, fixture) = match crate::tower::fixture_of(*verb) {
                 Some(fixture) => ("verb_needs_fixture", fixture),
                 None => ("verb_elsewhere", ""),

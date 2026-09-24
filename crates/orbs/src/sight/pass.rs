@@ -27,9 +27,9 @@ use super::settings::{SightUniform, Vision};
 
 /// Hand the setting to the render world.
 ///
-/// **Reads [`Vision`] and nothing else.** There is no path from here to
-/// `CrtSettings`, which is what makes "the tube cannot switch the accommodation
-/// off" a property of the wiring rather than a promise in a comment.
+/// Reads [`Vision`] and nothing else. There is no path from here to
+/// `CrtSettings`, which makes "the tube cannot switch the accommodation off" a
+/// property of the wiring rather than a promise in a comment.
 pub(super) fn extract(vision: Extract<Res<Vision>>, mut commands: Commands) {
     commands.insert_resource(ExtractedSight(SightUniform::new(vision.0)));
 }
@@ -126,11 +126,10 @@ pub(super) fn prepare(
     let Some(extracted) = extracted else {
         return;
     };
-    // **Skipped for the same reason the pass is.** `sight_pass` early-returns
-    // when the setting changes nothing, so uploading in that case buys a buffer
-    // write per frame for a value nothing reads — sixty a second, for every
-    // player who has not asked for an accommodation. The pass's own guard is
-    // what keeps the picture right; this is what keeps the ordinary case free.
+    // Skipped for the same reason the pass is: `sight_pass` early-returns when
+    // the setting changes nothing, so uploading then buys a buffer write per
+    // frame for a value nothing reads. The pass's guard keeps the picture right;
+    // this keeps the ordinary case free.
     if !extracted.0.wanted() {
         return;
     }
@@ -148,10 +147,10 @@ pub(super) fn sight_pass(
     uniform: Res<SightUniformBuffer>,
     mut ctx: RenderContext,
 ) {
-    // **Skipped when it would change nothing.** A pass that always ran would
-    // cost a fullscreen ping-pong on every frame for every player, to multiply
-    // by an identity. This is the one place the accommodation is allowed to be
-    // conditional, because the condition is its own setting and nothing else's.
+    // Skipped when it would change nothing: a pass that always ran would cost a
+    // fullscreen ping-pong every frame for every player, to multiply by an
+    // identity. The one place the accommodation may be conditional, because the
+    // condition is its own setting and nothing else's.
     let Some(extracted) = extracted else {
         return;
     };

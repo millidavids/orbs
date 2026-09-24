@@ -1,11 +1,8 @@
 //! Which verb runs what, and the two records every verb can need.
 //!
 //! Registration and dispatch only. The bodies live beside their concern —
-//! [`pipeline`] for §10.1's brewing loop,
-//! [`navigate`] for §7's places,
-//! [`files`] for §3's log — because this file is the one every
-//! phase must edit, and a merge between a brewing change and a log change should
-//! not conflict for a reason that is not semantic.
+//! [`pipeline`] for §10.1's brewing loop, [`navigate`] for §7's places,
+//! [`files`] for §3's log — because this is the file every phase must edit.
 
 use bevy_ecs::prelude::*;
 use orbs_render::{FieldName, RecordKind, Role};
@@ -20,9 +17,9 @@ use super::{files, navigate, pipeline, recall, scribe};
 
 /// The name the scrollback answers to.
 ///
-/// §3: unlogged output is forbidden, so the record stream *is* the log. Giving
-/// it a filename is not a debugging affordance — it is the same object the
-/// player will `peruse` and pipe once the filesystem exists, reachable early.
+/// §3: unlogged output is forbidden, so the record stream *is* the log. The
+/// filename is not a debugging affordance — it is the same object the player
+/// will `peruse` and pipe.
 pub const LOG: &str = "orb.log";
 
 /// The most ticks one `meditate` may pass.
@@ -35,8 +32,8 @@ pub const MAX_MEDITATE: u64 = 3600;
 /// Run everything the player queued since the last tick.
 ///
 /// Exclusive: a command reads and writes whatever its domain touches, and
-/// enumerating that as system parameters now would be a guess about domains that
-/// do not exist yet.
+/// enumerating that as system parameters would be a guess about domains that do
+/// not exist yet.
 pub fn run_pending(world: &mut World) {
     let queued = world.resource_mut::<Pending>().drain();
     for item in queued {
@@ -63,14 +60,11 @@ pub fn run_pending(world: &mut World) {
 
 /// Run one resolved command, from wherever the caller is standing.
 ///
-/// **The script runner's door into the same dispatch a typed line takes.** §13
-/// is explicit that if the live game and the CLI harness diverged *"we would not
-/// find out until Phase 11"*, and a script with its own copy of any verb is that
-/// divergence with an extra step. It does not go through
-/// [`Pending`]: that queue is drained by the `commands`
-/// schedule which runs **before** the one the runner is in, so a script routed
-/// through it would manage exactly one instruction per tick whatever its budget
-/// said.
+/// The script runner's door into the same dispatch a typed line takes: a
+/// script with its own copy of any verb is §13's live-game/harness divergence.
+/// Not through [`Pending`], which the `commands` schedule drains *before* the
+/// one the runner is in — a script routed that way would manage one instruction
+/// per tick whatever its budget said.
 pub fn execute_one(intent: &Intent, world: &mut World) {
     execute(intent, world, false);
 }
@@ -79,10 +73,9 @@ pub fn execute_one(intent: &Intent, world: &mut World) {
 /// (§6); a spell's line never is, because the player saw its reading when it
 /// was written.
 fn execute(intent: &Intent, world: &mut World, divined: bool) {
-    // **Any other word answers *no* to a pending `quit`.** The question lasts
-    // exactly one line, so a `quit` typed and thought better of cannot end a
-    // session three commands later. `quit` itself is excluded because it is the
-    // *yes* — see `quit::Quitting`.
+    // Any other word answers *no* to a pending `quit`: the question lasts one
+    // line, so a `quit` thought better of cannot end a session three commands
+    // later. `quit` itself is the *yes* — see `quit::Quitting`.
     if intent.verb != Verb::Quit {
         world.resource_mut::<super::quit::Quitting>().never_mind();
     }
@@ -137,37 +130,16 @@ fn execute(intent: &Intent, world: &mut World, divined: bool) {
 
 /// Whether the orb does this verb's work yet, or only says it heard.
 ///
-/// Lives beside `execute` rather than on [`Verb`] because this *is* the dispatch
-/// in that function, read as data — the parser knows the whole §6.1 vocabulary
-/// and should keep knowing it, while what the world can currently act on is a
-/// fact about this module and changes as phases land.
+/// Beside `execute` rather than on [`Verb`] because this *is* that function's
+/// dispatch read as data: the parser knows the whole §6.1 vocabulary, while
+/// what the world can act on is a fact about this module. Written out rather
+/// than probed, because a match arm is not data;
+/// `a_dark_verb_only_acknowledges_and_a_live_one_does_not` catches the drift.
 ///
-/// Written out rather than probed, because a match arm is not data. The
-/// disagreement it invites is caught by
-/// `a_dark_verb_only_acknowledges_and_a_live_one_does_not`, which drives all
-/// sixteen through a real [`Sim`](crate::Sim) and fails the moment the two drift
-/// apart.
+/// §15's scaffold tutorial reads it: naming a verb that only acknowledges walks
+/// a tester into a dead end.
 ///
-/// # Why anything reads this
-///
-/// §15's scaffold tutorial names the vocabulary so the gate measures the parser
-/// rather than a tester's guesswork. Naming a verb that only acknowledges would
-/// walk that tester straight into a **dead end** — the metric §15 calls more
-/// important than the raw resolution rate — so the report names what works, and
-/// this is where "works" is written down.
-///
-/// One of the six was worse than a dead end. With no scripts in scope `bind`'s
-/// only slot was unfillable, and the documented `find`/`bind` collision in the
-/// parser's vocabulary table then handed the line to `sift` unopposed: `bind
-/// night_watch` searched the session log and reported success. That is fixed by
-/// there being scripts to name, not by this list.
-///
-/// # Live is not the same as available
-///
-/// [`is_gated`] is the second question, and `bind` is the first verb to need it:
-/// it works, and it refuses until the tower has earned somewhere to put a spell.
-/// The scaffold asks both, because a word that can only refuse is the dead end
-/// this list exists to keep off it.
+/// Live is not the same as available — [`is_gated`] is the second question.
 #[must_use]
 pub const fn is_live(verb: Verb) -> bool {
     matches!(
@@ -190,108 +162,84 @@ pub const fn is_live(verb: Verb) -> bool {
             | Verb::Recall
             | Verb::Scribe
             | Verb::Invoke
-            // **Live, and gated.** Working and being *available* are different
-            // questions now: `bind` does everything it will ever do, and refuses
-            // until the tower has earned the concentration to hold a spell. See
-            // [`is_gated`], which is what keeps it off the boot report until it
-            // can do something.
+            // Live, and gated: `bind` does everything it will ever do, and
+            // refuses until the tower has earned the concentration to hold a
+            // spell. [`is_gated`] keeps it off the boot report until then.
             | Verb::Bind
             | Verb::Research
             | Verb::Purge
             | Verb::Verify
-            // **The one word whose whole reason for existing is being found.**
             // A verb that makes long output readable, left off the list a cold
-            // launch teaches from, would be exactly the affordance-nobody-can-
-            // discover problem it was added to solve — one level up.
+            // launch teaches from, is itself the undiscoverable affordance it
+            // was added to solve.
             | Verb::Unfurl
-            // **The way out has to be offered everywhere**, and for a stronger
-            // reason than the rest of this list: a player who cannot find how to
-            // stop is not stuck in a room, they are stuck in the game. It is
-            // also the only verb here whose absence a player discovers by
-            // reaching for the window's close button.
+            // The way out has to be offered everywhere: a player who cannot
+            // find how to stop is stuck in the game rather than in a room.
             | Verb::Quit
-            // **Beside `quit` for the same reason, and it is not the same word.**
-            // The menu is where a game is chosen, so a player who cannot reach
-            // it is stuck with the one they are in.
+            // Beside `quit`, and not the same word: the menu is where a game is
+            // chosen, so a player who cannot reach it is stuck with the one
+            // they are in.
             | Verb::Menu
-            // **Live and never gated**, unlike `bind` below. At experience 0 it
-            // shows the first threshold named and nothing taken, which is the
-            // onboarding value rather than a dead end — a new player learns what
-            // the work is *for*. There is no total at which it can only refuse.
+            // Live and never gated, unlike `bind`: at experience 0 it
+            // shows the first threshold named and nothing taken, which teaches
+            // a new player what the work is *for*.
             | Verb::Weave
             | Verb::Follow
             // Live, and it refuses in two states rather than being gated by
-            // one: there are no stacks here, or none open yet. Both
-            // name the way forward, so neither is the dead end this list
-            // exists to keep off the scaffold.
+            // one: no stacks here, or none open yet. Both name the way forward.
             | Verb::Wander
-            // The lens's two. Each refuses in voice where it cannot work — no
-            // ward open, a socket that is not one, a sigil that is not one —
-            // and every refusal names the way forward, which is the test this
-            // list applies rather than "does it always succeed".
+            // The lens's two. Each refuses in voice where it cannot work and
+            // names the way forward, which is this list's test rather than
+            // "does it always succeed".
             | Verb::Probe
             | Verb::Dial
-            // The sanctum's two, on the same reading as the lens's. `muster`
-            // refuses where there is no pylon and where a course is already
-            // drawn; `haul` refuses three ways, and the interesting one — a
-            // greater ward onto a lesser — *is* the puzzle rather than a dead end.
+            // The sanctum's two, on the same reading. `haul`'s interesting
+            // refusal — a greater ward onto a lesser — *is* the puzzle.
             | Verb::Muster
             | Verb::Haul
-            // The menagerie's two. `summon` refuses only where there is no
-            // circle; `limn` refuses where no beast waits and where a word is not
-            // a glyph or a humour. **A balk is not a refusal** — it is the circle
-            // answering wrongly, which is the puzzle rather than a dead end,
-            // exactly as a refused haul is.
+            // The menagerie's two, on the same reading. A balk is not a
+            // refusal — it is the circle answering wrongly, which is the
+            // puzzle, exactly as a refused haul is.
             | Verb::Summon
             | Verb::Limn
-            // The bailey's five, on the same reading. `defend` refuses where
-            // there is no rampart and where a siege is already running; the
-            // other four refuse where none is. **A round that goes badly is not
-            // a refusal** — it is the siege going badly, which is the puzzle
-            // rather than a dead end, exactly as a balked call is.
+            // The bailey's five, on the same reading. A round that goes badly
+            // is not a refusal — it is the siege going badly.
             | Verb::Defend
             | Verb::Deploy
             | Verb::Quaff
             | Verb::Hold
             | Verb::Pledge
-            // ...and `petition`, which refuses where there is no rampart, where
-            // the road is unarmed, where the tail is already at its floor and
-            // where the standing will not cover it. **Being unable to afford it
-            // is not a dead end** — it is a price, and the sentence names both
-            // numbers so it can be planned around.
+            // ...and `petition`. Being unable to afford it is a price, not a
+            // dead end, and the sentence names both numbers.
             | Verb::Petition
-            // The forge's three. `imbue` refuses where there is no lattice and
-            // where one is already open; the other two refuse where none is.
-            // **A lattice that does not light is not a refusal** — it is the
-            // puzzle going badly, which is the whole of what the domain is.
+            // The forge's three. A lattice that does not light is the puzzle
+            // going badly, not a refusal.
             | Verb::Imbue
             | Verb::Snap
             | Verb::Anneal
-            // The satchel's push. It refuses where there is no satchel and where
-            // one is full — and **full is not a dead end**: it is a producer
-            // that has outrun its consumer, which is the pipeline telling you
-            // something true about itself rather than a way to get stuck.
+            // The satchel's push. Full is a producer that has outrun its
+            // consumer, which is the pipeline saying something true about
+            // itself.
             | Verb::Queue
     )
 }
 
 /// Every verb worth offering where the player is standing.
 ///
-/// **One filter, shared.** The boot report and `recall`'s overview list the same
-/// thing for the same reasons, and two copies of *live, ungated, in scope* is two
-/// chances for the tutorial a player reads at launch to disagree with the manual
-/// they ask for a minute later.
+/// One filter, shared: the boot report and `recall`'s overview list the same
+/// thing, and two copies of *live, ungated, in scope* is two chances for them
+/// to disagree.
 ///
-/// Three exclusions, each of them the same rule one step further in — a word
-/// that can only refuse is worse than a word that is absent:
+/// Three exclusions, because a word that can only refuse is worse than a word
+/// that is absent:
 ///
 /// - not [`is_live`]: nobody has built it, so it acknowledges and does nothing.
 /// - [`is_gated`]: it works and the tower has not earned it, like `bind` at
 ///   concentration 0.
 /// - not offered by the [`Scene`](crate::parser::Scene): a per-instrument verb
-///   whose instrument is elsewhere. At the tower root this is exactly the
-///   `!is_operation()` the boot report used to hardcode, because an empty scene
-///   offers no operations — so generalising it changed no list.
+///   whose instrument is elsewhere. At the tower root this is the
+///   `!is_operation()` the boot report used to hardcode, so generalising it
+///   changed no list.
 #[must_use]
 pub fn offered(world: &World) -> Vec<Verb> {
     let scene = world.resource::<crate::parser::Scene>();
@@ -303,22 +251,15 @@ pub fn offered(world: &World) -> Vec<Verb> {
 
 /// The verbs a spell written for `domain` may actually use.
 ///
-/// # Two filters, and both are the spell's rather than the player's
+/// Two filters, both the spell's rather than the player's. [`offered`] reads
+/// the scene of the room the player stands in; a spell is written *for* a
+/// domain and runs there however far away it is edited from, so the scene is
+/// built for that domain. The second is `may_issue` — nine verbs are refused
+/// inside a spell, and a listing offering them is worse than a short one.
 ///
-/// [`offered`] answers *what can be typed here*, reading the scene of whichever
-/// room the player is standing in. A spell is written **for** a domain and runs
-/// there however far away it is being edited from, so the scene is built for
-/// that domain instead — `grind` belongs to a laboratory spell read from the
-/// archive.
-///
-/// The second filter is `may_issue`, and without it the guide would teach a line
-/// that cannot work: `attend`, `meditate`, `scribe`, `undo`, `bind`, `unfurl`,
-/// `weave`, `wander` and `quit` are refused inside a spell, so a listing offering
-/// them is worse than one that is short.
-///
-/// An unknown domain answers with the verbs that need no fixture, which is the
-/// honest floor: those work anywhere, and inventing a room's vocabulary for a
-/// name the tower does not have would be a guide making things up.
+/// An unknown domain answers with the verbs that need no fixture: those work
+/// anywhere, and inventing a room's vocabulary would be a guide making things
+/// up.
 #[must_use]
 pub fn spell_vocabulary(world: &World, domain: &str) -> Vec<Verb> {
     let scene = super::navigate::find_domain(world, domain)
@@ -333,16 +274,14 @@ pub fn spell_vocabulary(world: &World, domain: &str) -> Vec<Verb> {
 
 /// What may come next in a line of a spell written for `domain`.
 ///
-/// [`expect`](crate::parser::expect) against the scene of the domain the **file**
-/// belongs to, which is not always the room the player is standing in — the same
-/// call [`spell_vocabulary`] makes, and for the same reason: a laboratory spell
-/// offers `grind` however far away it is being edited from.
+/// [`expect`](crate::parser::expect) against the scene of the domain the
+/// *file* belongs to, not the room the player is standing in — a laboratory
+/// spell offers `grind` however far away it is being edited from.
 ///
 /// The scene is built here rather than handed out, because `scene_at` rebuilds
-/// every recipe, topic and node and is not something a painter should be able to
-/// reach for. An unknown domain answers against an empty scene, which offers the
-/// language's own words and no verbs — the honest floor, and the same one
-/// [`spell_vocabulary`] takes.
+/// every recipe, topic and node and is not something a painter should reach
+/// for. An unknown domain answers against an empty scene, which offers the
+/// language's own words and no verbs.
 #[must_use]
 pub fn spell_expect(
     world: &World,
@@ -355,10 +294,9 @@ pub fn spell_expect(
     let scene = at
         .map(|node| crate::tower::scene_at(world, node))
         .unwrap_or_default();
-    // **The same `groups_at` `recall scripting` prints**, so the guide and the
-    // manual name the same sets. Deriving them from the scene instead would
-    // offer the room's contents, which is a different question with no right
-    // answer in it.
+    // The same `groups_at` `recall scripting` prints, so the guide and the
+    // manual name the same sets. From the scene it would offer the room's
+    // contents, which is a different question.
     let sets = at.map(|node| crate::tower::groups_at(world, node));
     crate::parser::expect(
         line,
@@ -375,14 +313,10 @@ pub fn spell_expect(
 
 /// Whether `verb` works but is not available *yet*.
 ///
-/// The companion to [`is_live`], and the difference between *"nobody built
-/// this"* and *"you have not earned it"*. Both keep a word off §15's scaffold
-/// list and for the same reason — a tutorial that names a verb which can only
-/// refuse spends the gate's most important metric, the dead-end rate, on
-/// something the player cannot act on.
+/// [`is_live`]'s companion: the difference between *"nobody built this"* and
+/// *"you have not earned it"*. Both keep a word off §15's scaffold list.
 ///
-/// **A question about the world, so not `const`.** The gate moves: `bind` is
-/// unavailable at concentration 0 and available for ever after, and the boot
+/// A question about the world, so not `const`: the gate moves, and the boot
 /// report is written before a player has earned anything.
 #[must_use]
 pub fn is_gated(verb: Verb, world: &World) -> bool {
@@ -390,10 +324,8 @@ pub fn is_gated(verb: Verb, world: &World) -> bool {
         // §11.5's turn: the tower is worked entirely by hand until the orb has
         // somewhere to put a spell.
         Verb::Bind => tower::concentration(world) == 0,
-        // §8's channel is bought at the loom (`satchel_1`). Off every listing
-        // until it is, exactly as `bind` is — a word the boot report teaches and
-        // the tower then refuses is the affordance-that-does-not-work shape §19
-        // records shipping once.
+        // §8's channel is bought at the loom (`satchel_1`), so it is off every
+        // listing until then, exactly as `bind` is.
         Verb::Queue => !tower::holds(world, tower::Grant::Satchel),
         _ => false,
     }
@@ -420,34 +352,28 @@ fn meditate(intent: &Intent, world: &mut World) {
 
 /// Report what the world currently is.
 ///
-/// Every value here belongs to a subsystem that until now had no way of being
-/// seen from the game: the tick and seed are the determinism spine, and drawing
-/// them as a table is the record model doing its job in the binary rather than
-/// in an example.
+/// Every value here belongs to a subsystem that otherwise has no way of being
+/// seen from the game — the tick and seed are the determinism spine.
 fn status(world: &mut World) {
     let tick = world.resource::<Tick>().get();
     let seed = world.resource::<Rngs>().master_seed();
     let logged = world.resource::<Scrollback>().records().len();
     let queued = world.resource::<Pending>().len();
-    // §11.5's two progression numbers, and the only place they are *both*
-    // readable. `concentration` is derived from `experience`, so the pair is one
-    // fact twice — which is the point of showing them together: a player looking
-    // at 12 wants to know what 16 buys.
+    // §11.5's two progression numbers, and the only place both are readable.
+    // `concentration` is derived from `experience`: a player looking at 12
+    // wants to know what 16 buys.
     let earned = world.resource::<tower::Experience>().get();
     let held = tower::concentration(world);
-    // §11.5's second number, and the only one that can fall. It sits beside
-    // experience because the pair is the whole of what the work is worth: one
-    // buys capability and stays bought, the other is standing and can be lost.
+    // §11.5's second number, and the only one that can fall. One buys
+    // capability and stays bought; the other is standing and can be lost.
     let known = world.resource::<tower::Renown>().get();
     // §11.5's mana, and its ceiling — which the Ley Line's `pool` and `floor`
-    // raise. Nothing else on screen said the pool's size outside a siege
-    // board, and a grant nobody can see does not exist.
+    // raise. Nothing else on screen said the pool's size outside a siege board.
     let pool = u64::from(world.resource::<tower::Quintessence>().get());
     let ceiling = u64::from(tower::ceiling(world));
 
-    // **Read before the scrollback is borrowed**, and one walk of `Running`
-    // rather than a second — `tower::running_spells` is what the rail folds, so
-    // the two cannot come to disagree about what is running.
+    // Read before the scrollback is borrowed, and one walk of `Running` rather
+    // than a second — `tower::running_spells` is what the rail folds.
     let casting = tower::running_spells(world);
 
     let mut scrollback = world.resource_mut::<Scrollback>();
@@ -469,20 +395,13 @@ fn status(world: &mut World) {
             .finish();
     }
 
-    // **The full answer behind the rail's `+n`.** A box has one line for a
-    // spell, so it names the first and counts the rest — and until this existed
-    // that count pointed at nothing: a player reading `►tending +2` had no way
-    // to find out what the two were. The rail is the glance and this is the
-    // answer, which is the standing split.
+    // The full answer behind the rail's `+n`, which until now pointed at
+    // nothing. The rail is the glance and this is the answer.
     //
-    // **A section, not more `Status` rows.** The reading column above is guarded
-    // by a *shape* test — two or more records, each a name and a numeric
-    // quantity — so a row carrying a spell's room would have taken the whole
-    // report out of its aligned column. §19 records that guard being a shape
-    // rather than a kind for exactly this reason.
-    //
-    // **Absent when nothing runs**, rather than an empty heading: `status` is
-    // read constantly and a section that is usually a bare rule is a rule that
+    // A section, not more `Status` rows — the reading column above is guarded
+    // by a *shape* test (two or more records, each a name and a numeric
+    // quantity), so a row carrying a spell's room would break its alignment.
+    // Absent when nothing runs, because a section that is usually a bare rule
     // teaches the eye to skip it.
     if casting.is_empty() {
         return;
@@ -491,10 +410,10 @@ fn status(world: &mut World) {
         .text(FieldName::Kind, CASTING)
         .finish();
     for one in casting {
-        // **`Detail`, which is what makes this a described listing** rather than
-        // a tiled one — `record/view.rs` decides on the field's presence. A run
-        // of spell names tiled two to a row would put `tending  threading` side
-        // by side with nothing saying where either is.
+        // `Detail` is what makes this a described listing rather than a tiled
+        // one (`record/view.rs` decides on the field's presence): tiled, a run
+        // of names reads `tending  threading` with nothing saying where either
+        // is.
         let where_it_is = if one.cursors > 1 {
             format!("{}, on {} cursors", one.domain, one.cursors)
         } else {
@@ -526,9 +445,8 @@ fn quantity(count: usize) -> u64 {
 /// tick — enough of a gap for one command to remove what the next one names.
 pub(super) fn missing(verb: Verb, target: &str, world: &mut World) {
     // The fields carry the facts (rule 4); the sentence is authored (rule 6).
-    // Without it this drew as two bare values — `mix sage` — which names what
-    // was wanted and never says it was a refusal. That is the same defect
-    // `work_busy` was written to fix, on the commonest refusal in the game.
+    // Without it this drew as two bare values — `mix sage` — which never says
+    // it was a refusal.
     let message = world
         .resource::<crate::content::Prose>()
         .line("missing_target", &[("path", target)]);

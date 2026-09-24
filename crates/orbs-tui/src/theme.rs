@@ -1,55 +1,37 @@
 //! Where a [`Style`] finally becomes a colour, on this side of rule 2.
 //!
 //! `orbs-render` decides *what* appears and never emits a hue; everything here
-//! decides *how* it is drawn, and nothing here may add information the Frame did
-//! not carry. It is the exact counterpart of the Bevy build's `render::palette`,
-//! and it answers the same questions with sixteen colours instead of a solved
-//! four-theme palette.
+//! decides *how* it is drawn. The counterpart of the Bevy build's
+//! `render::palette`, with sixteen ANSI colours instead of a solved palette.
 //!
-//! # Indexed ANSI 0–15, inheriting the user's terminal theme
+//! Indexed ANSI 0–15, inheriting the user's terminal theme (§19), so there is no
+//! palette to tune and no contrast to verify — the numbers belong to whoever
+//! configured the terminal. That holds for the syntax hues too, which is why
+//! they are indices here and `Srgba` in the Bevy build.
 //!
-//! DESIGN.md §19 settles this and it is not re-litigated here: *"Colour: indexed
-//! ANSI 0–15; inherits the user's terminal theme. Phosphor themes are
-//! Bevy-only."* So there is no palette table to tune and no contrast to verify —
-//! the numbers belong to whoever configured the terminal, and a player who has
-//! chosen a readable scheme gets a readable game.
+//! What it costs is §14's guarantee: sixteen colours we do not own cannot be
+//! held to the Bevy palette's solved contrast. So the glyph carries the identity
+//! and the colour is a hint — a meter is read off a `█`/`▓` boundary against
+//! `░`, the ward's six sigils are six shapes, and every `Role` reaches the
+//! linear stream beside its text.
 //!
-//! That holds for the syntax hues too, and it is why they are *indices* here and
-//! `Srgba` in the Bevy build: `syntax_colour` picks six of the sixteen the reader
-//! already chose, rather than six colours of its own. Most of a spell keeps the
-//! terminal's own foreground on purpose — see that function.
+//! Three accepted degradations:
 //!
-//! What that costs is the guarantee §14 asks for. The Bevy palette is *solved*:
-//! every accent pair is ≥1.25:1 apart in greyscale luminance, asserted by a
-//! test. Sixteen colours we do not own cannot be held to that, which is why the
-//! design leans on the other half of the rule instead — **the glyph carries the
-//! identity and the colour is a hint**. A meter's value is read off a `█`/`▓`
-//! boundary against `░`, the ward's six sigils are six shapes, and every `Role`
-//! reaches the linear stream beside its text.
-//!
-//! # Three accepted degradations
-//!
-//! - **`Presentation` is ignored.** Eldritch and Tampered pick a *face* in the
-//!   glyph atlas, and the face here is whatever the user's terminal is set to.
-//!   §19 allows this by name: `verify` is the authoritative sabotage detector on
-//!   every surface, and the visual tell is a speed bonus for players reading
-//!   inside the Bevy orb.
-//! - **A mixed [`Wash`] takes its first tint.** The flask's `green+bone` band is
-//!   the one region that is two colours becoming one, and sixteen indices cannot
-//!   average. The band is already distinguishable by *position* — it grows from
-//!   the fill end while both ingredients shrink — which is the glyph-carries-
-//!   identity rule doing its job.
-//! - **No CRT, no phosphor, no blinking caret.** The terminal draws its own
-//!   cursor, which is better: it is the one a screen reader tracks.
+//! - `Presentation` is ignored: Eldritch and Tampered pick a face in the glyph
+//!   atlas, and the face here is the terminal's. §19 allows this by name —
+//!   `verify` is the authoritative sabotage detector on every surface.
+//! - A mixed [`Wash`] takes its first tint; sixteen indices cannot average, and
+//!   the flask's one two-colour band is already told apart by position.
+//! - No CRT, no phosphor, no blinking caret. The terminal draws its own cursor,
+//!   which is the one a screen reader tracks.
 
 use crossterm::style::Color;
 use orbs_render::{Density, Depiction, Heat, Intensity, Lexeme, Roil, Role, Style, Tint, Wash};
 
 /// A resolved pen: what colour, and how heavy.
 ///
-/// Weight is separate from colour because the base hue is the *terminal's*
-/// foreground and §4 gives ordinary text only one axis to vary on — intensity.
-/// Reaching for a grey would be picking a colour the user did not choose.
+/// Weight is separate from colour because the base hue is the terminal's
+/// foreground, and §4 gives ordinary text only intensity to vary on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Ink {
     /// The foreground, or `None` for the terminal's own.
@@ -106,10 +88,8 @@ impl From<Intensity> for Weight {
 /// 3. Otherwise the [`Lexeme`] over it, if a spell is being read here.
 /// 4. Otherwise the [`Role`], varied by [`Intensity`] only when it is `Normal`.
 pub(crate) fn resolve(style: Style, wash: Option<Wash>, syntax: Option<Lexeme>) -> Ink {
-    // **`depicted()`, never `style.depiction`.** The accessor yields `None` on
-    // any accented cell, so a `Role::Danger` cell can never render in flame
-    // colours. `orbs-render`'s own doc names this crate as the place it would be
-    // got wrong, because there is one call site per frontend in different crates.
+    // `depicted()`, never `style.depiction`: the accessor yields `None` on any
+    // accented cell, so a `Role::Danger` cell can never render in flame colours.
     let depiction = style.depicted();
 
     if let Some(wash) = wash
@@ -120,11 +100,9 @@ pub(crate) fn resolve(style: Style, wash: Option<Wash>, syntax: Option<Lexeme>) 
     if let Some(ink) = depicted(depiction) {
         return ink;
     }
-    // **After the pictures and before the accent.** A syntax run and an
-    // instrument bar never share a cell — the editor takes the whole pane — so
-    // the order is a statement of rank rather than a case anyone can reach: a
-    // picture of a thing outranks a colour for a word, and an accent outranks
-    // both.
+    // After the pictures and before the accent. A syntax run and an instrument
+    // bar never share a cell, so this is a statement of rank rather than a case
+    // anyone can reach.
     if let Some(ink) = syntaxed(syntax, style.role, style.intensity) {
         return ink;
     }
@@ -133,17 +111,10 @@ pub(crate) fn resolve(style: Style, wash: Option<Wash>, syntax: Option<Lexeme>) 
 
 /// A part of speech's colour, or `None` if it declines.
 ///
-/// # It declines on an accent, and asserting that is what found the hole
-///
-/// `orbs-shell` already refuses to register a run on an accented row, and this
-/// was written trusting it — under a comment claiming the rule was *"enforced
-/// twice on purpose"*, with nothing here enforcing it. The test one screen down
-/// failed on the first run: a line `interpret` could not read resolved violet
-/// instead of red, losing the one accent the game most needs legible.
-///
-/// That is §19's recurring defect exactly — a comment claiming a rule that
-/// nothing implements — and it is [`tinted`]'s first decline, for [`tinted`]'s
-/// reason: *"an accent is a signal; a tint is a hint. The signal wins."*
+/// It declines on an accent, for [`tinted`]'s reason: an accent is a signal, a
+/// tint is a hint, and the signal wins. Enforced here and not only in
+/// `orbs-shell` — trusting the other layer left a line `interpret` could not
+/// read resolving violet instead of red (§19).
 fn syntaxed(syntax: Option<Lexeme>, role: Role, intensity: Intensity) -> Option<Ink> {
     if role != Role::Normal {
         return None;
@@ -157,18 +128,11 @@ fn syntaxed(syntax: Option<Lexeme>, role: Role, intensity: Intensity) -> Option<
 
 /// A part of speech's colour, or `None` to keep the terminal's own foreground.
 ///
-/// # Seven departures from the base, not eight
-///
-/// [`Lexeme::Name`] deliberately resolves to `None`. A name is most of a spell —
-/// every reagent, instrument, place and reading — so colouring it would override
-/// the user's own foreground for the bulk of the file and leave the *departures*
-/// with nothing to depart from. §19 settles that this build inherits the
-/// terminal's theme; the base hue is the reader's to choose, and the hues are
-/// what the language adds to it.
-///
-/// [`Lexeme::Comment`] and [`Lexeme::Filler`] resolve to `None` too, and already
-/// read as recessive: [`Lexeme::weight`] draws both dim, which is carried on the
-/// weight axis and survives a terminal with no colour at all.
+/// [`Lexeme::Name`] resolves to `None` deliberately: a name is most of a spell,
+/// so colouring it would override the reader's own foreground for the bulk of
+/// the file and leave the departures with nothing to depart from (§19).
+/// [`Lexeme::Comment`] and [`Lexeme::Filler`] keep it too — [`Lexeme::weight`]
+/// draws both dim, which survives a terminal with no colour at all.
 const fn syntax_colour(kind: Lexeme) -> Option<Color> {
     match kind {
         // The scaffolding, and a call to this file's own — arcane, which is the
@@ -187,27 +151,22 @@ const fn syntax_colour(kind: Lexeme) -> Option<Color> {
 
 /// A material's colour family, or `None` if the tint declines.
 ///
-/// **All three declines are reproduced**, and each is load-bearing:
-///
-/// - An accent outranks a tint. *"An accent is a signal; a tint is a hint. The
-///   signal wins."* Without this a fouled instrument's red label goes brown.
-/// - Fire is never tinted. The athanor burns orange on every tube by decision
-///   (§19), so a green reagent in a lit hearth still burns orange.
-/// - Sediment declines, so waste always looks like waste.
+/// All three declines are reproduced: an accent outranks a tint (a fouled
+/// instrument's red label would go brown), fire is never tinted (the athanor
+/// burns orange on every tube, §19), and sediment declines so that waste always
+/// looks like waste.
 fn tinted(wash: Wash, role: Role, intensity: Intensity, depiction: Depiction) -> Option<Ink> {
     if role != Role::Normal {
         return None;
     }
-    // **`orbs-render`'s rule, not a second copy of it.** This was three `if`s
-    // mirroring the Bevy build's exhaustive `match`, under a comment saying the
-    // two had to agree — with nothing making them.
+    // `orbs-render`'s rule, not a second copy: this was three `if`s mirroring
+    // the Bevy build's `match`, with nothing making the two agree.
     if depiction.declines_tint() {
         return None;
     }
 
     // A mixture takes its first tint — see the module note. `with` is `Some`
-    // only for the flask's mid-combination band, which is already told apart by
-    // where it is rather than by what colour it is.
+    // only for the flask's mid-combination band, told apart by position.
     let colour = hue(wash.tint);
     let weight = match depiction.roil() {
         Some(Roil::Still) => Weight::Dim,
@@ -223,10 +182,8 @@ fn tinted(wash: Wash, role: Role, intensity: Intensity, depiction: Depiction) ->
 
 /// The eight material families, as the eight ANSI hues.
 ///
-/// `orbs-render`'s own `Tint` documentation predicted this: *"`orbs-tui` will
-/// resolve the same eight names to ANSI indices and be right."* The closed set
-/// is what makes it right — eight names, eight hues, no fallback and no default,
-/// so a tint added to the enum breaks this build on purpose.
+/// Eight names, eight hues, no fallback and no default, so a tint added to the
+/// enum breaks this build on purpose.
 const fn hue(tint: Tint) -> Color {
     match tint {
         Tint::Green => Color::Green,
@@ -242,27 +199,14 @@ const fn hue(tint: Tint) -> Color {
 
 /// What a cell is a *picture* of, if it is a picture of anything.
 ///
-/// Carries no meaning by design (§19's fourth channel), which is exactly why it
-/// is allowed to be colour alone: a channel that says nothing has nothing to
-/// withhold from a listener.
+/// Carries no meaning by design (§19's fourth channel), which is why it may be
+/// colour alone: a channel that says nothing has nothing to withhold.
 ///
-/// # Four steps out of two hues, using the weight axis
-///
-/// **The first version of this ran the fire from `DarkRed` to `White`, and it
-/// was wrong in the one way §19 names**: *"the athanor burns orange on every
-/// tube by decision."* `ember.rs`'s ramp is `#CC7024 → #EB9429 → #FFB838 →
-/// #FFE375` — orange to pale yellow, with no red at the cool end and nothing
-/// white at the hot one. Sixteen indices hold exactly two colours in that family,
-/// `DarkYellow` and `Yellow`, which is two steps for four heats.
-///
-/// So the missing steps come from [`Weight`], which was already carrying
-/// [`Intensity`] for ordinary text and had nothing to do here. Dim-dark, dark,
-/// bright, bold-bright: four steps, monotonic in brightness, and every one of
-/// them still a fire.
-///
-/// The liquid ramp had the same fault at its top — `Rolling` was `White` — and
-/// takes the same fix, so a rolling bath is emphatically teal rather than
-/// briefly colourless.
+/// Four steps out of two hues, using the weight axis. Sixteen indices hold only
+/// `DarkYellow` and `Yellow` in the fire's family, so [`Weight`] supplies the
+/// rest: dim-dark, dark, bright, bold-bright — monotonic, and every step still
+/// orange (§19). The liquid ramp takes the same fix, so a rolling bath is teal
+/// rather than briefly colourless.
 const fn depicted(depiction: Depiction) -> Option<Ink> {
     let (colour, weight) = match depiction {
         Depiction::None => return None,
@@ -280,26 +224,16 @@ const fn depicted(depiction: Depiction) -> Option<Ink> {
         // Waste declines the tint so that waste always looks like waste, and it
         // must not be mistakable for smoke — hence grey rather than a dark grey.
         Depiction::Sediment => (Color::Grey, Weight::Dim),
-        // **The gauge ramp, and the one that is not monotonic in brightness.**
-        // Red through yellow to green: the middle is the brightest step and the
-        // tests below do not walk this one for that reason. It is a *distance
-        // being closed* rather than a substance getting hotter, and the fill
-        // length says that on its own — the hue only agrees with it.
+        // The gauge ramp, red through yellow to green — the one ramp that is
+        // not monotonic in brightness, since it shows a distance being closed
+        // rather than a substance getting hotter. The fill length says that on
+        // its own, so the tests below do not walk it.
         //
-        // **Three hue families, six steps, and not one of them the triad's ink.**
-        // The first version spent `Red` on the low step and `Green` on the full
-        // one, which are byte-for-byte `Role::Danger` and `Role::Success` — so a
-        // ley gauge just past a station drew the exact red of every error line in
-        // this build, and a full one the exact green of every confirmation.
-        // `ember.rs` had already pulled its own ramp off saturation for that
-        // reason, and this side had not followed.
-        //
-        // The fix is the technique every other ramp here already uses: sixteen
-        // indices hold two colours per hue family, and [`Weight`] supplies the
-        // steps between them. Dark-dim and dark for the red end, the fire's two
-        // yellows for the middle, dark and bold-dark for the green — six pairs,
-        // each distinguishable, none of them an accent. `the_gauge_ramp_never_
-        // wears_an_accents_ink` below is what keeps it that way.
+        // Three hue families, six steps, and none of them the triad's ink:
+        // `Red` and `Green` are byte-for-byte `Role::Danger` and
+        // `Role::Success`, so a ley gauge drew the exact red of every error
+        // line. [`Weight`] supplies the steps within each family instead, and
+        // `the_gauge_ramp_never_wears_an_accents_ink` keeps it that way.
         Depiction::GaugeFaint => (Color::DarkRed, Weight::Dim),
         Depiction::GaugeLow => (Color::DarkRed, Weight::Plain),
         Depiction::GaugeMiddle => (Color::DarkYellow, Weight::Plain),
@@ -315,9 +249,8 @@ const fn depicted(depiction: Depiction) -> Option<Ink> {
 
 /// Ordinary text, or one of the three things that mean something.
 ///
-/// **Intensity is ignored on an accent**, matching the Bevy side exactly: an
-/// accent is already a signal and dimming it would dilute the one channel §14
-/// reserves for meaning.
+/// Intensity is ignored on an accent, matching the Bevy side: dimming one would
+/// dilute the channel §14 reserves for meaning.
 fn accent(role: Role, intensity: Intensity) -> Ink {
     match role {
         Role::Normal => Ink {
@@ -358,9 +291,8 @@ mod tests {
 
     #[test]
     fn the_three_accents_are_three_colours() {
-        // §14: colour never carries meaning *alone*, but where it carries any it
-        // must at least separate. Danger reading as Success is the one confusion
-        // this frontend can still make on its own.
+        // §14: colour never carries meaning alone, but where it carries any it
+        // must at least separate.
         let danger = accent(Role::Danger, Intensity::Normal);
         let cost = accent(Role::Cost, Intensity::Normal);
         let success = accent(Role::Success, Intensity::Normal);
@@ -369,18 +301,13 @@ mod tests {
         assert_ne!(danger, success);
     }
 
-    /// **No step of the gauge ramp may wear an accent's ink.**
+    /// No step of the gauge ramp may wear an accent's ink. §4 and §14 reserve
+    /// the triad for meaning and a depiction carries none; it shipped once with
+    /// `GaugeLow` as `Color::Red` and `GaugeWhole` as `Color::Green`.
     ///
-    /// §4 and §14 reserve the triad for meaning, and a depiction carries none —
-    /// so a bar drawn in Danger's exact red is the one channel borrowing the
-    /// other's voice. It shipped that way once: `GaugeLow` was `Color::Red` and
-    /// `GaugeWhole` was `Color::Green`, which are the two accents a player sees
-    /// most, and the gauge sits at the top of the pane where errors also land.
-    ///
-    /// **Weight is part of the ink and not an escape from this.** A bold green
-    /// is still green to a reader glancing at a colour, and several terminals
-    /// render bold-plus-dark as the bright index outright — so the check is on
-    /// the colour, not on the pair.
+    /// Weight is no escape: a bold green still reads as green, and several
+    /// terminals render bold-plus-dark as the bright index outright — so the
+    /// check is on the colour, not on the pair.
     #[test]
     fn the_gauge_ramp_never_wears_an_accents_ink() {
         let triad: Vec<_> = [Role::Danger, Role::Cost, Role::Success]
@@ -410,9 +337,8 @@ mod tests {
 
     #[test]
     fn ordinary_text_keeps_the_terminals_own_foreground() {
-        // The base hue is the user's, and intensity is the only axis §4 lets
-        // ordinary text vary on. Picking a grey here would be choosing a colour
-        // the player did not.
+        // The base hue is the user's, and §4 lets ordinary text vary only on
+        // intensity.
         for intensity in [Intensity::Dim, Intensity::Normal, Intensity::Bright] {
             let ink = accent(Role::Normal, intensity);
             assert_eq!(ink.colour, None, "ordinary text took a colour");
@@ -423,9 +349,8 @@ mod tests {
 
     #[test]
     fn an_accent_ignores_intensity() {
-        // The Bevy side asserts the same thing about its palette. Two frontends
-        // disagreeing about whether a dim breach is dimmer would be rule 2
-        // broken in the direction nobody checks.
+        // The Bevy side asserts the same. Two frontends disagreeing about
+        // whether a dim breach is dimmer is rule 2 broken where nobody looks.
         for role in [Role::Danger, Role::Cost, Role::Success] {
             let dim = accent(role, Intensity::Dim);
             let bright = accent(role, Intensity::Bright);
@@ -450,12 +375,9 @@ mod tests {
     fn a_tint_declines_to_fire_and_to_waste() {
         let wash = Wash::plain(Tint::Green);
         for depiction in Depiction::ALL {
-            // **Against `orbs-render`'s predicate, which is what the other
-            // frontend also calls.** This used to re-derive the rule here and
-            // compare `tinted` against a copy of itself, while its own failure
-            // message claimed a disagreement with the Bevy build it never
-            // consulted. Now there is one rule and this checks that this
-            // resolver honours it.
+            // Against `orbs-render`'s predicate, which the other frontend also
+            // calls. This used to compare `tinted` against a copy of its own
+            // rule while claiming to check the Bevy build.
             let declines = tinted(wash, Role::Normal, Intensity::Normal, depiction).is_none();
             assert_eq!(
                 declines,
@@ -493,11 +415,8 @@ mod tests {
 
     #[test]
     fn the_fire_is_orange_all_the_way_up() {
-        // **§19: *"the athanor burns orange on every tube by decision."*** The
-        // first version of this ramp ran `DarkRed` → `White`, so the cool end
-        // read as red and the hot end as colourless — a fire that is neither
-        // orange nor, at the top, a colour at all. `ember.rs` is
-        // `#CC7024 → #FFE375` throughout.
+        // The athanor burns orange on every tube (§19). This ramp once ran
+        // `DarkRed` → `White`: red at the cool end, colourless at the hot one.
         for heat in [Heat::Ember, Heat::Flame, Heat::Blaze, Heat::Core] {
             for depiction in [Depiction::flame(heat), Depiction::spark(heat)] {
                 let ink = depicted(depiction).expect("fire is a picture of something");
@@ -512,9 +431,8 @@ mod tests {
 
     #[test]
     fn every_ramp_climbs() {
-        // A meter is read off *where the colour steps*, so a ramp that is not
-        // monotonic is a meter that cannot be read. Four heats out of two hues
-        // only works because `Weight` supplies the steps between them.
+        // A meter is read off where the colour steps, so a ramp that is not
+        // monotonic cannot be read.
         let fire: Vec<_> = [Heat::Ember, Heat::Flame, Heat::Blaze, Heat::Core]
             .map(|heat| brightness(depicted(Depiction::flame(heat)).expect("fire")))
             .to_vec();
@@ -561,9 +479,8 @@ mod tests {
 
     #[test]
     fn a_role_never_reads_its_depiction_field_directly() {
-        // The trap `orbs-render` names this crate in. An accented cell that also
-        // carries a depiction must resolve as the accent, which only happens if
-        // `resolve` went through `depicted()`.
+        // An accented cell that also carries a depiction must resolve as the
+        // accent, which only happens if `resolve` went through `depicted()`.
         let style = Style::DANGER.with_depiction(Depiction::FlameCore);
         assert_eq!(
             resolve(style, None, None),
@@ -573,9 +490,8 @@ mod tests {
 
     /// Every part of speech that departs from the base gets its own colour.
     ///
-    /// **Seven categories and six colours**, because `Control` and `Call` share
-    /// one: both are the file's own scaffolding, and telling a block keyword
-    /// from a call to this file's own part is what the `()` is for.
+    /// Seven categories and six colours: `Control` and `Call` share one, both
+    /// being the file's own scaffolding, and the `()` tells them apart.
     #[test]
     fn each_part_of_speech_that_departs_has_its_own_colour() {
         let departs = [
@@ -603,10 +519,8 @@ mod tests {
 
     /// ...and the ones that keep the reader's own foreground keep it.
     ///
-    /// A name is most of a spell; colouring it would override the terminal's
-    /// theme for the bulk of the file and leave the departures with nothing to
-    /// depart from. Comments and filler already recede on the weight axis, which
-    /// is what survives a terminal with no colour at all.
+    /// A name is most of a spell, so colouring it leaves the departures with
+    /// nothing to depart from; comments and filler recede on the weight axis.
     #[test]
     fn the_base_hue_still_carries_most_of_a_spell() {
         for kind in [Lexeme::Name, Lexeme::Comment, Lexeme::Filler, Lexeme::None] {

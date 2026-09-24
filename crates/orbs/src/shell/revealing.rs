@@ -62,11 +62,11 @@ pub(super) fn drive_panes(time: Res<Time>, mut panes: ResMut<PaneTransition>) {
 /// Two clocks because they answer to different events — `F4` and the multiplex
 /// against `attend` and `wander`.
 ///
-/// **Ordered after `refresh_panel`, explicitly**, and not merely into the same
-/// set. `plugin.rs` records why for `motion::advance`: a set orders both against
-/// `repaint` and **not against each other**, so the executor is free to run this
-/// first and observe the previous frame's panel — which for a crossing means
-/// starting one a frame late, every time.
+/// Ordered after `refresh_panel` explicitly, not merely into the same set.
+/// `plugin.rs` records why for `motion::advance`: a set orders both against
+/// `repaint` and not against each other, so the executor may run this first and
+/// observe the previous frame's panel — which starts a crossing a frame late,
+/// every time.
 ///
 /// The motion switch is the tube's, read by `motion::advance` and handed on;
 /// this system has no `CrtSettings` of its own, so `None` here means *"nobody has
@@ -78,10 +78,10 @@ pub(super) fn drive_passing(
     linear: Res<crate::shell::Linear>,
     mut passing: ResMut<Passing>,
 ) {
-    // **The tower opening, and it happens once.** This system is gated on
-    // `booted`, so its first run *is* the frame the boot card handed over —
-    // `Passing::wake` latches, so calling it every frame after that is free and
-    // there is no edge for a hitch to miss.
+    // The tower opening, and it happens once. This system is gated on `booted`,
+    // so its first run is the frame the boot card handed over, and
+    // `Passing::wake` latches — so every frame after is free and there is no
+    // edge for a hitch to miss.
     passing.wake();
     passing.advance(time.delta_secs(), None);
     passing.observe(&Showing::of(surfaces.open(), &panel, linear.showing()));
@@ -89,18 +89,15 @@ pub(super) fn drive_passing(
 
 /// Panes the main window holds outside a siege.
 ///
-/// **One, since the tower rail replaced the telemetry pane** (§19, Phase 2). It
-/// was two, and the second held nine developer readings; the rail carries five
-/// of them in sixteen columns down the right, and the session pane gets the rest
-/// — **102 columns of body against the 58 it had**, which is what a transcript
-/// beside an instrument panel and a maze map actually wants.
+/// One, since the tower rail replaced the telemetry pane (§19). It was two, and
+/// the second held nine developer readings; the rail carries five of them in
+/// sixteen columns down the right and the session pane gets the rest — 102
+/// columns of body against the 58 it had.
 ///
-/// **`F4` is visibly inert at one pane, and that is recorded rather than fixed.**
-/// §9 makes the focus mode a setting the player may change at any time and §19
-/// fixes the switch on `F4`; reassigning it to toggle the rail would re-litigate
-/// both. With one pane the two tilings are identical, so the key changes nothing
-/// until multiplexing returns the second pane in Phase 11a — at which point it
-/// reclaims its job with no code to change.
+/// `F4` is visibly inert at one pane, recorded rather than fixed: §9 makes the
+/// focus mode a setting and §19 fixes the switch on `F4`, so reassigning it to
+/// toggle the rail would re-litigate both. With one pane the two tilings are
+/// identical, and the key reclaims its job when multiplexing returns the second.
 ///
 /// The decision the old constant encoded is not gone: `ORBS_DUMP` can still be
 /// handed a grid below the floor, and `dump.rs` still asks. §9 caps the count at

@@ -6,33 +6,21 @@
 //! rule 2 boundary: `orbs-render` says *this cell is flame, and this hot*, and
 //! nothing below decides anything but the hue.
 //!
-//! # One fire, on every tube
+//! Fire is orange on every tube. This shipped as four ramps, one per phosphor,
+//! on the argument that §4's premise is a single curved CRT whose base hue
+//! carries the picture. That argument was about the *tube*; the thing being
+//! drawn is a fire, and a green fire reads as the meter having changed colour.
+//! One ramp is also one thing to solve for, which is what the contrast table
+//! below now checks *across* the themes instead of within each.
 //!
-//! **Fire is orange, and the phosphor does not get a vote.** This shipped as four
-//! ramps — amber burned orange, green burned green, violet burned violet,
-//! monochrome burned white — on the argument that §4's premise is a single curved
-//! CRT whose base hue carries the picture, so an orange fire on the green
-//! phosphor is a colour that tube cannot make.
+//! It costs monochrome its no-hue promise — a real cost recorded in DESIGN.md
+//! §19. Nothing *informational* moves: [`Depiction`] carries no meaning by
+//! construction and the meter's value is read off the glyph boundary, so a
+//! colourblind player loses nothing they could have used.
 //!
-//! That argument was about the *tube*. The thing being drawn is a **fire**, and a
-//! green fire does not read as one — it reads as the meter having changed colour.
-//! The whole reason [`Depiction`] exists is that a picture is worth more than
-//! consistency with the surrounding hue, and four ramps was that concession made
-//! and then taken back. One ramp is also one thing to solve for rather than four,
-//! which is what the contrast table below now checks *across* the themes instead
-//! of within each.
-//!
-//! It costs monochrome its no-hue promise, and that is a real cost recorded in
-//! DESIGN.md §19: the accessibility theme now has exactly one coloured object on
-//! it. Nothing *informational* moves — [`Depiction`] carries no meaning by
-//! construction, and the meter's value is read off the glyph boundary — so a
-//! colourblind player still loses nothing they could have used.
-//!
-//! # Smoke is cool, and that is the whole of it
-//!
-//! Two steps, low and near the background. Smoke is what is left when the fire
-//! is not there, so it reads by being dimmer than everything around it rather
-//! than by being a colour.
+//! Smoke is two cool steps, low and near the background. It is what is left
+//! when the fire is not there, so it reads by being dimmer than everything
+//! around it rather than by being a colour.
 
 use bevy::prelude::*;
 use orbs_render::{Depiction, Heat};
@@ -42,8 +30,8 @@ use orbs_render::{Depiction, Heat};
 pub(crate) struct Ember {
     /// [`Heat::Ember`], [`Heat::Flame`], [`Heat::Blaze`], [`Heat::Core`].
     ///
-    /// **Read hottest-first at the *base* of the bar**, not at the flame front:
-    /// a fire is brightest where the fuel is, and mellows toward its tip.
+    /// Read hottest-first at the *base* of the bar, not at the flame front: a
+    /// fire is brightest where the fuel is and mellows toward its tip.
     pub(crate) flame: [Srgba; 4],
     /// [`Depiction::SmokeThin`], [`Depiction::SmokeThick`].
     pub(crate) smoke: [Srgba; 2],
@@ -63,12 +51,10 @@ const fn step(heat: Heat) -> usize {
 
 /// Fire: the literal orange into yellow a hearth is expected to be.
 ///
-/// **This was amber's ramp**, and it is now everyone's. It kept the numbers it
-/// was solved for rather than being re-tuned toward a compromise, because there
-/// is nothing left to compromise with — it now has to clear the contrast floor
-/// against four backgrounds rather than sit inside one theme's family, and it
-/// does so with room to spare (5.5:1 at the coolest ember against the tightest
-/// background, on a floor of 3.0).
+/// Amber's ramp, now everyone's. It kept its own numbers rather than being
+/// re-tuned toward a compromise — there is nothing left to compromise with, and
+/// it clears the floor against all four backgrounds with room to spare (5.5:1
+/// at the coolest ember against the tightest background, on a floor of 3.0).
 pub(crate) const FIRE: Ember = Ember {
     flame: [
         rgb(0.80, 0.44, 0.14),
@@ -82,14 +68,13 @@ pub(crate) const FIRE: Ember = Ember {
 /// The balneum mariae's liquid, at [`Depiction::LiquidStill`],
 /// [`Depiction::LiquidStirred`], [`Depiction::LiquidRolling`].
 ///
-/// **Teal, which is the fire's opposite**, and that is the whole selection
-/// criterion beyond the contrast floor. The two heated instruments sit next to
-/// each other on the panel, and the one thing a glance has to answer is which is
-/// which — so the bath is as far from orange as the repertoire allows while
-/// still reading as a liquid.
+/// Teal, the fire's opposite, and that is the whole selection criterion beyond
+/// the contrast floor: the two heated instruments sit next to each other on the
+/// panel and a glance has to answer which is which, so the bath is as far from
+/// orange as the repertoire allows while still reading as a liquid.
 ///
-/// Solved against all four backgrounds like the fire: 4.7:1 at the stillest step
-/// against the tightest background, on a floor of 3.0.
+/// Solved against all four backgrounds like the fire: 4.7:1 at the stillest
+/// step, on a floor of 3.0.
 pub(crate) const LIQUID: [Srgba; 3] = [
     rgb(0.28, 0.52, 0.58),
     rgb(0.40, 0.70, 0.76),
@@ -106,9 +91,8 @@ pub(crate) const SEDIMENT: Srgba = rgb(0.36, 0.32, 0.26);
 
 /// The colour of a depicted cell, or `None` if it is not a picture of anything.
 ///
-/// **A free function, not a method**, since the fire stopped being per-theme:
-/// there is one of each table now, so threading a `&self` through was carrying a
-/// receiver that only ever had one value.
+/// A free function, not a method, since the fire stopped being per-theme: there
+/// is one of each table now, so a `&self` was a receiver with one value.
 pub(crate) const fn resolve(depiction: Depiction) -> Option<Srgba> {
     match depiction {
         Depiction::Sediment => Some(SEDIMENT),
@@ -127,37 +111,26 @@ pub(crate) const fn resolve(depiction: Depiction) -> Option<Srgba> {
 
 /// A gauge's fill, red through yellow to green — see [`Fill`](orbs_render::Fill).
 ///
-/// **The only ramp here that is not monotonic in brightness.** Fire, liquid and
-/// smoke all climb from dim to bright and their tests assert it; this one peaks
-/// in the middle, where yellow is. That is what a red-to-green ramp *is*, and it
-/// is allowed because the fill's **length** carries the reading — take every
-/// colour away and the bar still says how full it is, which is the test §14 sets
-/// for anything decorative.
+/// The only ramp here not monotonic in brightness: it peaks in the middle,
+/// where yellow is. Allowed because the fill's *length* carries the reading —
+/// take every colour away and the bar still says how full it is, which is §14's
+/// test for anything decorative. The top half turns green by losing red rather
+/// than by gaining it, so luminance peaks at `GaugeHigh` and falls after.
 ///
-/// Six steps, walked in even sixths, so the bar warms as it fills rather than
+/// Six steps walked in even sixths, so the bar warms as it fills rather than
 /// switching like a traffic light. The hues are pulled off full saturation and
-/// lifted off the floor so each sits clear of the ground the tube paints, and so
-/// the red end reads as *early* rather than as `Role::Danger` — an accent this
-/// must never be mistaken for, which is also why a gauge is a depiction and
-/// never an accent.
+/// lifted off the floor so each sits clear of the ground the tube paints, and
+/// so the red end reads as *early* rather than as `Role::Danger` — which is
+/// also why a gauge is a depiction and never an accent.
 ///
-/// **The red end is dark, and that is the whole of what separates it from
-/// `Role::Danger`.** Every theme's danger is a *bright* saturated red — 0.85 to
-/// 0.95 on the red channel — so brightness is the axis with room in it, and a
-/// bar barely begun reading dim is what it should look like anyway.
-///
-/// The first pass ran the low end at `0.78, 0.24, 0.20` and sat 0.18 away from
-/// danger on three of the four tubes, which is to say it *was* the accent this
-/// doc claims it is not. Nothing caught it, because the ramp shipped without the
-/// test every other ramp in this file has. It now clears every accent on every
-/// tube by 0.36 and every background by 3.06:1, both measured rather than
-/// judged — `no_step_of_the_gauge_reads_as_an_accent` and
-/// `every_step_of_the_gauge_is_visible_on_every_tube` hold them.
-///
-/// **The top half turns green by losing red, not by gaining green**, which is
-/// why luminance peaks at `GaugeHigh` and falls after it. A red-to-green ramp
-/// has no monotonic-brightness reading to preserve; the fill's length is the
-/// reading.
+/// Brightness is the axis with room in it: every theme's danger is a *bright*
+/// saturated red, and a bar barely begun should read dim anyway. The first pass
+/// ran the low end at `0.78, 0.24, 0.20` and sat 0.18 from danger on three of
+/// the four tubes — it *was* the accent this doc denies — because the ramp
+/// shipped without the test every other ramp here has. It now clears every
+/// accent by 0.36 and every background by 3.06:1, held by
+/// `no_step_of_the_gauge_reads_as_an_accent` and
+/// `every_step_of_the_gauge_is_visible_on_every_tube`.
 const GAUGE: [Srgba; 6] = [
     rgb(0.64, 0.25, 0.05),
     rgb(0.78, 0.42, 0.10),
@@ -174,13 +147,10 @@ impl Ember {
             Depiction::None => None,
             Depiction::SmokeThin => Some(self.smoke[0]),
             Depiction::SmokeThick => Some(self.smoke[1]),
-            // Flame and spark both. **A spark is a piece of the fire that got
-            // away**, so it draws from the fire's own ramp; a separate one would
-            // be four more colours to solve for a difference nobody could name.
-            //
-            // `heat()` answers `None` for everything that is not the fire — the
-            // two smoke arms above, and the bath's liquid and sediment, which
-            // the free `resolve` handles before this is reached.
+            // Flame and spark both: a spark is a piece of the fire that got
+            // away, so it draws from the fire's own ramp. `heat()` answers
+            // `None` for everything else — smoke above, and the bath's liquid
+            // and sediment, which the free `resolve` handles before this.
             other => match other.heat() {
                 Some(heat) => Some(self.flame[step(heat)]),
                 None => None,
@@ -225,10 +195,9 @@ mod tests {
 
     #[test]
     fn the_one_fire_is_visible_on_every_tube() {
-        // **The test that got harder when the ramps merged**, and the reason the
-        // merge is safe. Four ramps each had to clear this against one
-        // background; one ramp has to clear it against all four, which is a
-        // stronger claim and the only thing standing between "fire is orange
+        // Harder since the ramps merged, and the reason the merge is safe: one
+        // ramp has to clear the floor against all four backgrounds where four
+        // ramps each cleared one — the only thing between "fire is orange
         // everywhere" and a bar nobody can see on the green phosphor.
         //
         // Smoke is chrome rather than text, so it is held to
@@ -255,10 +224,9 @@ mod tests {
 
     #[test]
     fn the_hottest_flame_reads_against_body_text_on_every_tube() {
-        // **Compared against `Normal`, deliberately, not against `Bright`.**
-        // Monochrome's `Bright` is pure white and nothing is hotter than that,
-        // so a rule phrased against it is unsatisfiable for the one theme the
-        // game most needs to keep.
+        // Against `Normal`, not `Bright`: monochrome's `Bright` is pure white
+        // and nothing is hotter, so a rule phrased against it is unsatisfiable
+        // for the one theme the game most needs to keep.
         for theme in ALL {
             let body = theme.base_at(orbs_render::Intensity::Normal);
             let ratio = contrast(FIRE.flame[3], body);
@@ -272,20 +240,15 @@ mod tests {
 
     #[test]
     fn monochromes_own_text_is_still_hueless() {
-        // **What is left of monochrome's promise, and what is not.**
+        // The theme used to guarantee a colourblind player lost nothing. One
+        // fire ramp on every tube and material tints retired that, and the
+        // guarantee moved to a Phase 13 roadmap item (colour-vision filters and
+        // a true greyscale mode) — a better home, since a theme made the
+        // accommodation an aesthetic choice a player had to give up to get
+        // amber. DESIGN.md §19 records the trade.
         //
-        // The theme used to guarantee that a colourblind player lost nothing:
-        // its base carried no hue, and it burned white so the fire carried none
-        // either. Two decisions retired that — one fire ramp on every tube, and
-        // material tints — and the guarantee **moved to a Phase 13 roadmap item**
-        // (colour-vision filters and a true greyscale mode), which is a better
-        // home for it: a theme made the accessible option also an aesthetic
-        // choice, so a player who wanted amber had to give up the accommodation
-        // to get it. DESIGN.md §19 records the trade.
-        //
-        // What still holds here is narrower and worth keeping: monochrome's
-        // *text* is grey. It is a grey aesthetic, and a grey aesthetic with a
-        // faintly warm body hue would just be a bad amber.
+        // What still holds is narrower: monochrome's *text* is grey. A grey
+        // aesthetic with a faintly warm body hue would just be a bad amber.
         let monochrome = ALL
             .iter()
             .find(|theme| theme.name == "monochrome")
@@ -348,13 +311,12 @@ mod tests {
 
     #[test]
     fn the_bath_never_reads_as_the_hearth() {
-        // **The two heated instruments sit next to each other on the panel**, and
-        // the one thing a glance has to answer is which is which. Both draw solid
-        // blocks, so the glyph cannot settle it and the hue has to.
+        // The two heated instruments sit next to each other and both draw solid
+        // blocks, so the glyph cannot say which is which and the hue has to.
         //
-        // Measured on the blue-yellow axis rather than by luminance, because
-        // luminance is exactly what they are *allowed* to share: a bright roll
-        // and a mid flame land within 1.2:1 of each other and should.
+        // On the blue-yellow axis rather than luminance, which is exactly what
+        // they are *allowed* to share: a bright roll and a mid flame land
+        // within 1.2:1 of each other and should.
         let axis = |colour: Srgba| colour.blue - colour.red;
         for (index, liquid) in LIQUID.iter().enumerate() {
             for (other, flame) in FIRE.flame.iter().enumerate() {
@@ -378,12 +340,9 @@ mod tests {
         );
     }
 
-    /// **Every step of the gauge is visible on every tube.**
-    ///
     /// The claim the other ramps each make, and the one this ramp did not. A
-    /// step that sank into the background would draw as a bar that stops part
-    /// way along its own fill — worse than a bar with no colour at all, because
-    /// it reads as a *shorter* bar rather than as an unstyled one.
+    /// step that sank into the background would draw a bar that stops part way
+    /// along its own fill — read as a *shorter* bar, not an unstyled one.
     ///
     /// Held to chrome's 3.0 rather than body text's 4.5: a gauge is furniture,
     /// like smoke, and the reading it carries is its length.
@@ -401,20 +360,16 @@ mod tests {
         }
     }
 
-    /// **No step of the gauge reads as an accent**, which is this ramp's whole
-    /// reason for being a depiction.
+    /// No step reads as an accent, which is why this ramp is a depiction.
     ///
-    /// The doc above says the red end must read as *early* rather than as
-    /// `Role::Danger`, and until now nothing checked it. The terminal build
-    /// made exactly that mistake with the same ramp — its low step was
-    /// `Color::Red`, byte-for-byte Danger's ink, and its full step was
-    /// Success's — so the property is worth asserting on the side that got it
-    /// right, not only on the side that did not.
+    /// The red end must read as *early* rather than as `Role::Danger`, and
+    /// nothing checked it. The terminal build made that mistake with the same
+    /// ramp — its low step was `Color::Red`, byte-for-byte Danger's ink, and
+    /// its full step was Success's.
     ///
-    /// **Measured through `resolve`**, the path the frontend actually takes,
-    /// rather than against the constants: an accent and a depiction reach the
-    /// screen by different arms of the same function and comparing the arms is
-    /// the point.
+    /// Measured through `resolve`, the path the frontend takes, rather than
+    /// against the constants: an accent and a depiction reach the screen by
+    /// different arms of the same function.
     #[test]
     fn no_step_of_the_gauge_reads_as_an_accent() {
         let gauges: Vec<_> = Depiction::ALL
@@ -436,11 +391,10 @@ mod tests {
                     let apart = (fill.red - accent.red).abs()
                         + (fill.green - accent.green).abs()
                         + (fill.blue - accent.blue).abs();
-                    // 0.25 is the floor; the ramp clears it by 0.36. The margin
-                    // is not generous by accident — a red-to-green ramp runs
-                    // through *three* of the triad's own hues, so every step is
-                    // near something and the separation has to be deliberate at
-                    // every one of them rather than only at the ends.
+                    // 0.25 is the floor; the ramp clears it by 0.36. A
+                    // red-to-green ramp runs through *three* of the triad's own
+                    // hues, so every step is near something and the separation
+                    // has to be deliberate at each, not only at the ends.
                     assert!(
                         apart > 0.25,
                         "{}: {depiction:?} is {apart:.2} from {role:?} — a bar \
@@ -458,11 +412,9 @@ mod tests {
         assert_eq!(resolve(Depiction::None), None);
         assert!(resolve(Depiction::flame(Heat::Blaze)).is_some());
 
-        // **Walked off `Depiction::ALL`, not a list written out here.** This was
-        // a hand-written array, which is a list that falls silently behind the
-        // enum the moment a variant is added — and it had: the bath's four
-        // arrived and the walk went on passing while covering none of them.
-        // `ALL` is exhaustiveness-checked at its definition.
+        // Walked off `Depiction::ALL`, not a hand-written array: the bath's
+        // four variants arrived and the old list went on passing while covering
+        // none of them. `ALL` is exhaustiveness-checked at its definition.
         for depiction in Depiction::ALL {
             let resolved = resolve(depiction).is_some();
             assert_eq!(

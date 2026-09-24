@@ -5,16 +5,12 @@ use bevy_ecs::prelude::*;
 
 /// A puzzle open on a fixture.
 ///
-/// **One list, matched exhaustively everywhere the question is asked.** A maze
-/// in the stacks, a ward at the prism, a charm on the lattice, a course at the
-/// pylon and a beast at the circle all hold a fixture busy without a `Working`
-/// component — a spell's `summon` or `haul` must never wait on the puzzle it is
-/// solving — so every place that asks *"is anything happening here"* has to
-/// know about each of them. `panel::read` answered that with one `if let` a
-/// puzzle and `execute::pipeline::stop` with another, as two lists; §19 records
-/// the pylon's arm being forgotten in `stop` once, and the circle had to be
-/// added to both. **A variant added here is a compile error in both** until each
-/// has decided what it does with it.
+/// One list, matched exhaustively everywhere the question is asked. A maze, a
+/// ward, a charm, a course and a beast all hold a fixture busy without a
+/// `Working` component — a spell's `summon` or `haul` must never wait on the
+/// puzzle it is solving — so every place that asks *"is anything happening
+/// here"* has to know about each. Two hand-kept lists lost the pylon's arm once
+/// (§19); a variant added here is a compile error in both.
 ///
 /// A fixture holds at most one: every puzzle has its own instrument.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -1,23 +1,18 @@
 //! How much of a thing a place holds.
 //!
-//! # One node per kind, with a count — not one node per unit
+//! One node per kind with a count, not one node per unit. A node per unit would
+//! make five sage five entities, five `survey` rows and five names the parser
+//! has to tell apart, all called the same thing. The count lives on the one node
+//! instead, keeping every existing lookup working as it did.
 //!
-//! A node per unit would make five sage five entities, five `survey` rows and
-//! five names the parser has to tell apart, all called the same thing. The count
-//! lives on the one node instead, which keeps every existing lookup — `find the
-//! child named sage` — working exactly as it did.
+//! Endless is a component state, not a special name. §11.5 wants the laboratory
+//! to always have something to do, and a tower whose sage runs out after one
+//! grind does not, so taking from a base reagent never depletes it.
 //!
-//! # Endless is a component state, not a special name
-//!
-//! §11.5 wants the laboratory to always have something to do, and a tower whose
-//! sage runs out after one grind does not. So the base reagents are **endless**:
-//! taking from them never depletes them.
-//!
-//! **A variant rather than a `sage`/`rock-salt`/`charcoal` name check**, for the
-//! reason `tower::Role` already records — six sites once branched on `name ==
-//! ATHANOR` with nothing binding them together. Which reagents are inexhaustible
-//! is a property of the tower's stock, decided once where it is built, and §10's
-//! five further domains will each have their own.
+//! A variant rather than a `sage`/`rock-salt`/`charcoal` name check, for the
+//! reason `tower::Role` records — six sites once branched on `name == ATHANOR`
+//! with nothing binding them together. Which reagents are inexhaustible is a
+//! property of the tower's stock, decided once where it is built.
 
 use bevy_ecs::prelude::*;
 
@@ -70,10 +65,10 @@ pub fn find(world: &World, place: Entity, named: &str) -> Option<Entity> {
 
 /// What `place` holds: each name once, with how many units of it are there.
 ///
-/// **The shape [`Recipes::matching`](crate::content::Recipes::matching) needs**,
-/// and the one place it is derived. Three callers built the name list by hand and
-/// all three dropped the count on the floor, which is invisible until a recipe
-/// wants more than one of something — see [`Recipe::count`](crate::content::Recipe::count).
+/// The shape [`Recipes::matching`](crate::content::Recipes::matching) needs, and
+/// the one place it is derived. Three callers built the name list by hand and
+/// all three dropped the count, which is invisible until a recipe wants more
+/// than one — see [`Recipe::count`](crate::content::Recipe::count).
 ///
 /// [`Endless`](Stock::Endless) reports [`u32::MAX`]: the tower always has more, so
 /// no count can be short of it.
@@ -81,16 +76,13 @@ pub fn find(world: &World, place: Entity, named: &str) -> Option<Entity> {
 /// does not use, and demanding one here would keep this out of `panel::read`,
 /// which is the caller that most needs it to be the same rule.
 ///
-/// # A reading is not stock
-///
-/// [`Sense`](crate::parser::NounKind::Sense) children are skipped, and the rule
-/// is general rather than a special case for the one place it bites. The maze
-/// publishes what it can see as named children — `passage`, `back`, `spoil`, and
-/// the lectern's own errand — and the lectern is an **instrument**, so a reading
-/// counted here would enter the multiset `Recipes::matching` compares: four
-/// fragments plus one word is not four fragments, the recipe would stop
-/// matching, and the panel would read `fouled` for a lectern with nothing wrong
-/// with it. Nothing anywhere wants a word to be a unit of something.
+/// A reading is not stock, so [`Sense`](crate::parser::NounKind::Sense) children
+/// are skipped — a general rule rather than a special case for the one place it
+/// bites. The maze publishes what it can see as named children and the lectern
+/// is an instrument, so a reading counted here would enter the multiset
+/// `Recipes::matching` compares: four fragments plus one word is not four
+/// fragments, the recipe stops matching, and the panel reads `fouled` for a
+/// lectern with nothing wrong with it.
 #[must_use]
 pub fn holdings(world: &World, place: Entity) -> Vec<(String, u32)> {
     super::children_of(world, place)
@@ -147,10 +139,9 @@ pub fn take(world: &mut World, place: Entity, named: &str, wanted: u32) -> bool 
 
 /// Put `wanted` of `named` into `place`, merging with whatever is there.
 ///
-/// **Merging is the point.** Without it, grinding twice leaves two nodes both
-/// called `ground-sage` in the dispensary — two `survey` rows for one thing, and
-/// a name the parser has to choose between arbitrarily. That was already true
-/// before counts existed; it simply had no way to show.
+/// Merging is the point: without it, grinding twice leaves two nodes both called
+/// `ground-sage` in the dispensary — two `survey` rows for one thing, and a name
+/// the parser has to choose between arbitrarily.
 pub fn give(world: &mut World, place: Entity, named: &str, kind: NounKind, wanted: u32) -> Entity {
     if let Some(node) = find(world, place, named) {
         match world.get::<Stock>(node).copied() {
@@ -181,7 +172,7 @@ pub fn give(world: &mut World, place: Entity, named: &str, kind: NounKind, wante
     node
 }
 
-/// Put an **inexhaustible** pile of `named` in `place`.
+/// Put an inexhaustible pile of `named` in `place`.
 ///
 /// The shape `build` gives the three the tower starts with, reached at run time:
 /// a base reagent unlocked mid-game has to be as endless as one the laboratory

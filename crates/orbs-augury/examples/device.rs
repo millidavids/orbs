@@ -1,9 +1,8 @@
 //! Does a tensor actually run on this machine's GPU, and can burn share a
 //! device with the renderer?
 //!
-//! **The spike DESIGN.md §19 asks for before a model is built.** Two questions,
-//! and the second is the one that decides whether the augury costs a second
-//! Vulkan stack:
+//! The spike DESIGN.md §19 asks for before a model is built. The second
+//! question decides whether the augury costs a second Vulkan stack:
 //!
 //! 1. Does `burn` compute anything at all on this GPU, through Vulkan?
 //! 2. Can it be handed a device somebody else made, rather than making its own?
@@ -21,8 +20,8 @@ use burn::tensor::Tensor;
 fn main() {
     println!("\nO.R.B.S. — can the augury reach the GPU?\n");
 
-    // **A default device makes its own adapter**, which is what a standalone
-    // trainer wants and what the game must *not* do — the game already has one.
+    // A default device makes its own adapter: what a standalone trainer wants,
+    // and what the game must not do — it already has one.
     let device = WgpuDevice::default();
     println!("  device        {device:?}");
 
@@ -46,14 +45,13 @@ fn main() {
 
 /// Hand burn a device made outside it, the way the game will.
 ///
-/// **The question the spike exists for.** `orbs` already has a wgpu device —
-/// Bevy made it, and every frame of the tube runs on it. If burn cannot be
-/// given that one it opens a second, which means a second Vulkan instance and a
-/// second shader compiler in a game whose whole picture is a text grid.
+/// `orbs` already has a wgpu device from Bevy. If burn cannot be given that one
+/// it opens a second Vulkan instance and shader compiler in a game whose whole
+/// picture is a text grid.
 ///
 /// Bevy exposes all four pieces (`RenderInstance`, `RenderAdapter`,
-/// `RenderDevice::wgpu_device`, `RenderQueue`); this makes them the same way
-/// Bevy does, so what is proved here is the *mechanism* rather than the plumbing.
+/// `RenderDevice::wgpu_device`, `RenderQueue`); this makes them the same way, so
+/// what is proved here is the mechanism rather than the plumbing.
 fn adopted() {
     use burn::backend::wgpu::{RuntimeOptions, WgpuSetup, init_device};
 
@@ -64,19 +62,13 @@ fn adopted() {
     let info = adapter.get_info();
     println!("  adapter       {} ({:?})", info.name, info.backend);
 
-    // **Not `DeviceDescriptor::default()`.** That asks for no features and the
-    // downlevel limits, and a device built that way is *accepted* by
-    // `init_device` and then computes zeros — see the §19 entry. Ask the adapter
-    // for everything it has, which is the closest stand-in for a renderer that
-    // configured its own device deliberately.
-    // **Not `DeviceDescriptor::default()`.** That asks for the *downlevel*
-    // limits, and a device built that way is accepted by `init_device` and then
-    // computes zeros — see the §19 entry. The adapter's own limits are what a
-    // renderer that configured a device deliberately would have.
+    // Not `DeviceDescriptor::default()`: its downlevel limits are accepted by
+    // `init_device` and then compute zeros (§19). The adapter's own limits are
+    // what a renderer that configured a device deliberately would have.
     //
-    // Features are left alone: asking for `adapter.features()` wholesale fails,
-    // because on this driver that set includes six `EXPERIMENTAL_*` flags that
-    // need a separate opt-in nobody wants turned on by accident.
+    // Features are left alone: `adapter.features()` wholesale fails, because on
+    // this driver that set includes six `EXPERIMENTAL_*` flags needing a
+    // separate opt-in.
     let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
         label: Some("orbs-augury spike"),
         required_limits: adapter.limits(),
@@ -110,24 +102,20 @@ fn adopted() {
     hazard();
 }
 
-/// The way this goes wrong, kept because it goes wrong *quietly*.
+/// The way this goes wrong, kept because it goes wrong quietly.
 ///
-/// **A device built with `DeviceDescriptor::default()` is accepted by
-/// `init_device` and then computes zeros.** No error, no warning, no panic —
-/// `request_device` succeeds, the setup is taken, the tensor round-trips, and
-/// every number in it is 0.0. The difference is `required_limits`: the default
-/// is the *downlevel* set, and cubecl's kernels need what the adapter actually
-/// has.
+/// A device built with `DeviceDescriptor::default()` is accepted by
+/// `init_device` and then computes zeros — no error, no warning, the tensor
+/// round-trips and every number in it is 0.0. cubecl's kernels need what the
+/// adapter actually has, not the downlevel `required_limits`.
 ///
-/// This matters for the real integration rather than for the spike. Bevy
-/// configures its own device, so whether the augury works at all will depend on
-/// limits chosen elsewhere in the frontend for reasons that have nothing to do
-/// with it — and the failure will look like a model that reads every sentence
-/// as the same command, not like a device problem.
+/// Bevy configures its own device, so whether the augury works will depend on
+/// limits chosen elsewhere in the frontend — and the failure looks like a model
+/// that reads every sentence as the same command.
 ///
-/// **So adopting a device has to be checked, not assumed.** A known matmul with
-/// a known answer, once, at startup, and fall back to the CPU backend when it
-/// fails. Demonstrated here so the check has something to be written against.
+/// So adoption is checked, not assumed: a known matmul at startup, falling back
+/// to the CPU backend. Demonstrated here so the check has something to be
+/// written against.
 fn hazard() {
     use burn::backend::wgpu::{RuntimeOptions, WgpuSetup, init_device};
 

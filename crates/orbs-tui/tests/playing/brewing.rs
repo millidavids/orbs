@@ -44,11 +44,10 @@ fn damping_the_fire_banks_what_is_left_of_it() {
     if !available() {
         return;
     }
-    // **The banking, which is the whole reason `stop` is worth typing.** A fresh
-    // light is always `600`, so a re-light reporting a *four* digit number is
-    // exactly the claim: what was left was kept and added to. Asserting the
-    // digits rather than `1188` on the nose keeps it honest about the two or
-    // three ticks that pass while the commands are typed.
+    // The banking, which is the whole reason `stop` is worth typing. A fresh
+    // light is always `600`, so a re-light reporting four digits is the claim:
+    // what was left was kept and added to. Asserting the digits rather than
+    // `1188` keeps it honest about the ticks spent typing the commands.
     let game = Game::start();
     game.does("attend laboratory", "/tower/laboratory")
         .does("kindle charcoal", "fuel for 600 ticks")
@@ -163,10 +162,10 @@ fn the_bath_takes_from_the_mortar_without_being_told_to() {
     if !available() {
         return;
     }
-    // **The fetch, which is what makes the loop `move`-free.** `reachable`
-    // walks every unbusy instrument before the shelf, so the origin named here
-    // is the *mortar* — not the dispensary the reagent would have been emptied
-    // into. That single word is the whole claim.
+    // The fetch, which is what makes the loop `move`-free: `reachable` walks
+    // every unbusy instrument before the shelf, so the origin named here is the
+    // mortar, not the dispensary the reagent would have been emptied into. That
+    // single word is the whole claim.
     let game = Game::start();
     game.does("attend laboratory", "/tower/laboratory")
         .does("kindle charcoal", "fuel for 600 ticks")
@@ -198,11 +197,10 @@ fn a_whole_clarity_brews_by_hand_and_earns_sixteen() {
     if !available() {
         return;
     }
-    // **The flagship, end to end, through the keyboard.** `orbs-balance`'s
-    // `BY_HAND` proves the same arithmetic in milliseconds against `Sim`; what
-    // this adds is that a person typing these fifteen lines into a terminal
-    // reaches the same place — every echo, every tick boundary, every refusal
-    // that would have interrupted them.
+    // The flagship, end to end, through the keyboard. `orbs-balance`'s `BY_HAND`
+    // proves the same arithmetic in milliseconds against `Sim`; this adds that a
+    // person typing these fifteen lines into a terminal reaches the same place —
+    // every echo, every tick boundary, every refusal.
     let game = Game::start();
     game.does("attend laboratory", "/tower/laboratory")
         .does("kindle charcoal", "fuel for 600 ticks")

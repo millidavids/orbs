@@ -1,31 +1,22 @@
 //! What an enchantment does, as a closed table.
 //!
-//! **A closed table**, the shape `Die::ALL`, `Humour::ALL` and the lens's
-//! `SIGILS` already have — so a new charm is a variant and a row, and nothing
-//! derives one. The forge authors *cost* and *duration* in `content/forge.toml`
-//! (rule 6, so a tuning pass is a content edit); what a charm **means** is code,
-//! because each one is read at a different site and there is nothing to derive.
+//! The shape `Die::ALL`, `Humour::ALL` and the lens's `SIGILS` already have: a
+//! new charm is a variant and a row. The forge authors *cost* and *duration* in
+//! `content/forge.toml` (rule 6); what a charm means is code, because each one
+//! is read at a different site.
 //!
-//! # The words were swept three ways
-//!
-//! §6's matcher is directional and prefix-first, so a candidate has to be scored
-//! against every word the game knows *in both directions*, and against the other
-//! candidates. The last pass here skipped that third check and `imbue` → `imbued`
-//! came back at **975** — a reading that would have stolen its own verb's
-//! abbreviation, and a fourth row in `tests/naming.rs`'s pinned list, whose
-//! comment says a fourth *"is a word somebody should look at before shipping
-//! it."* `nimble` fell the same way at 667. Both are renamed.
-//!
-//! What the rejected words cost, so nobody re-proposes them: `temper` scores 625
-//! against `tampered`, which is a `verify` verdict; `anvil` ties `until` — a
-//! spell control word — at exactly `MIN_SIMILARITY`; `charmed` scores 858
-//! against `charged`, an instrument state; and `quickened` would have been a
-//! third `qui` word, where §19 already tolerates one collision.
+//! The words were swept against every word the game knows, in both directions,
+//! and against each other — the third check is the one a pass here once skipped,
+//! which let `imbued` through at 975 against its own verb's abbreviation.
+//! Rejected, so nobody re-proposes them: `temper` (625 against `tampered`),
+//! `anvil` (ties `until` at `MIN_SIMILARITY`), `charmed` (858 against
+//! `charged`), and `quickened` (a third `qui` word, where §19 already tolerates
+//! one collision).
 
 /// What an enchantment does.
 ///
-/// Five, and each is read in a different module — which is the whole reason this
-/// is a composition rather than the `if` `tower::dice` warned about.
+/// Five, each read in a different module — a composition rather than the `if`
+/// `tower::dice` warned about.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Kind {
     /// Work takes half as long.
@@ -66,9 +57,8 @@ impl Kind {
 
     /// Read one back from its word.
     ///
-    /// Exact only. §6's fuzzy matcher runs at the *parser*, against the scene's
-    /// nouns; by the time a word reaches here it has already been resolved, and
-    /// a second round of approximate matching would be a second place for one
+    /// Exact only. §6's fuzzy matcher runs at the parser, so a word arriving
+    /// here is already resolved; a second round would be a second place for one
     /// name to mean two things.
     #[must_use]
     pub fn from_word(word: &str) -> Option<Self> {

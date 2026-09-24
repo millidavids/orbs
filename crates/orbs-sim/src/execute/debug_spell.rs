@@ -1,44 +1,32 @@
 //! A working spell for a tester, in the builds a tester runs.
 //!
-//! # Why this exists beside `debug_spawn` rather than inside it
+//! Beside `debug_spawn` rather than inside it. [`debug`](super::debug) skips the
+//! forty ticks of grinding a state costs; this skips the eighty lines an
+//! automated state costs, since the ladder that solves a maze is twenty-four
+//! rungs. Separate modules because they are separate concerns — `debug.rs` is
+//! already long, and a spawn order and a spell share only the `cfg`.
 //!
-//! [`debug`](super::debug) skips the forty ticks of grinding that reaching a
-//! state costs. This skips the **eighty lines** that reaching an *automated*
-//! state costs: the ladder that solves a maze is twenty-four rungs, and typing
-//! it by hand to check that the archive still works is the same class of tedium
-//! one directory over.
+//! A release build has neither code nor content: the module is
+//! `cfg(debug_assertions)` and [`DEV_SPELLS`] is `include_str!`'d under the same
+//! `cfg`, so the word, the parse, the queue variant, the effect and the ladder
+//! are all absent. `debug_spawn`'s prose ships because `prose.toml` is one file;
+//! this file is its own.
 //!
-//! They are separate modules because they are separate concerns — `debug.rs` is
-//! already long, and a spawn order and a spell have nothing in common but the
-//! `cfg`.
+//! Two places it deliberately does not copy `debug_spawn`.
 //!
-//! # What a release build has
+//! It refuses outside the spell's own domain. `debug_spawn`'s headline property
+//! is *"any fixture, from anywhere"*, on the argument that making a tester walk
+//! puts back what the tool exists to skip. That does not survive here:
+//! [`Sim::write_spell`](crate::Sim::write_spell) homes a new spell to wherever
+//! the player stands, so `debug_spell threading` typed in the laboratory writes
+//! an archive spell whose `follow` and `research` lines cannot resolve.
 //!
-//! No code, and no content. The module is `cfg(debug_assertions)` and
-//! [`DEV_SPELLS`] is `include_str!`'d under the same `cfg`, so the word, the
-//! parse, the queue variant, the effect *and* the eighty lines of ladder are all
-//! absent. `debug_spawn`'s four lines of prose ship because `prose.toml` is one
-//! file; this file is its own, so nothing of it does.
-//!
-//! # The two places it deliberately does not copy `debug_spawn`
-//!
-//! **It refuses outside the spell's own domain.** `debug_spawn`'s headline
-//! property is *"any fixture, from anywhere"*, on the argument that making a
-//! tester walk first puts back the walking the tool exists to skip. That
-//! argument does not survive here: [`Sim::write_spell`](crate::Sim::write_spell)
-//! homes a new spell to whichever domain the player is standing in, so
-//! `debug_spell threading` typed in the laboratory would write an *archive*
-//! spell homed in the laboratory — whose `follow` and `research` lines cannot
-//! resolve there. A broken spell reported as written down is a worse outcome
-//! than a refusal that names the room.
-//!
-//! **It records the write, not the typed line.** `debug_spawn` pushes its line
-//! into [`Submissions`](crate::session::Submissions) and re-runs it on replay.
-//! Doing that here would record *twice* — once as the typed line and once as the
-//! `Wrote` that `write_spell` already pushes — and a replay would re-match the
-//! word and push both again. Recording only the write is also the stronger
-//! guarantee: a replay reproduces the **lines that actually ran**, even if this
-//! file is edited afterwards.
+//! It records the write, not the typed line. `debug_spawn` pushes its line into
+//! [`Submissions`](crate::session::Submissions) and re-runs it on replay, which
+//! here would record twice — the typed line and the `Wrote` that `write_spell`
+//! pushes — and a replay would re-match the word and push both again. Recording
+//! the write is also stronger: a replay reproduces the lines that actually ran,
+//! even if this file is edited afterwards.
 
 use bevy_ecs::prelude::*;
 use orbs_render::{FieldName, RecordKind, Role};
@@ -125,10 +113,10 @@ fn write(world: &mut World, book: &Spells, name: &str) -> Option<(String, Vec<St
         return None;
     };
 
-    // **The room has to match, and this is the departure from `debug_spawn`.**
-    // A spell is written *for* a domain and `scribe::write` homes a new one to
-    // where the player stands, so writing an archive spell from the laboratory
-    // would produce a file whose every line fails to resolve.
+    // The room has to match — the departure from `debug_spawn`. A spell is
+    // written for a domain and `scribe::write` homes a new one to where the
+    // player stands, so writing an archive spell from the laboratory produces a
+    // file whose every line fails to resolve.
     let cwd = world.resource::<tower::Cwd>().0;
     let here = tower::domain_of(world, cwd)
         .or(Some(cwd))

@@ -18,20 +18,17 @@ pub const GARRISON: &str = "garrison";
 /// Theirs.
 pub const ENEMY: &str = "enemy";
 
-/// How many troops the king assigns. **Static, and that is the design.**
+/// How many troops the king assigns. Static by design.
 ///
 /// The baseline is the same every time so the variables are legible: what the
-/// enemy brought, what you brought, and how the dice fell. A contingent that
-/// scaled would blur all three together.
+/// enemy brought, what you brought, and how the dice fell.
 pub const ASSIGNED: u32 = 6;
 
 /// The smallest enemy that ever comes up the road.
 ///
-/// **The floor never moves, at any standing.** A famous tower can still draw a
-/// quiet night; what fame lengthens is the *tail*, not the whole band — so a
-/// player who has just lost three fights is never handed a fourth they cannot
-/// win, which is §11.5's *"never ruinous, only slower"* at the scale of one
-/// evening.
+/// The floor never moves, at any standing: fame lengthens the *tail* rather
+/// than the whole band, so a player who has lost three fights is never handed a
+/// fourth they cannot win (§11.5).
 pub const FEWEST: u32 = 5;
 
 /// The largest enemy a tower nobody has heard of will meet.
@@ -39,13 +36,10 @@ pub const BASE_MOST: u32 = 9;
 
 /// The largest enemy anyone will ever meet.
 ///
-/// **Twelve, and it is a written ceiling rather than a drawn one.** The garrison
-/// opens at [`ASSIGNED`] six and `Siege::outnumbered` is a *ratio* —
-/// `enemy >= garrison * 2` — so twelve is exactly where that reading becomes true
-/// at the opening. A curve that ran past it would put every fight above the rung
-/// three shipped solvers branch on and stop the reading meaning anything, and one
-/// that stopped short would leave `outnumbered` unreachable except after the
-/// garrison is thinned. Twelve is the number that makes it a *decision*.
+/// A written ceiling rather than a drawn one: the garrison opens at
+/// [`ASSIGNED`] six and `Siege::outnumbered` is `enemy >= garrison * 2`, so
+/// twelve is exactly where that reading — the rung three solvers branch on —
+/// becomes true at the opening.
 pub const MOST: u32 = 12;
 
 /// How many ranks of standing buy one more foe.
@@ -64,37 +58,27 @@ pub const THIN: u32 = 2;
 
 /// At or below this share of its vigour, the garrison reads [`HURT`](super::HURT).
 ///
-/// A half rather than a quarter: a warning that fires only when it is too late
-/// to act on is not a warning, and this is the reading a decision tree hangs its
-/// `quaff` rung on.
+/// A half rather than a quarter: a warning that fires too late to act on is not
+/// a warning, and a decision tree hangs its `quaff` rung on this.
 pub const WEARY: u32 = 2;
 
 /// How long the road stays empty after a siege, in ticks.
 ///
-/// §11.5 fixes the **siege provocation cadence** at *"every 20–30 min at a
-/// normal push rate"*, and at one tick a second twenty minutes is 1200. Until
-/// §5.3's trace actually provokes them, this is what stands in for that gate.
+/// §11.5 fixes the siege provocation cadence at *"every 20–30 min at a normal
+/// push rate"*, and at one tick a second twenty minutes is 1200. Until §5.3's
+/// trace provokes them, this stands in for that gate.
 ///
-/// # It is the single most load-bearing number in the domain
-///
-/// Without it `defend` is free and unlimited, and `orbs-balance` measured the
-/// consequence exactly: a driver fighting sieges back to back reads **4.70
-/// experience a tick**, against clarity's 0.140 and scrying's 0.268. That is
-/// thirty-three times the flagship, and it says *ignore every other room* —
-/// which is the opposite of what a capstone should say about the six domains
-/// that feed it.
-///
-/// **The escrow was not the thing to tune, and that was the first diagnosis.**
-/// A siege paying 105 for thirteen rounds is right; fighting three hundred of
-/// them in two hours is not. Cutting the reward would have made each siege feel
-/// worthless *and* left the exploit — the fix belongs on how often, not on how
-/// much.
+/// The most load-bearing number in the domain. Without it `defend` is free and
+/// unlimited: `orbs-balance` measured back-to-back sieges at 4.70 experience a
+/// tick against clarity's 0.140, which says *ignore every other room*. The
+/// escrow was not the thing to tune — a siege paying 105 for thirteen rounds is
+/// right, fighting three hundred of them in two hours is not.
 pub const CADENCE: u64 = 1200;
 
 /// What a lost siege takes off the barrier.
 ///
-/// **Never ruinous, only slower** (§11.5). It is larger than the menagerie's
-/// collapse because a siege is a longer commitment, and still far short of
+/// Never ruinous, only slower (§11.5): larger than the menagerie's collapse
+/// because a siege is a longer commitment, and still far short of
 /// [`STANDING`](crate::tower::erosion::STANDING).
 pub const DEFEAT_WEAR: u32 = 20;
 
@@ -103,14 +87,10 @@ pub const VICTORY_MEND: u32 = 12;
 
 /// What the enemy will do next round, announced a round ahead.
 ///
-/// # Telegraphing is the borrow, not determinism
-///
-/// Into the Breach declares exact enemy intent a turn ahead, which turns the
-/// player's turn into *prevention* rather than reaction. Here the intent is
-/// telegraphed and the **outcome is rolled** — the XCOM bargain rather than the
-/// ITB one — and the rule that keeps it fair is XCOM's: **show the odds before
-/// the commitment and the roll after it.** A decision under known risk is a
-/// decision; a surprise is not.
+/// Telegraphing is the borrow, not determinism. Into the Breach declares exact
+/// intent a turn ahead, turning the player's turn into prevention; here the
+/// intent is telegraphed and the *outcome is rolled* — XCOM's bargain, under
+/// its fairness rule of odds before the commitment and the roll after it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Intent {
     /// Close on the wall. Ordinary damage, ordinary numbers.
@@ -159,9 +139,9 @@ impl Intent {
 
     /// Whether the garrison strikes back this round.
     ///
-    /// **A volley is answered by nobody**, which is the whole reason the three
-    /// intents are a decision rather than three damage numbers: it is the cheap
-    /// one to absorb and the one you can never trade against.
+    /// A volley is answered by nobody, which is why the three intents are a
+    /// decision rather than three damage numbers: it is the cheap one to absorb
+    /// and the one you can never trade against.
     #[must_use]
     pub const fn answered(self) -> bool {
         !matches!(self, Self::Volley)
@@ -169,11 +149,9 @@ impl Intent {
 
     /// Draw one.
     ///
-    /// **`pub(super)`, not private, because the split moved its two callers a
-    /// file away** — `Siege::begin` and `Siege::resolve`. It is not `pub`: a
-    /// caller outside `siege` drawing an intent would advance the `Siege` stream
-    /// and desynchronise every replay, which is precisely the thing rule 3
-    /// exists to make impossible.
+    /// `pub(super)` because the split moved its two callers a file away, and not
+    /// `pub` because a caller outside `siege` drawing an intent would advance
+    /// the `Siege` stream and desynchronise every replay.
     pub(super) fn drawn(rngs: &mut Rngs) -> Self {
         use rand::Rng;
         let roll = rngs
@@ -210,10 +188,9 @@ impl Band {
 
     /// Take `hits` off, dropping troops as vigour runs out.
     ///
-    /// **Vigour is shared across the band and the count follows it**, rather
-    /// than each troop carrying its own pool. That keeps the board two numbers
-    /// instead of a list, which is what makes it readable at a glance and
-    /// askable in one `if` — and §14 has to read it aloud.
+    /// Vigour is shared across the band and the count follows it, rather than
+    /// each troop carrying its own pool: that keeps the board two numbers
+    /// instead of a list, and §14 has to read it aloud.
     ///
     /// `pub(super)` since the split; see [`Intent::drawn`] for why not `pub`.
     pub(super) fn wound(&mut self, hits: u32) {
@@ -225,24 +202,15 @@ impl Band {
 
     /// Put `points` of fight back, never above `ceiling`, bringing troops with it.
     ///
-    /// # The cap has to come from outside, and this was the defect
+    /// The cap has to come from outside. Capping at `self.count * VIGOUR` was
+    /// the defect: [`wound`](Self::wound) derives `count` back *down* from
+    /// `vigour`, so after any damage the cap is the band's current strength and
+    /// a wounded line could be healed by at most two points — which made
+    /// `succour` and the `mending` potion nearly inert.
     ///
-    /// It capped at `self.count * VIGOUR` — and [`wound`](Self::wound) derives
-    /// `count` back *down* from `vigour`, so after any damage the two are within
-    /// `VIGOUR - 1` of each other and the cap is **the band's current strength**.
-    /// A wounded line could be healed by at most two points, whatever it was
-    /// given.
-    ///
-    /// That made `succour` nearly inert and — quietly, for longer — the
-    /// `mending` potion too: `every_authored_arsenal_row_changes_the_siege`
-    /// passed because the number *moved*, by one or two out of six. The dice
-    /// work is what surfaced it, with `the succour rolled 4 and put back 0` on
-    /// screen.
-    ///
-    /// **The count comes back with the vigour**, capped at what the band was
-    /// mustered at. Healing that left troops down would be the same trap one
-    /// field over: the band would read as thin for ever however much fight it
-    /// had.
+    /// The count comes back with the vigour, capped at what the band was
+    /// mustered at: healing that left troops down would read as thin for ever
+    /// however much fight the band has.
     pub(super) fn mend(&mut self, points: u32, ceiling: u32) {
         self.vigour = (self.vigour + points).min(ceiling);
         self.count = self.vigour.div_ceil(VIGOUR).min(ceiling / VIGOUR);
@@ -275,11 +243,9 @@ pub struct Round {
     pub strengths: Strengths,
     /// Extra hits a sortie put on the enemy.
     ///
-    /// **Separate from [`dealt`](Self::dealt) rather than folded into it.** A
-    /// sortie is a thing the player *chose*, so the round has to say what the
-    /// choice bought — folded in, the one visible effect of the one area that
-    /// can lose you the siege was invisible, and the sentence read *"take 2"*
-    /// for a round that had actually dealt twelve.
+    /// Separate from [`dealt`](Self::dealt): a sortie is a thing the player
+    /// *chose*, so the round has to say what the choice bought. Folded in, the
+    /// sentence read *"take 2"* for a round that had dealt twelve.
     pub sortied: u32,
     /// What the sortie cost the garrison.
     pub spent: u32,

@@ -1,30 +1,20 @@
 //! A charm on a node, and the one question every read site asks.
 //!
-//! # An interval, never a countdown
+//! An interval, never a countdown: [`Charm`] stores when it began and how long
+//! it lasts, and [`charmed`] compares that against the clock. Nothing ticks it
+//! down and nothing has to notice it expiring, so hundreds of ticks collapsed
+//! inside one `step` behave like hundreds watched. A charm that decayed per
+//! tick would be the countdown §19 refused, wearing a multiplier.
 //!
-//! `Burning` is *"a pure function of the tick, so fuel survives `meditate`"*, and
-//! a charm is the same claim: [`Charm`] stores when it began and how long it
-//! lasts, and [`charmed`] compares that against the clock. **No system ticks it
-//! down and nothing has to notice it expiring**, so hundreds of ticks collapsed
-//! inside one `step` behave exactly like hundreds watched. Four modules argue
-//! for this shape independently — `heat`, `quicken`, `work::slot` and
-//! `save::node` — and a charm that decayed per tick would be the countdown §19
-//! refused, wearing a multiplier.
+//! With no expiry system an expired charm is still a present component, so
+//! `With<Charmed>` is wrong at every read site. [`charmed`] asks the clock
+//! once, so no call site has to remember.
 //!
-//! # So `Charmed` can never be a query filter
-//!
-//! The consequence of having no expiry system: **an expired charm is still a
-//! present component.** `With<Charmed>` is therefore wrong at every read site,
-//! and each one needs the clock. [`charmed`] is that question asked once, so no
-//! call site has to remember.
-//!
-//! # Why one component holding many, rather than one per charm
-//!
-//! `bevy_ecs` allows one component of a type per entity, so five charms as five
-//! types would be five queries, five save fields and five liveness tests. They
-//! are one `Vec` in registration order — **never sorted**, because insertion
-//! order is the parse everywhere else in this tower and a charm list that
-//! reordered itself across a save would be a replay divergence with no symptom.
+//! One component holding many: `bevy_ecs` allows one component of a type per
+//! entity, so five charms as five types would be five queries, five save fields
+//! and five liveness tests. One `Vec` in registration order, never sorted — a
+//! list that reordered itself across a save would be a replay divergence with
+//! no symptom.
 
 use bevy_ecs::prelude::*;
 
@@ -46,9 +36,8 @@ pub struct Charm {
 impl Charm {
     /// Ticks of this charm left at `now`.
     ///
-    /// Saturating in both directions: a charm laid in the future (which only a
-    /// hand-edited save can produce) reads as fully remaining rather than
-    /// panicking, and one long expired reads as nought rather than wrapping.
+    /// Saturating both ways: a charm laid in the future (only a hand-edited
+    /// save does that) reads as fully remaining, one long expired as nought.
     #[must_use]
     pub const fn remaining(&self, now: Tick) -> u64 {
         let spent = now.get().saturating_sub(self.from.get());
@@ -69,15 +58,12 @@ pub struct Charmed(pub Vec<Charm>);
 impl Charmed {
     /// Lay one, replacing any charm of the same kind.
     ///
-    /// **Re-laying refreshes rather than stacking**, which is what makes the
-    /// maintenance spell of Phase 9's fourth box writable: `repeat until` keeps
-    /// a charm alive by laying it again, and a stacking rule would make that loop
-    /// grow the `Vec` once a lap for ever — a save that swells by a row a second,
-    /// which is the shape §19 records for runaway `part` recursion.
+    /// Re-laying refreshes rather than stacks, which makes a maintenance spell
+    /// writable: `repeat until` keeps a charm alive by laying it again, and
+    /// stacking would grow the `Vec` once a lap for ever (§19).
     ///
-    /// Order is otherwise untouched: a refreshed charm keeps its position rather
-    /// than moving to the end, so the list a save writes does not depend on how
-    /// recently each was renewed.
+    /// A refreshed charm keeps its position, so a save's row order does not
+    /// depend on how recently each was renewed.
     pub fn lay(&mut self, charm: Charm) {
         match self.0.iter_mut().find(|held| held.kind == charm.kind) {
             Some(held) => *held = charm,
@@ -102,12 +88,9 @@ impl Charmed {
 
 /// Whether `place` is under a live charm of `kind` right now.
 ///
-/// **Looks at the node and the domain it stands in**, which is `quicken`'s rule
-/// and the reason a `quickening-scroll` can grant one: the scroll buys *a stretch
-/// of the laboratory being quick* and hangs its state on the room, while `imbue`
-/// names one tool. Both have to reach the same answer at `work::begin`, or the
-/// two sources §19 warns about would disagree at the call site — which is the
-/// exact failure this composition exists to prevent.
+/// Looks at the node and the domain it stands in: a `quickening-scroll` hangs
+/// its state on the room while `imbue` names one tool, and both must reach the
+/// same answer at `work::begin` (§19).
 #[must_use]
 pub fn charmed(world: &World, place: Entity, kind: Kind) -> bool {
     let now = *world.resource::<Tick>();
@@ -122,8 +105,8 @@ pub fn charmed(world: &World, place: Entity, kind: Kind) -> bool {
 /// Ticks left of `kind` on `place` or its domain — the larger of the two.
 ///
 /// What the panel's decay row and the `graced` reading are drawn from. The
-/// larger rather than the nearer, because both are really in force and reporting
-/// the shorter would have the row hit nought while the effect was still working.
+/// larger because both are in force; the shorter would hit nought while the
+/// effect was still working.
 #[must_use]
 pub fn charm_left(world: &World, place: Entity, kind: Kind) -> u64 {
     let now = *world.resource::<Tick>();

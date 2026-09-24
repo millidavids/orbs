@@ -1,30 +1,22 @@
 //! An instrument's own verb fetches what it needs — §10.1's collapse, pinned.
 //!
-//! §19 records that giving every instrument its own verb *"collapses the two
-//! commands a player types most"*: `grind sage` **is** `move sage to
-//! mortar_and_pestle` followed by `wield mortar_and_pestle`. What that entry does
-//! not say, and what nothing asserted, is **where the fetch may reach from** — and
-//! that is the whole difference between a loop with `move` in it and one without.
+//! §19 records that an instrument's own verb collapses `move` and `wield`:
+//! `grind sage` *is* both. What it does not say, and nothing asserted, is where
+//! the fetch may reach from — the whole difference between a loop with `move`
+//! in it and one without.
 //!
 //! `pipeline::reachable` is the rule: every instrument in the room that is not
 //! busy, in raise order, and then the store. So a stage can take its input
-//! straight out of the instrument that made it, and the laboratory's loop never
-//! needs the word `move` at all.
+//! straight out of the instrument that made it.
 //!
-//! # Why this is a file and not a line in the balance harness
+//! Not a line in the balance harness: `BY_HAND` does brew a clarity with no
+//! `move`, but it `empty`s the mortar first, so the ground-sage comes from the
+//! shelf — it would go on passing with the tool-to-tool fetch removed.
 //!
-//! `orbs-balance`'s `BY_HAND` already brews a clarity with no `move` — but it
-//! `empty`s the mortar before digesting, so the ground-sage is fetched from the
-//! **shelf**. It would go on passing if the tool-to-tool fetch were removed
-//! tomorrow, which makes it evidence for the weaker half of the claim only.
-//!
-//! # `move` is deliberately not being removed
-//!
-//! It is the only way finished work leaves the room that made it (`move clarity
-//! to arsenal`), and the only way to reach an instrument's `charged` state, which
-//! three animation See-it lines need because `grind` never rests there. What is
-//! wrong is teaching it as part of the brewing loop, and that is a prose change.
-//! DESIGN.md §19 records the decision.
+//! `move` stays. It is the only way finished work leaves the room that made it,
+//! and the only way to reach an instrument's `charged` state, which three
+//! animation See-it lines need. What is wrong is teaching it as part of the
+//! brewing loop (§19).
 
 use orbs_render::{FieldName, Value};
 use orbs_sim::Sim;
@@ -49,9 +41,9 @@ fn sources(sim: &Sim) -> Vec<String> {
 
 #[test]
 fn a_stage_takes_its_input_straight_out_of_the_instrument_before_it() {
-    // **The half `BY_HAND` cannot see.** No `empty` and no `move`: the ground-sage
-    // is still sitting in the mortar with the husks it was left beside, and
-    // `digest` has to reach in and take the one it needs.
+    // The half `BY_HAND` cannot see: no `empty` and no `move`, so the
+    // ground-sage is still in the mortar beside the husks and `digest` has to
+    // reach in and take the one it needs.
     let mut sim = Sim::new(1);
     for line in ["attend laboratory", "kindle charcoal", "grind sage"] {
         run(&mut sim, line);
@@ -96,11 +88,9 @@ fn a_stage_takes_its_input_straight_out_of_the_instrument_before_it() {
 
 #[test]
 fn a_whole_brew_needs_no_move() {
-    // §11.5's anchor, reached without the word once. `empty` is still here and is
-    // **not** the same question: it clears the *byproduct* the last stage left, so
-    // the mortar can take a second load. A brew without it stalls at `grind
-    // rock-salt` with "the mortar_and_pestle can do nothing with husks, rock-salt",
-    // which is a real gap and a separate one.
+    // §11.5's anchor, reached without the word once. `empty` is a separate
+    // question: it clears the *byproduct* the last stage left so the mortar can
+    // take a second load, and a brew without it stalls at `grind rock-salt`.
     let mut sim = Sim::new(1);
     for line in [
         "attend laboratory",
@@ -130,18 +120,12 @@ fn a_whole_brew_needs_no_move() {
 
 #[test]
 fn move_is_still_the_only_way_finished_work_leaves_the_room() {
-    // The reason the verb stays. Nothing else carries between domains, and this is
-    // what a proposal to retire `move` from the laboratory has to answer.
-    // **§10.1's chain, from endless stock, with no debug door in it.** It used to
-    // open with `debug_spawn clarified-draught`, which is `cfg(debug_assertions)`
-    // — so under `cargo test --release` the line was simply unresolvable, the
-    // draught never appeared, and this failed on a world that was never built.
-    // The failure said *"the potion never reached the arsenal"* and named
-    // nothing about a door, which is what makes the class hard to see.
+    // The reason the verb stays: nothing else carries between domains.
     //
-    // `move` carrying finished work between rooms is shipped behaviour, so the
-    // fix is to brew properly rather than to gate the test off the build that
-    // ships it.
+    // §10.1's chain brewed properly, with no debug door in it. It used to open
+    // with `debug_spawn clarified-draught`, which is `cfg(debug_assertions)`, so
+    // under `--release` the line was unresolvable and this passed judgement on a
+    // world that was never built.
     let mut sim = Sim::new(1);
     for line in [
         "attend laboratory",

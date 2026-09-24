@@ -1,17 +1,10 @@
 //! The archive's stacks (DESIGN.md §10, §19).
 //!
-//! # The world remembers, so the spell does not have to
-//!
-//! §8's language has **no variables**, and a spell carries a rule rather than a
-//! memory. A maze solved by *searching* would therefore be the one room in the
-//! game that permanently defeats pillar 3 — you could never teach the orb to do
-//! it.
-//!
-//! Unless the **maze** holds the search's state. Trémaux's algorithm needs no
-//! memory beyond marks in the passages: enter a passage and mark it, turn back
-//! at a junction you have seen before, prefer the passage walked least. So the
-//! cells mark themselves, the maze publishes what is adjacent as ordinary nodes,
-//! and a solver becomes a rule rather than a search:
+//! The world remembers, so the spell does not have to. §8's language has no
+//! variables, so a maze solved by *searching* would defeat pillar 3 unless the
+//! maze holds the search's state. Trémaux needs no memory beyond marks in the
+//! passages: mark what you enter, turn back at a junction you have seen, prefer
+//! the least-walked way. So the cells mark themselves and a solver is a rule:
 //!
 //! ```text
 //! repeat until the stacks is idle
@@ -27,35 +20,23 @@
 //! end
 //! ```
 //!
-//! That is depth-first search, performed physically — the marks are the visited
-//! set, and turning back the way you came is the stack pop, because the reading
-//! head *is* the stack pointer.
+//! That is depth-first search performed physically: the marks are the visited
+//! set, turning back is the stack pop, and the reading head *is* the stack
+//! pointer. The comparison grammar added no memory — it stopped a `u8` being
+//! read through the two-value lens of `walked` and `twice` (§19).
 //!
-//! **This paragraph used to end "the language did not need to grow, the world
-//! needed to remember", and half of that still stands.** The world does the
-//! remembering and always did — [`Square::marks`] is the visited set. What was
-//! wrong was the other half: the language *did* need to grow, because the count
-//! the world kept was being read through two words (`walked`, `twice`) that
-//! could not tell a square walked twice from one walked forty times. The
-//! comparison added no memory. It stopped the language reading a `u8` through a
-//! two-value lens — see §19, which this supersedes.
-//!
-//! # The reading moves, never the wizard
-//!
-//! §7's filesystem is already the game's space and `attend` is already how you
-//! move through it. A second spatial system would be a second answer to "where
-//! am I". So the player stands in the archive throughout and it is the *reading*
-//! that threads the stacks — which is also why a spell can work them, since
-//! `may_issue` forbids a spell from walking.
+//! The reading moves, never the wizard: §7's filesystem is already the game's
+//! space, so a second spatial system would be a second answer to "where am I".
+//! It is also why a spell can work the stacks at all, `may_issue` forbidding a
+//! spell from walking.
 
 use bevy_ecs::prelude::*;
 
 /// What the maze can say about a direction.
 ///
-/// **A closed vocabulary, offered by the scene whether or not a maze is open.**
-/// A solver's `if` names these words at the moment it is *cast*, which is
-/// exactly when none of them is true of anything — see `tower::scene_at`, where
-/// registering them is the single change that makes the whole design work.
+/// A closed vocabulary, offered by the scene whether or not a maze is open: a
+/// solver's `if` names these words at *cast*, which is exactly when none of
+/// them is true of anything. See `tower::scene_at`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Sense {
     /// The way is open and unwalked.
@@ -68,60 +49,39 @@ pub enum Sense {
 
 /// The way the reading last came from.
 ///
-/// **A second fact about a direction, not a fifth [`Sense`].** A way can be
-/// `walked` *and* the way you came, and the two answer different questions — so
-/// this is raised as an extra child rather than replacing the reading.
+/// A second fact about a direction, not a fifth [`Sense`]: a way can be `walked`
+/// *and* the way you came.
 ///
-/// # Without it there is no correct solver
-///
-/// The four-tier ladder — exit, unwalked, walked, twice — reads like Trémaux and
-/// is not, because Trémaux's rule is *"when you arrive at a junction you have
-/// seen before **by the passage you came along**, turn back"*, and nothing in the
-/// language could say which passage that was. It solved 7×7 mazes carved by a
-/// recursive backtracker and nothing harder: at 16×16 it finished four runs in
-/// eight, and on the denser mazes Prim's carves it cycled for ever on eleven in
-/// twelve. Not slow — cycling, at a junction where two ways read alike and a
-/// fixed compass order sent it back where it came from.
-///
-/// With this word the same ladder solves every maze tried, both generators, both
-/// sizes, in at most 708 steps. It is one word and it is the difference between
-/// the archive being automatable and not.
+/// Without it there is no correct solver — Trémaux turns back *by the passage
+/// you came along*, and nothing else could name it. The four-tier ladder solved
+/// 7×7 backtracker mazes and nothing harder: four runs in eight at 16×16, and
+/// eleven in twelve cycled for ever on Prim's denser mazes. With this word the
+/// same ladder solves every maze tried in at most 708 steps.
 pub const BACK: &str = "back";
 
 /// A way whose next square holds something worth picking up.
 ///
-/// **A second fact about a direction, exactly as [`BACK`] is**, and outside
+/// A second fact about a direction, exactly as [`BACK`] is, and outside
 /// [`Sense::ALL`] for the same reason: a way can be `passage` *and* hold a
-/// spoil, and a solver asks both. `scene_at` chains the two onto the readings so
-/// all of them resolve at **cast**, when none of them is true of anything.
+/// spoil, and a solver asks both.
 pub const SPOIL: &str = "spoil";
 
 /// How many times the square a way leads to has been walked.
 ///
-/// **A counted child, and the only reading that carries a number.** It replaced
-/// `walked` and `twice`, which were two buckets over a `u8` the maze had all
-/// along — so a square walked nine times read exactly like one walked twice, and
-/// a ladder could not prefer the less-trodden of two ways it had both seen.
+/// The only reading that carries a number. It replaced `walked` and `twice`, two
+/// buckets over a `u8` the maze had all along, so a ladder could not prefer the
+/// less-trodden of two ways. Outside [`Sense::ALL`] like [`BACK`] and [`SPOIL`].
 ///
-/// Outside [`Sense::ALL`] like [`BACK`] and [`SPOIL`], and for the same reason: a
-/// way can be a `passage` *and* have a count, and a solver asks both.
-///
-/// **Published from one, never nought.** A pile that reaches zero is despawned
-/// everywhere else in the tower — `stock::take` states it and `debug_spawn`
-/// refuses to create one — so an unwalked way simply has no count, and the
-/// fresh-floor tier stays `if <way> has passage`, which already means exactly
-/// that. Absence answers nought to a comparison, which is what makes
-/// `has 1 or fewer marks` true of unwalked floor without a node existing to say
-/// so.
+/// Published from one, never nought, a pile at zero being despawned everywhere
+/// else in the tower. Absence answers nought to a comparison, which makes
+/// `has 1 or fewer marks` true of unwalked floor with no node saying so.
 pub const MARKS: &str = "marks";
 
 /// Every word a way can be asked about, whether or not a maze is open.
 ///
-/// **One list, because the scene and the maze must speak the same vocabulary.**
-/// `scene_at` built this chain inline, so `Sense::ALL` was the only part any test
-/// checked — and `back`, `spoil` and now `marks` ride *outside* it. A reading
-/// dropped from the chain would have compiled, cast clean, and answered no for
-/// ever, which is the shape §19 records the ways' stale readings taking.
+/// One list, the scene and the maze having to speak the same vocabulary. Built
+/// inline in `scene_at`, a reading dropped from the chain compiles, casts clean
+/// and answers no for ever.
 #[must_use]
 pub fn readings() -> Vec<&'static str> {
     Sense::ALL
@@ -133,22 +93,13 @@ pub fn readings() -> Vec<&'static str> {
 
 /// What the stacks are being walked *for*.
 ///
-/// The maze's **modifier**, and the thing a scroll changes. It is published on
-/// the **stacks** as an ordinary named child, so a spell asks `if the stacks has
-/// gleaning` through the `has` question it already has — no new grammar, no new
-/// [`State`](super::panel::State), and one solver can therefore handle both
-/// errands instead of two that cannot tell which maze they are in.
+/// The maze's modifier, and what a scroll changes. Published on the **stacks**
+/// as an ordinary named child, so a spell asks `if the stacks has gleaning`
+/// through the `has` question it already has, and one solver handles both.
 ///
-/// **The stacks, not the lectern**, and this said `lectern` for a version after
-/// the two fixtures split. The word goes where the maze is, which is where
-/// `republish_errand` puts it — but a doc is the spec a spell author writes
-/// against, so `if the lectern has gleaning` was a rung that compiles clean and
-/// never fires, which is the worst shape a wrong instruction can take here.
-///
-/// **Not a `State` variant**, which was the other candidate: `State` is a closed
-/// set read by `State::is_busy`, the panel's `bar_of` and the spell language's
-/// `is working` / `is idle` at once, and an errand is not a state of the
-/// *instrument* — the stacks are doing exactly what they were doing before.
+/// Not a `State` variant: `State` is read by `is_busy`, `bar_of` and
+/// `is working`/`is idle` at once, and an errand is not a state of the
+/// instrument.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Errand {
     /// Reach the way out. What the stacks always open as.
@@ -162,10 +113,9 @@ pub enum Errand {
 impl Errand {
     /// The word this errand is published and named by, if it has one.
     ///
-    /// `Way` has none: it is what the stacks already are, and publishing a word
-    /// for the absence of a modifier would put a permanent child on the stacks
-    /// saying nothing. A spell that wants the other case writes `if not the
-    /// stacks has gleaning`, which §19's `not` already answers.
+    /// `Way` has none: it is what the stacks already are, and a word for the
+    /// absence of a modifier is a permanent child saying nothing. A spell writes
+    /// `if not the stacks has gleaning` instead.
     #[must_use]
     pub const fn word(self) -> Option<&'static str> {
         match self {
@@ -179,18 +129,15 @@ impl Errand {
 }
 
 impl Sense {
-    /// Every reading, as the scene offers them.
-    /// **Three, where there were five.** `walked` and `twice` were two buckets
-    /// over `Square::marks`, so a square walked nine times read the same as one
-    /// walked twice and *"prefer the least-walked way"* could not be asked. They
-    /// are [`MARKS`] now — a count, compared with `or more` / `or fewer`.
+    /// Every reading, as the scene offers them. Three, where there were five:
+    /// `walked` and `twice` were buckets over `Square::marks` and are [`MARKS`]
+    /// now, compared with `or more` / `or fewer`.
     pub const ALL: [&'static str; 3] = ["passage", "wall", "exit"];
 
     /// The word this reading answers to.
     ///
-    /// **Not prose.** One word naming a state is the parser's kind of fact, and
-    /// §19 already settles that the tables emit facts and never sentences. What
-    /// the orb *says* about a reading lives in `prose.toml`.
+    /// Not prose: the tables emit facts rather than sentences (§19). What the
+    /// orb *says* about a reading is in `prose.toml`.
     #[must_use]
     pub const fn word(self) -> &'static str {
         match self {
@@ -203,11 +150,8 @@ impl Sense {
 
 /// The four ways out of a cell.
 ///
-/// **Absolute, not relative.** Relative directions would need a heading, which
-/// is state the maze would have to keep and a spell would have to reason about —
-/// and Trémaux needs no heading at all, while solving looped mazes that the
-/// wall-follower a heading would enable cannot. A heading is a later rung on the
-/// ladder (§19), bought rather than assumed.
+/// Absolute, not relative: a heading is state, and Trémaux needs none — while
+/// solving the loops the wall-follower a heading enables cannot (§19).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Way {
     /// Up the grid.
@@ -249,11 +193,9 @@ impl Way {
 
 /// One square of the grid: a wall, or floor the reading may have walked.
 ///
-/// **A square, not a cell with four walls.** The maze used to be 7×7 cells with
-/// the walls *between* them, which draws as `2w+1` characters — so one step took
-/// the reading two characters across the picture and read, correctly, as moving
-/// two spaces at a time. Making the wall a square of its own means a step is a
-/// step: the corridor between two cells is somewhere you stand.
+/// A square, not a cell with four walls. Walls *between* cells draw as `2w+1`
+/// characters, so one step moved the reading two characters across the picture.
+/// Making the wall a square means a step is a step.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Square {
     /// Whether this is solid. Nothing walks through it and nothing marks it.
@@ -264,14 +206,11 @@ pub struct Square {
 
 /// The stacks, and where the reading has reached in them.
 ///
-/// **A component, not a node per square.** Spawning one entity each would flood
-/// `survey`, the parser's scene and `NodeId`s with nodes the player can never
-/// name — and §19 records archive order changing what a phrase resolves to as a
-/// bug that no test catches.
+/// A component, not a node per square: one entity each would flood `survey`, the
+/// parser's scene and `NodeId`s with nodes the player can never name (§19).
 ///
-/// It is the first component in the game not reconstructible from names and
-/// `NodeId`s, which is a debt against §8's *"in-flight state is first-class
-/// serialisable"* and is recorded as one in §19.
+/// The first component not reconstructible from names and `NodeId`s, a debt
+/// against §8's serialisable in-flight state (§19).
 #[derive(Component, Debug, Clone, PartialEq, Eq)]
 pub struct Maze {
     /// Squares, row-major.
@@ -298,17 +237,14 @@ pub struct Maze {
 impl Maze {
     /// A maze from its squares, with the reading at `at`.
     ///
-    /// **Built in one go, never over ticks.** `heat.rs` records that spawning
-    /// across ticks issues `NodeId`s at a rate depending on how the ticks were
-    /// consumed, so a live-watched run and a `meditate`-collapsed one produce
-    /// different worlds from one seed. A maze that grew as it was walked would
-    /// have the same hazard.
+    /// Built in one go, never over ticks: spawning across ticks issues `NodeId`s
+    /// at a rate depending on how the ticks were consumed, so a live-watched run
+    /// and a `meditate`-collapsed one differ from one seed (`heat.rs`).
     #[must_use]
     pub fn new(mut squares: Vec<Square>, width: usize, at: usize, exit: usize) -> Self {
-        // **The starting square counts as walked**, because it has been: the
-        // reading is standing in it. Left unmarked, the first step back reports
-        // the way you came as an unwalked `passage` — and a Trémaux solver would
-        // take it, walk to the start, and loop there for ever.
+        // The starting square counts as walked, because it has been. Unmarked,
+        // the first step back reports the way you came as an unwalked
+        // `passage`, and a Trémaux solver loops at the start for ever.
         if let Some(square) = squares.get_mut(at) {
             square.marks = 1;
         }
@@ -325,10 +261,8 @@ impl Maze {
 
     /// Set this maze an errand, and what it has to gather to finish it.
     ///
-    /// **In one go, like everything else here.** `Maze::new`'s own note applies:
-    /// scattering the spoils as the walk went would issue them at a rate
-    /// depending on how the ticks were consumed, so a live-watched run and a
-    /// `meditate`-collapsed one would differ from one seed.
+    /// In one go, for `Maze::new`'s reason: scattering spoils as the walk went
+    /// would issue them at a rate depending on tick consumption.
     pub fn set_errand(&mut self, errand: Errand, spoils: Vec<usize>) {
         self.errand = errand;
         self.spoils = spoils;
@@ -348,10 +282,9 @@ impl Maze {
 
     /// Every square the reading could still be sent to gather from.
     ///
-    /// Unwalked floor only, and never where the reading is standing: a spoil
-    /// dropped under the reading's feet would be collected on the frame it was
-    /// scattered, and one on a walked square would make spending the scroll on a
-    /// half-explored maze a partial refund.
+    /// Unwalked floor only, never where the reading stands: one dropped
+    /// underfoot is collected on the frame it is scattered, and one on walked
+    /// floor makes spending the scroll on a half-explored maze a partial refund.
     #[must_use]
     pub fn scatterable(&self) -> Vec<usize> {
         self.squares
@@ -396,13 +329,9 @@ impl Maze {
 
     /// Floor walked, against floor there is.
     ///
-    /// **The only honest meter the stacks have.** A brew knows its duration
-    /// before it starts; a maze does not — how long it takes is what the player's
-    /// rule decides. What *can* be reported is how much of it has been seen, and
-    /// that only ever grows, which is what a bar has to do.
-    ///
-    /// Walls are not counted. They are most of the grid and none of the walk, so
-    /// counting them would peg the bar near a third for ever.
+    /// The only honest meter: a brew knows its duration, a maze does not. How
+    /// much has been seen only ever grows, which is what a bar has to do. Walls
+    /// are most of the grid and none of the walk, so they are not counted.
     #[must_use]
     pub fn explored(&self) -> (u64, u64) {
         let floor = self.squares.iter().filter(|square| !square.wall);
@@ -451,25 +380,15 @@ impl Maze {
 
     /// What the reading can say about `way` from where it stands.
     ///
-    /// **`Exit` outranks everything**, including a wall — a solver's first rule
-    /// is *if the way out is there, take it*, and a reading that reported the
-    /// exit as `walked` would make that rule fire on the wrong square.
+    /// `Exit` outranks everything, including a wall: a solver's first rule is
+    /// *take the way out if it is there*, and an exit reported as `walked` fires
+    /// it on the wrong square. A gleaning maze publishes no exit at all, or the
+    /// top rung would walk onto it and take the same rung for ever.
     ///
-    /// **And a gleaning maze publishes no exit at all**, rather than publishing
-    /// one that does nothing. A solver's top rung is `if <way> has exit`, so an
-    /// inert exit would have it walk onto that square, find the walk not over,
-    /// and take the same rung again from the same place for ever. Withdrawing
-    /// the word is what makes the errand a *behaviour* change instead of a trap.
-    /// **`None` means one thing only: open, already walked, and not the way
-    /// out.** Every other absence is still `Some(Sense::Wall)` — off the grid, an
-    /// index the squares do not have, and a square that is solid. The obvious
-    /// refactor collapses the first two into `None` and turns *there is no such
-    /// direction* into *walked floor*, which would publish a tread count into a
-    /// way that is not there.
-    ///
-    /// What a walked way says instead is its [`marks`](Self::marks) count,
-    /// which is a number rather than a word and is why `walked` and `twice` are
-    /// gone: they were two buckets over a `u8` the maze had all along.
+    /// `None` means one thing: open, already walked, and not the way out. Every
+    /// other absence is `Some(Sense::Wall)`, or *there is no such direction*
+    /// would read as *walked floor*. A walked way says its
+    /// [`marks`](Self::marks) count instead.
     #[must_use]
     pub fn reading(&self, way: Way) -> Option<Sense> {
         let Some(beyond) = self.beyond(self.at, way) else {
@@ -489,13 +408,9 @@ impl Maze {
 
     /// How many times the square that way has been walked, if it is open.
     ///
-    /// **`None` for a wall**, which is what keeps a comparison from sending the
-    /// reading into stone: absence answers nought, and `has 1 or fewer marks`
-    /// would otherwise be true of every wall in the maze.
-    ///
-    /// Derived from the same lookup [`reading`](Self::reading) makes rather than
-    /// repeating the bounds check, so the two cannot disagree about which
-    /// directions exist.
+    /// `None` for a wall: absence answers nought, so `has 1 or fewer marks`
+    /// would otherwise send the reading into stone. Derived from
+    /// [`reading`](Self::reading)'s lookup, so the two cannot disagree.
     #[must_use]
     pub fn marks(&self, way: Way) -> Option<u8> {
         let beyond = self.beyond(self.at, way)?;
@@ -505,18 +420,13 @@ impl Maze {
 
     /// Move the reading one square, marking where it arrives.
     ///
-    /// Returns whether it moved. **The maze does the marking**, which is what
-    /// lets a spell hold a rule rather than a memory.
-    ///
-    /// A spoil on the square the reading arrives at is picked up here, by the
-    /// walking, rather than by anything watching: `Sim::walk` and `follow` both
-    /// come through this one function, so a fifth press of an arrow key and a
-    /// bound solver's fifth lap collect on exactly the same rule.
+    /// Returns whether it moved. The maze does the marking, which lets a spell
+    /// hold a rule rather than a memory. A spoil is picked up here, by the
+    /// walking, so an arrow key and a bound solver collect on the same rule.
     pub fn tread(&mut self, way: Way) -> bool {
-        // **`Some(Wall)`, not `None`.** A walked-open way reads `None` now, and
-        // treating that as impassable would stop the reading ever retracing its
-        // steps — which is the `back` tier, and the whole of what makes a solver
-        // terminate.
+        // `Some(Wall)`, not `None`: a walked-open way reads `None`, and treating
+        // that as impassable would stop the reading retracing its steps, which
+        // is the `back` tier and the whole of what makes a solver terminate.
         if self.reading(way) == Some(Sense::Wall) {
             return false;
         }
@@ -532,19 +442,13 @@ impl Maze {
         true
     }
 
-    /// The maze as a frontend draws it — **whole**.
-    ///
-    /// It used to fog: a square was handed over only once the reading had stood
-    /// in it or beside it, which is exactly what the four `survey` readings
-    /// answer, so the picture carried nothing the linear stream lacked. The maze
-    /// is now given entire, which makes walking it routing rather than feeling
+    /// The maze as a frontend draws it — whole. Fogged it carried nothing the
+    /// linear stream lacked; entire, walking it is routing rather than feeling
     /// along a wall.
     ///
-    /// **The cost is §14's, and it is recorded in §19**: a sighted player sees
-    /// more than a listener does. What survives it is that a *spell* still
-    /// solves from the four readings alone, so the automation pillar is
-    /// untouched — and the cheap repair, if it bites, is a spoken bearing to the
-    /// exit rather than a return to fog.
+    /// The cost is §14's (§19): a sighted player sees more than a listener. A
+    /// *spell* still solves from the four readings alone, and the cheap repair
+    /// is a spoken bearing to the exit rather than a return to fog.
     #[must_use]
     pub fn view(&self) -> orbs_render::Stacks {
         let squares = self
@@ -560,10 +464,9 @@ impl Maze {
             squares,
             width: u16::try_from(self.width).unwrap_or(u16::MAX),
             at: self.at,
-            // **The picture says the same thing the readings do.** A gleaning
-            // maze publishes no `exit`, so drawing `Ω` would be the one place on
-            // screen offering a way out that a spell cannot see and a player
-            // cannot use — the invisible-state defect in reverse.
+            // The picture says what the readings do. A gleaning maze publishes
+            // no `exit`, so drawing `Ω` would offer a way out that no spell can
+            // see and no player can use.
             exit: (self.errand == Errand::Way).then_some(self.exit),
             spoils: self.spoils.clone(),
         }
@@ -571,25 +474,15 @@ impl Maze {
 }
 /// Reading a maze out into a save, and back.
 ///
-/// # Why this lives here rather than in `crate::save`
-///
-/// The same argument `Ward::to_save` makes — it is private, so this names it
-/// rather than links it: the
-/// fields are private, and putting the conversion beside them means a new field
-/// breaks the build *here*, in the file being edited.
-///
-/// It also pays a debt this module already recorded. `Maze` was named as *"the
-/// first component in the game not reconstructible from names and `NodeId`s,
-/// which is a debt against §8"* — §8 requiring in-flight state to be
-/// serialisable. This is the pair of methods that settles it.
+/// Here rather than in `crate::save` for `Ward::to_save`'s reason: the fields
+/// are private. It settles the debt above — `Maze` was the first component not
+/// reconstructible from names and `NodeId`s (§8).
 impl Maze {
     /// Everything a save needs to put this maze back.
     ///
-    /// **The walls go out as a picture and the marks as a sparse list.** 33 × 23
-    /// is 759 squares, and an array-of-tables of `Square` would be several
-    /// hundred lines of `{ wall = true, marks = 0 }` — the save file would *be*
-    /// the maze. §15 makes readable-and-editable a stated criterion, and this is
-    /// the one field big enough to decide whether it is met.
+    /// The walls go out as a picture and the marks as a sparse list: 33 × 23 is
+    /// 759 squares, and an array-of-tables would be hundreds of lines of
+    /// `{ wall = true, marks = 0 }` in a save §15 says stays readable.
     pub(crate) fn to_save(&self) -> crate::save::MazeSave {
         crate::save::MazeSave {
             width: self.width,
@@ -620,9 +513,9 @@ impl Maze {
 
     /// Put one back.
     ///
-    /// **Draws no randomness**, unlike the generator — the layout is read rather
-    /// than dug. A restore that re-dug the maze would move `RngStream::Archive`
-    /// and change every later roll in the session.
+    /// Draws no randomness, unlike the generator: the layout is read, not dug. A
+    /// restore that re-dug would move `RngStream::Archive` and change every
+    /// later roll in the session.
     pub(crate) fn from_save(save: &crate::save::MazeSave) -> Self {
         let squares: Vec<Square> = save
             .walls
@@ -634,12 +527,9 @@ impl Maze {
             })
             .collect();
 
-        // **Range-checked, because §15 invites hand-editing.** Nothing here can
-        // panic today — every consumer of `at` and `exit` reaches through
-        // `.get()` — but a maze whose reading stands outside its own grid is a
-        // maze `follow` can never move and `survey` reports nothing about, which
-        // is a silently unplayable archive rather than a loud one. Clamped to a
-        // real square instead.
+        // Range-checked, because §15 invites hand-editing. Nothing panics today,
+        // but a reading standing outside its own grid is a maze `follow` cannot
+        // move and `survey` says nothing about — a silently unplayable archive.
         let width = save.width.max(1);
         let squares: Vec<Square> = squares;
         let last = squares.len().saturating_sub(1);
@@ -675,9 +565,8 @@ mod tests {
     /// A straight corridor `len` squares long running east, walls either side,
     /// with the exit at the far end.
     ///
-    /// Laid out as a `len + 2` by 3 grid so the corridor has real wall squares
-    /// around it — which is the point of squares, and what makes `reading`
-    /// answer `wall` for north and south without a special case.
+    /// A `len + 2` by 3 grid, so the corridor has real wall squares around it
+    /// and `reading` answers `wall` north and south with no special case.
     fn corridor(len: usize) -> Maze {
         let span = len + 2;
         let mut squares = vec![
@@ -703,23 +592,18 @@ mod tests {
         );
         assert_eq!(maze.reading(Way::North), Some(Sense::Wall));
         assert_eq!(maze.reading(Way::East), Some(Sense::Passage));
-        // **A wall has no count at all**, which is what stops `1 or fewer marks`
-        // sending a solver into stone: absence answers nought to a comparison, so
-        // a wall that reported `0` would satisfy every `or fewer` rung there is.
+        // A wall has no count at all, which stops `1 or fewer marks` sending a
+        // solver into stone: absence answers nought, so a wall reporting `0`
+        // would satisfy every `or fewer` rung there is.
         assert_eq!(maze.marks(Way::West), None, "a wall reported a count");
         assert_eq!(maze.marks(Way::East), Some(0), "open floor has a count");
     }
 
     #[test]
     fn the_maze_counts_what_the_reading_walks() {
-        // **The whole design in one assertion.** A spell has no memory, so if
-        // the squares do not remember, Trémaux cannot be written and the archive
-        // is the one room automation can never reach.
-        //
-        // It used to assert `Sense::Walked` then `Sense::Twice` — two buckets
-        // over a `u8` the maze had all along, so a square walked nine times read
-        // exactly like one walked twice. The count is the reading now, and
-        // `passage` is what an unwalked way says.
+        // The whole design in one assertion: a spell has no memory, so if the
+        // squares do not remember, Trémaux cannot be written and the archive is
+        // the one room automation can never reach.
         let mut maze = corridor(4);
         assert_eq!(maze.reading(Way::East), Some(Sense::Passage));
         assert!(maze.tread(Way::East));
@@ -743,10 +627,9 @@ mod tests {
 
     #[test]
     fn the_exit_outranks_every_other_reading() {
-        // A solver's first rule is *take the way out if it is there*. Reporting
-        // the exit as walked floor on a second pass would fire that rule on the
-        // wrong square — and it is the one reading that outranks a tread count,
-        // which the exit keeps carrying beside it.
+        // A solver's first rule is *take the way out if it is there*, so an exit
+        // reported as walked floor on a second pass fires it on the wrong
+        // square. The one reading that outranks a tread count.
         let mut maze = corridor(2);
         assert_eq!(maze.reading(Way::East), Some(Sense::Exit));
         assert!(maze.tread(Way::East));
@@ -765,9 +648,8 @@ mod tests {
 
     #[test]
     fn a_step_is_one_square() {
-        // **What the whole grid exists for.** With the walls *between* cells the
-        // picture was `2w+1` across, so one step moved the reading two characters
-        // and read as moving two spaces at a time.
+        // What the grid exists for: with walls *between* cells the picture was
+        // `2w+1` across, so one step moved the reading two characters.
         let mut maze = corridor(4);
         let before = maze.at();
         assert!(maze.tread(Way::East));
@@ -792,10 +674,8 @@ mod tests {
 
     #[test]
     fn the_view_hands_over_the_whole_maze() {
-        // **The fog is gone** (§19). The view used to withhold every square the
-        // reading had not stood in or beside, which is exactly what the four
-        // `survey` readings answer; it now hands the maze over entire, so
-        // walking it is routing rather than feeling along a wall.
+        // The fog is gone (§19): the view withheld exactly what the four
+        // `survey` readings answer, and hands the maze over entire now.
         let maze = corridor(4);
         let view = maze.view();
 
@@ -839,10 +719,9 @@ mod tests {
                 sense.word(),
             );
         }
-        // **And the three that are not `Sense`es**, which is the half this test
-        // missed when `back` and `spoil` were added: they ride outside
-        // `Sense::ALL` and are chained on separately, so nothing here would have
-        // noticed one being dropped from the chain.
+        // And the three that are not `Sense`es, which is the half this test
+        // missed when `back` and `spoil` were added: chained on separately, so
+        // nothing here would have noticed one dropped.
         for word in [BACK, SPOIL, MARKS] {
             assert!(
                 readings().contains(&word),

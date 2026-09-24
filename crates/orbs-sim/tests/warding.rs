@@ -5,12 +5,11 @@
 //! a haul costs the tower nothing, and a finished course pays what
 //! `progression.toml` says it does.
 //!
-//! **The solver here is the one `dev_spells.toml` ships**, run through `invoke`
-//! rather than reimplemented. A Rust copy of the cyclic algorithm would prove
-//! the algorithm, which `tower::pylon` already does; what is worth proving
-//! here is that §8's language can *express* it — no variables in the loop body,
-//! a part it has to call three times with different bindings, and a parity it
-//! has to read off the world.
+//! The solver here is the one `dev_spells.toml` ships, run through `invoke`
+//! rather than reimplemented: a Rust copy would prove the algorithm, which
+//! `tower::pylon` already does. What is worth proving is that §8's language can
+//! *express* it — no variables in the loop body, a part called three times with
+//! different bindings, and a parity read off the world.
 
 use orbs_render::{FieldName, Value};
 use orbs_sim::Sim;
@@ -21,8 +20,8 @@ const STATIONS: [&str; 3] = ["wellspring", "conduit", "barrier"];
 
 /// The shipped solver's name.
 ///
-/// **Gated with the tests that use it**, which are the debug-word ones: in a
-/// release build those are gone and this reads as dead rather than deliberate.
+/// Gated with the debug-word tests that use it: in a release build those are
+/// gone and this reads as dead rather than deliberate.
 #[cfg(debug_assertions)]
 const SOLVER: &str = "holding";
 
@@ -50,10 +49,9 @@ fn ever_said(sim: &Sim, needle: &str) -> bool {
 
 /// Every field of every record, as one line each.
 ///
-/// **`survey`'s answer is not a `Message`.** It emits `TableRow`s carrying a
-/// `Name` and a `Quantity`, so [`said`] — which reads the message field — cannot
-/// see a published reading at all. Two tests here were written against `said`
-/// and passed for the wrong reason before they failed for the right one.
+/// `survey`'s answer is not a `Message`: it emits `TableRow`s carrying a `Name`
+/// and a `Quantity`, so [`said`] cannot see a published reading at all. Two
+/// tests here were written against `said` and passed for the wrong reason.
 fn shown(sim: &Sim) -> Vec<String> {
     sim.scrollback()
         .records()
@@ -105,11 +103,10 @@ fn a_course_goes_up_and_publishes_what_a_spell_can_ask() {
     );
 }
 
-/// **A course refused on load takes its readings with it** — the circle's
-/// defect, one room over. The course travels as a component and `potency` as
-/// nodes, so a document whose course `Course::from_save` refuses restored the
-/// readings alone: a spell's `if the wellspring has 3 potency` answered about
-/// wards that were not there.
+/// A course refused on load takes its readings with it — the circle's defect,
+/// one room over. The course travels as a component and `potency` as nodes, so a
+/// document whose course `Course::from_save` refuses restored the readings
+/// alone, and `if the wellspring has 3 potency` answered about absent wards.
 #[test]
 fn a_course_refused_on_load_leaves_no_potency_behind() {
     let mut sim = in_the_sanctum(3);
@@ -144,15 +141,12 @@ fn a_course_refused_on_load_leaves_no_potency_behind() {
 
 #[test]
 fn the_barrier_says_how_it_stands_before_anything_has_happened() {
-    // **The defect this is here for, and it was the worse of the two.** The
-    // `integrity` reading was published by `erode`, which only writes when the
-    // number moves — so for the first thirty ticks of every session there was no
-    // reading at all. `survey pylon` printed nothing, and `watch::many_at`
-    // answers an absent child with **nought**, so `if the pylon has fewer than
-    // 60 integrity` was true of a barrier in perfect repair.
-    //
-    // A guard that fires hardest when nothing is wrong is the worst shape a
-    // guard can have, and no test that mustered first could ever have seen it.
+    // The defect this is here for, and the worse of the two: `integrity` was
+    // published by `erode`, which only writes when the number moves, so for the
+    // first thirty ticks of every session there was no reading — and
+    // `watch::many_at` answers an absent child with nought, making `if the pylon
+    // has fewer than 60 integrity` true of a barrier in perfect repair. No test
+    // that mustered first could have seen it.
     let sim = in_the_sanctum(1);
     assert_eq!(sim.integrity(), 100);
 
@@ -170,10 +164,9 @@ fn the_barrier_says_how_it_stands_before_anything_has_happened() {
 
 #[test]
 fn a_haul_is_instant_and_takes_no_slot() {
-    // **The decision this domain shares with the lens.** A course is a hundred
-    // hauls; one that held the tower's single production slot would starve every
-    // other spell into `spell_gave_up`, and a bound solver would be an
-    // alternative to brewing rather than something that runs beside it.
+    // The decision this domain shares with the lens: a course is a hundred
+    // hauls, and one holding the tower's single production slot would starve
+    // every other spell into `spell_gave_up`.
     let mut sim = in_the_sanctum(1);
     run(&mut sim, "muster");
     assert!(
@@ -192,17 +185,15 @@ fn a_haul_is_instant_and_takes_no_slot() {
 #[test]
 #[cfg(debug_assertions)]
 fn a_scripted_course_runs_while_the_laboratory_is_busy() {
-    // **The claim the whole domain rests on, and it shipped false.** `muster`
-    // and `haul` are in `Verb::is_operation` — which is the *scope* question,
-    // and what keeps them out of the tower-wide vocabulary — and
+    // The claim the whole domain rests on, and it shipped false. `muster` and
+    // `haul` are in `Verb::is_operation` — the *scope* question — and
     // `spell::block::begins_work` reads that same predicate to decide whether a
-    // scripted line must wait on the tower's one production slot. The `Dial`
-    // exemption beside them was written for exactly this and these two were left
-    // out of it.
+    // line waits on the production slot. The `Dial` exemption was written for
+    // exactly this and these two were left out.
     //
-    // The symptom: `holding.spell waits: the alembic is distilling`, forever, and
-    // then `spell_gave_up` at `PATIENCE` with a fault latched on the rail. Every
-    // other test here runs in an idle tower, so none of them could see it.
+    // The symptom: `holding.spell waits: the alembic is distilling` for ever,
+    // then `spell_gave_up` with a fault on the rail. Every other test here runs
+    // in an idle tower.
     let mut sim = Sim::new(1);
     for line in [
         "attend laboratory",
@@ -230,16 +221,12 @@ fn a_scripted_course_runs_while_the_laboratory_is_busy() {
 
 #[test]
 fn the_rail_says_the_barrier_and_never_the_course() {
-    // **The rail's own recorded defect, arriving for the third time.** The
-    // pylon's meter was wards-still-to-haul while a course stood, and
-    // `detail_of` prints a meter's *remainder* — so the sanctum read `py 4` and
-    // counted **down** as a solver won, which to a player who last saw `py 100`
-    // is a barrier about to fail. §19 records the same shape at `st 350t` and
-    // `pr 4t`: *"two of the three built domains were glanceably wrong"*.
-    //
-    // Worse here than there, because the number did not merely mislead — it
-    // *vanished* into course progress exactly while a bound solver was working,
-    // which is the one time the player is in another room and glancing.
+    // The rail's recorded defect, arriving for the third time (§19, `st 350t`
+    // and `pr 4t`): the pylon's meter was wards-still-to-haul while a course
+    // stood, and `detail_of` prints a remainder — so the sanctum read `py 4` and
+    // counted *down* as a solver won. Worse here, because the number vanished
+    // into course progress exactly while a bound solver was working, which is
+    // the one time the player is in another room and glancing.
     let detail = |sim: &Sim| {
         sim.briefs()
             .into_iter()
@@ -293,10 +280,9 @@ fn the_one_rule_is_refused_in_voice_and_costs_nothing() {
 
     // ...and it changed nothing, which is §11.5's "never ruinous, only slower".
     //
-    // **Read through `shown`, not `said`.** This asked `said` for `potency = 2`
-    // and could never have failed: `survey` emits `TableRow`s with no `Message`
-    // at all, and even `shown` renders the pair as `potency 2`. The claim in the
-    // comment was untested.
+    // Read through `shown`, not `said`: this asked `said` for `potency = 2` and
+    // could never have failed, because `survey` emits `TableRow`s with no
+    // `Message` and even `shown` renders the pair as `potency 2`.
     let before = shown(&sim).len();
     run(&mut sim, "survey barrier");
     let after: Vec<String> = shown(&sim).into_iter().skip(before).collect();
@@ -351,11 +337,10 @@ fn the_words_mean_nothing_in_the_laboratory() {
 #[test]
 #[cfg(debug_assertions)]
 fn the_shipped_solver_finishes_a_course_in_the_optimal_number_of_hauls() {
-    // **The acceptance test for the whole domain.** §8's language has no
-    // arguments to a part and no per-descent variables, so the only way to write
-    // the cyclic solution is the one `holding` takes: bind `here` and `there`
-    // before each call and let the part read them. If this stops finishing, the
-    // language has lost something the domain depends on.
+    // The acceptance test for the whole domain: §8's language has no arguments
+    // to a part and no per-descent variables, so the only way to write the
+    // cyclic solution is `holding`'s — bind `here` and `there` before each call
+    // and let the part read them.
     //
     // Optimality is the sharp half. A wrong cycle direction still *finishes* —
     // in the conduit — and a ladder that guessed would take more hauls, so
@@ -396,17 +381,16 @@ fn the_shipped_solver_finishes_a_course_in_the_optimal_number_of_hauls() {
 #[test]
 #[cfg(debug_assertions)]
 fn a_bound_solver_holds_the_barrier_while_the_player_stands_elsewhere() {
-    // **What the domain is for**, and the bug it would otherwise ship with: the
-    // lens published its readings from `Cwd`, so a bound solver working while
-    // the player was in the laboratory froze on its first move. `publish` taking
-    // the pylon entity is what stops that here, and this is what proves it.
+    // What the domain is for, and the bug it would otherwise ship with: the lens
+    // published its readings from `Cwd`, so a bound solver working while the
+    // player was in the laboratory froze on its first move. `publish` taking the
+    // pylon entity is what stops that here.
     let mut sim = in_the_sanctum(3);
 
-    // **Earned, not counted.** Concentration costs 16 experience and a course
-    // pays one or two, so the number of courses is a function of
-    // `progression.toml` — a loop with a hard count would go red every time
-    // somebody tuned the yield, which is the wrong thing for this test to be
-    // sensitive to. The cap is a runaway guard, not a budget.
+    // Earned, not counted: concentration costs 16 experience and a course pays
+    // one or two, so the number of courses is a function of `progression.toml`
+    // and a hard count would go red every time somebody tuned the yield. The cap
+    // is a runaway guard, not a budget.
     for _ in 0..40 {
         if sim.concentration() > 0 {
             break;
@@ -495,12 +479,10 @@ fn the_barrier_wears_down_and_a_finished_course_puts_it_back() {
 
 #[test]
 fn the_integrity_a_spell_reads_keeps_up_with_the_one_the_rail_draws() {
-    // **The defect this is here for.** `erode` wears a resource down; the
-    // pylon carries a *reading* of it, and the first version never
-    // republished — so `survey pylon` and every `if the pylon has fewer than
-    // n integrity` went on reporting a whole wall while the rail counted down
-    // beside them. Two surfaces, one number, and only the one a spell reads was
-    // wrong.
+    // The defect this is here for: `erode` wears a resource down, the pylon
+    // carries a *reading* of it, and the first version never republished — so
+    // `survey pylon` and every `if the pylon has fewer than n integrity`
+    // reported a whole wall while the rail counted down beside them.
     let mut sim = in_the_sanctum(1);
     sim.step_n(900);
 
@@ -520,11 +502,10 @@ fn the_integrity_a_spell_reads_keeps_up_with_the_one_the_rail_draws() {
 
 #[test]
 fn every_station_answers_to_its_own_name_and_to_no_other() {
-    // **This asserted nothing at all.** `said(&sim).len() >= before` is monotone
-    // and trivially true, and `is not a station` is a *haul* refusal that
-    // `survey` cannot produce — in a test that issues no hauls. What it is meant
-    // to prove is that each name reaches its own station and no other, so it
-    // hauls a ward onto each in turn and reads the potency back.
+    // This asserted nothing at all: `said(&sim).len() >= before` is monotone,
+    // and `is not a station` is a *haul* refusal that `survey` cannot produce in
+    // a test that issues no hauls. What it means to prove is that each name
+    // reaches its own station, so it hauls onto each and reads the potency back.
     let mut sim = in_the_sanctum(1);
     run(&mut sim, "muster");
 

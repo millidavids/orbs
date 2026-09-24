@@ -11,10 +11,9 @@ use orbs_sim::{Sim, parser};
 
 /// A reader that answers everything, wrongly, and loudly.
 ///
-/// **The instrument for proving tier one.** A test that a literal line is not
-/// sent to a reader cannot be written with a reader that abstains — abstaining
-/// and never being asked look identical from outside. This one always answers,
-/// so being consulted at all is visible in the world.
+/// Tier one cannot be proved with a reader that abstains — abstaining and never
+/// being asked look identical from outside. This one always answers, so being
+/// consulted at all is visible in the world.
 struct Trap;
 
 impl Augur for Trap {
@@ -25,10 +24,9 @@ impl Augur for Trap {
 
 /// A reader whose first answer never runs and whose second always does.
 ///
-/// **The candidates rule, made visible.** A reader offers several because it
-/// cannot tell `run {script}` from `run the {place}` — nothing in the sentence
-/// says which. The caller must skip past what does not resolve rather than
-/// taking the head of the list on faith.
+/// A reader offers several because nothing in the sentence tells `run {script}`
+/// from `run the {place}`, so the caller must skip past what does not resolve
+/// rather than take the head of the list on faith.
 struct Fussy;
 
 impl Augur for Fussy {
@@ -110,13 +108,9 @@ fn a_typo_is_the_matchers_and_not_a_readers() {
 
 #[test]
 fn a_phrasing_the_orb_cannot_read_reaches_the_reader_and_runs() {
-    // The feature, in one test. `turn the sage into powder` resolves to nothing
-    // today; it grinds now.
-    //
-    // **Standing in the laboratory matters.** `grind` is anchored to the mortar
-    // (§7), so the canonical command the reader produces is `Elsewhere` from
-    // anywhere else — which is right, and would make this test measure the room
-    // rather than the reader.
+    // The feature, in one test: `turn the sage into powder` grinds. Standing in
+    // the laboratory matters — `grind` is anchored to the mortar (§7), so from
+    // anywhere else this would measure the room rather than the reader.
     let mut sim = Sim::new(0);
     sim.submit("attend laboratory");
     sim.step();
@@ -133,11 +127,9 @@ fn a_phrasing_the_orb_cannot_read_reaches_the_reader_and_runs() {
 
 #[test]
 fn the_trace_records_a_consultation_even_when_the_command_does_not_land() {
-    // The augury read the sentence correctly and the command was refused —
-    // `grind` is the mortar's word and nobody is standing at the mortar. That
-    // row is the most interesting one in an export, because it is where either
-    // the model or the room was wrong, and deriving `divined` from the
-    // confidence would have dropped it silently.
+    // Read correctly, refused anyway — `grind` is the mortar's word and nobody
+    // is standing there. That row is where either the model or the room was
+    // wrong, and deriving `divined` from the confidence would drop it silently.
     let mut sim = Sim::new(0);
     sim.submit_reading("turn the sage into powder", &Fixture::worked());
 
@@ -174,18 +166,14 @@ fn a_reader_that_abstains_leaves_the_game_exactly_as_it_was() {
 
 #[test]
 fn a_reader_cannot_change_a_reading_the_orb_was_sure_of() {
-    // **The additive claim, stated as a property rather than an argument.**
-    // Every synonym of every verb, submitted both ways, with a reader standing
-    // by that would answer differently — and wherever the orb read the line
-    // outright, it reads it identically.
+    // The additive claim as a property: every synonym of every verb, submitted
+    // both ways with a reader standing by that would answer differently, reads
+    // identically wherever the orb read the line outright.
     //
-    // **Not every synonym qualifies, and that is the router working.** Bare
-    // `edit` reaches `verify` only because `edit` is two edits from `audit` and
-    // scores exactly `MIN_SIMILARITY`; the exact `scribe` reading loses because
-    // its `Name` slot is free text and cannot be enumerated. A 600 is a guess,
-    // and a guess is precisely what a reader is allowed to improve on. Nothing
-    // is lost either way: a reader that abstains falls through to the same
-    // `verify`, so §19's *"a released word does not stop resolving"* holds.
+    // Not every synonym qualifies, which is the router working. Bare `edit`
+    // reaches `verify` only at exactly `MIN_SIMILARITY`, and a 600 is a guess —
+    // what a reader is allowed to improve on. Nothing is lost: abstaining falls
+    // through to the same `verify` (§19).
     let mut offered = 0;
     for verb in parser::Verb::ALL {
         for (_, phrase) in parser::synonyms_of(verb) {
@@ -222,9 +210,9 @@ fn a_reader_cannot_change_a_reading_the_orb_was_sure_of() {
 
 #[test]
 fn a_word_the_orb_only_guesses_at_still_resolves_when_no_reader_answers() {
-    // The other half of the case above. `edit` is a shipped synonym, and §19's
-    // rule is that a released word does not stop resolving — so the fallback
-    // has to reach exactly where it always did.
+    // The other half of the case above: `edit` is a shipped synonym and a
+    // released word does not stop resolving (§19), so the fallback reaches
+    // exactly where it always did.
     let mut plain = Sim::new(0);
     plain.submit("edit");
 
@@ -236,10 +224,9 @@ fn a_word_the_orb_only_guesses_at_still_resolves_when_no_reader_answers() {
 
 #[test]
 fn the_first_reading_that_runs_is_the_one_taken() {
-    // **Why the seam returns a list at all.** A reader cannot see the world, so
-    // it offers what the sentence might mean and the room decides. Taking the
-    // head of the list on faith would run nothing and fall through to §6's
-    // suggestions, which is the behaviour this replaced.
+    // Why the seam returns a list: a reader cannot see the world, so it offers
+    // what the sentence might mean and the room decides. Taking the head on
+    // faith ran nothing and fell through to §6's suggestions.
     let mut sim = Sim::new(0);
     sim.submit_reading("what is about the place", &Fussy);
 
@@ -275,9 +262,8 @@ fn a_reader_whose_readings_all_fail_leaves_the_game_as_it_was() {
 
 #[test]
 fn a_divined_reading_never_raises_a_numbered_prompt() {
-    // "It acts, and never stops to ask." A reader whose command is ambiguous
-    // drops rather than interrogating — the interrogation is what the augury
-    // exists to remove.
+    // "It acts, and never stops to ask." An ambiguous divined command drops
+    // rather than interrogating, which is what the augury exists to remove.
     let augur = Fixture::new().reading("get rid of things", "purge");
     let mut sim = Sim::new(0);
     sim.submit_reading("get rid of things", &augur);
@@ -288,13 +274,11 @@ fn a_divined_reading_never_raises_a_numbered_prompt() {
     );
 }
 
-/// **Every sentence the circle teaches is one a reader is shown** — or one the
-/// orb reads as the very command it teaches. The orb answers first, so a
-/// phrasing opening on another room's word taught a reader something it never
-/// sees: *"put heed on the keystone"* was `dial`'s, *"test the circle"*
-/// fuzzed to `rest`, and each answered in the menagerie with a reader standing
-/// by. Filled with the circle's own words, both ways round, since a humour may
-/// be named first.
+/// Every sentence the circle teaches is one a reader is shown, or one the orb
+/// reads as the very command it teaches. The orb answers first, so a phrasing
+/// opening on another room's word taught a reader something it never sees —
+/// *"put heed on the keystone"* was `dial`'s, *"test the circle"* fuzzed to
+/// `rest`. Both ways round, since a humour may be named first.
 #[test]
 fn every_phrasing_the_circle_teaches_reaches_a_reader_or_its_own_command() {
     let phrasings = Phrasings::builtin();

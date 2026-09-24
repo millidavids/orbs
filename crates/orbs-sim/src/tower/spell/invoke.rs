@@ -1,29 +1,19 @@
 //! `invoke` — casting a spell yourself.
 //!
-//! # Invoking is not automation, and that is the point
+//! Invoking is not automation, and that is the point: §19 settles that
+//! automation wins nothing until the first Concentration level is bought, and
+//! `invoke` runs at concentration 0. It types for you, and typing was already
+//! free (§5.0, §14), so an invoked spell takes the same durations, occupies the
+//! same production slot, and needs you standing there.
 //!
-//! §19 settles that **automation wins nothing at all until the first
-//! Concentration level is bought**, and that buying it is the moment the game
-//! becomes what it advertises. `invoke` runs at concentration 0, so it cannot be
-//! allowed to win anything either.
+//! What `bind` adds is running unattended, and that is the whole of it — §11.5's
+//! invariant about a script action being faster than a manual one was struck
+//! when `bind` was built (§19). See
+//! [`Running::unattended`](super::Running::unattended).
 //!
-//! It does not. It types for you, and typing was already free — §5.0 makes
-//! issuing an action cost nothing but the time the action takes, and §14 forbids
-//! any mechanic requiring fast typing. So an invoked spell takes the **same**
-//! durations, occupies the **same** production slot, and needs you standing
-//! there watching it.
-//!
-//! What `bind` adds is **running unattended**, and that is the whole of it:
-//! §11.5's invariant about a script action being faster than a manual one was
-//! struck when `bind` was built (§19), so a binding sells one thing rather than
-//! two. It is still the game's turn, because *walk away and come back to work
-//! done* is the sentence pillar 3 is made of — and because "needs you standing
-//! there" above was an assertion nothing enforced until `bind` gave it something
-//! to be true against. See [`Running::unattended`](super::Running::unattended).
-//!
-//! It also gives the player a way to **test** a spell before committing a
-//! Concentration slot to it — which at concentration 1, where binding a second
-//! spell means letting the first one go, is the sharpest decision in the game.
+//! It also lets a player *test* a spell before committing a Concentration slot,
+//! which at concentration 1 — where binding a second spell means letting the
+//! first go — is the sharpest decision in the game.
 
 use bevy_ecs::prelude::*;
 use orbs_render::{FieldName, RecordKind, Role};
@@ -81,22 +71,20 @@ pub fn invoke(intent: &Intent, world: &mut World) {
 
 /// Put a spell into flight, however it was asked for.
 ///
-/// **One door, shared by `invoke` and `bind`.** They differ in what they *buy* —
-/// an invocation ends when the player leaves, a binding does not — and not at
-/// all in how a spell is started. Two copies of this would be two places for the
-/// compile step, the depth counter and the complaint report to drift apart.
+/// One door, shared by `invoke` and `bind`: they differ in what they *buy* — an
+/// invocation ends when the player leaves — and not at all in how a spell is
+/// started. Two copies would be two places for the compile step, the depth
+/// counter and the complaint report to drift apart.
 ///
-/// `announce` is the prose key for "it has begun", or **empty** for a cast
-/// nobody asked for: a bound spell standing up again on its own says nothing,
-/// because one line per lap is the noise §19 cut back from the editor's saves.
-///
-/// **An empty `announce` is also what makes a lap a lap** rather than a fresh
-/// beginning — see `said` below, which is carried over rather than cleared.
+/// `announce` is the prose key for "it has begun", or empty for a cast nobody
+/// asked for, because one line per lap is the noise §19 cut from the editor's
+/// saves. An empty `announce` is also what makes a lap a lap rather than a fresh
+/// beginning — see `said` below, carried over rather than cleared.
 ///
 /// `held` says the orb is holding this spell, which is the one thing the two
-/// doors genuinely differ on. A parameter rather than a look at the `Bound`
-/// component, because `bind` casts *before* it would be able to read it back and
-/// because a spell cast by a held spell is unattended without being held itself.
+/// doors genuinely differ on. A parameter rather than a look at `Bound`, because
+/// `bind` casts before it could read it back and because a spell cast by a held
+/// spell is unattended without being held itself.
 pub(super) fn cast(
     world: &mut World,
     node: Entity,
@@ -109,13 +97,9 @@ pub(super) fn cast(
     let Some(spell) = world.get::<NodeId>(node).copied() else {
         return;
     };
-    // **A spell runs in its own domain, wherever the player is.** That is what
-    // domain-scoping buys: `invoke morning` from the archive runs the laboratory
-    // spell in the laboratory, because that is what it was written for.
-    //
-    // Not acting at a distance in §19's sense — that rule is about *typing* a
-    // command at a room you are not in. Casting a spell you already wrote is a
-    // different act, and `bind` is what makes it survive you walking out.
+    // A spell runs in its own domain wherever the player is, which is what
+    // domain-scoping buys. Not acting at a distance in §19's sense — that rule
+    // is about *typing* a command at a room you are not in.
     let Some(at_place) = world
         .get::<Domain>(node)
         .cloned()
@@ -129,25 +113,21 @@ pub(super) fn cast(
         return;
     };
 
-    // **Derived here, from the text, every time.** `Held` stays the truth: §8's
-    // hot-reload re-resolves only changed *lines*, and §8.1's sabotage surface
-    // is *"a line reordered"* — so an enemy edits the text and the program is
-    // whatever the text now means.
+    // Derived here from the text, every time. `Held` stays the truth: an enemy
+    // edits the text and the program is whatever the text now means.
     let lines = super::source(world, node);
-    // **Compiled, not merely parsed.** This is where the loose phrasing in the
-    // file becomes the tower's own names — the moment §8 asks for and the file
-    // no longer provides, since it holds exactly what the player typed.
+    // Compiled, not merely parsed: this is where the loose phrasing in the file
+    // becomes the tower's own names, since the file holds exactly what the
+    // player typed.
     let program = super::compile(world, at_place, &lines);
     let complaints = program.complaints().to_vec();
     let seen = world.resource::<Scrollback>().records().sequence();
 
-    // **Carried across a lap, cleared for a beginning.** `said` rations a bad
-    // name to one report per line per casting, and a standing spell is cast
-    // again every time it runs off the end — so clearing it here put the
-    // rationing back to square one twice a second, which is the failure it
-    // exists to prevent arriving through the fix for a different one. A lap is
-    // not a new casting; `scribe` clears it when the *text* changes, which is
-    // the event that makes a name worth complaining about again.
+    // Carried across a lap, cleared for a beginning. `said` rations a bad name
+    // to one report per line per casting, and a standing spell is cast again
+    // every time it runs off the end — so clearing it here put the rationing
+    // back to square one twice a second. `scribe` clears it when the *text*
+    // changes, which is what makes a name worth complaining about again.
     //
     // Read off `Bound`, not off `Running`: `finish` removes the run between
     // laps, so the run is exactly the thing that cannot carry it.
@@ -176,10 +156,10 @@ pub(super) fn cast(
         biding: None,
         said: already,
         unattended,
-        // **Empty at every cast**, including a binding's re-cast. A spell that
-        // has run off the end and starts again is a new pass over the same
-        // lines, and an accumulator left holding last lap's answer would make
-        // the first comparison of this one ask about a world that has moved.
+        // Empty at every cast, including a binding's re-cast: a spell that ran
+        // off the end and starts again is a new pass over the same lines, and an
+        // accumulator holding last lap's answer would make the first comparison
+        // of this one ask about a world that has moved.
         vars: std::collections::BTreeMap::new(),
         // A cast opens on the spell's own body with nothing suspended behind it,
         // which is the same *"a new pass over the same lines"* the store above
@@ -187,11 +167,10 @@ pub(super) fn cast(
         // a call the new pass never made.
         part: None,
         stack: Vec::new(),
-        // **One cursor at every cast**, and `alongside` is the only thing that
-        // ever adds a second. It mirrors the fields above rather than being
-        // derived from them, because `swap_in` reads this slot before the first
-        // step and a strand list that disagreed with the fields would step a
-        // cursor pointing nowhere.
+        // One cursor at every cast, and `alongside` is the only thing that adds
+        // a second. It mirrors the fields above rather than deriving from them,
+        // because `swap_in` reads this slot before the first step and a strand
+        // list that disagreed would step a cursor pointing nowhere.
         strands: vec![super::Strand {
             pc: vec![0],
             ..Default::default()
@@ -206,11 +185,9 @@ pub(super) fn cast(
     // spell runs either way — §8 forbids both refusing at save and halting at
     // cast, so this is a report rather than a rejection.
     //
-    // **Only when the cast was asked for.** A bound spell recompiles on every
-    // lap, and a spell with an unreadable line would otherwise print the same
-    // complaint for as long as it is held — the failure the once-per-cast
-    // rationing on `Running::said` exists to stop, arriving through the recast
-    // that resets it.
+    // Only when the cast was asked for: a bound spell recompiles on every lap,
+    // so a spell with an unreadable line would print the same complaint for as
+    // long as it is held.
     if announce.is_empty() {
         return;
     }
@@ -236,29 +213,24 @@ pub(super) fn cast(
 ///
 /// Returns whether it found one, so `stop` can fall through to an instrument.
 ///
-/// # Why `stop` had to learn about spells
+/// `stop` had to learn about spells because nothing but running out of program
+/// removed [`Running`], and `repeat` with no count never runs out — so a player
+/// who wrote one had a spell working the laboratory for ever. §6's dead end from
+/// a direction the parser could not see: `stop` took a `Place`, a spell is a
+/// `Script`, so the sentence never resolved to the thing it named.
 ///
-/// Nothing but running out of program removed [`Running`], so an invoked spell
-/// could not be called off — and `repeat` with no count never runs out. A
-/// player who wrote one had a spell working the laboratory for ever with no way
-/// to reach it, which is §6's dead end arrived at from a direction the parser
-/// could not see: `stop` took a `Place`, a spell is a `Script`, so the sentence
-/// never resolved to the thing it named.
-///
-/// **What it is working on is left alone.** Stopping the spell is not stopping
-/// the mortar — `stop mortar_and_pestle` is still how you cancel a run, and a
-/// spell called off mid-brew leaves the brew to finish, exactly as it would if
-/// you had typed the line yourself and walked away.
+/// What it is working on is left alone: stopping the spell is not stopping the
+/// mortar, and a spell called off mid-brew leaves the brew to finish exactly as
+/// it would if you had typed the line yourself and walked away.
 pub fn stop_spell(world: &mut World, named: &str) -> bool {
     let wanted = crate::content::with_extension(named);
     let Some(node) = find(world, &wanted) else {
         return false;
     };
-    // **Released first, or it stands straight back up.** `stand` casts every
-    // bound spell that is not running, so removing `Running` from a held spell
-    // would put it back on the next tick — the player would type `stop` and
-    // watch nothing happen. Letting go is what `stop` means for a spell the orb
-    // is holding, which is also how a slot is freed for another (§11.5).
+    // Released first, or it stands straight back up: `stand` casts every bound
+    // spell that is not running, so removing `Running` from a held spell would
+    // put it back next tick. Letting go is what `stop` means for a held spell,
+    // and is also how a slot is freed for another (§11.5).
     let released = super::bind::release(world, node, &wanted);
 
     if world.get::<Running>(node).is_none() {
@@ -276,8 +248,8 @@ pub fn stop_spell(world: &mut World, named: &str) -> bool {
 
 /// The spell node called `wanted`, wherever it is kept.
 ///
-/// **One of three byte-identical copies of this walk**, and now one call: see
-/// `tower::reach` for the rule and for what the other two cost.
+/// One of three byte-identical copies of this walk, and now one call — see
+/// `tower::reach` for the rule and what the other two cost.
 fn find(world: &World, wanted: &str) -> Option<Entity> {
     tower::reach::look(world)
         .scope(tower::reach::Scope::Tower)

@@ -1,15 +1,12 @@
-//! Colour vision deficiency, simulated — **an instrument, not an effect.**
+//! Colour vision deficiency, simulated — an instrument, not an effect.
 //!
-//! Nothing here draws. This module exists so the palette's accessibility claim
-//! can be *measured* rather than asserted: push each accent through a
-//! deficiency and check the triad is still separable on the other side.
+//! Nothing here draws. This exists so the palette's accessibility claim can be
+//! measured rather than asserted: push each accent through a deficiency and
+//! check the triad is still separable on the other side.
 //!
-//! # Why this is not a correction filter
-//!
-//! ROADMAP Phase 13 and DESIGN.md §19 specify three **daltonisation** filters —
-//! simulate the deficiency, take the error, redistribute it into the channels
-//! the player can still see. That was implemented numerically against this
-//! palette before any of it was written, and it makes the game **worse**:
+//! It is not a correction filter. ROADMAP Phase 13 and §19 specify three
+//! daltonisation filters, and measuring them against this palette first showed
+//! they make the game worse:
 //!
 //! | channel | unfiltered | daltonised |
 //! |---|---|---|
@@ -18,24 +15,18 @@
 //! | spell syntax (hue) | 43–53 | 37–44 |
 //!
 //! Worse in eleven of twelve theme × deficiency combinations, worst case violet
-//! under protanopia going 1.41 → **1.00** — danger and cost at identical
-//! brightness.
+//! under protanopia going 1.41 → 1.00 — danger and cost at identical brightness.
 //!
-//! The reason is structural rather than a tuning failure. This game does not
-//! carry meaning in hue: [`the accent
-//! triad`](super::palette::Phosphor) is *solved* so danger, cost and success
-//! differ in **luminance**, and every screen duplicates colour with a glyph or a
-//! word (§14). Daltonisation redistributes hue, which moves luminance around —
-//! so it fights the one property the design actually relies on, in exchange for
-//! improving a channel §19 already permits to collapse.
+//! The reason is structural. This game carries no meaning in hue: the accent
+//! triad is solved so danger, cost and success differ in *luminance*, and every
+//! screen duplicates colour with a glyph or a word (§14). Daltonisation
+//! redistributes hue, which moves luminance around, so it fights the property
+//! the design relies on to improve one §19 already permits to collapse.
 //!
-//! So the correction is not shipped, and the simulation is kept and pointed at
-//! the tests. §19 records the measurement.
+//! So the correction is not shipped and the simulation is pointed at the tests.
 //!
-//! # The matrices
-//!
-//! Machado, Oliveira and Fernandes (2009), severity 1.0, as used by
-//! `court_wizard`. They operate on **linear** RGB.
+//! The matrices are Machado, Oliveira and Fernandes (2009) at severity 1.0, as
+//! `court_wizard` uses them. They operate on linear RGB.
 
 use bevy::color::Srgba;
 
@@ -90,12 +81,11 @@ impl Deficiency {
 
 /// What `colour` looks like to someone with `deficiency`.
 ///
-/// **Written as three dot products rather than a `Mat3`**, deliberately.
-/// `court_wizard`'s shader builds `mat3x3(row0, row1, row2)` — and WGSL's
-/// constructor takes **columns**, so it is applying the transpose of every one
-/// of these. Machado's matrices are not symmetric, so that is not a subtle
-/// difference. Spelling the rows out is what makes the convention unmistakable
-/// if this is ever transliterated to a shader.
+/// Three dot products rather than a `Mat3`, deliberately. `court_wizard`'s
+/// shader builds `mat3x3(row0, row1, row2)` and WGSL's constructor takes
+/// **columns**, so it applies the transpose of every one of these — and
+/// Machado's matrices are not symmetric. Spelling the rows out makes the
+/// convention unmistakable if this is transliterated to a shader.
 pub(crate) fn simulated(deficiency: Deficiency, colour: Srgba) -> Srgba {
     let m = deficiency.matrix();
     let (r, g, b) = (

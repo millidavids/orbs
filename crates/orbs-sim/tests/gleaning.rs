@@ -1,44 +1,31 @@
 //! Scrolls, and the errand one of them sets.
 //!
-//! The archive assembled a scroll from the day the lectern had a recipe, and
-//! then did nothing with it — an object with a name, a colour and no use, which
-//! §15 weighs as a dead end above the raw resolution rate. This is the file that
-//! says the other half works.
+//! The lectern assembled a scroll and nothing spent it — a name, a colour and no
+//! use, which §15 weighs as a dead end. This file says the other half works.
 //!
-//! **Every claim here is driven through a real `Sim`**, in the shape
-//! `tests/solver.rs` established: there is no public way to hand the world a
-//! scroll, an errand or a fragment count, so a test that reached in and set one
+//! Every claim is driven through a real `Sim`: there is no public way to hand
+//! the world a scroll, an errand or a fragment count, so a test that set one
 //! would be testing a state the game cannot arrive at.
 
 use orbs_render::{FieldName, Value};
-// **Most of this file is `cfg(debug_assertions)`, and the reason is the scroll.**
+// Most of this file is `cfg(debug_assertions)` because of the scroll: the honest
+// route to one is four solved mazes, and `debug_spawn` — which makes it testable
+// — does not exist in a release build, where the test would fail against a world
+// that was never built.
 //
-// A `gleaning-scroll` is four fragments assembled at the lectern, and a fragment
-// is one finished walk of the stacks — so the honest route to a single scroll is
-// four solved mazes, several thousand ticks apiece. `debug_spawn` is the door
-// that makes any of this testable at all, and it does not exist in a release
-// build: the line is simply unresolvable there, so the scroll never appears and
-// the test fails against a world that was never built.
-//
-// Gated per test rather than per file, which is this project's convention — the
-// handful below that need no door still run in either profile. Where a fixture
-// *can* be built without one it is (`arsenal`, `fetching` and `binding` all brew
-// §10.1's chain from endless stock instead); a scroll cannot.
+// Gated per test rather than per file, this project's convention: the handful
+// below that need no door still run in either profile.
 
 use orbs_sim::Sim;
 use orbs_sim::parser::NounKind;
 
 /// Standing in the archive holding the scroll this file is about.
 ///
-/// **Spawned, not assembled, and the difference is the roll.** What four
-/// fragments become is *drawn* from the scrolls the lectern knows, so a test that
-/// assembled one and then spent it would be testing the draw as much as the
-/// effect — and would start failing the day a third scroll is authored, on a
-/// coin toss rather than on anything being wrong. `debug_spawn` names the one
-/// under test; [`assembled`] is what exercises the other half.
+/// Spawned, not assembled: what four fragments become is drawn, so assembling
+/// one would start failing on a coin toss the day a third scroll is authored.
+/// [`assembled`] exercises that half.
 ///
-/// A scroll's home is the arsenal, whose contents are reachable from every room
-/// (`tower::keep`), so it is in hand in the archive without being carried there.
+/// A scroll's home is the arsenal, reachable from every room (`tower::keep`).
 fn with_a_gleaning_scroll(seed: u64) -> Sim {
     let mut sim = Sim::new(seed);
     sim.submit("attend archive");
@@ -50,10 +37,8 @@ fn with_a_gleaning_scroll(seed: u64) -> Sim {
 
 /// Four fragments on the lectern, wielded — whatever that happens to yield.
 ///
-/// **The helpers carry the gate too**, for the reason the header gives about the
-/// tests: with `debug_assertions` off every caller of this is gone, and a
-/// release build reports it as dead code rather than as the deliberate thing it
-/// is. Every helper below that only debug-gated tests reach is marked the same.
+/// The helpers carry the gate too: with `debug_assertions` off every caller is
+/// gone and a release build reports this as dead code.
 #[cfg(debug_assertions)]
 fn assembled(seed: u64) -> Sim {
     let mut sim = Sim::new(seed);
@@ -92,13 +77,9 @@ fn scrolls() -> Vec<String> {
 
 #[test]
 fn every_scroll_the_lectern_makes_can_be_spent() {
-    // **The lint that keeps the content file and the executor honest**, and the
-    // same shape `progression.toml`'s `grants` check has: a word nothing
-    // implements gives the step nothing, and the file reads as deliberate.
-    //
-    // A scroll authored with no arm behind it would be drawn, carried, wielded
-    // and refused — which reads to a player exactly like a bug in `wield`, and
-    // costs four walks of the stacks to find out.
+    // Keeps the content file and the executor honest: a scroll authored with no
+    // arm behind it would be drawn, carried, wielded and refused, which reads
+    // like a bug in `wield` and costs four walks of the stacks to find out.
     for name in scrolls() {
         assert!(
             orbs_sim::execute::Scroll::of(&name).is_some(),
@@ -111,10 +92,8 @@ fn every_scroll_the_lectern_makes_can_be_spent() {
 #[cfg(debug_assertions)]
 #[test]
 fn four_fragments_become_a_scroll_that_is_a_scroll() {
-    // The kind, not just the name: `Recipes::kind_of` is what `debug_spawn` and
-    // `produce::transmute` both ask, and a scroll that came out as a `Reagent`
-    // would be `move`-able, `grind`-able and unwieldable — the wrong-kind state
-    // §19 already records `debug_spawn` refusing to create.
+    // The kind, not just the name: a scroll that came out as a `Reagent` would
+    // be `move`-able, `grind`-able and unwieldable (§19).
     let sim = assembled(1);
     let made: Vec<String> = scrolls()
         .into_iter()
@@ -145,12 +124,9 @@ fn a_gleaning_errand_scatters_spoils_and_withdraws_the_way_out() {
     sim.step();
     let after = sim.stacks().expect("the stacks are still open");
 
-    // **No way out at all, rather than one that does nothing.** A solver's top
-    // rung is `if <way> has exit`; an inert exit would have it walk onto that
-    // square, find the walk not over, and take the same rung from the same place
-    // for ever. Withdrawing the word is what makes the errand a behaviour change
-    // instead of a trap — and the picture has to agree, or the map offers a way
-    // out the readings do not.
+    // No way out at all, rather than one that does nothing: a solver's top rung
+    // is `if <way> has exit`, so an inert exit would have it walk onto that
+    // square and take the same rung for ever. The picture has to agree too.
     assert!(
         after.exit.is_none(),
         "a gleaning maze still draws a way out"
@@ -175,16 +151,12 @@ fn a_gleaning_errand_scatters_spoils_and_withdraws_the_way_out() {
 
 #[test]
 fn the_lectern_still_assembles_with_an_errand_published_on_it() {
-    // **The hazard that is not hypothetical.** The errand is published on the
-    // lectern as a named child, exactly as a way publishes `passage` — and the
-    // lectern is an *instrument*, so a child counted as stock would enter the
-    // multiset `Recipes::matching` compares. Four fragments plus one word is not
-    // four fragments: the recipe stops matching, and the panel reads `fouled`
-    // for a lectern with nothing wrong with it.
-    //
-    // `tower::holdings` skipping `NounKind::Sense` is the fix, and this is what
-    // holds it. Driven rather than asserted on `holdings`, because what has to
-    // keep working is the *recipe*.
+    // The errand is a named child on the lectern, and the lectern is an
+    // instrument — so a child counted as stock enters the multiset
+    // `Recipes::matching` compares, the recipe stops matching, and the panel
+    // reads `fouled` for a lectern with nothing wrong with it. `tower::holdings`
+    // skipping `NounKind::Sense` is the fix; driven, because what has to keep
+    // working is the recipe.
     let mut sim = with_a_gleaning_scroll(5);
     sim.submit("research");
     sim.step();
@@ -210,20 +182,16 @@ fn the_lectern_still_assembles_with_an_errand_published_on_it() {
 #[cfg(debug_assertions)]
 #[test]
 fn a_spell_can_ask_which_errand_the_stacks_are_on() {
-    // **The point of the whole mechanic**, and the reason the errand is a named
-    // child rather than a `State` variant: one solver, written once, that reads
-    // what it is walking for. The condition has to resolve at **cast**, which is
+    // Why the errand is a named child rather than a `State` variant: one solver
+    // that reads what it is walking for. The condition has to resolve at cast,
     // when there is no errand on — `tower::scene_at` chaining `Errand::ALL` onto
-    // the readings is the single line that makes that work, exactly as it does
-    // for `passage` and `back`.
+    // the readings is what makes that work.
     let mut sim = with_a_gleaning_scroll(7);
     sim.submit("research");
     sim.step();
 
-    // **`verify`, because it names its target and does nothing else.** Both
-    // branches have to be visible without changing the world — a branch that
-    // walked or stopped something would make the second casting a different
-    // experiment from the first.
+    // `verify`, because it names its target and does nothing else: a branch that
+    // changed the world would make the second casting a different experiment.
     sim.write_spell(
         "asking",
         &[
@@ -236,9 +204,8 @@ fn a_spell_can_ask_which_errand_the_stacks_are_on() {
     );
     sim.step();
 
-    // **Deltas, not totals.** The setup ran `wield lectern`, and a completion
-    // files the instrument under `Source` too — so a raw count starts at one and
-    // the first assertion would fail on the fixture rather than on the feature.
+    // Deltas, not totals: a completion files the instrument under `Source` too,
+    // so a raw count starts at one and fails on the fixture.
     let before = verified(&sim);
 
     // Cast with no errand on: the `else` branch.
@@ -272,9 +239,8 @@ const fn since(before: (usize, usize), after: (usize, usize)) -> (usize, usize) 
 
 /// How often each of the two branches has run, by what it verified.
 ///
-/// `Source` is where `verify` files its **target** — `Name` is the verb, which
-/// is the same on both branches. Reading the wrong one counted nothing at all
-/// and looked exactly like the condition failing.
+/// `Source` is where `verify` files its target; `Name` is the verb, the same on
+/// both branches. Reading the wrong one looks like the condition failing.
 #[cfg(debug_assertions)]
 fn verified(sim: &Sim) -> (usize, usize) {
     let named = |wanted: &str| {
@@ -290,10 +256,8 @@ fn verified(sim: &Sim) -> (usize, usize) {
 #[cfg(debug_assertions)]
 #[test]
 fn a_scroll_with_nothing_to_work_on_is_kept() {
-    // §7's *"destruction is a tool, not a trap"*, applied to a thing four
-    // walks paid for: a refusal that had already spent the scroll would be
-    // the worst trade in the game, and it would be invisible until the player
-    // went looking for it.
+    // §7's *"destruction is a tool, not a trap"*, applied to a thing four walks
+    // paid for: a refusal that had already spent the scroll would be invisible.
     let mut sim = with_a_gleaning_scroll(11);
     sim.submit("wield gleaning-scroll");
     sim.step();
@@ -318,11 +282,9 @@ fn a_scroll_with_nothing_to_work_on_is_kept() {
 #[cfg(debug_assertions)]
 #[test]
 fn spending_a_scroll_takes_no_production_slot() {
-    // `CAPACITY` is 1, and `wield` is the verb that fills it — so if spending a
-    // scroll went through `tower::begin` it would be refused whenever anything
-    // was running, which is exactly when a player reaches for one. Branching
-    // before `start` is what avoids that; `begins_work` is `const fn(Verb)` and
-    // could not have.
+    // `CAPACITY` is 1 and `wield` fills it, so going through `tower::begin`
+    // would refuse a scroll whenever anything was running — exactly when a
+    // player reaches for one. Branching before `start` is what avoids it.
     let mut sim = with_a_gleaning_scroll(13);
     sim.submit("research");
     sim.step();
@@ -344,17 +306,15 @@ fn spending_a_scroll_takes_no_production_slot() {
     );
 }
 
-// **Both of the next two are `cfg(debug_assertions)`**, because they read the
-// ladder from `execute::dev_spells`, which a release build does not have — the
-// whole point of `debug_spell` being a tester's door. Without the gate the test
-// *binary* fails to compile in release, which `cargo test --workspace` never
+// Both of the next two are `cfg(debug_assertions)` because they read the ladder
+// from `execute::dev_spells`, which a release build does not have. Without the
+// gate the test binary fails to compile in release — which `cargo test` never
 // notices and `cargo check --release --all-targets` does.
 #[cfg(debug_assertions)]
 #[test]
 fn gathering_the_last_spoil_ends_the_walk() {
-    // The errand's own completion rule. Walked by hand rather than solved,
-    // because what is under test is *what ends it* and not whether a ladder can
-    // find its way — `tests/solver.rs` owns the second question.
+    // The errand's own completion rule. What is under test is what ends the
+    // walk, not whether a ladder can find its way — `tests/solver.rs` owns that.
     let mut sim = with_a_gleaning_scroll(17);
     sim.submit("research");
     sim.step();
@@ -364,11 +324,9 @@ fn gathering_the_last_spoil_ends_the_walk() {
     // Walk the whole maze, taking whatever is nearest. A gleaning maze publishes
     // no exit, so this cannot end early by arriving somewhere.
     //
-    // **Five spoils is a much longer walk than one exit**, and the budget says
-    // so: the ladder is twenty-four rungs, a step costs a tick (`SCRIPT_BUDGET`
-    // is 1), and five scattered squares means crossing the maze five times over.
-    // `tests/solver.rs` pins 6500 ticks for reaching one exit; this is that
-    // several times, with room.
+    // Five spoils is a much longer walk than one exit: five scattered squares
+    // means crossing the maze five times over, against `tests/solver.rs`'s 6500
+    // ticks for reaching one.
     sim.write_spell("sweeping", &threading());
     sim.step();
     sim.submit("invoke sweeping");
@@ -392,25 +350,15 @@ fn gathering_the_last_spoil_ends_the_walk() {
 #[cfg(debug_assertions)]
 #[test]
 fn one_ladder_solves_a_maze_walked_for_its_exit_and_one_set_to_gather() {
-    // **The claim the errand was built for, finally asserted.** It has been true
-    // since the spoil rung was written and it was a *doc comment*: `sweeper`
-    // said "one solver for both errands" and was only ever pointed at a gleaning
-    // maze. A regression that broke the exit half — the `exit` tier reordered, a
-    // reading renamed — would have left this file green.
+    // "One solver for both errands" was a doc comment, and `sweeper` was only
+    // ever pointed at a gleaning maze — a regression in the exit half would have
+    // left this file green. Both halves below run the same `threading()` text,
+    // the file `debug_spell` hands a tester.
     //
-    // What makes it one ladder rather than two is that both halves below run the
-    // *same* `threading()` text, which is the file `debug_spell` hands a tester.
-    //
-    // **Four seeds, and the step budgets are the lever rather than the count.**
-    // `tests/solver.rs` carries the wide sweep for the exit errand at 12 seeds;
-    // this asks the narrower question — *does one text serve both* — so four is
-    // enough to catch an ordering mistake.
-    //
-    // What costs is the *headroom*, not the seeds: a step runs whether the walk
-    // is over or not, so an exit solve measured at ~5100 ticks against a
-    // `step_n(20_000)` throws away three quarters of the run, four times over.
-    // These are ~2.5x the measured worst, which is margin for a slower seed
-    // without paying for eight walks nobody takes.
+    // Four seeds: `tests/solver.rs` carries the wide sweep at 12, and this asks
+    // the narrower question. What costs is the headroom rather than the count —
+    // a step runs whether the walk is over or not, so these budgets are ~2.5x
+    // the measured worst rather than four times it.
     const SEEDS: [u64; 4] = [3, 11, 17, 23];
     const EXIT_TICKS: u64 = 13_000;
     const GLEAN_TICKS: u64 = 22_000;
@@ -452,10 +400,8 @@ fn one_ladder_solves_a_maze_walked_for_its_exit_and_one_set_to_gather() {
 /// How many fragments the archive's shelf holds.
 #[cfg(debug_assertions)]
 fn fragments(sim: &Sim) -> u32 {
-    // **Wherever the rule says they live**, rather than a room written down
-    // here. A walk pays into the archive's shelf and `debug_spawn` puts one in
-    // the same place because both ask `tower::home`; a test naming the room
-    // instead is a third opinion, and the third opinion is the one that drifts.
+    // Wherever the rule says they live: a walk and `debug_spawn` both ask
+    // `tower::home`, and a test naming the room is a third opinion that drifts.
     let world = sim.world();
     let shelf = orbs_sim::tower::home(world, "fragment").expect("a fragment has nowhere to live");
     orbs_sim::tower::holdings(world, shelf)
@@ -467,17 +413,12 @@ fn fragments(sim: &Sim) -> u32 {
 
 /// The ladder a tester gets from `debug_spell`, read from the content file.
 ///
-/// **The same text, not a second copy of it.** This was a `sweeper()` that built
-/// the ladder here while `tests/solver.rs` built its own — two expressions of one
-/// algorithm that had to agree and nothing made them, which is the shape §19 keeps
-/// recording as the cause of defects. Reading `dev_spells.toml` makes *the ladder
-/// under test* and *the ladder a tester is handed* the same twenty-four rungs by
-/// construction: a change to one is a change to both, and this file fails if the
-/// shipped ladder stops working.
+/// The same text, not a second copy: two expressions of one algorithm that had
+/// to agree and nothing made them (§19). Reading `dev_spells.toml` makes the
+/// ladder under test and the one a tester is handed the same by construction.
 ///
-/// `tests/solver.rs` keeps a ladder of its own **on purpose** — see the note there.
-/// It pins a tick budget, and the four always-false `spoil` rungs this one carries
-/// would blow it by ~2800 ticks while proving nothing about the exit walk.
+/// `tests/solver.rs` keeps its own on purpose: it pins a tick budget, and the
+/// four always-false `spoil` rungs here would blow it by ~2800 ticks.
 #[cfg(debug_assertions)]
 fn threading() -> Vec<String> {
     orbs_sim::execute::dev_spells()
@@ -490,13 +431,10 @@ fn threading() -> Vec<String> {
 #[cfg(debug_assertions)]
 #[test]
 fn abandoning_a_gleaning_maze_takes_the_word_with_it() {
-    // **The errand is a child node, so it can outlive the thing it describes.**
-    // §19 already records this exact shape once: the four ways kept a solved
-    // maze's readings for ever, so `survey north` answered `passage` with no
-    // stacks open and a bound solver was told *"research first"* for the rest
-    // of its `repeat`. A stale `gleaning` would be worse, because nothing on
-    // screen contradicts it — every later cast of a mode-aware spell would take
-    // the gathering branch of a maze that is walked for its exit.
+    // The errand is a child node, so it can outlive what it describes — the
+    // shape §19 records for the four ways keeping a solved maze's readings. A
+    // stale `gleaning` would be worse: nothing on screen contradicts it, and
+    // every later cast would take the gathering branch.
     let mut sim = with_a_gleaning_scroll(19);
     sim.submit("research");
     sim.step();
@@ -521,9 +459,8 @@ fn abandoning_a_gleaning_maze_takes_the_word_with_it() {
 
 /// What a spell would be told if it asked, right now.
 ///
-/// Driven through a real cast rather than read off the world, because what has
-/// to be true is the *answer a spell gets* — `watch::ask` resolving a named
-/// child is the mechanism, and asserting on the child would skip it.
+/// Driven through a real cast: the mechanism is `watch::ask` resolving a named
+/// child, and asserting on the child would skip it.
 #[cfg(debug_assertions)]
 fn asks_gleaning(sim: &mut Sim) -> bool {
     let before = verified(sim);
@@ -546,8 +483,7 @@ fn asks_gleaning(sim: &mut Sim) -> bool {
 /// Standing in the laboratory with a long distillation running and a scroll.
 ///
 /// The alembic, because 56 ticks is the longest run in the game and a halving is
-/// unmistakable against it — a mortar's eight would be hard to tell from a
-/// rounding.
+/// unmistakable against it.
 #[cfg(debug_assertions)]
 fn distilling(seed: u64) -> Sim {
     let mut sim = Sim::new(seed);
@@ -576,10 +512,9 @@ fn meter(sim: &Sim) -> Option<(u64, u64)> {
 #[cfg(debug_assertions)]
 #[test]
 fn quickening_halves_what_is_left_and_the_run_lands_early() {
-    // **The interval is the whole effect.** `Working { started, ends }` is what
-    // `land::finish` compares against and what the meter is derived from, so
-    // moving `ends` carries to the completion, the panel and every frontend with
-    // nothing else changed.
+    // The interval is the whole effect: `Working { started, ends }` is what
+    // `land::finish` compares and what the meter derives from, so moving `ends`
+    // carries to the completion, the panel and every frontend.
     let mut sim = distilling(1);
     sim.step_n(10);
     let (_, before) = meter(&sim).expect("the alembic is running");
@@ -592,10 +527,9 @@ fn quickening_halves_what_is_left_and_the_run_lands_early() {
         "the run was not shortened: {before} then {after}",
     );
 
-    // **Halved from *now*, not from the start.** Ten ticks in on a 56-tick run
-    // leaves 46, so the total becomes 10 + 23 = 33. Halving the whole interval
-    // would refund time already spent, and past the half-way point would put the
-    // end in the past.
+    // Halved from now, not from the start: ten ticks into 56 leaves 46, so the
+    // total becomes 10 + 23 = 33. Halving the whole interval would refund time
+    // already spent.
     assert_eq!(after, 33, "halved from the wrong point: {after}");
 
     sim.step_n(30);
@@ -609,16 +543,13 @@ fn quickening_halves_what_is_left_and_the_run_lands_early() {
 #[cfg(debug_assertions)]
 #[test]
 fn a_quickened_run_is_the_same_however_the_ticks_are_taken() {
-    // `meditate` collapses hundreds of ticks inside one `step`, and three
-    // modules state that in-flight state must be identical either way. A halving
-    // re-derived per tick would shrink the run geometrically and this is what
-    // would say so.
+    // `meditate` collapses hundreds of ticks inside one `step`, and in-flight
+    // state must be identical either way: a halving re-derived per tick would
+    // shrink the run geometrically.
     let mut watched = distilling(2);
     let mut skipped = distilling(2);
-    // **`meditate 9`, for ten ticks.** The `step` that runs the command advances
-    // the clock itself and *then* drains the skip, so `meditate n` costs `n + 1`
-    // — which is the semantics, not a rounding, and getting it wrong here would
-    // have compared two different moments and blamed the scroll.
+    // `meditate 9`, for ten ticks: the `step` that runs the command advances the
+    // clock itself and then drains the skip, so `meditate n` costs `n + 1`.
     for _ in 0..10 {
         watched.step();
     }
@@ -636,10 +567,8 @@ fn a_quickened_run_is_the_same_however_the_ticks_are_taken() {
     }
     skipped.submit("meditate 39");
     skipped.step();
-    // **What the run said, not how much was said.** `meditate` narrates itself,
-    // so the skipped arm has extra lines that belong to the command rather than
-    // to the brew — counting them would measure the fixture. What has to match is
-    // the completion.
+    // What the run said, not how much was said: `meditate` narrates itself, so
+    // counting the skipped arm's lines would measure the fixture.
     let landed = |sim: &Sim| {
         messages(sim)
             .into_iter()
@@ -658,10 +587,8 @@ fn a_quickened_run_is_the_same_however_the_ticks_are_taken() {
 #[cfg(debug_assertions)]
 #[test]
 fn quickening_with_nothing_running_makes_the_next_run_short() {
-    // **The play the first version could not do.** Quicken the laboratory, then
-    // brew, is the obvious way to spend a scroll — and it refused for want of
-    // something to hurry, which made four walks of the stacks unusable at exactly
-    // the moment a player reaches for one.
+    // Quicken the laboratory, then brew, is the obvious way to spend a scroll —
+    // and it refused for want of something to hurry.
     let mut sim = Sim::new(3);
     for line in [
         "attend laboratory",
@@ -683,17 +610,13 @@ fn quickening_with_nothing_running_makes_the_next_run_short() {
 #[cfg(debug_assertions)]
 #[test]
 fn a_run_started_in_the_window_stays_short_when_it_closes() {
-    // **Speed follows heat.** §10.1 checks the athanor when a run *begins* and
-    // lets it finish even if the fire dies under it, because pausing would be the
-    // countdown §19 refused. A run whose duration changed as the window expired
-    // would be that countdown wearing a multiplier — and would break the interval
-    // `meditate` idempotence rests on.
+    // Speed follows heat: §10.1 checks the athanor when a run begins and lets it
+    // finish even if the fire dies under it, because pausing would be the
+    // countdown §19 refused.
     //
-    // **The window has to actually close**, which is the whole difficulty and
-    // which the first version of this test quietly skipped: it meditated 25 ticks
-    // against a 120-tick window and asserted a length that nothing had any reason
-    // to move. So the run starts *near the end* of the window and the boundary is
-    // crossed while it is still going.
+    // The window has to actually close, which the first version quietly skipped
+    // by meditating 25 ticks against a 120-tick window. So the run starts near
+    // the end of the window and the boundary is crossed while it is going.
     let mut sim = Sim::new(5);
     for line in [
         "attend laboratory",
@@ -746,9 +669,8 @@ fn quickened(sim: &Sim) -> bool {
 #[cfg(debug_assertions)]
 #[test]
 fn quickening_also_hurries_what_is_already_running() {
-    // One rule, not two: the state means *this room works at double speed*, and a
-    // run in flight is something the room is doing. Leaving it alone would make
-    // wielding the scroll mid-brew look like it had done nothing.
+    // One rule, not two: the state means this room works at double speed, and a
+    // run in flight is something the room is doing.
     let mut sim = distilling(7);
     sim.step_n(10);
     let (_, before) = meter(&sim).expect("the alembic is running");
@@ -757,9 +679,8 @@ fn quickening_also_hurries_what_is_already_running() {
     sim.step();
     let (_, after) = meter(&sim).expect("the alembic is still running");
 
-    // **Halved from now, not from the start.** Ten ticks into 56 leaves 46, so
-    // the total becomes 10 + 23 = 33; halving the whole interval would refund
-    // time already spent and, past the half-way point, put the end in the past.
+    // Halved from now, not from the start: ten ticks into 56 leaves 46, so the
+    // total becomes 10 + 23 = 33.
     assert_eq!(
         after, 33,
         "halved from the wrong point: {before} then {after}"
@@ -807,14 +728,9 @@ fn scoured_after(sim: &mut Sim) -> u64 {
 #[cfg(debug_assertions)]
 #[test]
 fn a_quickened_room_scours_quickly_too() {
-    // **The one duration in the tower that did not ask.** `Triaging` was inserted
-    // with a raw `PURGE_TICKS`, so §19's *"everything the room starts inside that
-    // window takes half as long"* was false for a scour and nothing said so —
-    // `hastened` had exactly one caller and this was the path around it.
-    //
-    // The *ratio* rather than the two numbers: `PURGE_TICKS` is a placeholder the
-    // balance CLI sweeps, and a test naming 4 and 2 would fail on a tuning pass
-    // that changed nothing about this rule.
+    // `Triaging` was inserted with a raw `PURGE_TICKS`, so §19's rule was false
+    // for a scour and nothing said so. The ratio rather than the two numbers:
+    // `PURGE_TICKS` is a placeholder the balance CLI sweeps.
     let plain = scoured_after(&mut scouring(false));
     let quick = scoured_after(&mut scouring(true));
     assert!(
@@ -826,12 +742,9 @@ fn a_quickened_room_scours_quickly_too() {
 #[cfg(debug_assertions)]
 #[test]
 fn a_window_that_has_closed_is_not_written_into_the_save() {
-    // **`Cooling`'s rule, one component over.** Nothing ever removes `Quickened`
-    // — that is what an interval means, and `quickened` simply reads false once
-    // it has run out — so a bare capture wrote a dead span into *every* autosave
-    // from the first scroll a player ever spent, for ever after.
-    //
-    // The control matters as much as the case: without it this passes against a
+    // `Cooling`'s rule, one component over: nothing removes `Quickened`, so a
+    // bare capture wrote a dead span into every autosave after the first scroll.
+    // The control matters as much as the case — without it this passes against a
     // capture that has stopped writing the window at all.
     let mut sim = distilling(1);
     sim.submit("wield quickening-scroll");
@@ -870,10 +783,8 @@ fn shelved(sim: &Sim) -> Vec<String> {
 #[cfg(debug_assertions)]
 #[test]
 fn a_verdant_scroll_puts_one_herb_on_the_shelf_and_the_fourth_is_refused() {
-    // **One each, not all three.** A scroll that unlocked everything would leave
-    // the lectern assembling a thing with nothing left to give — a dud draw for
-    // ever, which is the dead end this whole item exists to close. Three are all
-    // worth having and the laboratory visibly grows three times.
+    // One each, not all three: a scroll that unlocked everything would leave the
+    // lectern assembling a dud draw for ever.
     let mut sim = Sim::new(1);
     sim.submit("attend laboratory");
     sim.step();
@@ -886,8 +797,8 @@ fn a_verdant_scroll_puts_one_herb_on_the_shelf_and_the_fourth_is_refused() {
         "the herbs were on the shelf before anything unlocked them: {before:?}",
     );
 
-    // **Alphabetical, and fixed for every seed.** A roll here would be a second
-    // draw stacked on the lectern's; what the player chooses is when to spend.
+    // Alphabetical, and fixed for every seed: a roll here would be a second draw
+    // stacked on the lectern's.
     for want in ["amber", "mugwort", "valerian"] {
         sim.submit("wield verdant-scroll");
         sim.step();
@@ -898,10 +809,8 @@ fn a_verdant_scroll_puts_one_herb_on_the_shelf_and_the_fourth_is_refused() {
         );
     }
 
-    // **Only the herbs.** The first version asked `Recipes::outputs`, which is a
-    // recipe's `output` and not its `leaves` — so every byproduct in the game
-    // read as unlockable and four scrolls shelved `dregs`, `ash` and a
-    // `fragment` as inexhaustible stock. No test said a word; one dump did.
+    // Only the herbs. The first version asked `Recipes::outputs`, not `leaves`,
+    // so four scrolls shelved `dregs`, `ash` and a `fragment` as endless stock.
     for never in ["dregs", "ash", "husks", "phlegm", "fragment", "potash"] {
         assert!(
             !shelved(&sim).iter().any(|name| name == never),
@@ -926,8 +835,7 @@ fn a_verdant_scroll_puts_one_herb_on_the_shelf_and_the_fourth_is_refused() {
 #[test]
 fn an_unlocked_herb_is_as_endless_as_one_the_tower_opened_with() {
     // A base reagent that ran out would make a recipe written against it work
-    // for a while and then stop — the same word meaning a different thing
-    // depending on when it arrived.
+    // for a while and then stop.
     let mut sim = Sim::new(1);
     sim.submit("attend laboratory");
     sim.step();
@@ -948,9 +856,8 @@ fn an_unlocked_herb_is_as_endless_as_one_the_tower_opened_with() {
 #[cfg(debug_assertions)]
 #[test]
 fn the_ported_herbs_reach_a_potion() {
-    // **Driven the whole way**, because a route that reads well in `recall` and
-    // cannot be walked is a table rather than content — which is exactly what
-    // the lectern's `dust` recipe turned out to be.
+    // Driven the whole way: a route that reads well in `recall` and cannot be
+    // walked is a table rather than content, which the `dust` recipe was.
     let mut sim = Sim::new(1);
     for line in [
         "attend laboratory",

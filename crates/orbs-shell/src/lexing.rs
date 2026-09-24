@@ -2,9 +2,9 @@
 //!
 //! The classification is `orbs-sim`'s — see `parser::lexeme`, and §19 on why a
 //! painter must not have a second opinion about the grammar. What is decided
-//! here is the other half of rule 2: **how much of the row's own styling a run
-//! is allowed to override**, which is a presentation question and belongs on
-//! this side of the boundary.
+//! here is the other half of rule 2 — how much of the row's own styling a run
+//! may override — which is a presentation question and belongs on this side of
+//! the boundary.
 //!
 //! It lived in `sheet` while the spell editor was the only surface that
 //! highlighted. The prompt is the second.
@@ -14,13 +14,12 @@ use orbs_render::{Intensity, Lexeme, Role, Style};
 /// One run's style: the row's, with the lexeme's weight if the row has none of
 /// its own.
 ///
-/// # The row outranks the run, one level below the accent
-///
-/// `Style::lexed` already drops the lexeme on an accented cell, so a line
-/// `interpret` could not read stays wholly `Role::Danger`. This is the same
-/// arbitration a step further in: the line the orb is **executing** is drawn
-/// `Intensity::Bright` to say so, and a `the` inside it dimming back down would
-/// break the one row-wide signal the gutter marker is paired with.
+/// The row outranks the run, one level below the accent. `Style::lexed` already
+/// drops the lexeme on an accented cell, so a line `interpret` could not read
+/// stays wholly `Role::Danger`. This is the same arbitration a step further in:
+/// the line the orb is executing is drawn `Intensity::Bright` to say so, and a
+/// `the` inside it dimming back down would break the one row-wide signal the
+/// gutter marker is paired with.
 ///
 /// So a lexeme's weight applies only where the row is at normal weight — which
 /// is every line except the running one.
@@ -37,13 +36,11 @@ pub(crate) fn lit(style: Style, kind: Lexeme) -> Style {
 
 /// Whether a row lets its runs style themselves at all.
 ///
-/// # Ask this, never `lit(style, kind) != style`
-///
-/// The obvious test is wrong in a way that is easy to ship: `lit` also returns
-/// the style unchanged when the run's weight already **matches** the row's,
-/// which is every ordinary [`Lexeme::Name`] on an ordinary line. A caller
-/// gating on inequality would colour the control words and the filler and
-/// silently skip the names — most of a spell.
+/// Ask this, never `lit(style, kind) != style`. The obvious test is wrong in a
+/// way that is easy to ship: `lit` also returns the style unchanged when the
+/// run's weight already matches the row's, which is every ordinary
+/// [`Lexeme::Name`] on an ordinary line. A caller gating on inequality would
+/// colour the control words and the filler and silently skip the names.
 ///
 /// So the question is about the *row*, and it is asked in two places now: `lit`
 /// resolves the weight, and the painter decides whether to register the hue.
@@ -53,10 +50,9 @@ pub(crate) fn takes_syntax(style: Style) -> bool {
     style.role == Role::Normal && style.intensity == Intensity::Normal
 }
 
-/// What a lexeme honestly is at the **prompt**, which cannot run a spell.
+/// What a lexeme honestly is at the prompt, which cannot run a spell.
 ///
-/// # Four of them mean nothing here, and drawing them would lie
-///
+/// Four of them mean nothing here, and drawing them would lie.
 /// `lex` is lexical and world-free, so it reads `repeat` as a control word,
 /// `gathering()` as a call, `is` as grammar and `idle` as a state wherever it
 /// finds them. In a spell all four are right. At the prompt none can run:
@@ -70,9 +66,9 @@ pub(crate) fn takes_syntax(style: Style) -> bool {
 /// they fall back to what any unrecognised word gets, and the player finds out
 /// what the orb made of the line from the echo, as they do for every other word.
 ///
-/// **`Verb`, `Name`, `Number`, `Filler` and `Comment` are shared**, because all
-/// five mean the same thing in both places: §6's parser strips the same filler
-/// and answers to the same verbs whether the line was typed or scribed.
+/// `Verb`, `Name`, `Number`, `Filler` and `Comment` are shared, because all five
+/// mean the same thing in both places: §6's parser strips the same filler and
+/// answers to the same verbs whether the line was typed or scribed.
 pub(crate) const fn at_prompt(kind: Lexeme) -> Lexeme {
     match kind {
         Lexeme::Control | Lexeme::Call | Lexeme::Grammar | Lexeme::State => Lexeme::None,
@@ -99,15 +95,14 @@ mod tests {
 
     /// ...and an accented or already-weighted row keeps its own.
     ///
-    /// **A fault outranks the highlighting.** §4 reserves the accent triad
-    /// strictly for meaning, so decoration may not paint over it — the rule
-    /// `Style::depicted` already applies to pictures, here applied to syntax.
-    /// Without it a `repeat` inside an unreadable line would draw bright instead
-    /// of red, and the one signal saying *this line is broken* would be the one
-    /// the eye skipped.
+    /// A fault outranks the highlighting: §4 reserves the accent triad strictly
+    /// for meaning, so decoration may not paint over it — `Style::depicted`'s
+    /// rule for pictures, applied to syntax. Without it a `repeat` inside an
+    /// unreadable line would draw bright instead of red, and the one signal
+    /// saying *this line is broken* would be the one the eye skipped.
     ///
-    /// **So does the row the orb is standing on**, which is drawn bright to say
-    /// so; a `the` inside it dimming back down would break the one row-wide
+    /// So does the row the orb is standing on, which is drawn bright to say so;
+    /// a `the` inside it dimming back down would break the one row-wide
     /// signal the gutter marker is paired with.
     #[test]
     fn the_row_outranks_the_run() {

@@ -1,17 +1,16 @@
 //! The addressable parts of a record: what a field is called, and what it holds.
 //!
-//! Fields are named from a **closed set**. DESIGN.md §6 fuzzy-resolves player
-//! input against closed vocabularies — verbs, nouns, registers — and a field name
-//! is the same kind of thing the moment `sift --field stat feed.log` has to mean
-//! something. A closed enum also makes a missed case a compile error in every
-//! view, which is the point: a table that silently skips a column it does not
-//! recognise is worse than one that will not build.
+//! Fields are named from a closed set. §6 fuzzy-resolves player input against
+//! closed vocabularies, and a field name is the same kind of thing the moment
+//! `sift --field stat feed.log` has to mean something. A closed enum also makes
+//! a missed case a compile error in every view: a table that silently skips a
+//! column it does not recognise is worse than one that will not build.
 
 /// The name of one field of a record.
 ///
-/// Deliberately **not** `#[non_exhaustive]`, for the same reason as
-/// [`Role`](crate::Role): every consumer is in this workspace, and exhaustive
-/// matching is what makes adding a field a reviewed act rather than a silent one.
+/// Deliberately not `#[non_exhaustive]`, for [`Role`](crate::Role)'s reason:
+/// every consumer is in this workspace, and exhaustive matching is what makes
+/// adding a field a reviewed act rather than a silent one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum FieldName {
     /// What the thing is called. `nightshade`, `feed.log`, `north_gate`.
@@ -26,7 +25,7 @@ pub enum FieldName {
     Quantity,
     /// When, in world time (DESIGN.md §5.0). Ticks, not wall-clock.
     Tick,
-    /// **Where in a file**, counting from one. A position, never a time.
+    /// Where in a file, counting from one. A position, never a time.
     ///
     /// [`Tick`](Self::Tick) carried this for as long as a listing was numbered,
     /// which made a spell's eleventh line announce itself as *"tick: 11"* — the
@@ -43,9 +42,9 @@ pub enum FieldName {
     Remaining,
     /// Which subsystem produced this. `laboratory`, `sanctum`, `lens`.
     ///
-    /// **A domain, not a place.** `read_file` filters a domain's log by this, so
-    /// putting a *room* in it silently drops the record from the log of the
-    /// domain it happened in. Where a thing came from is [`FieldName::Origin`].
+    /// A domain, not a place. `read_file` filters a domain's log by this, so a
+    /// room in it silently drops the record from the log of the domain it
+    /// happened in. Where a thing came from is [`FieldName::Origin`].
     Source,
     /// Where a thing was before it moved. `dispensary`, `mortar_and_pestle`.
     ///
@@ -54,22 +53,19 @@ pub enum FieldName {
     /// and a record about the laboratory must still appear in the laboratory's
     /// log while saying it came from the dispensary.
     Origin,
-    /// **The place this happened**, as a leaf. `mortar_and_pestle`, `athanor`.
+    /// The place this happened, as a leaf. `mortar_and_pestle`, `athanor`.
     ///
-    /// # Why this had to exist before a spell could watch anything
+    /// It had to exist before a spell could watch anything. Eleven sites emitted
+    /// a completion and put the instrument in whichever field was nearest —
+    /// `Name` at `produce::fouled` and `heat`, `Path` at `refuse_busy` and
+    /// `stop`, [`Source`](Self::Source) at `land` and `transmute`, where its own
+    /// doc forbids a place — and `Name` meant one of {verb, instrument, product,
+    /// list of products} depending on who wrote the line.
     ///
-    /// Eleven sites emitted a completion and put the instrument in whichever
-    /// field was nearest: `Name` at `produce::fouled` and `heat`, `Path` at
-    /// `refuse_busy` and `stop`, [`Source`](Self::Source) at `land` and
-    /// `transmute` — where its own documentation forbids a place. `Name` itself
-    /// meant one of {verb, instrument, product, list of products} depending on
-    /// who wrote the line.
-    ///
-    /// That is survivable while a person is reading the log and unsurvivable the
-    /// moment a **spell** is, because *"wait until the mortar finishes"* has to
-    /// be one question with one answer. This is that answer: a completion says
-    /// where it happened here, always, and `tower::spell::watch` reads nothing
-    /// else to find out.
+    /// Survivable while a person is reading the log and unsurvivable the moment
+    /// a spell is, because *"wait until the mortar finishes"* has to be one
+    /// question with one answer. A completion says where it happened here,
+    /// always, and `tower::spell::watch` reads nothing else.
     ///
     /// Distinct from [`Path`](Self::Path), which is a full path to a thing, and
     /// from [`Origin`](Self::Origin), which is where a thing *was*.
@@ -96,12 +92,12 @@ pub enum FieldName {
     Choice,
     /// Which spell caused this, if a spell did rather than a player.
     ///
-    /// **An annotation**, like [`Outcome`](Self::Outcome) — filtered *on*, never
+    /// An annotation, like [`Outcome`](Self::Outcome) — filtered on, never
     /// drawn. Missing that put the spell's filename on the end of every line it
     /// caused: `peruse orb.log` read `retort watch.spell`, and a screen reader
     /// heard the same. `is_annotation` is the one gate between a field a view
-    /// consults and a field a player reads. A spell working
-    /// the laboratory emits exactly what the same commands typed by hand emit —
+    /// consults and a field a player reads. A spell working the laboratory
+    /// emits exactly what the same commands typed by hand emit —
     /// which is right, and which buried the transcript: a `repeat` loop pushes a
     /// move, a yield and an empty every few ticks for as long as it runs, and
     /// the player's own last line scrolls off in seconds.

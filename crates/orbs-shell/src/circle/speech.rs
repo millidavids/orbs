@@ -1,8 +1,8 @@
 //! What the circle says, for a reader who cannot see it.
 //!
-//! **Spoken once as a summary, never cell by cell**, and in words rather than the
-//! drawn rows — the lattice's `residue_spoken` lesson, and here the table *is*
-//! the puzzle, so there is no shape to fall back on. The painted sense rows are
+//! Spoken once as a summary, never cell by cell, and in words rather than the
+//! drawn rows — the lattice's `residue_spoken` lesson, and here the table is the
+//! puzzle, so there is no shape to fall back on. The painted sense rows are
 //! silent, so everything they show has to be in these words: each glyph and what
 //! it is given (turned or not), the temper by the senses lit on each of its lit
 //! rows, and where the last call balked.
@@ -21,7 +21,7 @@ pub(super) fn speak(painter: &mut Painter<'_>, circle: &Circle, prose: &Prose) {
 
 /// The whole summary, as one sentence a reader hears.
 pub(super) fn summary(circle: &Circle, prose: &Prose) -> String {
-    // **Only when there are other glyphs to feed it.** At a lesser circle the
+    // Only when there are other glyphs to feed it. At a lesser circle the
     // keystone is the one line and is given two senses, which a reader has not
     // heard yet — so it is spoken as an outer glyph is, with what it is given.
     let keystone = (circle.lines.len() > 1).then(|| circle.lines.len() - 1);
@@ -95,8 +95,8 @@ fn named(given: &CircleGiven, prose: &Prose) -> String {
 
 /// A lit row by its number **and the senses lit on it**: *"4 (bone breath)"*.
 ///
-/// **The senses, not only the number**, because the number alone asks a reader to
-/// know how the rows are counted — the painted sense rows say it to an eye and
+/// The senses, not only the number, because the number alone asks a reader to
+/// know how the rows are counted — the painted sense rows say that to an eye and
 /// are silent to an ear. With the senses named, the temper is a list of which
 /// senses make the beast answer, and nothing else is needed to solve it.
 fn lit_row(circle: &Circle, row: usize, prose: &Prose) -> String {

@@ -370,18 +370,35 @@ menu_begins = "you lift your eyes from the orb"
 # The menu's own furniture. Authored against the narrow pane, like the weave's.
 menu_title = "orbs"
 menu_lead = "the tower waits. what now?"
+# The same screen with no tower behind it, after the boot card. `menu_lead`
+# cannot be reused: it says the tower is waiting, and at the threshold there is
+# not one yet — which is the whole distinction the screen exists to draw.
+menu_lead_threshold = "the orb is awake. no tower yet"
+menu_too_small_threshold = "the window is too small for the orb's menu"
 menu_word_resume = "resume    go back to the tower"
-menu_word_saves = "saves     the towers the orb is keeping"
-menu_word_new = "new       raise another"
-menu_word_options = "options   how the orb reads you"
+menu_word_play = "play      open a tower, or raise one"
+menu_word_settings = "settings  how the orb reads you, and how it looks"
+menu_word_manual = "manual    how any of this works"
 menu_word_quit = "quit      put the orb down"
+# On the play page, under the towers: the other half of the one question that
+# page asks. There is no `_threshold` form because there is no tower behind the
+# play page either way — "another" would be the lie, so it is not said at all.
+menu_word_new = "new       raise a tower"
+# The only destructive word in the menu, so it is typed whole and asked about.
+# It is drawn dim and only when there is something to abandon.
+menu_word_abandon = "abandon <slot>   clear one, asking first"
 menu_word_back = "back      the way you came"
 menu_too_small = "the pane is too small for the menu. press F4"
 
-# The saves listing. `{count}` is the slot a player types to open it.
-menu_saves_lead = "which tower?"
-menu_saves_none = "no towers kept. new raises one"
+# The play page: the towers the orb is keeping, and `new` under them. `{count}`
+# is the slot a player types to open one.
+menu_play_lead = "open a tower, or raise one"
+menu_saves_none = "no towers yet"
 menu_saves_row = "{count}  {name}, a {detail} game, {quantity} earned"
+# A file in a slot this build cannot read. Listed rather than hidden: the slot is
+# not free, and saying nothing made its number answer "there is no tower in 3"
+# about a game sitting right there.
+menu_saves_unreadable = "{count}  a tower this orb cannot read"
 
 # How long a new game is to be. The tiers are `Length::OFFERED`; baseline is not
 # offered, because it is the numbers we happened to author first rather than a
@@ -396,15 +413,66 @@ menu_length_long = "long      the long haul"
 # words it already knows and suggests when it cannot. The mark says which is on,
 # because a settings page that does not say what is currently true is a list of
 # things you might already have done.
-menu_options_lead = "how should the orb read you?"
-menu_driver_on = "  * {detail}"
-menu_driver_off = "    {detail}"
-menu_driver_augury = "augury    it works out what you meant"
-menu_driver_plain = "plain     only the words it knows"
+menu_settings_lead = "what would you set?"
+menu_settings_sound = "sound     how loud the orb is"
+menu_settings_tube = "tube      the glass, and the colour of it"
+menu_settings_access = "access    what the orb does so you can read it"
+menu_settings_habits = "habits    how the orb behaves"
+
+# One page of settings. A row says what it is set to, because a page that lists
+# what you *could* pick without saying what is picked is a list of things you
+# might already have done. Typing the word cycles it; the word and a value sets
+# it outright.
+menu_sound_lead = "how loud the orb is"
+menu_tube_lead = "the glass"
+menu_access_lead = "what the orb does so you can read it"
+menu_habits_lead = "how the orb behaves"
+menu_setting_row = "{name}  [{state}]"
+menu_setting_how = "type a word to step it, or the word and a value"
+
+# One line per setting, each padded to 27 cells so the `[value]` that follows
+# lines up down the page. The longest is `reading`; the rest are padded to it.
+menu_set_voice = "voice    clicks and chimes "
+menu_set_hum = "hum      the tube itself   "
+menu_set_crt = "crt      the curved glass  "
+menu_set_theme = "theme    the phosphor      "
+menu_set_sight = "sight    hue, or none      "
+menu_set_linear = "linear   the plain stream  "
+menu_set_reading = "reading  how lines are read"
+menu_set_focus = "focus    how the panes sit "
+menu_set_skip = "skip     the boot sequence "
+
+# The manual, which is a surface of its own rather than a page of the menu: it
+# has paragraphs, it scrolls, and the menu has no scroll at all.
+manual_title = "the manual"
+# The three chapters the manual builds rather than authors, out of the 578 keys
+# `recall` has been accumulating since Phase 1. See `manual/assemble.rs`: a
+# second copy of a verb's page is a page that comes to disagree with `help`.
+manual_commands_title = "every command there is"
+manual_commands_lead = "every word the orb answers to, wherever you are standing"
+manual_commands_where = "help lists the ones that work where you are. this is all of them"
+manual_language_title = "every word a spell is written with"
+manual_language_lead = "the language, whole. recall <word> says the same in a room"
+# The room primers, gathered. `man` says these one room at a time, about the
+# room you are standing in, which is no answer at all to "what is behind the
+# door I have not opened yet".
+manual_inside_title = "what is behind each door"
+manual_inside_lead = "every room in the tower, including the ones a new game has not opened"
+manual_inside_where = "man says the same three lines about the room you are in"
+manual_inside_sealed = "a sealed tower opens these one at a time, along the mastery lines"
+manual_contents = "which part?"
+manual_more = "pgdn for more"
+manual_unknown = "there is no chapter called '{detail}'"
+manual_too_small = "the window is too small to read in"
 
 # Refusals. §6: never a bare error, and every one names what to do instead.
 menu_unknown = "the orb does not know '{detail}'"
 menu_empty = "there is no tower in {count}. new raises one"
+menu_unreadable = "the tower in {count} is not one this orb can read"
+# The question `abandon` asks. Not a refusal - it is the only word here that
+# cannot be undone, so it is put twice, and any other line answers no.
+menu_abandoning = "set the tower in {count} aside? abandon {count} again to do it"
+menu_unabandoned = "the tower in {count} would not move. is the folder read-only?"
 menu_full = "the orb keeps no more towers. open one and quit from it"
 menu_unkept = "this orb keeps no saves at all - ORBS_SAVE is off"
 # **As short as the `PgDn newest` it replaces.** This rides in the border title
@@ -1597,7 +1665,7 @@ man_solve_grimoire = "peruse one to read it back. invoke casts it where you stan
 
 man_here_arsenal = "finished work, kept where every room can reach it"
 man_start_arsenal = "move a potion or a scroll here from the room that made it"
-man_solve_arsenal = "nothing spends them yet. a siege will be what does"
+man_solve_arsenal = "spend draws on it in a siege. what your rooms made is your weight"
 
 man_here_tower = "your tower. the rooms are below you"
 man_start_tower = "attend a room to stand in it, then ask again"

@@ -1,207 +1,135 @@
 //! Turning runs into something a person or a spreadsheet can read.
 //!
-//! Two outputs, deliberately. **The table is for the eye** — §15's "work is done
-//! when it has been looked at" applies to a balance sweep as much as to a
-//! screen, and a wall of CSV is not looking. **The CSV is for the sweep**, where
-//! the question is the shape of a curve over hours rather than one number.
+//! Two outputs. The table is for the eye — §15's "work is done when it has been
+//! looked at" applies to a sweep too, and a wall of CSV is not looking. The CSV
+//! is for the shape of a curve over hours.
 //!
-//! The reference rates are what a clean run of each policy **measured**, not
-//! what DESIGN.md argues for in prose — see [`expected`], where the gap between
-//! the two is the first thing this crate found. Printing a reference beside the
-//! measurement is what makes the See-it line *"a sweep's curve and a hand-played
-//! session agree"* something you can check rather than assert, and pinning it to
-//! a reachable number is what stops it being a column nobody reads.
+//! The reference rates are what a clean run measured, not what DESIGN.md argues
+//! in prose (see [`expected`]) — pinning to a reachable number is what stops it
+//! being a column nobody reads.
 
 use std::fmt::Write as _;
 
 use crate::drive::Run;
 
-/// What each policy earns per tick, **as measured**, so drift shows up.
+/// What each policy earns per tick, as measured, so drift shows up.
 ///
-/// # These are not DESIGN.md's numbers, and the gap is the first finding
+/// Not DESIGN.md's numbers: the design argues from recipe ticks alone, while a
+/// real loop also pays a tick of queue latency per command, a `PURGE_TICKS`
+/// scour per byproduct, and a relight. Hand-played clarity reaches
+/// `experience 16` at tick 123, not 94, and the looped policy settles at 0.140
+/// once its first lap is amortised.
 ///
-/// The design argues its rates from **recipe ticks alone** — clarity's 16 over
-/// 94 is grind 8, digest 12, grind 8, mix 10, distil 56 — and a real loop also
-/// pays a tick of queue latency per command, a `PURGE_TICKS` scour to clear each
-/// byproduct, and a relight when the charcoal runs out. A hand-played clarity
-/// reaches `experience 16` at **tick 123**, not 94, which is 0.130 rather than
-/// 0.170; the looped policy settles at 0.140 once its first lap's setup is
-/// amortised. Neither number is wrong — they measure different things — but only
-/// one of them is reachable, and a reference nothing can hit is a reference
-/// nobody checks.
-///
-/// So this table pins **what the harness produced on a clean run**, and
-/// DESIGN.md keeps its idealisation with a §19 note saying what the loop costs on
-/// top. That makes this a regression pin: a number moving here means the *game*
-/// changed, which is exactly the alarm §16 wants.
+/// So this pins what the harness produced on a clean run (§19). A number moving
+/// here means the *game* changed, which is the alarm §16 wants.
 const EXPECTED: [(&str, f64); 9] = [
     // 0.170 idealised (§19, "16, and why the anchor moved") against 0.140 looped.
     ("clarity", 0.140),
-    // §10.1's claimed better play, measured **behind** the careless one — see
-    // `Policy::DAMPED`. Pinned so that if damping ever does get ahead, the table
-    // says so rather than nobody noticing.
+    // §10.1's claimed better play, measured behind the careless one — see
+    // `Policy::DAMPED`. Pinned so the table says so if damping ever gets ahead.
     ("damped", 0.136),
-    // §19: "the fastest experience in the game is the haste chain at 0.367/tick
-    // against the flagship clarity's 0.170" — recorded there as a risk. The
+    // §19 records the haste chain ahead of the flagship as a risk. The
     // idealised ratio is 2.16x; measured it is 1.82x. Still the risk, gentler.
     ("haste", 0.255),
-    // §19: "1 experience per ~10 ticks for ever". The one rate the idealisation
-    // and the loop agree on exactly, because the loop is two commands and has no
-    // fire, no byproduct and nothing to scour.
+    // §19's "1 experience per ~10 ticks for ever", and the one rate the
+    // idealisation and the loop agree on exactly — two commands, no fire, no
+    // byproduct, nothing to scour.
     ("grind", 0.100),
-    // **The number the lens redesign moved most, and the reason it is pinned at
-    // all.** Automated scrying read 0.07 while the ward exchanged sigils, took
-    // ~23 presses and paid twelve ticks for each; it reads 0.268 now — the same
-    // 8 a solve, over ~12 presses at two ticks apiece.
+    // The number the lens redesign moved most: 0.07 when the ward exchanged
+    // sigils (~23 presses at twelve ticks each) against the same 8 over ~12
+    // presses at two ticks apiece now.
     //
-    // It is *unlike* the four above in one way worth knowing before reading it:
-    // a press takes no production slot, so this is the only policy here that
-    // never waits on the tower and never competes with a brew. The rate is
-    // therefore **additive** to whatever the laboratory is doing rather than an
-    // alternative to it, which is what §8 wants automation to buy and is not
-    // something the table's single column can show.
-    //
-    // A real bound `breaking` measures ~0.18 over the same span, because §8's
-    // interpreter spends a tick on every `if`, `else` and `end`. This is a
-    // ceiling, exactly as `stacks` is — §19's *"the harness has no player"* puts
-    // execution outside what a policy models.
+    // A press takes no production slot, so this is additive to whatever the
+    // laboratory is doing — what §8 wants automation to buy, and not something
+    // one column can show. A real bound `breaking` measures ~0.18, because §8's
+    // interpreter spends a tick on every `if`, `else` and `end`; a ceiling, as
+    // `stacks` is (§19's "the harness has no player").
     ("scrying", 0.268),
-    // **The flattest column in the table, and the flatness is arithmetic rather
-    // than luck.** A course of `n` wards costs `2^n` ticks and pays `n - 2`, so
-    // three and four both come out at an eighth — and a policy keeping the walls
-    // up only ever musters those two. All four seeds read 0.1249 to the digit,
-    // where `stacks` swings 0.0067 to 0.0144 on the same four.
+    // The flattest column, by arithmetic rather than luck: a course of `n` wards
+    // costs `2^n` ticks and pays `n - 2`, so three and four both come out at an
+    // eighth, and a policy keeping the walls up musters only those two. All four
+    // seeds read 0.1249, where `stacks` swings 0.0067 to 0.0144.
     //
-    // Additive, like `scrying` and for the same reason: neither `muster` nor
-    // `haul` takes the production slot, so this runs beside a brew rather than
-    // instead of one. What is different is that this domain **pays twice** — a
-    // finished course puts integrity back as well as earning — which is why the
-    // rate sits under the flagship's 0.140 where scrying's sits over it.
+    // Additive like `scrying`, but this domain pays twice — a finished course
+    // puts integrity back as well as earning — which is why the rate sits under
+    // the flagship's 0.140 where scrying's sits over it.
     ("warding", 0.125),
-    // **Flatter still, and for a sharper reason: nothing here is drawn.**
-    // 0.0060, 0.0060, 0.0060, 0.0059 across the same four seeds — where
-    // `warding`'s flatness is arithmetic over two course heights, this is a
-    // domain whose whole output is bounded by a resource that regenerates on a
-    // *clock*. The lattice's one draw does not reach the rate at all, because a
-    // spell holding the eight-rung table lights every board in one fall.
+    // Flatter still — 0.0060 to 0.0059 across four seeds — because output is
+    // bounded by a resource regenerating on a clock and the lattice's one draw
+    // does not reach the rate.
     //
-    // **The lowest rate in the table, deliberately.** Enchanting's payoff is not
-    // experience — it is a mortar at half time, a stacks paying twice — and that
-    // value is realised in whatever room the tool is in. The token 1 a fall pays
-    // is for the slot it held. It earns *something* rather than nothing only
-    // because a domain reading 0.0000 is indistinguishable from a broken one,
-    // which is exactly how this policy's first sweep reported it.
+    // The lowest rate, deliberately: enchanting's payoff is a mortar at half
+    // time, realised in whatever room the tool is in, and the token 1 a fall
+    // pays is for the slot it held. It earns something rather than nothing only
+    // because 0.0000 is indistinguishable from a broken domain.
     //
-    // **And it is the one policy that competes rather than adds.** `anneal` is
-    // an operation, so a tower binding charms is a tower not brewing — which is
-    // §10's stated scarcity for the domain and the thing nothing measured until
-    // this column existed.
+    // The one policy that competes rather than adds: `anneal` is an operation,
+    // so a tower binding charms is a tower not brewing — §10's scarcity for the
+    // domain, unmeasured until this column.
     ("imbuing", 0.006),
-    // **The search, not a player — and it replaced the table's second-best rate
-    // with one of its lowest, on purpose** (§19). The menagerie was a chant, and
-    // a chant sung perfectly read 0.243, because a spell at two steps a tick sang
-    // it perfectly too. The circle is a logic puzzle: a person who reads the
-    // temper holds a beast in one call, and the shipped `taming` tries circles in
-    // order and averages 68 as beasts are drawn. This measures the second — 0.042
-    // over ten seeds, because how far down the order a beast sits is the draw —
-    // since that is what the economy sees.
+    // The search, not a player, and deliberately one of the table's lowest
+    // rates where the chant read 0.243 (§19): a reader of the temper holds a
+    // beast in one call, while the shipped `taming` tries circles in order and
+    // averages 68. This measures the second, which is what the economy sees.
     //
-    // **Its own band, thirty-five percent, and measured rather than widened to
-    // taste.** Since `0.15.4` draws circuits with turned wires, seeds 0–7, 11 and
-    // 42 read 0.0319 to 0.0550 — seed 1 31% over and seed 5 24% under — because a
-    // two-hour run holds only about forty beasts and one beast can take 1 call or
-    // 174. At fifteen percent the sweep CLAUDE.md asks for after every world
-    // change flagged two seeds of ten, and a flag that shows on luck is one
-    // nobody reads. A halved menagerie is 50% out and still flagged; `agrees.rs`
-    // holds the four-world mean, 0.0414, to that band over the square root of
-    // its four worlds — seventeen and a half percent. See [`WIDER`] and
-    // [`tolerance_of_mean`].
+    // Its own band, thirty-five percent, measured rather than widened to taste:
+    // since `0.15.4`'s turned wires, seeds 0–7, 11 and 42 read 0.0319 to 0.0550,
+    // because a two-hour run holds only about forty beasts and one can take 1
+    // call or 174. At fifteen percent two seeds of ten flagged on luck alone. A
+    // halved menagerie is still flagged; `agrees.rs` holds the four-world mean,
+    // 0.0414, to that band over √4. See [`WIDER`] and [`tolerance_of_mean`].
     //
-    // **Additive, as `scrying` is**: neither word takes the production slot, so
-    // this is earned beside a brew rather than instead of one. And it is the
-    // floor of what a player's knowledge buys: a spell that prunes the keystone
-    // by `fervour` and sunwise by De Morgan averages 38 calls, and a second step
-    // a tick halves the ticks either way. A *bound* `taming` at one step a tick
-    // holds 27 beasts in two hours over the same four worlds — about 80 troops —
-    // against the ~27 `besieging` spends.
+    // Additive as `scrying` is, and the floor of what knowledge buys: a spell
+    // pruning the keystone by `fervour` and sunwise by De Morgan averages 38
+    // calls. A bound `taming` holds 27 beasts in two hours over four worlds,
+    // about 80 troops, against the ~27 `besieging` spends.
     ("taming", 0.042),
-    // **The siege, and it was very nearly left unpinned for the wrong reason.**
-    // The first measurement spread 0.043–0.085 across seeds, which read as dice
-    // variance over the ~6 sieges a two-hour run fits — the argument `stacks`
-    // makes, and it was written into the docs as such.
+    // Nearly left unpinned for the wrong reason: the first spread, 0.043–0.085,
+    // was not dice variance but `fight_one` keying "already spent this round"
+    // on a rendered line's byte length, so consecutive rounds collided. Keyed
+    // on `turns`, the spread was 0.1225–0.1313 over five seeds.
     //
-    // It was not the dice. `fight_one` keyed *"have I already spent this round"*
-    // on the byte length of a rendered prose line, so consecutive rounds collided
-    // and the driver stopped using its arsenal at random. Keyed on `turns` the
-    // spread tightened to **0.1225–0.1313 over five seeds**, tight enough to pin.
+    // Then pledging dice took it to 0.114 — allocating wins faster (6 rounds
+    // against about 10) and costs more commands, and at three dice a round the
+    // second effect is larger. The version that skipped the domain's central
+    // decision measured what a player gets for *ignoring* the mechanic.
     //
-    // **Then the driver learned to pledge dice and it settled at 0.114**, down
-    // from that 0.128 midpoint — and the number moving *down* when the policy
-    // started playing better is the part worth keeping. Allocating wins faster —
-    // a pledged siege runs **6 rounds against about 10** — and costs more
-    // commands to do it, and at three dice a round the second effect is larger.
-    // The version that skipped the domain's central decision was measuring what
-    // a player gets for *ignoring* the mechanic, which is not a ceiling worth
-    // pinning at any spread.
+    // 0.123 since pledging cost quintessence: the driver stops asking for dice
+    // it cannot pay for, so refused commands now reach the arsenal ladder, and
+    // the spread narrowed from 23% of the mean to 17%. It is gated by
+    // `siege::CADENCE` more than by the loop's own speed, so this pin mostly
+    // watches that constant.
     //
-    // 0.114 sits under warding's 0.125 and clearly under clarity's 0.140, which
-    // is where a domain that also mends the barrier *and* consumes the arsenal
-    // belongs. It is gated by `siege::CADENCE` far more than by the loop's own
-    // speed, so this pin is mostly watching that constant.
-    //
-    // **0.123 since pledging cost quintessence**, up from 0.114 — and the rate
-    // rising when the domain got *harder* is the part worth understanding.
-    // Nothing about a siege got cheaper: what changed is that the driver stops
-    // asking for dice it cannot pay for, so the commands it used to spend being
-    // refused now reach the arsenal ladder instead. The policy plays better
-    // because the world tells it what it can afford.
-    //
-    // The spread narrowed with it, 23% of the mean to 17%, for the same reason —
-    // a run's rate now depends less on how many refusals it happened to eat.
-    //
-    // **A single-seed sweep will still flag this sometimes, and the flag is not
-    // a finding.** Measured over `agrees::SEEDS`: 0.1225, 0.1342, 0.1225,
-    // 0.1138 — a **mean of 0.1232**. `--ticks 7200` fits only about six sieges,
-    // so one badly-timed sabotage still moves a whole siege and the seed shows
-    // through.
-    //
-    // This is why the pin is read by the **mean of four worlds** and not by the
-    // column. `stacks` is the same problem and is left unpinned because a maze
-    // is one sample per seed with nothing to average; a siege averages, so it is
-    // pinned. Read `--why` before believing `<-- drifted` here: healthy costs are
-    // cadence waits and sabotage notices, and anything else means the driver has
-    // fallen out of phase.
+    // A single-seed sweep still flags this sometimes and the flag is not a
+    // finding: over `agrees::SEEDS` it reads 0.1225, 0.1342, 0.1225, 0.1138, a
+    // mean of 0.1232, because `--ticks 7200` fits only about six sieges. Hence
+    // the pin is read by the mean of four worlds. Read `--why` before believing
+    // `<-- drifted`: healthy costs are cadence waits and sabotage notices.
     ("besieging", 0.123),
 ];
 
 /// How far a measurement may sit from its expectation before it is called out.
 ///
-/// **A tenth, now that the references are measured rather than argued.** It was
-/// a quarter while they came from prose, which was the right width for numbers
-/// that were never precise and the wrong one for a regression pin — a quarter
-/// would let clarity fall to 0.105, below the standing grind loop, without a
-/// word.
+/// A tenth, now that the references are measured rather than argued. It was a
+/// quarter while they came from prose, which would let clarity fall to 0.105 —
+/// below the standing grind loop — without a word.
 ///
-/// `stacks` is deliberately absent from [`EXPECTED`]: a maze is generated per
-/// seed and one run is one sample, so pinning it would pin a seed rather than a
-/// rate. Sweep it across several `--seed`s instead.
+/// `stacks` is absent from [`EXPECTED`] because a maze is generated per seed and
+/// one run is one sample, so pinning it would pin a seed. Sweep several
+/// `--seed`s instead.
 ///
-/// **`bound` is absent for the opposite reason** — not because one run says too
-/// little, but because its absolute rate is the wrong thing to hold. It moves
-/// with a world's luck at sabotage exactly as `grind` does (0.0814 on seed 3
-/// against 0.0910 on seed 0), while the quotient of the two is 0.910 on every
-/// seed measured, because that is a property of the script engine rather than of
-/// the tower. `tests/agrees.rs` pins the quotient; this table reports the rate.
+/// `bound` is absent because its absolute rate moves with a world's luck at
+/// sabotage as `grind` does (0.0814 on seed 3 against 0.0910 on seed 0), while
+/// the quotient of the two is 0.910 on every seed — a property of the script
+/// engine rather than of the tower. `tests/agrees.rs` pins the quotient.
 const TOLERANCE: f64 = 0.10;
 
 /// The policies whose single-seed spread is measured wider than [`TOLERANCE`],
 /// and the band each is held to instead.
 ///
-/// **An exception has to carry its measurement**, which is why this is a table
-/// of its own rather than a third column every pin fills in: a wider band is a
-/// claim that the draw, not the driver, moves the rate, and the comment beside
-/// the pin is where that claim is argued. Nothing here should be wider than its
-/// worst measured seed needs.
+/// A table of its own rather than a third column every pin fills in. A wider
+/// band claims the draw moves the rate, and the comment beside the pin argues
+/// it; nothing here is wider than its worst measured seed needs.
 const WIDER: [(&str, f64); 1] = [("taming", 0.35)];
 
 /// The summary table.
@@ -266,10 +194,9 @@ pub fn csv(runs: &[Run]) -> String {
 
 /// Why each policy's commands were turned down, commonest first.
 ///
-/// **The half of a sweep that says whether to believe the other half.** A rate
-/// measured while a third of the loop is being refused is a real number about a
-/// loop nobody wrote, and the only way to tell the two apart is to read the
-/// sentences the tower was saying at the time.
+/// The half of a sweep that says whether to believe the other half: a rate
+/// measured while a third of the loop is refused is a real number about a loop
+/// nobody wrote.
 #[must_use]
 pub fn why(runs: &[Run]) -> String {
     let mut out = String::new();
@@ -289,11 +216,8 @@ pub fn why(runs: &[Run]) -> String {
 
 /// What a policy is pinned to earn per tick, if anything.
 ///
-/// **Public so a test can hold the pin, and that is not test-only API.** The
-/// number is already on screen in every [`table`] a person reads; what was missing
-/// is anything that *fails* when a measurement leaves the band. A `<-- drifted`
-/// marker in a column is a regression pin only for as long as somebody is looking
-/// at the column, and `tests/agrees.rs` is what looks at it every run.
+/// Public so a test can hold the pin: `<-- drifted` is a regression pin only
+/// while somebody reads the column, and `tests/agrees.rs` reads it every run.
 #[must_use]
 pub fn expected(policy: &str) -> Option<f64> {
     EXPECTED
@@ -312,14 +236,13 @@ pub fn tolerance(policy: &str) -> f64 {
         .map_or(TOLERANCE, |(_, band)| *band)
 }
 
-/// How far a policy's rate **averaged over `worlds` seeds** may sit from its pin.
+/// How far a policy's rate averaged over `worlds` seeds may sit from its pin.
 ///
-/// **Narrower than [`tolerance`] wherever that band was widened for one seed's
-/// luck.** A wider band is a claim about a single run's spread, and a mean of
-/// `n` runs spreads about `1/√n` as far — so `taming`'s thirty-five percent is
-/// seventeen and a half over `agrees.rs`'s four worlds. Held to the whole band,
-/// a menagerie earning thirty percent less still averaged inside it. Never
-/// below `TOLERANCE`, which every pinned mean was already held to.
+/// Narrower than [`tolerance`] wherever that band was widened for one seed's
+/// luck: a mean of `n` runs spreads about `1/√n` as far, so `taming`'s
+/// thirty-five percent is seventeen and a half over four worlds — held to the
+/// whole band, a menagerie earning thirty percent less averaged inside it.
+/// Never below `TOLERANCE`.
 #[must_use]
 pub fn tolerance_of_mean(policy: &str, worlds: usize) -> f64 {
     #[allow(clippy::cast_precision_loss)]
@@ -329,10 +252,9 @@ pub fn tolerance_of_mean(policy: &str, worlds: usize) -> f64 {
 
 /// Whether a measured rate has left its expectation's `tolerance` band.
 ///
-/// Public for the same reason [`expected`] is: the band is half the pin, and a
-/// test asserting one without the other would invent a second tolerance. **The
-/// band is passed in**, from [`tolerance`], so the table and the test cannot hold
-/// one policy to two widths.
+/// Public for [`expected`]'s reason: the band is half the pin. It is passed in,
+/// from [`tolerance`], so the table and the test cannot hold one policy to two
+/// widths.
 #[must_use]
 pub fn off_by(measured: f64, want: f64, tolerance: f64) -> bool {
     (measured - want).abs() > want * tolerance
@@ -367,15 +289,13 @@ mod tests {
 
     #[test]
     fn a_run_of_no_length_has_no_rate_rather_than_a_panic() {
-        // Reachable with `--ticks 0`, and dividing by nought here would take the
-        // harness down over a question nobody asked.
+        // Reachable with `--ticks 0`.
         assert!((run_of("grind", 0, 0).rate() - 0.0).abs() < f64::EPSILON);
     }
 
     #[test]
     fn drift_is_flagged_and_agreement_is_not() {
-        // The whole point of the reference column: a policy that has wandered
-        // out of its band says so in the table rather than in a later phase.
+        // A policy out of its band says so in the table, not a phase later.
         let band = tolerance("clarity");
         assert!(!off_by(0.140, 0.140, band));
         assert!(!off_by(0.133, 0.140, band), "inside a tenth, so not drift");
@@ -385,9 +305,8 @@ mod tests {
         );
     }
 
-    /// **`taming`'s band is its measured seeds and no wider** — the lowest and
-    /// highest of ten read inside it, and a menagerie earning half is still out
-    /// of it.
+    /// `taming`'s band is its measured seeds and no wider: the lowest and
+    /// highest of ten read inside it, and a halved menagerie is still out.
     #[test]
     fn the_menageries_wider_band_holds_its_seeds_and_still_flags_a_halving() {
         let want = expected("taming").expect("taming is pinned");
@@ -398,9 +317,8 @@ mod tests {
         }
         assert!(off_by(want / 2.0, want, band), "a halved menagerie passed");
 
-        // **A mean is held tighter than a seed.** Four worlds of a menagerie
-        // earning thirty percent less sat inside the single-seed band; the
-        // four-world band flags it, and still holds the mean it pins.
+        // A mean is held tighter than a seed: four worlds earning thirty
+        // percent less sat inside the single-seed band.
         let mean_band = tolerance_of_mean("taming", 4);
         assert!(mean_band < band, "a mean held to a single seed's band");
         assert!(off_by(want * 0.7, want, mean_band), "a 30% cut passed");
@@ -422,10 +340,8 @@ mod tests {
 
     #[test]
     fn the_flagship_still_beats_the_standing_grind_loop() {
-        // §11.5's whole shape in one assertion: finishing the chain must pay
-        // better than repeating its first step for ever. The tolerance band is
-        // set so that a clarity which fell this far would be flagged, and this
-        // is the sentence that says why anyone cares.
+        // §11.5's shape: finishing the chain must pay better than repeating its
+        // first step for ever.
         let clarity = expected("clarity").expect("clarity is pinned");
         let grind = expected("grind").expect("grind is pinned");
         assert!(clarity > grind, "{clarity} is not ahead of {grind}");
@@ -433,8 +349,8 @@ mod tests {
 
     #[test]
     fn every_expected_policy_is_one_the_harness_can_run() {
-        // A reference for a policy nobody can select would never be checked, and
-        // would look exactly like a policy that always agrees.
+        // An unselectable policy's reference is never checked, and looks
+        // exactly like one that always agrees.
         for (name, _) in EXPECTED {
             assert!(
                 crate::policy::Policy::named(name).is_some(),

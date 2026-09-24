@@ -6,9 +6,8 @@ use bevy::render::render_resource::ShaderType;
 /// The player's chosen accommodation (DESIGN.md §14).
 ///
 /// A resource rather than a component on the camera, unlike `CrtSettings`: it is
-/// a *setting*, one per session, and nothing in the world may write it. That
-/// asymmetry is deliberate — `CrtSettings` is driven by world state (§4 wires
-/// its flash and desaturation to threat) and this must never be.
+/// a *setting*, one per session, and nothing in the world may write it.
+/// `CrtSettings` is driven by world state (§4) and this must never be.
 #[derive(Resource, Debug, Clone, Copy, Default)]
 pub(crate) struct Vision(pub(crate) Sight);
 
@@ -17,19 +16,15 @@ const VAR: &str = "ORBS_SIGHT";
 
 /// How the player has asked to be shown the screen.
 ///
-/// **Not a theme.** §19 records the reversal: a theme made the accommodation an
-/// aesthetic choice, so a player who needed it had to give up amber to get it.
-/// This is orthogonal to the phosphor, which is what an accommodation should be.
+/// Not a theme, which is the reversal §19 records: a theme made the
+/// accommodation an aesthetic choice, so a player who needed it had to give up
+/// amber. This is orthogonal to the phosphor.
 ///
-/// # There are two variants, and there were meant to be five
-///
-/// ROADMAP Phase 13 asks for protanopia, deuteranopia and tritanopia correction
-/// beside greyscale. They are **not** here, on measurement rather than on
-/// schedule: daltonisation degrades this palette's accent separation in eleven
-/// of twelve theme × deficiency combinations, because the triad is solved in
-/// *luminance* and the correction works in *hue*. DESIGN.md §19 carries the
-/// numbers. `render::deficiency` keeps the simulation half and points it at the
-/// tests instead.
+/// Two variants where Phase 13 asks for five. The three deficiency corrections
+/// are left out on measurement: daltonisation degrades this palette's accent
+/// separation in eleven of twelve theme × deficiency combinations, because the
+/// triad is solved in *luminance* and the correction works in *hue* (§19).
+/// `render::deficiency` keeps the simulation half.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum Sight {
     /// The tube as authored.
@@ -64,10 +59,9 @@ impl Sight {
 
 /// What the shader is told.
 ///
-/// **Field order must match `sight.wgsl`'s `Sight` struct.** The same
-/// hand-maintained contract `CrtUniform` carries, and the same reason it is
-/// worth a sentence: nothing checks it, and a mismatch is a silent wrong
-/// picture rather than a compile error.
+/// Field order must match `sight.wgsl`'s `Sight` struct — the hand-maintained
+/// contract `CrtUniform` carries. Nothing checks it, and a mismatch is a silent
+/// wrong picture rather than a compile error.
 #[derive(ShaderType, Debug, Clone, Copy, PartialEq)]
 pub(crate) struct SightUniform {
     /// 1.0 to take the hue out, 0.0 to leave it.
@@ -80,9 +74,9 @@ pub(crate) struct SightUniform {
 impl SightUniform {
     /// Build the uniform for a setting.
     ///
-    /// **Takes a [`Sight`] and nothing else.** It cannot see `CrtSettings`, and
-    /// that is asserted rather than left to be noticed — an accommodation the
-    /// tube's own off-switch could reach is the defect §19 already records once.
+    /// Takes a [`Sight`] and nothing else, so it cannot see `CrtSettings` — an
+    /// accommodation the tube's own off-switch could reach is a defect §19
+    /// already records once.
     pub(crate) const fn new(sight: Sight) -> Self {
         Self {
             greyscale: match sight {
@@ -114,25 +108,38 @@ pub(super) fn cycle(mut vision: ResMut<Vision>) {
     let next = Sight::ALL[(at.unwrap_or(0) + 1) % Sight::ALL.len()];
     vision.0 = next;
     info!("sight: {}", next.name());
+    // The key and the settings page are one setting seen twice — see
+    // `crt::plugin::cycle`. An accommodation that did not survive a relaunch
+    // would be the worst one to leave un-sticky.
+    crate::shell::remember_setting(crate::shell::SIGHT, next.name());
 }
 
-/// What the accommodation opens as, from `ORBS_SIGHT`.
+/// What the accommodation opens as: the switch, then what the player chose.
+///
+/// The chain `crt::seeded` uses and for the same reason — the two accommodation
+/// switches must behave alike.
 pub(super) fn seeded() -> Sight {
-    chosen(std::env::var(VAR).ok().as_deref())
+    chosen(
+        // An exported-but-empty `ORBS_SIGHT=` is not the switch being set —
+        // `save::chosen`'s rule. Discarding a *saved accessibility choice* over
+        // an empty variable is the worst version of it.
+        std::env::var(VAR)
+            .ok()
+            .filter(|value| !value.trim().is_empty())
+            .or_else(|| orbs_shell::settings::get(crate::shell::SIGHT))
+            .as_deref(),
+    )
 }
 
 /// The rule [`seeded`] applies, without the environment.
 ///
 /// Split out so it can be *tested*: a test that set the variable would set it
-/// for every other test in the binary. `save::chosen` is the precedent and the
-/// reason, and `crt::chosen` is the sibling — the two must agree about case and
-/// about blanks, or one accommodation switch behaves unlike the other.
+/// for every other test in the binary. `crt::chosen` is the sibling — the two
+/// must agree about case and about blanks.
 fn chosen(value: Option<&str>) -> Sight {
     // An exported-but-empty variable is *unset*, not a typo. `ORBS_SIGHT= orbs`
-    // is the shell idiom for neutralising one, and a loop variable that came out
-    // empty is the same thing arriving by accident; warning on either would put
-    // a line in the log on every launch. `save::chosen` filters blanks for this
-    // reason and `environment::wizard` rejects them explicitly.
+    // is the shell idiom for neutralising one, and warning on it would put a
+    // line in the log on every launch.
     let Some(value) = value.map(str::trim).filter(|value| !value.is_empty()) else {
         return Sight::Plain;
     };
@@ -177,9 +184,9 @@ mod tests {
 
     /// `F8` must reach every accommodation and come back round.
     ///
-    /// The property `crt`'s own cycle test pins: a key that cannot reach the
-    /// state a player needs is not a control. Asserted on the table rather than
-    /// through the system, which takes a `ResMut` a unit test cannot build.
+    /// A key that cannot reach the state a player needs is not a control.
+    /// Asserted on the table rather than through the system, which takes a
+    /// `ResMut` a unit test cannot build.
     #[test]
     fn cycling_reaches_every_sight_and_returns() {
         let mut seen = Vec::new();
@@ -218,22 +225,18 @@ mod tests {
         assert!(SightUniform::new(Sight::Greyscale).wanted());
     }
 
-    // **There is no test here for "the tube cannot switch the accommodation
-    // off", and there was one — it asserted `new(s) == new(s)`.** That is the
-    // reflexivity of a pure function: it holds for every implementation,
-    // including one that read the tube's state, so it claimed the diff's
-    // headline safety property while proving nothing at all. A test that cannot
-    // fail is worse than no test, because it stops anyone writing a real one.
+    // No test here for "the tube cannot switch the accommodation off". There was
+    // one, asserting `new(s) == new(s)` — the reflexivity of a pure function,
+    // which holds for every implementation including one that read the tube's
+    // state. A test that cannot fail stops anyone writing a real one.
     //
-    // The guarantee is **structural**: `new` takes a `Sight` and nothing else,
-    // and `sight::plugin::extract` reads `Vision` and nothing else, so no value
-    // of `CrtSettings` is in scope on either path. Rust's type system is what
-    // holds that, and a unit test cannot add to it.
+    // The guarantee is structural: `new` takes a `Sight` and nothing else, and
+    // `sight::plugin::extract` reads `Vision` and nothing else, so no value of
+    // `CrtSettings` is in scope on either path.
     //
-    // The *evidence* is the four-way capture matrix in CLAUDE.md's greyscale
+    // The evidence is the four-way capture matrix in SEEING-IT's greyscale
     // block, which drives the real binary at both tube states and counts
-    // hue-carrying pixels. That is an end-to-end check of the thing this
-    // paragraph claims, and it is where the property is actually pinned.
+    // hue-carrying pixels.
 
     #[test]
     fn every_name_round_trips_and_a_typo_does_not() {

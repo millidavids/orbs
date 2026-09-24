@@ -1,19 +1,16 @@
 //! Approximate string matching.
 //!
-//! Integer-only, like everything else the sim scores with. Floats would make
-//! candidate ordering depend on rounding, and DESIGN.md §6 requires every
-//! resolution be reproducible and explainable — a tie broken by the last bit of
-//! an `f32` is neither.
+//! Integer-only, like everything else the sim scores with: floats would make
+//! candidate ordering depend on rounding, and §6 requires every resolution be
+//! reproducible and explainable.
 //!
-//! Two shapes of near-miss get handled differently on purpose:
+//! Two shapes of near-miss, handled differently on purpose:
 //!
-//! - **Prefixes are intentional.** A player typing `sur` for `survey` is
-//!   abbreviating, not misspelling, and expects it to work. Prefixes score high
-//!   and scale gently with how much of the word was given.
-//! - **Typos are accidental.** `clarty` for `clarity` scores by edit distance
-//!   against the longer word, so a one-character slip in a long word costs less
-//!   than a one-character slip in a short one — which is what makes `rm` and `cd`
-//!   safe from fuzzy collisions.
+//! - Prefixes are intentional. `sur` for `survey` is abbreviating, so prefixes
+//!   score high and scale gently with how much of the word was given.
+//! - Typos are accidental. `clarty` for `clarity` scores by edit distance
+//!   against the longer word, so a slip in a long word costs less than one in a
+//!   short word — which keeps `rm` and `cd` safe from fuzzy collisions.
 
 /// The score of an exact match. All similarity is on a `0..=EXACT` scale.
 pub const EXACT: u32 = 1000;

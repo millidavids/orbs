@@ -1,26 +1,18 @@
 //! The bailey, scripted — and the arithmetic a siege spell is written with.
 //!
-//! `tests/besieging.rs` proves the **game**: that the words resolve, that a
-//! round pays, that a siege survives a save. `tests/solvers.rs` proves the
-//! shipped spells run. Neither asks the question this file does: **can a person
-//! write a siege spell at all**, and is every state they would need to write one
-//! actually emitted?
+//! `tests/besieging.rs` proves the game and `tests/solvers.rs` proves the
+//! shipped spells run. Neither asks whether a person could write a siege spell
+//! at all, or whether every state they would need is emitted.
 //!
-//! # Three claims, and the first is the one that catches the next bug
-//!
-//! 1. **Every reading the domain declares is reachable.** `siege::readings()` is
-//!    what `recall scripting` teaches and what the scene registers, so a word in
-//!    it that no state ever publishes is a word the manual offers and the world
-//!    never answers — `if the coffer has quintessence` reading nought for ever,
-//!    with the whole suite green. That shipped: the die prices were raised only
-//!    by `defend::publish`, which nothing calls until a bailey verb runs, so a
-//!    fresh tower priced every die at nothing and the affordability guard every
-//!    solver ships answered *yes* on an empty pool.
-//! 2. **A hand-written spell can use each of them**, compiled through the real
+//! 1. Every reading the domain declares is reachable. A declared word no state
+//!    publishes reads nought for ever with the suite green — the die prices
+//!    shipped that way, raised only by `defend::publish`, so a fresh tower
+//!    priced every die at nothing and every solver's affordability guard said
+//!    *yes* on an empty pool.
+//! 2. A hand-written spell can use each of them, compiled through the real
 //!    editor and run through the real schedule.
-//! 3. **The arithmetic is exact**, against numbers this domain fixes rather than
-//!    a maze's luck: the pool opens at 24 and a `d20` costs 5, so `plus`,
-//!    `double` and the comparison have known answers rather than derived ones.
+//! 3. The arithmetic is exact against numbers this domain fixes: the pool opens
+//!    at 24 and a `d20` costs 5.
 
 use orbs_render::{FieldName, Value};
 use orbs_sim::{Sim, tower};
@@ -62,10 +54,8 @@ fn words(sim: &Sim) -> Vec<String> {
 
 /// Write a spell into the bailey and cast it, then hand back the log.
 ///
-/// **Through `write` and `invoke`, never by hand.** A test that pokes a
-/// `Program` into the world proves the runner works and says nothing about
-/// whether a person could have got there — and *"can a person write this"* is
-/// the whole question here.
+/// Through `write` and `invoke`, never by hand: poking a `Program` into the
+/// world proves the runner works, not that a person could get there.
 fn cast(sim: &mut Sim, name: &str, lines: &[&str]) {
     let body: Vec<String> = lines.iter().map(|line| (*line).to_owned()).collect();
     sim.write_spell(name, &body);
@@ -75,9 +65,8 @@ fn cast(sim: &mut Sim, name: &str, lines: &[&str]) {
 
 /// Whether a spell the orb was given reads clean.
 ///
-/// The complaints are the thing to assert on: a line the compiler cannot read is
-/// reported once per cast, and a spell that silently does nothing looks
-/// identical to one that ran.
+/// The thing to assert on: a spell that silently does nothing looks identical
+/// to one that ran.
 fn complaints(sim: &Sim) -> Vec<String> {
     said(sim)
         .into_iter()
@@ -94,25 +83,19 @@ fn complaints(sim: &Sim) -> Vec<String> {
 // 1. Every declared reading is one the world actually publishes
 // ---------------------------------------------------------------------------
 
-/// **The lint that would have caught the die prices.**
+/// The lint that would have caught the die prices.
 ///
-/// `siege::readings()` is the domain's contract with the language: `scene_at`
-/// registers every word in it unconditionally, so all of them *compile* in a
-/// spell whether or not anything ever publishes them. That is deliberate — a
-/// spell must compile before the siege it asks about exists — and it means the
-/// declaration is the **only** thing standing between a word and silence.
-///
-/// So this walks a real siege through the states that produce each one and
-/// asserts the word actually turns up. A reading nothing can publish is worse
-/// than a missing one: `many_at` answers absent with nought, so the spell gets a
-/// confident wrong number rather than an error.
+/// `scene_at` registers every declared word unconditionally, so all of them
+/// compile whether or not anything publishes them — the declaration is the only
+/// thing between a word and silence. This walks a real siege through the states
+/// that produce each one. A reading nothing publishes is worse than a missing
+/// one: `many_at` answers absent with nought.
 #[test]
 fn every_reading_the_domain_declares_is_one_some_state_reaches() {
     let mut seen: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
 
-    // Sixty seeds, because several readings are conditional on how a fight goes:
-    // `few` and `hurt` need a worn line, `outnumbered` a big enemy, `routed` a
-    // broken one, and no single seed produces all of them.
+    // Sixty seeds, because no single one produces every reading: `few` needs a
+    // worn line, `outnumbered` a big enemy, `routed` a broken one.
     for seed in 0..60 {
         let mut sim = at_the_wall(seed);
         run(&mut sim, "defend");
@@ -133,10 +116,8 @@ fn every_reading_the_domain_declares_is_one_some_state_reaches() {
             for die in tower::siege::POOL {
                 run(&mut sim, &format!("survey {}", die.word()));
             }
-            // Pledge what we can, **and survey the areas again afterwards** —
-            // `ceiling` is raised only while something is on an area and `hold`
-            // clears the pledges, so surveying before the pledge (as this did)
-            // never sees it at all.
+            // Survey the areas again after pledging: `ceiling` is raised only
+            // while something is on an area, and `hold` clears the pledges.
             for die in tower::siege::POOL {
                 run(&mut sim, &format!("pledge {} buckler", die.word()));
             }
@@ -163,12 +144,9 @@ fn every_reading_the_domain_declares_is_one_some_state_reaches() {
     );
 }
 
-/// **A die's price is there before the first siege**, which it was not.
-///
-/// It was raised by `defend::publish`, and nothing calls that until a bailey verb
-/// runs — so on a fresh tower `survey d20` answered *"the d20 holds nothing"* and
-/// `not the coffer has fewer quintessence than the d20` compared nought against
-/// nought and said **yes, afford it**, with no siege and no pool at all.
+/// A die's price is there before the first siege, which it was not: raised by
+/// `defend::publish`, nothing called it until a bailey verb ran, so the
+/// affordability guard compared nought against nought and said yes.
 #[test]
 fn a_die_is_priced_before_any_siege_has_been_fought() {
     let sim = Sim::new(11);
@@ -198,30 +176,22 @@ fn a_die_is_priced_before_any_siege_has_been_fought() {
 // 2. A person can write a spell with them
 // ---------------------------------------------------------------------------
 
-/// **The arsenal's stores, in a spell a person typed.**
+/// The arsenal's stores, in a spell a person typed.
 ///
-/// Compiling is not using: `scene_at` registers every declared word, so a spell
-/// naming one always compiles. What this asserts is that the loop's body
-/// actually *runs* — the cursor binds to a store and the condition answers.
+/// Compiling is not using: every declared word compiles. This asserts the
+/// loop's body runs — the cursor binds to a store and the condition answers.
 #[test]
 fn a_spell_can_walk_the_arsenal_and_find_what_has_gone_thin() {
-    // **The half that makes the mechanic answerable.** Stores run down with
-    // time, and a player who cannot ask *which* has run down can only guess —
-    // so a spell walks them, exactly as it walks ways and sockets, and the
-    // answer to a thinning arsenal is a spell that keeps making things.
-    //
-    // Registering a nameable word that no `has` can reach is the silent defect
-    // `scene.rs` records the whole registration loop existing to prevent: the
-    // spell casts, runs, and does nothing for ever. `complaints` is what
-    // catches that, which is why this asserts on it rather than on an effect.
+    // Stores run down with time, and a player who cannot ask *which* can only
+    // guess — so a spell walks them, as it walks ways and sockets. A nameable
+    // word no `has` can reach casts, runs and does nothing for ever, which is
+    // why this asserts on `complaints` rather than on an effect.
     let mut sim = at_the_wall(11);
     run(&mut sim, "debug_spawn warding 1");
     run(&mut sim, "debug_spawn troop 1");
-    // **Aged until the stores have run out**, which is the state worth asking
-    // about: `spent` is what a keeping spell acts on. `thin` is the middle of
-    // the slope and is reached by production *spread over time*, which one
-    // `debug_spawn` cannot make — it stamps a full store at a single tick, so
-    // its makings all fall out of the window together.
+    // Aged until the stores have run out: `spent` is what a keeping spell acts
+    // on. `thin` needs production spread over time, which one `debug_spawn`
+    // cannot make — its makings all leave the window together.
     run(&mut sim, "meditate 3000");
 
     cast(
@@ -240,11 +210,9 @@ fn a_spell_can_walk_the_arsenal_and_find_what_has_gone_thin() {
         "a spell could not ask what the arsenal is stocked in: {:?}",
         complaints(&sim),
     );
-    // **And the body actually ran**, which is the half a clean compile does not
-    // prove: a `for each` over a set with no members, or a `has` that is always
-    // false, complains about nothing and does nothing. One `debug_spawn` is a
-    // rate of one, so both of these *are* thin, and the survey inside the loop
-    // is what says the question was answered rather than merely parsed.
+    // And the body ran, which a clean compile does not prove: a `for each` over
+    // an empty set complains about nothing and does nothing. The survey inside
+    // the loop is what says the question was answered.
     for _ in 0..8 {
         sim.step();
     }
@@ -255,11 +223,10 @@ fn a_spell_can_walk_the_arsenal_and_find_what_has_gone_thin() {
     );
 }
 
-/// **Each new reading, in a spell a person typed.**
+/// Each new reading, in a spell a person typed.
 ///
-/// Compiling is not using: `scene_at` registers every declared word, so a spell
-/// naming one always compiles. What this asserts is that the guard actually
-/// *fires* — the spell acts, and the log says so.
+/// Compiling is not using: every declared word compiles. This asserts the guard
+/// fires — the spell acts, and the log says so.
 #[test]
 fn a_hand_written_spell_can_read_the_odds_and_the_pool() {
     let mut sim = at_the_wall(11);
@@ -297,12 +264,11 @@ fn a_hand_written_spell_can_read_the_odds_and_the_pool() {
     );
 }
 
-/// **The affordability guard, in the spelling the shipped solvers use.**
+/// The affordability guard, in the spelling the shipped solvers use.
 ///
-/// `not … fewer … than` is the language's route to *at least as many*, and the
-/// affirmative is wrong rather than merely clumsy — a comparison against a place
-/// is strict, so `has more quintessence than the d20` refuses the die you can
-/// exactly afford. This asserts the double negative behaves.
+/// `not … fewer … than` is the language's route to *at least as many*: a
+/// comparison against a place is strict, so the affirmative refuses the die you
+/// can exactly afford.
 #[test]
 fn the_affordability_guard_pledges_while_it_can_and_stops_when_it_cannot() {
     let mut sim = at_the_wall(11);
@@ -344,18 +310,13 @@ fn the_affordability_guard_pledges_while_it_can_and_stops_when_it_cannot() {
     );
 }
 
-/// **A spell can tell a win from a loss, which is the one thing `lifted` does
-/// not say.**
+/// A spell can tell a win from a loss, which `lifted` does not say.
 ///
-/// `repeat until the rampart has lifted` is the loop guard — it exists because
-/// `until the enemy has routed` can never come true when the *garrison* is the
-/// side that broke, and the shipped solver spun for ever on a loss until it was
-/// added. But `lifted` says only *over*, so the outcome is read afterwards by
-/// asking **which band is routed**.
-///
-/// Both directions are asserted, because a test that only ever wins would pass
-/// against a domain that could not express the loss at all — and losing is the
-/// case the reading was added for.
+/// `repeat until the rampart has lifted` is the loop guard: `until the enemy
+/// has routed` never comes true when the garrison is the side that broke. So
+/// the outcome is read afterwards by asking which band is routed, and both
+/// directions are asserted — a test that only wins would pass against a domain
+/// that could not express the loss.
 #[cfg(debug_assertions)]
 #[test]
 fn a_spell_can_tell_which_way_a_finished_siege_went() {
@@ -366,8 +327,7 @@ fn a_spell_can_tell_which_way_a_finished_siege_went() {
     for _ in 0..6 {
         run(&mut won, "hold");
     }
-    // **The rampart, not a band** — `lifted` is a fact about the *siege*, which
-    // is the whole reason it exists rather than `routed` doing the job.
+    // The rampart, not a band: `lifted` is a fact about the *siege*.
     run(&mut won, "survey rampart");
     run(&mut won, "survey enemy");
     run(&mut won, "survey garrison");
@@ -418,15 +378,11 @@ fn a_spell_can_tell_which_way_a_finished_siege_went() {
 
 /// Whether a one-line question is true, right now, in this world.
 ///
-/// Cast as a spell that says something when the guard holds — because a
-/// condition is only observable through what it *does*, and a test that reached
-/// into `watch::holds` would be testing the evaluator rather than the language a
-/// player writes.
+/// Cast as a spell that says something when the guard holds: reaching into
+/// `watch::holds` would test the evaluator, not the language a player writes.
 fn asks(sim: &mut Sim, name: &str, question: &str) -> bool {
-    // **Counted before and after, never read off the tail.** A `survey rampart`
-    // inside the guard writes a `turns` row, so the question held exactly when
-    // one more of them exists than did a moment ago — which does not depend on
-    // how much else the orb happened to say in between.
+    // Counted before and after, never read off the tail: the question held
+    // exactly when one more `turns` row exists than did a moment ago.
     let turns = |sim: &Sim| {
         sim.scrollback()
             .records()
@@ -454,11 +410,9 @@ fn asks(sim: &mut Sim, name: &str, question: &str) -> bool {
     turns(sim) > before
 }
 
-/// **The pool is 24 and a `d20` costs 5, so the comparison has a known answer.**
-///
-/// `tower::spell::watch`'s own tests weigh a maze, where which way was walked
-/// more is a fact about the seed. Here both sides are fixed by the domain, so a
-/// wrong answer is a wrong *number* rather than a wrong world.
+/// The pool is 24 and a `d20` costs 5, so the comparison has a known answer —
+/// unlike `tower::spell::watch`'s own tests, which weigh a maze. A wrong answer
+/// here is a wrong number rather than a wrong world.
 #[test]
 fn the_comparison_answers_what_the_numbers_say() {
     let base = tower::ceiling_for(tower::STANDING, 0);
@@ -479,26 +433,17 @@ fn the_comparison_answers_what_the_numbers_say() {
         "a full pool read as too poor for a d20",
     );
 
-    // ...and the same question flips when the pool is short.
-    //
-    // **Set directly rather than spent down over rounds**, and that is the
-    // sharper test rather than the lazier one. It used to pledge everything for
-    // three rounds, which emptied the pool *exactly* — an arithmetic
-    // coincidence that stopped holding the moment `hold` began granting
-    // `REGEN_PER_ROUND` back, and would have stopped again on any tuning pass.
-    // Worse, a stronger garrison now ends the fight sooner, so the loop could
-    // run out of siege before it ran out of quintessence and the test would fail
-    // for a reason that has nothing to do with the comparison.
-    //
-    // What is being asked is whether `fewer … than` reads two numbers correctly
-    // at the boundary. So put the number there.
+    // ...and the same question flips when the pool is short. Set directly
+    // rather than spent down over rounds: pledging everything for three rounds
+    // emptied the pool by arithmetic coincidence, which any tuning pass breaks.
+    // What is asked is whether `fewer … than` reads two numbers at the
+    // boundary, so put the number there.
     let d20_cost = tower::siege::cost_of(orbs_sim::tower::dice::Die::D20);
     sim.world_mut()
         .insert_resource(tower::Quintessence::new(d20_cost - 1));
-    // **A verb, because the coffer's readings are published by one.** Setting
-    // the resource changes what the tower holds and nothing else; `publish` runs
-    // on `defend`, `pledge` and `hold`. A `d6` costs one, so this leaves the
-    // pool short of a `d20` either way and is the cheapest thing that republishes.
+    // A verb, because the coffer's readings are published by one: `publish`
+    // runs on `defend`, `pledge` and `hold`. A `d6` costs one, so the pool is
+    // short of a `d20` either way.
     run(&mut sim, "pledge d6 buckler");
     assert!(
         asks(
@@ -510,12 +455,11 @@ fn the_comparison_answers_what_the_numbers_say() {
     );
 }
 
-/// **`plus` and `double`, evaluated rather than merely parsed.**
+/// `plus` and `double`, evaluated rather than merely parsed.
 ///
-/// The garrison opens at six spears against an enemy of five to nine, so
-/// `double the garrison` is twelve — more than any enemy this domain draws. That
-/// makes the two directions of the comparison assertable without knowing the
-/// seed.
+/// The garrison opens at six against an enemy of five to nine, so `double the
+/// garrison` is twelve — more than any enemy drawn, and both directions of the
+/// comparison are assertable without knowing the seed.
 #[test]
 fn double_and_plus_are_worth_what_they_say() {
     let mut sim = at_the_wall(11);
@@ -540,9 +484,8 @@ fn double_and_plus_are_worth_what_they_say() {
         "`double` did not double",
     );
 
-    // `plus` shifts a threshold by exactly what it says. The garrison is six, so
-    // it is not more than itself plus nought and is not more than itself plus
-    // anything.
+    // `plus` shifts a threshold by what it says: the garrison is six, so it is
+    // not more than itself plus nought.
     assert!(
         !asks(
             &mut sim,
@@ -561,13 +504,9 @@ fn double_and_plus_are_worth_what_they_say() {
     );
 }
 
-/// **`plus 0` is the identity, which is how `strict` is caught reading the
-/// variant instead of the grammar.**
-///
-/// Derived from the `Quantity` variant, the expression forms all fall to
-/// *inclusive* while a bare place is *strict* — so `than the garrison` and `than
-/// the garrison plus 0` would disagree at equality, which is exactly where a
-/// comparison is asked.
+/// `plus 0` is the identity, which catches `strict` reading the variant instead
+/// of the grammar: derived from `Quantity`, every expression form falls to
+/// inclusive while a bare place is strict, so the two disagree at equality.
 #[test]
 fn adding_nothing_changes_no_answer() {
     let mut sim = at_the_wall(11);
@@ -593,14 +532,12 @@ fn adding_nothing_changes_no_answer() {
     }
 }
 
-/// **A far-side reading the tower has never heard of is refused at cast**, which
-/// is better than the nought I expected and worth pinning as the guarantee it is.
+/// A far-side reading the tower has never heard of is refused at cast, not read
+/// as nought — worth pinning as the guarantee it is.
 ///
-/// `nothing-is-named-this` is not a nameable word, so `compile::fix` leaves it
-/// `Unplaced::Thing` and the whole question is unreadable — *"that question means
-/// nothing. neither half runs"*. The far side inherits that from the near one
-/// for free, because `Condition::rename` walks the whole tree; had it not, an
-/// unknown word over there would have read as nought and answered confidently.
+/// `compile::fix` leaves an unnameable word `Unplaced::Thing` and the whole
+/// question is unreadable. The far side inherits that because
+/// `Condition::rename` walks the whole tree.
 #[test]
 fn an_unknown_reading_on_the_far_side_is_refused_rather_than_read_as_nought() {
     let mut sim = at_the_wall(11);
@@ -627,17 +564,13 @@ fn an_unknown_reading_on_the_far_side_is_refused_rather_than_read_as_nought() {
     );
 }
 
-/// **A *declared* reading that is simply absent here reads as nought**, and the
-/// operators do not know they are adding to nothing.
+/// A *declared* reading that is absent here reads as nought, and the operators
+/// do not know they are adding to nothing.
 ///
-/// This is the case with no design fix, only the knowledge. `ceiling` is a real
-/// word — it compiles anywhere, because `scene_at` registers the whole declared
-/// set — and it is published on *areas*, never on a band. So asking a band for it
-/// is nought, and `plus 3` over that is three.
-///
-/// Pinned rather than asserted away: a spell that asks the wrong node gets a
-/// confident wrong number, which is why CLAUDE.md's rule is to test every new
-/// comparison against an absent reading.
+/// `ceiling` compiles anywhere but is published on areas, never on a band, so
+/// asking a band for it is nought and `plus 3` over that is three. Pinned
+/// rather than fixed: a spell that asks the wrong node gets a confident wrong
+/// number.
 #[test]
 fn the_arithmetic_over_an_absent_reading_is_arithmetic_over_nought() {
     let mut sim = at_the_wall(11);
@@ -672,12 +605,11 @@ fn the_arithmetic_over_an_absent_reading_is_arithmetic_over_nought() {
     );
 }
 
-/// **Absurd numbers saturate rather than panicking.**
+/// Absurd numbers saturate rather than panicking.
 ///
 /// `by` is a number the player typed and `double` multiplies a world read, so
-/// both are reachable with values that would overflow in a debug build — and a
-/// question that took the tower down over a sentence would be the worst possible
-/// failure for a line a player is still editing.
+/// both reach values that overflow in a debug build — and a line a player is
+/// still editing must not take the tower down.
 #[test]
 fn an_absurd_threshold_saturates_and_answers() {
     let mut sim = at_the_wall(11);

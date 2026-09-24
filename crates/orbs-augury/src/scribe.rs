@@ -1,37 +1,24 @@
 //! The trained reader for `.spell` files, answering as a [`Scrivener`].
 //!
-//! # The stricter half
+//! The stricter half (§19): a spell resolves with nobody watching, so where the
+//! prompt's reader offers four candidates against the room, this offers a line
+//! back into the player's own file — and a candidate survives five checks before
+//! it is offered at all. See [`Scribe::reading`].
 //!
-//! DESIGN.md §19, *The orb accepts an abbreviation, never a typo, and never a
-//! coin flip*: *"At the prompt the player sees the echo; a spell resolves with
-//! nobody watching, so it takes the stricter half."* Everything here is that
-//! sentence made mechanical. The prompt's reader offers four candidates and lets
-//! `parser::resolve` pick one against the room; this offers a line back to the
-//! player's own file and nobody will be looking, so a candidate has to survive
-//! five checks before it is offered at all — see [`Scribe::reading`].
+//! Nothing that already reads is touched. §19 deleted `scribe::canonicalise`
+//! because save-time rewriting destroyed the player's words whenever it
+//! understood only part of one, so the first defence is answering [`None`] for
+//! every line `spell::reads_cleanly` accepts — those never reach the model.
 //!
-//! # Nothing that already reads is touched
+//! Not `parser::is_literal`, which is the prompt's predicate rather than a
+//! spell's: it answers true for any line whose first word is a spell word, and
+//! half the loose phrasings this exists for begin with one. *"if the alembic is
+//! not busy"* is the line the feature is for, and that gate refused it.
 //!
-//! §19 deleted `scribe::canonicalise` because save-time rewriting *"destroyed the
-//! player's words whenever it understood only part of one"*. The first defence
-//! against arriving back at that is to answer [`None`] for every line the game
-//! could already read — `spell::reads_cleanly`, which is a statement that parses,
-//! a call, or a block word standing on its own. Those never reach the model, so
-//! no weight can change them.
-//!
-//! **Not `parser::is_literal`**, which was tried and is the prompt's predicate
-//! rather than a spell's: it answers *true* for any line whose first word is a
-//! spell word, and half the loose phrasings a spell reader exists for begin with
-//! one. *"if the alembic is not busy"* is exactly the line this feature is for,
-//! and the gate refused it before the model ever saw it.
-//!
-//! # Two readers, because a spell body is mostly commands
-//!
-//! `grind sage` is not control flow and the spell head says so — that is what
-//! [`spelling::command`] is for. The line then belongs to the *prompt's* reader,
-//! which is the one trained on the verbs, so this holds one of those too
-//! and hands the line over. A build with no prompt weights simply leaves command
-//! lines alone.
+//! Two readers, because a spell body is mostly commands. `grind sage` is not
+//! control flow and [`spelling::command`] says so, which puts the line with the
+//! *prompt's* reader — the one trained on verbs — so this holds one of those and
+//! hands the line over. A build with no prompt weights leaves them alone.
 
 use burn::prelude::*;
 use orbs_sim::Scrivener;
@@ -73,11 +60,10 @@ pub struct Scribe<B: Backend> {
     /// which is not a state anyone would train on purpose but is one a partial
     /// build reaches. Command lines are then left exactly as written.
     ///
-    /// **Its own copy, not the frontend's.** A build that holds both readers
-    /// loads the prompt's weights twice — 341k parameters, so about 1.4MB and
-    /// one extra file read at start-up. Sharing would mean an `Arc` reaching
-    /// across the `Augur`/`Scrivener` seam and a lifetime on this type, which is
-    /// a great deal of structure to save a megabyte that is never touched again.
+    /// Its own copy, not the frontend's: holding both readers loads the prompt's
+    /// weights twice, about 1.4MB and one extra file read at start-up. Sharing
+    /// would mean an `Arc` across the `Augur`/`Scrivener` seam and a lifetime on
+    /// this type, which is a lot of structure to save a megabyte.
     prompt: Option<Trained<B>>,
     vocabulary: Vocabulary,
     device: B::Device,
@@ -103,10 +89,9 @@ impl<B: Backend> Scribe<B> {
     /// Load the spell register's weights from `spell`, and the prompt's — for
     /// the command lines — from `prompt`, each without its `.bin`.
     ///
-    /// **For runs nobody has shipped yet**, as [`Trained::load_from`]. Both
-    /// paths, because a spell reader's command lines are only as good as the
-    /// prompt reader it hands them to, and two spell readers can only be
-    /// compared through the same one.
+    /// For runs nobody has shipped yet, as [`Trained::load_from`]. Both paths,
+    /// because a spell reader's command lines are only as good as the prompt
+    /// reader it hands them to, and two can only be compared through one.
     ///
     /// # Errors
     ///
@@ -118,7 +103,7 @@ impl<B: Backend> Scribe<B> {
     ) -> Result<Self, burn::record::RecorderError> {
         let vocabulary = Vocabulary::builtin();
         let reader = weights(spell, Register::Spells, &vocabulary, &device)?;
-        // **Absent is allowed; wrong is not.** A checkout with no prompt weights
+        // Absent is allowed; wrong is not. A checkout with no prompt weights
         // leaves command lines as written, by design — but weights that do not
         // fit this vocabulary are exactly the error `weights` exists to raise,
         // and swallowing it made `measure --spells --reader <stale>` report a
@@ -145,23 +130,19 @@ impl<B: Backend> Scribe<B> {
 
     /// What the orb makes of one spell line, or [`None`] to leave it as written.
     ///
-    /// # Five checks, and a line survives all of them or none
+    /// Five checks, and a line survives all of them or none:
     ///
-    /// 1. **It is not already readable.** A line opening on a spell word, or one
-    ///    that parses as a statement, is returned untouched — see the module
-    ///    documentation.
-    /// 2. **The binary head found something.** Trained on `phrasings.toml`'s
-    ///    refusals, the sentences that ask for nothing at all — the spell file's
-    ///    are canonical statements check 1 keeps away from it.
-    /// 3. **The shape fills honestly.** [`spelling::assemble`] refuses a shape
-    ///    with more slots than the tagger found, a count the line does not
-    ///    contain, a name the player never wrote, or an `else` or `end` the line
-    ///    never says.
-    /// 4. **It parses and accounts for the line.** `spell::reads_cleanly` and
-    ///    [`spelling::accounts_for`] between them — no join, comparison,
-    ///    negation, condition or unit dropped — which is the pair §19's rewriter
-    ///    never had.
-    /// 5. **It keeps every name.** See [`spelling::names_in`].
+    /// 1. It is not already readable — a line opening on a spell word, or one
+    ///    that parses, is returned untouched.
+    /// 2. The binary head found something, trained on `phrasings.toml`'s
+    ///    refusals.
+    /// 3. The shape fills honestly: [`spelling::assemble`] refuses more slots
+    ///    than the tagger found, a count the line does not contain, a name the
+    ///    player never wrote, or an `else` the line never says.
+    /// 4. It parses and accounts for the line — `spell::reads_cleanly` and
+    ///    [`spelling::accounts_for`] between them, the pair §19's rewriter never
+    ///    had.
+    /// 5. It keeps every name. See [`spelling::names_in`].
     ///
     /// A command line takes the same route through the prompt's reader, with
     /// check 3 replaced by that reader's own arity trim.
@@ -190,22 +171,19 @@ impl<B: Backend> Scribe<B> {
             return None;
         }
 
-        // # No reading may drop a name
-        //
-        // **Measured, not supposed**, and first on commands alone. On `let`'s
-        // holdout the head ranked *command* first 299 times in 576 and `let`
-        // second, and every one of those `let` readings was built correctly —
-        // `let nook be alembic` — while the prompt's reader answered `stop`,
-        // `move bailey`, `attend lectern`. So a command that dropped a word the
-        // game does not know lost to a statement that kept it.
+        // No reading may drop a name, measured rather than supposed. On `let`'s
+        // holdout the head ranked *command* first 299 times in 576 with `let`
+        // second, and every one of those `let` readings was built correctly
+        // while the prompt's reader answered `stop`, `move bailey`, `attend
+        // lectern` — so a command dropping a word the game does not know lost
+        // to a statement that kept it.
         //
         // A statement was taken to be unable to drop one, being built from the
-        // tagger's spans — and it could, whenever the tagger missed the name:
+        // tagger's spans, and it could whenever the tagger missed the name:
         // *"name the alembic bertha"* came back `if alembic is empty`. Every
-        // reading with room for a name is held to it now, and the best-ranked
-        // one that keeps them wins; a shape with no room for one has to be said
-        // instead — see `spelling::holds_a_name`. `spelling::names_in` is what
-        // separates a name from a typo the reader is entitled to spend.
+        // reading with room for a name is held to it now, and a shape with no
+        // room has to say so (`spelling::holds_a_name`). `spelling::names_in`
+        // separates a name from a typo the reader may spend.
         let names = spelling::names_in(line, &read.placed, &self.vocabulary);
         read.ranked
             .into_iter()
@@ -213,21 +191,16 @@ impl<B: Backend> Scribe<B> {
             .enumerate()
             .filter_map(|(rank, class)| {
                 let reading = if class == spelling::command() {
-                    // **Only as the first choice.** The prompt's reader always
-                    // finds *some* verb, so falling through to it after a shape
-                    // failed to build is the sink this crate has closed twice
-                    // already — something that never fails to resolve winning by
-                    // never failing. The head said *this is a `let`*; a `let` it
-                    // could not build is a line it cannot read, not a command.
+                    // Only as the first choice: the prompt's reader always finds
+                    // *some* verb, so falling through to it after a shape failed
+                    // to build is the sink this crate has closed twice — a thing
+                    // that never fails to resolve winning by never failing.
                     (rank == 0).then(|| self.commanded(line)).flatten()
                 } else if rank > 0 && !spelling::fills_from_the_line(class) {
-                    // **`else` and `end` are the same sink one level down.** A
-                    // shape with no slot and no count assembles out of any line
-                    // at all, so reaching one by walking down the ranking is
-                    // reaching the thing that cannot fail: *"do it for all
-                    // columns"* came back `else`. It stands as a first choice and
-                    // never as a fallback — and even first, only where the line
-                    // says it (`spelling::assemble`).
+                    // `else` and `end` are the same sink one level down: a shape
+                    // with no slot and no count assembles out of any line, so
+                    // *"do it for all columns"* came back `else`. First choice
+                    // only, and even then only where the line says it.
                     None
                 } else {
                     spelling::ordered(class, &read.placed)
@@ -244,11 +217,10 @@ impl<B: Backend> Scribe<B> {
     /// Why [`reading`](Self::reading) answered as it did — for a report, not for
     /// a player.
     ///
-    /// **The instrument this reader was tuned with, kept.** Every fix to the
-    /// scrivener in `0.14` came from seeing *which* part failed — the head
-    /// choosing *command* on a `let`, the tagger running two words into one slot,
-    /// a shape with no slot winning by never failing — and an accuracy figure
-    /// says none of that.
+    /// The instrument this reader was tuned with, kept: every fix in `0.14` came
+    /// from seeing *which* part failed — the head choosing *command* on a `let`,
+    /// the tagger running two words into one slot, a shape winning by never
+    /// failing — and an accuracy figure says none of that.
     #[must_use]
     pub fn consider(&self, line: &str) -> Considered {
         let gated = |why: &'static str| Considered {
@@ -296,10 +268,9 @@ impl<B: Backend> Scribe<B> {
     fn commanded(&self, line: &str) -> Option<String> {
         let prompt = self.prompt.as_ref()?;
         let readings = prompt.readings(line);
-        // **A line the reader counts among its own readings is already one.**
+        // A line the reader counts among its own readings is already one.
         // Passing over the reading equal to the line and taking the next was a
-        // second-best answer to a line that needed none: `kindle charcoal` —
-        // canonical, and the prompt reader's own first reading of it — came
+        // second-best answer to a line that needed none: `kindle charcoal` came
         // back `grind charcoal`. Other spacing or capitals are the same line.
         let same = |reading: &String| {
             reading
@@ -312,11 +283,10 @@ impl<B: Backend> Scribe<B> {
         }
         readings.into_iter().find(|reading| {
             spelling::accounts_for(line, reading)
-                // **A bare verb has to be one the line names.** It takes no
-                // argument, so nothing from the line went into it, and the
-                // prompt's reader will always find one: *"for every one of the
-                // bands"* came back `status`, *"the stairs creak"* `probe`. With
-                // an argument, the line's own words are in it.
+                // A bare verb has to be one the line names: nothing from the line
+                // went into it and the prompt's reader always finds one — *"for
+                // every one of the bands"* came back `status`, *"the stairs
+                // creak"* `probe`. With an argument the line's words are in it.
                 && (reading.split_whitespace().nth(1).is_some()
                     || spelling::names_its_verb(line, reading))
         })
@@ -355,21 +325,19 @@ mod tests {
 
     /// The trained spell weights, if this checkout has any.
     ///
-    /// **Skipped rather than failed when absent**, for `Trained`'s reason:
-    /// weights are a build artefact of a GPU run, and `cargo test --workspace`
-    /// must pass on a machine that has never trained anything.
+    /// Skipped rather than failed when absent, for `Trained`'s reason: weights
+    /// are a build artefact of a GPU run, and `cargo test --workspace` must pass
+    /// on a machine that has never trained anything.
     fn scribe() -> Option<Scribe<NdArray<f32>>> {
         Scribe::load(burn::backend::ndarray::NdArrayDevice::default()).ok()
     }
 
     #[test]
     fn a_prompt_reader_that_does_not_fit_is_an_error_rather_than_silence() {
-        // **Absent is allowed; wrong is not.** A checkout with no prompt weights
-        // leaves command lines as written, by design — but a file that cannot be
-        // read is the error `weights` exists to raise. Swallowed, it made
-        // `measure --spells --reader <stale>` report a spell reader whose
-        // command lines read 0%, which `seeds.sh` would have compared as a
-        // regression of the spell reader.
+        // Absent is allowed; wrong is not. A file that cannot be read is the
+        // error `weights` exists to raise — swallowed, it made `measure --spells
+        // --reader <stale>` report a spell reader whose command lines read 0%,
+        // which `seeds.sh` would have compared as a regression.
         if scribe().is_none() {
             return;
         }
@@ -395,7 +363,7 @@ mod tests {
 
     #[test]
     fn a_line_the_game_already_reads_is_never_touched() {
-        // **Check one, and it needs no weights at all** — which is the point of
+        // Check one, and it needs no weights at all, which is the point of
         // putting it before the model rather than trusting the model to have
         // learned it. §19 deleted the last thing that rewrote a working line.
         let Some(scribe) = scribe() else {

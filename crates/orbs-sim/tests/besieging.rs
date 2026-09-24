@@ -1,23 +1,15 @@
 //! The bailey, driven through the real parser and schedule (§5.1).
 //!
-//! `tower::siege` and `tower::dice` prove the arithmetic with no `World` at all.
-//! These prove the *game*: that the words resolve where they should, that the
-//! readings a decision tree asks for are actually published, that spending the
-//! arsenal reaches the dice, and that a siege survives being saved.
+//! `tower::siege` and `tower::dice` prove the arithmetic with no `World`. These
+//! prove the game: that the words resolve, that the readings a decision tree
+//! asks for are published, that the arsenal reaches the dice, and that a siege
+//! survives being saved.
 //!
-//! # Eleven of these are `cfg(debug_assertions)`
-//!
-//! A siege runs for as long as the dice take, and the arsenal is spent on stock
-//! a player earns over hours — so `debug_siege` and `debug_spawn` are what make
-//! any of it testable in a hundredth of a second. Neither word exists in a
-//! release build: the line is unresolvable there, the shortcut silently does
-//! nothing, and the test fails against a world that was never built. **They were
-//! failing that way**, all eleven of them, from before the siege phase closed —
-//! `cargo test --release` is not the gate CLAUDE.md runs, so nobody saw it.
-//!
-//! Gated per test rather than per file, which is this project's convention and
-//! what `tests/gleaning.rs` records: the thirty-two below that need no door run
-//! in either profile.
+//! Eleven are `cfg(debug_assertions)`: `debug_siege` and `debug_spawn` make a
+//! siege testable in a hundredth of a second, and neither word exists in a
+//! release build, where the test fails against a world that was never built.
+//! Gated per test rather than per file, as `tests/gleaning.rs` records, so the
+//! thirty-two that need no door run in either profile.
 
 use orbs_render::{FieldName, Value};
 use orbs_sim::{Save, Sim, tower};
@@ -50,10 +42,8 @@ fn ever_said(sim: &Sim, needle: &str) -> bool {
 
 /// Whether any record carries `wanted` in its `State` field.
 ///
-/// **Not every answer is a `Message`.** `purge` reports through `State` and
-/// `Detail` with no message at all, so `ever_said` cannot see it — which read
-/// exactly like the repair not working. Second time this file has been caught by
-/// a helper that looks at one field; `readings` was the first.
+/// Not every answer is a `Message`: `purge` reports through `State` and
+/// `Detail`, so `ever_said` cannot see it and the repair reads as broken.
 fn ever_stated(sim: &Sim, wanted: &str) -> bool {
     sim.scrollback().records().iter().any(|record| {
         matches!(record.field(FieldName::State), Some(Value::Text(text)) if text == wanted)
@@ -62,10 +52,8 @@ fn ever_stated(sim: &Sim, wanted: &str) -> bool {
 
 /// Every `name: qty` reading `survey` has printed, in order.
 ///
-/// **The quantity arrives as `Value::Text`, not `Value::Count`.** A `survey`
-/// answer is an `Entry` whose fields have already been rendered for a column, so
-/// matching on `Count` finds nothing and reads exactly like the reading never
-/// being published — which cost four of these tests a wrong diagnosis.
+/// The quantity arrives as `Value::Text`, not `Value::Count` — a `survey` answer
+/// is an `Entry` already rendered for a column.
 fn readings(sim: &Sim) -> Vec<(String, u64)> {
     sim.scrollback()
         .records()
@@ -85,12 +73,8 @@ fn readings(sim: &Sim) -> Vec<(String, u64)> {
 
 /// Every bare word `survey` has printed — a reading with no number on it.
 ///
-/// **The third helper in this file, and the third field.** `said` reads
-/// `Message`, `readings` reads `Name` *plus* `Quantity`, and a bare reading like
-/// `moot` or `d20` carries only a `Name` — so neither of the first two can see
-/// one, and both report it as *not published* rather than *not looked for*.
-/// Every time this file has been wrong about the game it has been a helper
-/// reading one field.
+/// The third field. `said` reads `Message` and `readings` reads `Name` plus
+/// `Quantity`, so neither can see a bare `moot` or `d20`.
 fn words(sim: &Sim) -> Vec<String> {
     sim.scrollback()
         .records()
@@ -104,10 +88,8 @@ fn words(sim: &Sim) -> Vec<String> {
 
 /// The spells an audit has just called tampered, in the order it named them.
 ///
-/// **Asked rather than assumed.** These tests hardcoded `holding.spell`, and the
-/// dice allocation shifted the `Siege` stream enough to change which spell the
-/// enemy reached — so a repair test began purging something that was never
-/// broken. What is under test is the *loop*, not the name.
+/// Asked rather than assumed: a hardcoded `holding.spell` broke when the dice
+/// allocation shifted the `Siege` stream. What is under test is the loop.
 fn tampered(sim: &Sim) -> Vec<String> {
     said(sim)
         .into_iter()
@@ -135,9 +117,8 @@ fn last(sim: &Sim, wanted: &str) -> Option<u64> {
 
 #[test]
 fn the_four_words_only_work_at_the_wall() {
-    // `Verb::anchor` scopes them to the rampart, which is what stops `help` in
-    // the laboratory offering a word that can only refuse — §19's debt that
-    // `follow` and `wander` were waiting on.
+    // `Verb::anchor` scopes them to the rampart, so `help` in the laboratory
+    // does not offer a word that can only refuse (§19).
     let mut sim = Sim::new(11);
     run(&mut sim, "attend laboratory");
     run(&mut sim, "defend");
@@ -150,9 +131,8 @@ fn the_four_words_only_work_at_the_wall() {
 
 #[test]
 fn a_siege_arrives_and_says_what_it_means_to_do() {
-    // **Telegraphed intent** — the Into the Breach borrow. The enemy declares
-    // before it acts, which turns the player's turn into prevention rather than
-    // reaction, and is what makes the arsenal a decision rather than a reflex.
+    // Telegraphed intent — the Into the Breach borrow. The enemy declares before
+    // it acts, so the player's turn is prevention rather than reaction.
     let mut sim = at_the_wall(11);
     run(&mut sim, "defend");
     assert!(
@@ -170,10 +150,8 @@ fn a_siege_arrives_and_says_what_it_means_to_do() {
 
 #[test]
 fn nothing_moves_until_you_hold() {
-    // **The whole accessibility position.** §10 wants outcome to follow what the
-    // player chooses given readable state, *never how fast they act* — so the
-    // world must not advance while they are reading the board. This is that,
-    // asserted: the round counter does not move, however long you take.
+    // §10 wants outcome to follow what the player chooses, never how fast they
+    // act, so the world must not advance while they read the board.
     let mut sim = at_the_wall(11);
     run(&mut sim, "defend");
     for _ in 0..20 {
@@ -196,10 +174,8 @@ fn nothing_moves_until_you_hold() {
 
 #[test]
 fn a_siege_takes_no_production_slot() {
-    // **§19's *"a domain stands alone"*, and this domain needs it most.** A
-    // siege exists to test the automation, so holding the tower-wide slot would
-    // freeze the thing the enemy is supposed to attack. A grind must still work
-    // while a siege is being fought.
+    // §19's "a domain stands alone": a siege exists to test the automation, so
+    // holding the tower-wide slot would freeze what the enemy attacks.
     let mut sim = at_the_wall(11);
     run(&mut sim, "defend");
     run(&mut sim, "hold");
@@ -214,8 +190,7 @@ fn a_siege_takes_no_production_slot() {
 
 #[test]
 fn the_readings_a_decision_tree_asks_for_are_published() {
-    // The maze's pattern: the world publishes a derived word and the spell asks
-    // for it. *"If the enemy count is twice that of defenders"* is not
+    // The maze's pattern: *"if the enemy count is twice the defenders"* is not
     // expressible in the language, so `outnumbered` is published instead.
     let mut sim = at_the_wall(11);
     run(&mut sim, "defend");
@@ -237,7 +212,6 @@ fn the_readings_a_decision_tree_asks_for_are_published() {
 
 #[test]
 fn a_band_that_is_standing_is_never_empty_and_a_routed_one_is() {
-    // **The rule the sanctum recorded and the satchel repeated.**
     // `spell::watch` answers `is empty` by asking whether a node has children,
     // so a band that always carried a count could never be empty and the first
     // rung of every solver would be dead.
@@ -253,9 +227,8 @@ fn a_band_that_is_standing_is_never_empty_and_a_routed_one_is() {
 #[cfg(debug_assertions)]
 #[test]
 fn spending_the_arsenal_reaches_the_line() {
-    // Step 4's whole claim: potions, scrolls and troops are pure mathematical
-    // advantages applied on your turn, and this is what retires the ten shipped
-    // prose lines saying *"a siege will be what spends them"*.
+    // Potions, scrolls and troops are mathematical advantages applied on your
+    // turn — the ten shipped prose lines promising it are now true.
     let mut sim = at_the_wall(11);
     run(&mut sim, "defend");
     run(&mut sim, "debug_spawn troop 1");
@@ -274,9 +247,8 @@ fn spending_the_arsenal_reaches_the_line() {
 
 #[test]
 fn the_wrong_word_is_refused_and_names_the_right_one() {
-    // §6 forbids a bare error, and a player who typed `quaff troop` is one word
-    // from correct. The split is §19's: a scroll keeps `wield`, a troop is
-    // deployed, and drinking has its own word.
+    // §6 forbids a bare error, and `quaff troop` is one word from correct. §19's
+    // split: a scroll keeps `wield`, a troop is deployed, drinking has its own.
     let mut sim = at_the_wall(11);
     run(&mut sim, "defend");
     run(&mut sim, "debug_spawn troop 1");
@@ -316,10 +288,8 @@ fn spending_something_you_do_not_have_is_refused() {
 
 #[test]
 fn every_roll_reaches_the_log_with_its_die_and_its_face() {
-    // **Rule 4 doing its job.** The same record is the transcript line, the §14
-    // utterance and what `sift` finds — which is what makes `peruse bailey.log`
-    // a genuine postmortem rather than a list of outcomes, and what lets a
-    // player see whether a potion earned its place.
+    // Rule 4: one record is the transcript line, the §14 utterance and what
+    // `sift` finds, which makes `peruse bailey.log` a postmortem.
     let mut sim = at_the_wall(11);
     run(&mut sim, "defend");
     run(&mut sim, "hold");
@@ -361,15 +331,15 @@ fn a_siege_ends_and_pays() {
 #[cfg(debug_assertions)]
 #[test]
 fn a_store_runs_down_and_the_shelf_keeps_what_it_will_not_spend() {
-    // **Stores are a rate, and the shelf is not what is measured.** The count
-    // never moves here; what changes is whether the tower has made one lately.
+    // Stores are a rate, and the shelf is not what is measured: the count never
+    // moves, only whether the tower has made one lately.
     let mut sim = at_the_wall(11);
     run(&mut sim, "debug_spawn warding 1");
     run(&mut sim, "defend");
     run(&mut sim, "meditate 3000");
 
-    // Surveyed first, because `last` reads what `survey` has published — with no
-    // survey behind it the count is `None` rather than the shelf being empty.
+    // Surveyed first: `last` reads what `survey` published, so with no survey
+    // behind it the count is `None` rather than the shelf being empty.
     run(&mut sim, "survey arsenal");
     let held = last(&sim, "warding");
     assert_eq!(held, Some(1), "the shelf did not have the warding");
@@ -390,10 +360,8 @@ fn a_store_runs_down_and_the_shelf_keeps_what_it_will_not_spend() {
 #[cfg(debug_assertions)]
 #[test]
 fn an_empty_shelf_says_so_rather_than_blaming_the_stores() {
-    // **Two facts, two sentences.** A name the arsenal does not hold has never
-    // been made either, so the supply check would answer *"your troop stores are
-    // out"* for a shelf that is simply bare — the wrong refusal, and one a
-    // player cannot act on. Asked in the right order, it says the true thing.
+    // Two facts, two sentences: the supply check answered *"your troop stores
+    // are out"* for a shelf that is simply bare, which a player cannot act on.
     let mut sim = at_the_wall(11);
     run(&mut sim, "defend");
     run(&mut sim, "deploy troop");
@@ -407,9 +375,8 @@ fn an_empty_shelf_says_so_rather_than_blaming_the_stores() {
 #[cfg(debug_assertions)]
 #[test]
 fn a_famous_tower_draws_a_longer_tail_and_the_floor_never_moves() {
-    // **Fame lengthens the tail, it does not shift the band.** Asserted over
-    // seeds rather than on one, because the draw is a draw: what is pinned is
-    // that the ceiling rises and the floor does not.
+    // Fame lengthens the tail, it does not shift the band. Over seeds, because
+    // the draw is a draw: the ceiling rises and the floor does not.
     let quiet: Vec<u32> = (0..40).map(|seed| opening(seed, 0)).collect();
     let famous: Vec<u32> = (0..40).map(|seed| opening(seed, 9_000)).collect();
 
@@ -450,10 +417,8 @@ fn petitioning_buys_the_tail_down_and_costs_standing_to_do_it() {
 #[cfg(debug_assertions)]
 #[test]
 fn petitioning_is_refused_at_the_floor_and_keeps_the_renown() {
-    // **The gate the reading sweep cannot be.** `every_reading_…_reaches` never
-    // petitions, so it passes whatever this does — and the risk that matters is
-    // a tower buying the tail away until `outnumbered` can never fire. This is
-    // the test that actually walks it down to the floor.
+    // The reading sweep never petitions, so it passes whatever this does. The
+    // risk is a tower buying the tail away until `outnumbered` can never fire.
     let mut sim = at_the_wall(11);
     run(&mut sim, "debug_renown 9000");
     for _ in 0..12 {
@@ -474,13 +439,10 @@ fn petitioning_is_refused_at_the_floor_and_keeps_the_renown() {
 #[cfg(debug_assertions)]
 #[test]
 fn petitioning_is_refused_once_they_are_at_the_wall() {
-    // **What is bought is the size of the *next* siege**, and this one has
-    // already been drawn — §19: it *"resolves with the road empty, which is the
-    // only time it is any use."*
-    //
-    // Allowing it was worse than useless: `settle` measures the fight from the
-    // snapshot taken when the enemy arrived, so renown spent *inside* that
-    // window was charged to the fight. A siege that moved +38 reported +31.
+    // What is bought is the size of the *next* siege, and this one is drawn
+    // (§19). `settle` measures the fight from the snapshot taken when the enemy
+    // arrived, so renown spent inside that window was charged to the fight — a
+    // siege that moved +38 reported +31.
     let mut sim = at_the_wall(11);
     run(&mut sim, "debug_renown 400");
     run(&mut sim, "defend");
@@ -528,16 +490,12 @@ fn opening(seed: u64, renown: u64) -> u32 {
 #[cfg(debug_assertions)]
 #[test]
 fn a_round_moves_standing_and_says_nothing_about_it() {
-    // **The exchange is worth something, and the round does not stop to say
-    // so.** A fight is six to thirteen rounds and each has already said what
-    // the enemy did, so a sentence per exchange is the same news twice over —
-    // the shape `earn` was made silent for when a line per making took one
-    // sweep of the clarity loop from 466 records to 792.
+    // The exchange is worth something and the round does not stop to say so: a
+    // fight is six to thirteen rounds and each has already said what the enemy
+    // did, so a sentence per exchange is the same news twice.
     let mut sim = at_the_wall(11);
-    // **Standing to move, in either direction.** A fresh tower is at nought and
-    // `slip` saturates there, so a round that went badly would leave the total
-    // untouched and this would assert nothing. A real tower has fought nothing
-    // by then either — a siege opens on a pylon course, hours of brewing in.
+    // Standing to move, in either direction: a fresh tower is at nought and
+    // `slip` saturates there, so a bad round would assert nothing.
     run(&mut sim, "debug_renown 400");
     run(&mut sim, "defend");
     // Pledged, because an unpledged round trades about evenly and can net to
@@ -547,15 +505,12 @@ fn a_round_moves_standing_and_says_nothing_about_it() {
     let before = sim.renown();
     let quiet = sim.scrollback().records().len();
 
-    // **Rounds, not a round.** A single exchange can genuinely trade even — the
-    // dice decide — so pinning one would be pinning a seed's arithmetic rather
-    // than the mechanism. Held short of a settle, so nothing here is the
-    // outcome's doing.
+    // Rounds, not a round: a single exchange can trade even. Held short of a
+    // settle, so nothing here is the outcome's doing.
     for _ in 0..4 {
         run(&mut sim, "hold");
-        // **"the wall" is not the end of a siege** — `the buckler put 14 on the
-        // wall` is a round saying what a pledge bought, and matching it here
-        // ended the loop after one exchange.
+        // "the wall" is not the end of a siege — `the buckler put 14 on the
+        // wall` is a round saying what a pledge bought.
         if ever_said(&sim, "the wall is carried") || ever_said(&sim, "breaks and runs") {
             break;
         }
@@ -582,10 +537,8 @@ fn a_round_moves_standing_and_says_nothing_about_it() {
 #[cfg(debug_assertions)]
 #[test]
 fn a_won_siege_pays_standing_and_says_what_the_fight_came_to() {
-    // The other half: the fight speaks **once**, on settling, and the number
-    // it says is the whole movement — the rounds *and* the outcome — because
-    // it is measured from `Siege::standing`, the snapshot taken when the enemy
-    // came up the road.
+    // The other half: the fight speaks once, on settling, and says the whole
+    // movement — measured from `Siege::standing`, taken when the enemy arrived.
     let mut sim = at_the_wall(11);
     let before = sim.renown();
     run(&mut sim, "defend");
@@ -617,10 +570,8 @@ fn a_won_siege_pays_standing_and_says_what_the_fight_came_to() {
 #[cfg(debug_assertions)]
 #[test]
 fn a_lost_siege_costs_standing_and_a_near_miss_costs_less_than_a_collapse() {
-    // **The box's whole purpose: a number that can go down.** The stake scales
-    // by how far short the wall fell, so this asserts the direction rather than
-    // a value — the seeds decide how the dice land, and `orbs-balance` decides
-    // the constant.
+    // A number that can go down. The stake scales by how far short the wall
+    // fell, so this asserts the direction rather than a value.
     let collapse = tower::siege::renown_stake(7, 10, tower::siege::Outcome::Fallen);
     let near_miss = tower::siege::renown_stake(7, 90, tower::siege::Outcome::Fallen);
     assert!(
@@ -699,9 +650,8 @@ fn a_siege_survives_being_saved() {
 
 #[test]
 fn the_same_seed_fights_the_same_siege_through_the_real_verbs() {
-    // Rule 3, end to end and through `submit` rather than over the model. This
-    // is the genre's own regression pattern and the reason the dice have their
-    // own stream.
+    // Rule 3, end to end and through `submit` rather than over the model — the
+    // reason the dice have their own stream.
     let script = ["attend bailey", "defend", "hold", "hold", "hold"];
     let mut a = Sim::new(5);
     let mut b = Sim::new(5);
@@ -714,13 +664,10 @@ fn the_same_seed_fights_the_same_siege_through_the_real_verbs() {
 
 #[test]
 fn a_siege_rolls_its_own_stream_and_does_not_move_the_sabotage_schedule() {
-    // **The reason `RngStream::Siege` exists.** Sharing `Threat` was the
-    // tempting shortcut and the worst option: every combat roll would shift the
-    // ambient sabotage schedule, moving the seeds `scripts/play.sh` chose and
-    // invalidating every replay with a siege in it.
-    //
-    // Two towers on one seed, one of which fights: the tampering the *other*
-    // sees must be identical.
+    // Why `RngStream::Siege` exists: sharing `Threat` would let every combat
+    // roll shift the ambient sabotage schedule and invalidate every replay with
+    // a siege in it. Two towers on one seed, one of which fights — the tampering
+    // the other sees must be identical.
     let mut quiet = Sim::new(3);
     let mut fighting = Sim::new(3);
     run(&mut fighting, "attend bailey");
@@ -737,19 +684,13 @@ fn a_siege_rolls_its_own_stream_and_does_not_move_the_sabotage_schedule() {
     quiet.step_n(40);
     fighting.step_n(40);
 
-    // **Logs and shelves only.** A siege *is* expected to corrupt spells — that
-    // is §5.1's adversarial half and it draws from `Siege` — so the claim here
-    // is narrower than "the two towers report the same thing": it is that the
-    // **ambient** schedule, which draws from `Threat`, is untouched.
+    // Logs and shelves only. A siege is expected to corrupt spells — §5.1's
+    // adversarial half, drawing from `Siege` — so the claim is narrower: the
+    // ambient schedule, which draws from `Threat`, is untouched.
     //
-    // This assertion was written before the adversarial surfaces existed and
-    // compared the whole list, so step 7 broke it by working. The fix is to say
-    // what was always meant rather than to widen the tolerance.
-    // **The names, parsed off the sentence rather than filtered inside it.** The
-    // first version split the whole line on `", "` and dropped any chunk ending
-    // in `spell` — which took the *prefix* with it whenever the first name was a
-    // spell, so the two sides were compared with one of them missing its opening
-    // clause. Take the list, then filter the list.
+    // The names are parsed off the sentence rather than filtered inside it:
+    // splitting the whole line and dropping chunks ending in `spell` took the
+    // prefix with it whenever the first name was a spell.
     let ambient = |sim: &Sim| -> Vec<String> {
         said(sim)
             .into_iter()
@@ -772,9 +713,8 @@ fn a_siege_rolls_its_own_stream_and_does_not_move_the_sabotage_schedule() {
     );
 }
 
-/// **The premise, asserted.** *"Sieges then test everything you automated —
-/// because the enemy attacks the automation."* Six domains produce; this is the
-/// one thing that consumes, and until step 7 the last clause was unbuilt.
+/// The premise, asserted: *"sieges then test everything you automated — because
+/// the enemy attacks the automation."*
 #[test]
 fn a_siege_reaches_the_automation() {
     let mut sim = at_the_wall(3);
@@ -797,15 +737,12 @@ fn the_calm_layer_never_sees_an_adversarial_aberration() {
     let mut sim = Sim::new(3);
     sim.step_n(3000);
     run(&mut sim, "verify");
-    // **`AUDIT_LONGEST`, not a guessed number.** The claim here is a *negative*,
-    // so a wait shorter than the audit passes it with no audit having happened —
-    // and `ticks_for` grows with the shelf, which a debug build stocks with every
-    // dev spell. The neighbouring test waits 80 and would have gone the same way.
+    // `AUDIT_LONGEST`, not a guessed number: the claim is a negative, so a wait
+    // shorter than the audit passes with no audit having happened.
     sim.step_n(orbs_sim::tower::audit::AUDIT_LONGEST + 1);
     let lines = said(&sim);
-    // The control. Without it the filter below can be empty because nothing was
-    // corrupted *or* because nothing ever answered, and the assertion cannot
-    // tell those apart — which is the whole failure mode of asserting a negative.
+    // The control: without it the filter below is empty whether nothing was
+    // corrupted or nothing ever answered.
     assert!(
         lines.iter().any(
             |line| line.contains("is what it says it is") || line.contains("not what they say")
@@ -848,11 +785,9 @@ fn a_sabotaged_spell_is_found_by_verify_and_mended_by_purge() {
         "the audit missed the spell it had just been told about: {named:?}",
     );
 
-    // ...and a purge puts it back, which is what makes this a loop rather than
-    // a report. **Whichever spell the audit named**, not a hardcoded one: the
-    // dice allocation shifted the `Siege` stream and the enemy started reaching
-    // a different spell, so a fixed name began purging something that was never
-    // broken.
+    // ...and a purge puts it back, which makes this a loop rather than a report.
+    // Whichever spell the audit named: a fixed name began purging something that
+    // was never broken once the dice allocation shifted the `Siege` stream.
     let broken = tampered(&sim);
     let target = broken.first().expect("the audit named a spell").clone();
     run(&mut sim, "attend grimoire");
@@ -865,7 +800,7 @@ fn a_sabotaged_spell_is_found_by_verify_and_mended_by_purge() {
     );
 }
 
-/// **Misdirection, never theft** — `substitute`'s rule, one surface over.
+/// Misdirection, never theft — `substitute`'s rule, one surface over.
 #[test]
 fn a_repaired_spell_reads_exactly_as_it_was_written() {
     // Fight first, so the enemy chooses which spell this is about.
@@ -879,9 +814,8 @@ fn a_repaired_spell_reads_exactly_as_it_was_written() {
     let broken = tampered(&sim);
     let target = broken.first().expect("the audit named a spell").clone();
 
-    // What it said before anything touched it — **the peruse output alone**, not
-    // the whole scrollback, which is what made this compare a spell's lines
-    // against `attend bailey`.
+    // What it said before anything touched it — the peruse output alone, not the
+    // whole scrollback, which compared a spell's lines against `attend bailey`.
     let mut before = at_the_wall(3);
     run(&mut before, "attend grimoire");
     let mark = said(&before).len();
@@ -895,9 +829,8 @@ fn a_repaired_spell_reads_exactly_as_it_was_written() {
     run(&mut sim, &format!("peruse {target}"));
     let repaired: Vec<String> = said(&sim).into_iter().skip(mark).collect();
 
-    // **Every line back, and none of them wearing the substitution sigil.**
-    // A repair that cleared the mark and left the text is the defect
-    // `triage::purge` records; a repair that lost a line would be theft.
+    // Every line back, none wearing the substitution sigil. A repair that
+    // cleared the mark and left the text is the defect `triage::purge` records.
     for line in &original {
         if line.len() > 6 && !line.contains("peruse") {
             assert!(
@@ -912,12 +845,10 @@ fn a_repaired_spell_reads_exactly_as_it_was_written() {
     );
 }
 
-/// **A sabotaged spell's own words survive a save**, or the repair loop is a lie.
+/// A sabotaged spell's own words survive a save, or the repair loop is a lie.
 ///
-/// The corruption travelled and the truth did not: the spell reloaded corrupt,
-/// still `Poisoned`, and `purge` cleared the mark, said `cleansed` and repaired
-/// nothing. That is exactly the defect `triage::purge`'s two repair lines exist
-/// to prevent, arriving through the save instead.
+/// The corruption travelled and the truth did not: the spell reloaded corrupt
+/// and `purge` cleared the mark, said `cleansed` and repaired nothing.
 #[test]
 fn a_rewritten_spell_can_still_be_repaired_after_a_save() {
     let mut sim = at_the_wall(3);
@@ -961,12 +892,11 @@ fn a_rewritten_spell_can_still_be_repaired_after_a_save() {
     );
 }
 
-/// **A save from before a siege closes one that is running.**
+/// A save from before a siege closes one that is running.
 ///
-/// `adopt::apply` adopts onto the *live* world, so it has to remove what the
-/// document does not have — its own doc says so for `Stock` and `Substituted`.
-/// Without it the bailey reopened mid-fight against a siege the save had never
-/// heard of, with a stale `clear_at` gating `defend`.
+/// `adopt::apply` adopts onto the live world, so it has to remove what the
+/// document does not have. Without it the bailey reopened mid-fight with a
+/// stale `clear_at` gating `defend`.
 #[test]
 fn loading_a_save_from_before_a_siege_ends_the_one_in_progress() {
     let mut sim = at_the_wall(11);
@@ -986,13 +916,11 @@ fn loading_a_save_from_before_a_siege_ends_the_one_in_progress() {
     );
 }
 
-/// **A scroll spent on the wall reaches the wall.**
+/// A scroll spent on the wall reaches the wall.
 ///
-/// §19 keeps `wield` for scrolls rather than giving them a fourth verb, so the
-/// same word has to mean *set this going* in two places. Without the
-/// interception the three scroll rows in `siege.toml` were dead content:
-/// `wield quickening-scroll` in the bailey hurried the *laboratory*, and `quaff`
-/// refused and pointed the player at it.
+/// §19 keeps `wield` for scrolls rather than a fourth verb, so without the
+/// interception the three scroll rows in `siege.toml` were dead content —
+/// `wield quickening-scroll` in the bailey hurried the laboratory.
 #[cfg(debug_assertions)]
 #[test]
 fn a_scroll_is_spent_on_the_siege_when_one_is_running() {
@@ -1017,9 +945,8 @@ fn a_scroll_is_spent_on_the_siege_when_one_is_running() {
     );
 }
 
-/// **...and everything outside a siege is untouched**, which is the half that
-/// could regress silently. The interception is narrow on purpose: only while a
-/// siege is running, and only for a scroll the wall can actually use.
+/// ...and everything outside a siege is untouched. The interception is narrow on
+/// purpose: only while a siege runs, and only for a scroll the wall can use.
 #[cfg(debug_assertions)]
 #[test]
 fn a_scroll_keeps_its_ordinary_effect_when_no_siege_is_running() {
@@ -1045,15 +972,11 @@ fn a_scroll_keeps_its_ordinary_effect_when_no_siege_is_running() {
     );
 }
 
-/// **Every row of `siege.toml` is spendable and does something observable.**
+/// Every row of `siege.toml` is spendable and does something observable.
 ///
-/// The matrix that would have caught the scrolls: three rows named `wield`, and
-/// nothing routed `wield` to the siege — so they were authored, tested for
-/// *shape* by `content::siege`'s own tests, and dead in the game. A table test
-/// that only reads the table cannot see that.
-///
-/// This spends each entry through the **real verb** its row names and requires
-/// the world to answer.
+/// Three rows named `wield` and nothing routed `wield` to the siege, so they
+/// were authored, shape-tested and dead in the game. Spends each entry through
+/// the real verb its row names and requires the world to answer.
 #[cfg(debug_assertions)]
 #[test]
 fn every_authored_arsenal_row_can_actually_be_spent() {
@@ -1065,18 +988,15 @@ fn every_authored_arsenal_row_can_actually_be_spent() {
             .verb_for(name)
             .expect("content::siege pins every row to a verb");
 
-        // **A worn line, not a fresh one.** A heal spent at full strength is
-        // refused now, so a fixture that opens a siege and drinks immediately
-        // measures the refusal rather than the potion.
+        // A worn line, not a fresh one: a heal spent at full strength is
+        // refused, so drinking immediately measures the refusal.
         let mut sim = at_the_wall(11);
         run(&mut sim, "defend");
         run(&mut sim, "hold");
         run(&mut sim, "hold");
         run(&mut sim, &format!("debug_spawn {name} 1"));
-        // **Messages before and after, never record indices.** `said` filters to
-        // the records that carry a message, so a count of *records* does not
-        // index into it — which is how this first read back an empty list and
-        // reported every row as dead.
+        // Messages before and after, never record indices: `said` filters to
+        // records carrying a message, so a record count does not index into it.
         let before = said(&sim).len();
         run(&mut sim, &format!("{} {name}", verb.canonical()));
         let answered: Vec<String> = said(&sim).into_iter().skip(before).collect();
@@ -1139,10 +1059,10 @@ fn every_authored_arsenal_row_changes_the_siege() {
     );
 }
 
-/// **The cadence holds, and it is the number the whole economy rests on.**
+/// The cadence holds, and the whole economy rests on it.
 ///
 /// Without it `defend` is free and `orbs-balance` measured 4.70 experience a
-/// tick against clarity's 0.140 — thirty-three times the flagship.
+/// tick against clarity's 0.140.
 #[cfg(debug_assertions)]
 #[test]
 fn a_second_siege_cannot_be_summoned_at_will() {
@@ -1188,11 +1108,10 @@ fn the_cadence_travels_in_the_save() {
     );
 }
 
-/// **A potion that would do nothing is kept, not drunk.**
+/// A potion that would do nothing is kept, not drunk.
 ///
-/// Not an error — §6's bare error is a different thing — but the silent loss of
-/// the one resource the domain exists to make you weigh, and the next siege
-/// arrives on `CADENCE` whether or not you have anything left.
+/// The silent loss of the one resource the domain exists to make you weigh, and
+/// the next siege arrives on `CADENCE` whether or not you have anything left.
 #[cfg(debug_assertions)]
 #[test]
 fn a_heal_at_full_strength_is_refused_and_the_potion_kept() {
@@ -1217,10 +1136,9 @@ fn a_heal_at_full_strength_is_refused_and_the_potion_kept() {
     );
 }
 
-/// **Replay: the same seed and the same submissions reach the same siege.**
+/// Replay: the same seed and the same submissions reach the same siege.
 ///
-/// Rule 3 through `Sim::replay` rather than by re-typing, which is the genre's
-/// own regression pattern and the one the plan named.
+/// Rule 3 through `Sim::replay` rather than by re-typing.
 #[test]
 fn a_siege_replays_from_its_submissions() {
     let script = [
@@ -1237,10 +1155,8 @@ fn a_siege_replays_from_its_submissions() {
         run(&mut played, line);
     }
 
-    // The established idiom — `tests/progression.rs` and `tests/debug_spawn.rs`
-    // both replay this way. A submission carries the tick it was made on, so the
-    // replay walks the clock forward to meet each one rather than assuming one
-    // command a tick.
+    // The established idiom. A submission carries the tick it was made on, so
+    // the replay walks the clock forward to meet each one.
     let mut replayed = Sim::new(5);
     for (tick, submission) in played.submissions().all().to_vec() {
         while replayed.tick() < tick {
@@ -1259,21 +1175,15 @@ fn a_siege_replays_from_its_submissions() {
     );
 }
 
-/// **A siege replayed through the refusal, which is the path that changed.**
+/// A siege replayed through the refusal, which is the path that changed.
 ///
-/// Making a pledge refusable changes *how many dice roll* in a round, and a die
-/// that never rolls is a draw that never happens — so this is where a
-/// determinism defect would land. The existing replay test above never runs the
-/// pool dry, so it exercises the path that was always there.
+/// A refusable pledge changes how many dice roll in a round, and a die that
+/// never rolls is a draw that never happens. The script spends the pool down and
+/// keeps pledging into an empty one, so the run contains successes, `Short`
+/// refusals and the rounds after them.
 ///
-/// The script spends the pool down and then keeps pledging into an empty one, so
-/// the run contains successes, `Short` refusals and the rounds after them. If the
-/// refusal ever drew, or ever skipped a draw it should have taken, the two runs
-/// would disagree about every roll from that point.
-///
-/// **Six rounds, where three used to do.** A resolved round now grants
-/// `REGEN_PER_ROUND` back against a full allocation's eight, so the pool drains
-/// six a round rather than eight. The number of rounds here is arithmetic over
+/// Six rounds, where three used to do: a resolved round grants `REGEN_PER_ROUND`
+/// back against a full allocation's eight, so the count here is arithmetic over
 /// those two constants and moves when either does.
 #[test]
 fn a_siege_replays_through_running_out_of_quintessence() {
@@ -1313,12 +1223,11 @@ fn a_siege_replays_through_running_out_of_quintessence() {
     );
 }
 
-/// **The pool is a function of the world, not of the stream.**
+/// The pool is a function of the world, not of the stream.
 ///
-/// Two towers at the same integrity and the same experience open with the same
-/// pool, whatever their seeds — which is what makes it safe for `defend` to read
-/// it *before* the two opening draws. A pool that varied with the seed would be
-/// randomness wearing arithmetic's clothes.
+/// Two towers at the same integrity and experience open with the same pool
+/// whatever their seeds, which is what makes it safe for `defend` to read it
+/// before the two opening draws.
 #[test]
 fn the_pool_is_the_same_on_every_seed() {
     let pools: Vec<u64> = [0, 3, 11, 42]
@@ -1336,16 +1245,11 @@ fn the_pool_is_the_same_on_every_seed() {
     );
 }
 
-/// **A bonus bought for a round the garrison does not swing in is refused.**
+/// A bonus bought for a round the garrison does not swing in is refused.
 ///
 /// `staged` clears when the round resolves, so a `warding` bought before a
-/// volley is spent on rolls that never happen — the same silent loss as a heal
-/// at full strength, one intent over.
-///
-/// **Bodies are not refused**, and that distinction is the point: a volley still
-/// hits you. What it takes away is your answer, not their attack. The shipped
-/// `answering` solver had that backwards in its first draft and lost a siege the
-/// other three won.
+/// volley is spent on rolls that never happen. Bodies are not refused: a volley
+/// still hits you, so what it takes away is your answer, not their attack.
 #[cfg(debug_assertions)]
 #[test]
 fn a_bonus_is_refused_before_a_volley_and_a_troop_is_not() {
@@ -1384,7 +1288,7 @@ fn a_bonus_is_refused_before_a_volley_and_a_troop_is_not() {
 
 // --- the dice allocation (§5.1) --------------------------------------------
 
-/// **Three dice against four areas**, so the board can never be covered.
+/// Three dice against four areas, so the board can never be covered.
 #[test]
 fn the_coffer_holds_fewer_dice_than_there_are_places_for_them() {
     assert!(
@@ -1413,8 +1317,8 @@ fn a_pledged_die_leaves_the_coffer_and_returns_next_round() {
         "a pledged die was still in the coffer: {after:?}",
     );
 
-    // ...and the round gives it back. **The die is not what is scarce — the
-    // round is.**
+    // ...and the round gives it back: the die is not what is scarce, the round
+    // is.
     run(&mut sim, "hold");
     let mark = words(&sim).len();
     run(&mut sim, "survey coffer");
@@ -1425,7 +1329,7 @@ fn a_pledged_die_leaves_the_coffer_and_returns_next_round() {
     );
 }
 
-/// **A die cannot be pledged twice**, and the refusal says where it went.
+/// A die cannot be pledged twice, and the refusal says where it went.
 #[test]
 fn a_die_is_refused_a_second_pledge_and_named_where_it_is() {
     let mut sim = at_the_wall(11);
@@ -1439,8 +1343,8 @@ fn a_die_is_refused_a_second_pledge_and_named_where_it_is() {
     );
 }
 
-/// **The range is shown before the commitment** — §5.1's fairness rule carried
-/// from a roll to an allocation.
+/// The range is shown before the commitment — §5.1's fairness rule carried from
+/// a roll to an allocation.
 #[test]
 fn a_pledge_says_what_it_could_come_to_before_it_is_rolled() {
     let mut sim = at_the_wall(11);
@@ -1455,7 +1359,7 @@ fn a_pledge_says_what_it_could_come_to_before_it_is_rolled() {
     assert!(ever_said(&sim, "1 to 6"), "{:?}", said(&sim));
 }
 
-/// **The one mistake the domain warns about, before it is made.**
+/// The one mistake the domain warns about, before it is made.
 #[test]
 fn pledging_to_the_line_before_a_volley_is_allowed_and_warned_about() {
     for seed in 0..30 {
@@ -1508,9 +1412,9 @@ fn every_area_does_something_and_says_what_it_did() {
     }
 }
 
-/// **A succour actually heals a wounded line**, which `mend`'s old cap made
+/// A succour actually heals a wounded line, which `mend`'s old cap made
 /// impossible: it capped at `count * VIGOUR`, and `wound` derives `count` back
-/// down from `vigour`, so the cap *was* the band's current strength.
+/// from `vigour`, so the cap was the band's current strength.
 #[test]
 fn a_succour_puts_real_mettle_back() {
     let mut sim = at_the_wall(11);
@@ -1574,19 +1478,15 @@ fn a_pledge_survives_being_saved() {
     );
 }
 
-/// **Every die the pool holds has a node, and every node has a price.**
+/// Every die the pool holds has a node, and every node has a price.
 ///
 /// The bailey's dice and areas are hardcoded `Branch` names in `tower::build`,
-/// and `publish` reaches them with `let Some(node) = … else { continue }` — so a
-/// die added to [`siege::POOL`] without a matching branch is **pledgeable,
-/// nameable, listed by `readings()`, and prices at nought**, with the whole
-/// suite green. A spell asking `if the coffer has fewer quintessence than the
-/// d12` would then read its cost as absent, which is zero, and answer that it
-/// can afford anything.
+/// and `publish` skips a name with no node — so a die added to [`siege::POOL`]
+/// without a matching branch is pledgeable, nameable, listed by `readings()` and
+/// priced at nought, with the whole suite green.
 ///
-/// This is the shape `every_material_has_a_home_a_move_can_reach` and
-/// `every_self_anchored_verb_is_declared_by_a_fixture` already forbid elsewhere.
-/// The bailey shipped without the equivalent; this is it.
+/// The shape `every_material_has_a_home_a_move_can_reach` already forbids
+/// elsewhere; the bailey shipped without the equivalent.
 #[test]
 fn every_die_and_area_the_domain_knows_is_a_node_that_answers() {
     let mut sim = at_the_wall(11);

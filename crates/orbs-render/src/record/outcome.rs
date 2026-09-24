@@ -1,28 +1,18 @@
 //! How a command concluded.
 //!
-//! An outcome is **output vocabulary**, not parser vocabulary — every command
-//! concludes somehow, and the parser is merely the first thing that had to say
-//! so. It lives here for the same reason [`RecordKind`](super::RecordKind) and
-//! [`FieldName`](super::FieldName) do: a view has to be able to draw the
-//! difference, and a view that had to recognise string literals defined in
-//! `orbs-sim` would be reaching across the boundary to do it.
-//!
-//! # Why a view must be able to tell these apart
+//! Output vocabulary, not parser vocabulary — every command concludes somehow.
+//! It lives here for the same reason [`RecordKind`](super::RecordKind) and
+//! [`FieldName`](super::FieldName) do: a view that had to recognise string
+//! literals defined in `orbs-sim` would be reaching across the boundary.
 //!
 //! All six carry one canonical command form in
 //! [`FieldName::Message`](super::FieldName::Message), so as *text* they are
-//! identical. What differs is what the player is being asked to do:
-//!
-//! - [`Outcome::Candidate`] is **selectable** — DESIGN.md §6 numbers the tied
-//!   readings and the player answers with a number.
-//! - [`Outcome::Suggestion`] is not. It is the orb offering somewhere to go,
-//!   and numbering it would promise an interaction that does nothing.
-//! - [`Outcome::Forced`] needs a correction affordance; [`Outcome::Resolved`]
-//!   does not.
-//!
-//! Drawn without that distinction, an unresolved input renders as a column of
-//! bare words and the first ambiguous phrase a player meets looks like the
-//! parser malfunctioning.
+//! identical; what differs is what the player is asked to do.
+//! [`Outcome::Candidate`] is selectable and §6 has the player answer with a
+//! number; [`Outcome::Suggestion`] is not, and numbering it would promise an
+//! interaction that does nothing; [`Outcome::Forced`] needs a correction
+//! affordance where [`Outcome::Resolved`] does not. Drawn without the
+//! distinction, an ambiguous input reads as the parser malfunctioning.
 
 use crate::style::Intensity;
 
@@ -38,7 +28,7 @@ pub enum Outcome {
     Forced,
     /// The verb is known and a required slot is empty.
     Incomplete,
-    /// One of several tied readings. **Selectable.**
+    /// One of several tied readings. Selectable.
     Candidate,
     /// Nothing resolved.
     Unresolved,
@@ -60,8 +50,7 @@ impl Outcome {
     /// The value stored in [`FieldName::Outcome`](super::FieldName::Outcome).
     ///
     /// A record field holds text, so the enum round-trips through this. It is
-    /// never spoken and never drawn — [`FieldName::Outcome`](super::FieldName::Outcome) is an annotation
-    /// (see [`FieldName::is_annotation`](super::FieldName::is_annotation)).
+    /// an [annotation](super::FieldName::is_annotation), never spoken or drawn.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -83,17 +72,12 @@ impl Outcome {
     /// The glyph a prompt draws in front of the line.
     ///
     /// A glyph, not a word: prose belongs in content files (§12, rule 6), and a
-    /// marker has to survive being read at a glance during a siege. All six are
-    /// in the CP437 repertoire, which a test asserts.
+    /// marker has to be readable at a glance during a siege. All six are in the
+    /// CP437 repertoire, which a test asserts.
     ///
-    /// | Outcome | Marker | Reads as |
-    /// |---|---|---|
-    /// | [`Outcome::Resolved`] | `→` | this is what runs |
-    /// | [`Outcome::Forced`] | `≈` | approximately this — correct me |
-    /// | [`Outcome::Incomplete`] | `¿` | I need one more thing |
-    /// | [`Outcome::Candidate`] | `»` | pick one of these |
-    /// | [`Outcome::Unresolved`] | `!` | I do not know this |
-    /// | [`Outcome::Suggestion`] | `·` | you could try |
+    /// `→` this is what runs, `≈` approximately this — correct me, `¿` I need
+    /// one more thing, `»` pick one of these, `!` I do not know this, `·` you
+    /// could try.
     #[must_use]
     pub const fn marker(self) -> char {
         match self {
@@ -108,10 +92,9 @@ impl Outcome {
 
     /// How strongly the line is drawn.
     ///
-    /// The second channel, because a marker is one glyph and §14 forbids any
-    /// single channel carrying meaning alone. A selectable prompt is brightest
-    /// because it is the only one waiting on the player; an offer is dimmest
-    /// because ignoring it is the common case.
+    /// The second channel, because §14 forbids any single channel carrying
+    /// meaning alone. A selectable prompt is brightest because it is the only
+    /// one waiting on the player; an offer is dimmest.
     #[must_use]
     pub const fn intensity(self) -> Intensity {
         match self {
@@ -137,8 +120,7 @@ mod tests {
 
     #[test]
     fn every_marker_is_drawable() {
-        // A marker outside the CP437 repertoire draws nothing at all, and the
-        // line silently loses its only visual classification.
+        // A marker outside CP437 draws nothing, and the line loses its class.
         for outcome in Outcome::ALL {
             assert!(
                 is_renderable(outcome.marker()),
@@ -167,8 +149,8 @@ mod tests {
 
     #[test]
     fn only_a_candidate_is_selectable() {
-        // §6 numbers tied readings and has the player pick one. Numbering
-        // anything else promises an interaction that does nothing.
+        // Numbering anything but a tie promises an interaction that does
+        // nothing (§6).
         for outcome in Outcome::ALL {
             assert_eq!(
                 outcome.is_selectable(),
@@ -180,8 +162,7 @@ mod tests {
 
     #[test]
     fn a_choice_outranks_an_offer() {
-        // The one waiting on the player must not be dimmer than the one that is
-        // safe to ignore.
+        // The one waiting on the player must not be dimmer than the safe one.
         assert!(Outcome::Candidate.intensity() > Outcome::Suggestion.intensity());
         assert!(Outcome::Resolved.intensity() > Outcome::Suggestion.intensity());
     }

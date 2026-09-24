@@ -1,4 +1,4 @@
-//! What the player might be about to type — **the prompt's view of it**.
+//! What the player might be about to type — the prompt's view of it.
 //!
 //! The answer itself is [`expect`](mod@super::expect)'s, which three surfaces share.
 //! What is left here is the shape the prompt's Tab *listing* wants — strings
@@ -9,31 +9,24 @@
 //! frontends must be able to offer the same thing. It is also the only part of
 //! the prompt's editing behaviour that can be tested without a window.
 //!
-//! # The shape is `rustyline`'s, for its reasons
+//! The shape is `rustyline`'s, for its reasons.
 //!
-//! **A range, not an append.** `rustyline`'s `complete` returns *where the
-//! completable word starts*; `reedline`'s `Suggestion` carries the span it
-//! replaces. That matters more here than it does there, because §6's parser is
-//! deliberately fuzzy — `clarty` resolves to `clarity` — and a completer that can
-//! only extend what was typed is useless the moment the player has typed a
-//! near-miss, which is the player this game is built for.
+//! A range, not an append: `rustyline`'s `complete` returns where the completable
+//! word starts and `reedline`'s `Suggestion` carries the span it replaces. That
+//! matters more here, because §6's parser is deliberately fuzzy — `clarty`
+//! resolves to `clarity` — and a completer that can only extend what was typed
+//! is useless to the player this game is built for.
 //!
-//! **One string, not `display` apart from `insert`.** `rustyline` and `reedline`
-//! both split them, and the split was taken here on the theory that a place is
-//! registered by full path and shown by leaf. It is not: the leaf is what the
-//! list shows *and* what goes into the line, because §6's matcher accepts it and
-//! the echo shows it back. Two fields that every construction site sets equal are
-//! two fields that can drift — the shared prefix read one and the Tab listing the
-//! other — so there is one until something genuinely needs two.
-//!
-//! # What it does not do
+//! One string, not `display` apart from `insert`. Both libraries split them and
+//! the split was taken here on the theory that a place is registered by full
+//! path and shown by leaf. It is not: the leaf is what the list shows and what
+//! goes into the line. Two fields every construction site sets equal are two
+//! that can drift, so there is one until something needs two.
 //!
 //! No debouncing, no caching, no background thread. `fish` has all three and
-//! `zsh` recommends async, because their corpus is a filesystem and a history of
-//! tens of thousands of lines. Ours is a few dozen scene nouns, in memory, with
-//! no I/O — and rule 8 forbids async here regardless. Taking that machinery would
-//! be pure cost, which is worth writing down because the prior art all points at
-//! it.
+//! `zsh` recommends async because their corpus is a filesystem and a history of
+//! tens of thousands of lines; ours is a few dozen scene nouns in memory with no
+//! I/O, and rule 8 forbids async here regardless.
 
 use core::ops::Range;
 
@@ -68,9 +61,8 @@ impl Completion {
 /// that is refused the moment it is used.
 ///
 /// `prompt_open` turns completion off entirely: while §6's numbered prompt is
-/// waiting, the orb wants a **digit**, and offering verbs there — or ghosting one
-/// — walks the player into a dead end. §15 weighs the dead-end rate above the raw
-/// resolution rate.
+/// waiting the orb wants a digit, and offering verbs there — or ghosting one —
+/// walks the player into a dead end, which §15 weighs above resolution rate.
 #[must_use]
 pub fn complete(line: &str, caret: usize, scene: &Scene, prompt_open: bool) -> Completion {
     let found = super::expect::expect(
@@ -206,14 +198,11 @@ mod tests {
 
     /// Verbs come back sorted and nouns come back in scene order.
     ///
-    /// **Nine tests and only two of them asserted an order**, both by comparing
-    /// a one-element list — which pins nothing. `common()` reads the whole list
-    /// and Tab's listing shows it in the order it arrives, so the order is
-    /// player-visible behaviour with no gate on it.
-    ///
-    /// This is written *before* [`expect`](super::expect) grows ranking, so that
-    /// the day ranking lands the change is a failing assertion here rather than
-    /// a listing that quietly reshuffled.
+    /// Nine tests and only two asserted an order, both by comparing a
+    /// one-element list, which pins nothing. `common()` reads the whole list and
+    /// Tab shows it in arrival order, so the order is player-visible with no
+    /// gate on it. Written before [`expect`](super::expect) grows ranking, so
+    /// that day is a failing assertion rather than a quiet reshuffle.
     #[test]
     fn the_order_a_completion_arrives_in_is_part_of_the_answer() {
         // Verbs: alphabetical, from `verbs`'s `sort`. Not table order, not
@@ -224,11 +213,10 @@ mod tests {
         sorted.sort();
         assert_eq!(unsorted, sorted, "verbs stopped arriving alphabetically");
 
-        // Nouns: **scene order**, which is the tower's own raise order and is
-        // emphatically not alphabetical — `balneum_mariae` is registered after
+        // Nouns: scene order, which is the tower's raise order and emphatically
+        // not alphabetical — `balneum_mariae` is registered after
         // `mortar_and_pestle` and comes back after it. Pinned whole rather than
-        // by a pair of indices, because the thing that would rot is the
-        // sequence.
+        // by a pair of indices, because the sequence is what would rot.
         assert_eq!(
             inserts("wield "),
             [

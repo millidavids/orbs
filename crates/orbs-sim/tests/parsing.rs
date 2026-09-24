@@ -9,11 +9,10 @@ use orbs_sim::parser::{
 };
 
 /// The slice's world: two starting domains, thin (DESIGN.md §15).
-/// A scene standing **nowhere in particular**, offering no fixture's verb.
 ///
-/// Load-bearing for `the_retired_brewing_words_all_still_land_somewhere_deliberate`,
-/// which needs `mix` and `distil` out of scope to reach `Resolution::Elsewhere`. Use
-/// [`anywhere`] for a test about phrasing rather than about scope.
+/// It stands nowhere in particular and offers no fixture's verb, which is what
+/// `the_retired_brewing_words_all_still_land_somewhere_deliberate` needs to
+/// reach `Resolution::Elsewhere`. Use [`anywhere`] for a test about phrasing.
 fn tower() -> Scene {
     Scene::new()
         .with(NounKind::Place, "/tower/laboratory")
@@ -23,9 +22,8 @@ fn tower() -> Scene {
         .with(NounKind::File, "purge_cycle.log")
         .with(NounKind::Essence, "clarity")
         .with(NounKind::Essence, "warding")
-        // Recipes are `Topic` nouns beside their `Essence` (§6.1), which is what
-        // lets `make a potion of clarity` answer with the recipe now that
-        // `decoct` is retired.
+        // Recipes are `Topic` nouns beside their `Essence` (§6.1), so `make a
+        // potion of clarity` answers with the recipe.
         .with(NounKind::Topic, "clarity")
         .with(NounKind::Topic, "warding")
         .with(NounKind::Reagent, "sage")
@@ -38,11 +36,10 @@ fn tower() -> Scene {
 
 /// [`tower`], plus every fixture-anchored verb in scope at once.
 ///
-/// `Scene::offers` asks [`Verb::anchor`], so a bare [`tower`] scopes out
-/// `research`, `follow`, `wander` and the five laboratory operations. A test about
-/// *phrasing* reaching a verb must not also be measuring which room the verb lives
-/// in — that is what `every_verb_is_reachable_from_plain_english` was accidentally
-/// doing when `study` came back `Elsewhere { Research }`.
+/// A bare [`tower`] scopes out `research`, `follow`, `wander` and the laboratory
+/// operations, so a test about phrasing would also be measuring which room a verb
+/// lives in — `every_verb_is_reachable_from_plain_english` had `study` coming back
+/// `Elsewhere { Research }`.
 fn anywhere() -> Scene {
     Verb::ALL
         .into_iter()
@@ -63,10 +60,9 @@ fn echo(input: &str) -> String {
 
 #[test]
 fn the_designs_worked_examples_resolve() {
-    // Verbatim from §6. `make a potion of clarity` now answers with the recipe:
-    // §15 chose brewing to gate the parser because a shell-naive tester
-    // understands the phrase, which requires it to resolve somewhere *useful* —
-    // not that a verb exist to satisfy it. `decoct` is retired (§19).
+    // Verbatim from §6. `make a potion of clarity` answers with the recipe
+    // because §15 needs the phrase to resolve somewhere useful, not because a
+    // verb exists to satisfy it — `decoct` is retired (§19).
     assert_eq!(echo("make a potion of clarity"), "recall clarity");
     assert_eq!(echo("grep march feed.log"), "sift march feed.log");
 }
@@ -76,19 +72,15 @@ fn the_retired_brewing_words_all_still_land_somewhere_deliberate() {
     // The Phase 0 naming pass's rule: a released word does not stop resolving,
     // it resolves to whatever it is nearest. These three stay claimed.
     //
-    // `mix` and `distil` **left** this set: §10.1 gave them to the flask and the
-    // alembic, where they name a real operation rather than a retired one. That
-    // is not a release — they are more firmly claimed than before — but they are
-    // claimed *by a domain*, so out of the laboratory they resolve to
-    // `Elsewhere` rather than to the manual. `there is nothing here to mix with`
-    // is a better answer than a recipe nobody asked for.
+    // `mix` and `distil` left the set — §10.1 gave them to the flask and the
+    // alembic, so out of the laboratory they reach `Elsewhere` rather than the
+    // manual. A better answer than a recipe nobody asked for.
     for input in ["decoct clarity", "brew clarity", "make clarity"] {
         assert_eq!(echo(input), "recall clarity", "{input:?}");
     }
 
     // ...and this scene stands nowhere in particular, so the two that left are
-    // out of scope entirely. The word is still recognised, which is the whole
-    // point of `Resolution::Elsewhere`.
+    // out of scope — still recognised, which is `Resolution::Elsewhere`.
     for input in ["mix clarity", "distil clarity"] {
         assert!(
             matches!(
@@ -120,26 +112,19 @@ fn all_three_registers_reach_the_same_canonical_command() {
 #[test]
 fn a_spell_reads_back_like_any_other_file() {
     // `peruse` takes `NounKind::Readable`, which is `File` *or* `Script`. Until
-    // it did, a `.spell` registered as a `Script` was unreadable: `best_match`
-    // filters on the slot's kind, so the only noun kind `peruse` could see was
-    // `File`, and the spell you had just written could not be read back.
+    // it did, `best_match` filtered to `File` and the spell you had just
+    // written could not be read back.
     assert_eq!(echo("peruse night_watch"), "peruse night_watch");
     assert_eq!(echo("cat night_watch"), "peruse night_watch");
 }
 
 #[test]
 fn peruse_refuses_things_that_are_not_text() {
-    // **The guard, and the reason `Readable` exists rather than `Any`.**
-    //
-    // Widening `peruse` to `NounKind::Any` also makes a spell readable, passes
-    // the whole suite, and is wrong: every noun in the scene becomes something
-    // to read. `peruse sage` resolves at full confidence and reports a
-    // zero-line read of a reagent — the symptom `execute::files` documents as
-    // the reason resolution goes by kind in the first place.
-    //
-    // It lands where it costs most. `peruse` owns `read`, `cat`, `open` and
-    // `show`, so it is the verb a shell-naive tester reaches for earliest, and
-    // §15 weighs the dead-end rate above the raw resolution rate.
+    // Why `Readable` rather than `Any`: widening `peruse` makes a spell
+    // readable and passes the whole suite, but `peruse sage` then resolves at
+    // full confidence and reports a zero-line read of a reagent. `peruse` owns
+    // `read`, `cat`, `open` and `show`, so it is where a shell-naive tester
+    // lands earliest, and §15 weighs dead ends above resolution rate.
     for input in ["peruse sage", "read the sage", "open retort", "cat clarity"] {
         let resolution = resolve(input, &tower(), Mode::Calm);
         let read_it = matches!(
@@ -152,14 +137,10 @@ fn peruse_refuses_things_that_are_not_text() {
 
 #[test]
 fn a_slot_offers_only_what_could_fill_it() {
-    // The matcher, the numbered prompt and Tab completion each asked "does this
-    // noun fit this slot?" in their own words, so a slot kind meaning *a set*
-    // could be understood by one and not the others. `NounKind::accepts` is now
-    // the single answer; this is the surface where a disagreement would show.
-    //
-    // A bare `peruse` must offer files to read. Under `Any` it offered the
-    // three places instead — `1. peruse /tower/laboratory` — which is not a
-    // question a player can answer usefully.
+    // The matcher, the numbered prompt and Tab completion each answered "does
+    // this noun fit this slot?" in their own words; `NounKind::accepts` is the
+    // single answer now, and this is where a disagreement would show. Under
+    // `Any` a bare `peruse` offered places — `1. peruse /tower/laboratory`.
     let resolution = resolve("peruse", &tower(), Mode::Calm);
     let offered: Vec<NounKind> = match &resolution {
         Resolution::Resolved { intent, .. } => intent.arguments.iter().map(|a| a.kind).collect(),
@@ -210,15 +191,13 @@ fn every_verb_is_reachable_from_plain_english() {
         ("transfer sage to laboratory", Verb::Move),
         ("use laboratory", Verb::Wield),
         ("cancel laboratory", Verb::Stop),
-        // `collect` was `siphon`'s. It moved to `empty` when `siphon` retired
-        // (§19), because a released word does not stop resolving — it resolves
-        // to whatever it is nearest, and the two nearest here are `purge` and
-        // `stop`, the pair this room can least afford to confuse.
+        // `collect` was `siphon`'s and moved to `empty` when `siphon` retired
+        // (§19); the other two nearest are `purge` and `stop`, the pair this
+        // room can least afford to confuse.
         ("collect laboratory", Verb::Empty),
         ("get rid of sludge", Verb::Purge),
-        // `research` takes no argument at all now — it opens the stacks on the
-        // one lectern (§19) — so what this pins is the *word*, which is all it
-        // ever pinned: `study` has to reach `research` and nothing else.
+        // `research` takes no argument now (§19), so what this pins is the
+        // word: `study` has to reach `research` and nothing else.
         ("study", Verb::Research),
         ("author night_watch", Verb::Scribe),
         ("schedule night_watch", Verb::Bind),
@@ -266,9 +245,8 @@ fn typos_resolve() {
 #[test]
 fn abbreviations_resolve() {
     assert_eq!(echo("sur"), "survey");
-    // Was `grim brewing`, when the manual was called `grimoire`. That
-    // abbreviation now reaches **`grind`** — correctly, and `Elsewhere` says so
-    // rather than guessing — which is the clash the rename removed.
+    // Was `grim brewing`, when the manual was called `grimoire`; that
+    // abbreviation reaches `grind` now, which is the clash the rename removed.
     assert_eq!(echo("reca brewing"), "recall brewing");
 }
 
@@ -280,9 +258,9 @@ fn filler_is_ignored() {
 
 #[test]
 fn a_place_can_be_named_by_its_leaf_or_its_path() {
-    // Both forms are accepted, and **both echo the leaf** — the echo teaches one
-    // canonical form, and §7's is the one players say. The full path clipped the
-    // destination off a three-argument `move` at the 80×22 floor.
+    // Both forms are accepted and both echo the leaf: the echo teaches one
+    // canonical form (§7), and the full path clipped the destination off a
+    // three-argument `move` at the 80×22 floor.
     assert_eq!(echo("attend laboratory"), "attend laboratory");
     assert_eq!(echo("attend /tower/laboratory"), "attend laboratory");
 }
@@ -294,14 +272,9 @@ fn a_place_can_be_named_by_its_leaf_or_its_path() {
 #[test]
 fn a_missing_argument_becomes_a_numbered_prompt() {
     // §6's worked example: a bare verb yields a numbered list of what could
-    // fill it, rather than an error.
-    //
-    // **The fixture was a bare `brew`**, a `recall` synonym, until `recall`'s
-    // slot became optional so that `help` could list the vocabulary rather than
-    // ask a lost player to pick between four arbitrary subjects (§19,
-    // `TOPIC_OPTIONAL`). `purge` is the fixture now — a required
-    // `NounKind::Any` — and what is under test is unchanged: a verb that *needs*
-    // an argument asks for one instead of failing.
+    // fill it, rather than an error. The fixture was a bare `brew` until
+    // `recall`'s slot became optional (§19, `TOPIC_OPTIONAL`); `purge` is a
+    // required `NounKind::Any` and tests the same thing.
     let resolution = resolve("purge", &tower(), Mode::Calm);
     let Resolution::Ambiguous { candidates } = resolution else {
         panic!("expected a prompt, got {resolution:?}");
@@ -313,8 +286,8 @@ fn a_missing_argument_becomes_a_numbered_prompt() {
 
 #[test]
 fn disambiguation_never_blocks_during_a_siege() {
-    // §6: a modal wait would make ambiguous phrasing cost siege time, which is
-    // exactly the typing pressure §14 forbids.
+    // §6: a modal wait would make ambiguous phrasing cost siege time, the
+    // typing pressure §14 forbids.
     let resolution = resolve("purge", &tower(), Mode::Siege);
     let Resolution::Resolved { intent, confidence } = resolution else {
         panic!("a siege must never block: {resolution:?}");
@@ -393,10 +366,9 @@ fn resolution_is_deterministic() {
 // ---------------------------------------------------------------------------
 // The augury's router — which lines the deterministic pipeline keeps (§6).
 //
-// `Analysis::reads_outright` decides what a trained model never sees. It is
-// written as claims about phrasing rather than about scores, because the thing
-// it must get right is *"did the orb understand the sentence"* and the scores
-// are only how that is measured.
+// `Analysis::reads_outright` decides what a trained model never sees. Written
+// as claims about phrasing rather than scores: the question is whether the orb
+// understood the sentence, and the scores are only how that is measured.
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -422,10 +394,9 @@ fn a_command_typed_properly_is_read_outright() {
 
 #[test]
 fn a_typo_in_an_argument_is_still_read_outright() {
-    // `clarty` reaches `clarity` at 819, and the matcher is better at that than
-    // any model trained on phrasings will be. Routing typos away from it would
-    // hand the augury work the deterministic path already does well — and
-    // §19's *"the player this game is built for"* types exactly this.
+    // `clarty` reaches `clarity` at 819, and the matcher beats any model
+    // trained on phrasings at that — while §19's *"the player this game is
+    // built for"* types exactly this.
     for input in ["recall clarty", "attend labratory", "sift march fed.log"] {
         assert!(
             analyse(input, &anywhere(), Mode::Calm).reads_outright(),
@@ -436,10 +407,9 @@ fn a_typo_in_an_argument_is_still_read_outright() {
 
 #[test]
 fn a_sentence_is_not_read_outright_even_when_it_opens_on_a_verb() {
-    // **The defect this router exists to avoid.** `put` is a plain-register
-    // `dial` synonym, `take` and `make` are claimed too — so a rule that asked
-    // only whether the head named a verb would answer "yes" to all of these and
-    // send a sentence into a one-word command with the rest left over.
+    // The defect the router exists to avoid: `put`, `take` and `make` are all
+    // claimed, so a rule asking only whether the head named a verb would run a
+    // sentence as a one-word command with the rest left over.
     for input in [
         "put the sage in the mortar and grind it",
         "take the husks out and throw them away",
@@ -469,10 +439,9 @@ fn the_phrasings_the_augury_exists_for_reach_it() {
 
 #[test]
 fn a_deliberate_refusal_is_read_outright() {
-    // `Elsewhere` and `InSpell` both exist because *"I do not know that word"*
-    // would lie about a word the game taught the player — in the room next door,
-    // or in the editor (§19). Handing either to a model trades a good refusal
-    // for a guess.
+    // `Elsewhere` and `InSpell` exist because *"I do not know that word"* would
+    // lie about a word the game taught (§19). Handing either to a model trades
+    // a good refusal for a guess.
     let elsewhere = analyse("mix", &tower(), Mode::Calm);
     assert!(matches!(elsewhere.resolution, Resolution::Elsewhere { .. }));
     assert!(elsewhere.reads_outright());
@@ -504,9 +473,9 @@ fn a_leftover_word_is_what_separates_a_sentence_from_a_command() {
 
 #[test]
 fn a_verb_that_takes_nothing_names_the_words_it_could_not_use() {
-    // **`Incomplete`'s other half** (§19). `status gibberish` ran `status` and
-    // `undo gibberish` acknowledged, each with the word thrown away: `Incomplete`
-    // names the slot it waits for, and these verbs have none to name.
+    // `Incomplete`'s other half (§19): it names the slot it waits for, and
+    // these verbs have none — so `status gibberish` ran with the word thrown
+    // away.
     for (input, verb) in [
         ("status gibberish", Verb::Status),
         ("undo gibberish", Verb::Undo),
@@ -531,9 +500,9 @@ fn a_verb_that_takes_nothing_names_the_words_it_could_not_use() {
 
 #[test]
 fn a_verb_that_takes_nothing_may_still_name_where_it_acts() {
-    // A verb with no slot names nothing but where it acts, and there is only
-    // one of each — so naming the place is not a word thrown away. The same
-    // exemption `light athanor` has, without its operation test.
+    // A verb with no slot names nothing but where it acts, and there is one of
+    // each — so the place is not a word thrown away. `light athanor`'s
+    // exemption, without its operation test.
     for input in ["wander archive", "research archive"] {
         assert!(
             matches!(
@@ -547,9 +516,9 @@ fn a_verb_that_takes_nothing_may_still_name_where_it_acts() {
 
 #[test]
 fn a_reading_that_uses_every_word_runs_before_one_that_leaves_some() {
-    // **What `Sim::submit_reading` takes of a reader's readings.** It took the
-    // first that resolved, so one that left a word unused beat one behind it
-    // that used them all — *"stir the alembic"* ran as `distil alembic`.
+    // `Sim::submit_reading` took the first reading that resolved, so one that
+    // left a word unused beat one behind it that used them all — *"stir the
+    // alembic"* ran as `distil alembic`.
     let scene = orbs_sim::content::corpus_scene();
     let readings = ["distil alembic".to_owned(), "survey alembic".to_owned()];
     assert_eq!(
@@ -565,12 +534,10 @@ fn a_reading_that_uses_every_word_runs_before_one_that_leaves_some() {
 
 #[test]
 fn a_verb_that_takes_nothing_refuses_though_another_verb_answered_first() {
-    // **One `Incomplete` was kept for the line, not one per verb.** `verify`'s
-    // `audit` scores 600 against `quit` and sits above it in the table, so its
-    // answer claimed the only slot and the exactly-typed `quit` below it ran
-    // bare, with the word thrown away — the defect this refusal exists to end,
-    // wearing a fuzzy reading of another verb. `decode` reaches `research` past
-    // `recall`'s `decoct` the same way.
+    // One `Incomplete` was kept for the line, not one per verb: `verify`'s
+    // `audit` scores 600 against `quit` and sits above it, so its answer
+    // claimed the only slot and the exactly-typed `quit` below ran bare.
+    // `decode` reaches `research` past `recall`'s `decoct` the same way.
     for (input, verb) in [
         ("quit gibberish", Verb::Quit),
         ("decode gibberish", Verb::Research),
@@ -589,12 +556,11 @@ fn a_verb_that_takes_nothing_refuses_though_another_verb_answered_first() {
 
 #[test]
 fn only_a_verb_that_acts_somewhere_may_name_a_place() {
-    // The exemption above it is for a verb a fixture declares — `wander` at the
-    // stacks, `probe` at the lens — which has one place to name and no slot to
-    // name it in. The whole tower answers to `status`, `quit` and `undo`, so a
-    // place after one of those is a word discarded like any other. And a place
-    // found *inside* the tail is not the tail naming one: `best_match` tries
-    // each word, so `undo laboratory move` used to pass as a place.
+    // The exemption above is for a verb a fixture declares — `wander` at the
+    // stacks — which has one place to name and no slot to name it in. The whole
+    // tower answers to `status`, `quit` and `undo`, so a place after one of
+    // those is discarded like any other word. And `best_match` tries each word,
+    // so `undo laboratory move` used to pass as a place named in the tail.
     for input in [
         "status laboratory",
         "quit laboratory",
@@ -613,9 +579,8 @@ fn only_a_verb_that_acts_somewhere_may_name_a_place() {
 #[test]
 fn a_verb_the_whole_tower_answers_to_may_name_the_tower() {
     // `status` reports on every room at once, so the tower is the one place it
-    // can name: *"overview of the tower"* says exactly what it reports on, and
-    // was refused as a word thrown away. A room is narrower than that, and
-    // still refused.
+    // can name — *"overview of the tower"* was refused as a word thrown away.
+    // A room is narrower, and still refused.
     let scene = anywhere().with(NounKind::Place, "/tower");
     for input in ["overview of the tower", "status tower"] {
         assert!(
@@ -634,10 +599,9 @@ fn a_verb_the_whole_tower_answers_to_may_name_the_tower() {
 
 #[test]
 fn punctuation_is_not_a_word_a_verb_was_handed() {
-    // `fold` sheds a *trailing* stop but keeps a token that is nothing else
-    // whole, because `?` and `./` are synonyms in their own right — so the stop
-    // in `status .` arrived as a word said, and a line that had always run was
-    // refused.
+    // `fold` sheds a trailing stop but keeps a token that is nothing else
+    // whole, because `?` and `./` are synonyms — so the stop in `status .`
+    // arrived as a word said and a line that had always run was refused.
     for input in ["status .", "status ?", "undo !"] {
         assert!(
             matches!(
@@ -667,10 +631,9 @@ fn a_plain_phrase_may_run_past_its_command_and_one_plain_word_may_not() {
 
 #[test]
 fn a_siege_runs_a_verb_that_takes_nothing_rather_than_refusing_it() {
-    // §6 gives the mode its own answer to ambiguity — *"a modal prompt would
-    // make ambiguous phrasing cost siege time"* — and a refusal costs the same
-    // turn. `muster the troops` is what a player types with the wall coming
-    // down; calm, it is still told.
+    // §6 gives the mode its own answer to ambiguity, and a refusal costs the
+    // same turn. `muster the troops` is what a player types with the wall
+    // coming down; calm, it is still told.
     let scene = anywhere();
     assert!(
         matches!(
@@ -687,10 +650,9 @@ fn a_siege_runs_a_verb_that_takes_nothing_rather_than_refusing_it() {
 
 #[test]
 fn a_reading_with_no_argument_does_not_win_by_having_nothing_left_over() {
-    // `quit`, `undo` and a bare verb account for every word they were handed by
-    // being handed none — so preferring the reading that leaves nothing over
-    // handed them the line. A reader offering `[grind sage now, quit]` ran
-    // `quit`: the sink `Trained::readings` documents, one level up.
+    // A bare verb accounts for every word it was handed by being handed none,
+    // so preferring the reading that leaves nothing over handed it the line —
+    // `[grind sage now, quit]` ran `quit`.
     let scene = orbs_sim::content::corpus_scene();
     let readings = ["grind sage now".to_owned(), "quit".to_owned()];
     assert_eq!(
@@ -701,11 +663,9 @@ fn a_reading_with_no_argument_does_not_win_by_having_nothing_left_over() {
 
 #[test]
 fn a_first_choice_that_used_every_word_is_not_jumped() {
-    // **The other half of the rule above, and the half a first fix broke.**
-    // Refusing a bare reading the shortcut also stopped it *keeping* first
-    // place, so a later reading with an argument ran instead: *"open the loom"*
-    // came back `survey loom` over the `weave` the reader ranked first. A first
-    // choice that used every word it was handed has nothing unused to lose on.
+    // The half a first fix broke: refusing a bare reading the shortcut also
+    // stopped it keeping first place, so *"open the loom"* came back `survey
+    // loom` over the `weave` the reader ranked first.
     let scene = orbs_sim::content::corpus_scene();
     let readings = ["status".to_owned(), "survey laboratory".to_owned()];
     assert_eq!(

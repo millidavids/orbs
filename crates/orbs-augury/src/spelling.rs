@@ -1,38 +1,29 @@
 //! The spell register: what a `.spell` line means, and how one is put back
 //! together.
 //!
-//! # The same question over a different set of answers
+//! The prompt asks *which verb, and which words are its argument*; a spell line
+//! asks *which statement, and which words are its argument*. Everything in
+//! between is identical, so this shares the encoder, the vocabulary, the
+//! batching and the trainer with [`crate::model`] — one head's width and one
+//! corpus are all that differ.
 //!
-//! The prompt asks *which verb, and which words are its argument*. A spell line
-//! asks *which statement, and which words are its argument* — and everything
-//! between those two sentences is identical, so this shares the encoder, the
-//! vocabulary, the batching and the trainer with [`crate::model`]. What differs
-//! is one head's width and one corpus.
-//!
-//! # A class is a **template**, not a spell word
-//!
-//! At the prompt a canonical command names its own class: the head of `grind
-//! sage` is `grind` and `Verb::ALL` has a row for it. A spell statement does not.
-//! `if {place} is idle`, `if {place} is empty` and `if {place} has {reagent}` are
-//! one word between them, and the first two carry the same number of slots — so
-//! neither the word nor the tagging says which shape to build.
-//!
-//! So the classes are the entries of `content/spellings.toml`, in file order,
-//! plus one for *this line is a command*. [`assemble`] then has a shape to fill
-//! rather than a string to reverse-engineer.
-//!
-//! # Propose, then check twice
+//! A class is a *template*, not a spell word. At the prompt a canonical command
+//! names its own class; a spell statement does not — `if {place} is idle` and
+//! `if {place} is empty` are one word between them and carry the same slots, so
+//! neither the word nor the tagging says which shape to build. The classes are
+//! therefore the entries of `content/spellings.toml`, in file order, plus one
+//! for *this line is a command*, and [`assemble`] has a shape to fill rather
+//! than a string to reverse-engineer.
 //!
 //! A reader's answer never replaces a line on its own. The assembler builds a
-//! candidate and then asks two questions, and **both** have to hold:
+//! candidate and both of these have to hold:
 //!
 //! - does it stand on its own as a statement — `spell::reads_cleanly`;
-//! - does it account for **every word the player wrote** that carries meaning.
+//! - does it account for every word the player wrote that carries meaning.
 //!
-//! The second is the one that matters. `if the alembic has finished` parses
-//! perfectly and means *"holds a thing called finished"*, so a re-parse alone
-//! would wave through the exact class this feature exists to fix. §19 records
-//! four rewriter defects of precisely that kind.
+//! The second matters most: `if the alembic has finished` parses perfectly and
+//! means *"holds a thing called finished"*, so a re-parse alone waves through
+//! the exact class this exists to fix. §19 records four such defects.
 
 use std::sync::OnceLock;
 
@@ -43,9 +34,9 @@ use orbs_sim::parser::{NounKind, SYNONYMS, SpellWord, Verb};
 ///
 /// Read once from `content/spellings.toml` — the same file the corpus is built
 /// from, so a template added there becomes a class without anything here
-/// changing. That also means **adding an entry invalidates trained weights**,
-/// exactly as adding a word invalidates the vocabulary, and
-/// [`Scribe::load`](crate::Scribe::load) checks the head's width for that reason.
+/// changing. It also means adding an entry invalidates trained weights, as
+/// adding a word invalidates the vocabulary, which is why
+/// [`Scribe::load`](crate::Scribe::load) checks the head's width.
 pub fn shapes() -> &'static [String] {
     static SHAPES: OnceLock<Vec<String>> = OnceLock::new();
     SHAPES.get_or_init(|| {
@@ -59,9 +50,9 @@ pub fn shapes() -> &'static [String] {
 
 /// How many statements the spell head chooses between.
 ///
-/// Every shape plus one: **a line that is a command**, which the prompt's own
-/// reader owns. A spell body is mostly commands, so a head that could not say so
-/// would have to call them all `wait`.
+/// Every shape plus one: a line that is a command, which the prompt's own
+/// reader owns. A spell body is mostly commands, so a head that could not say
+/// so would have to call them all `wait`.
 #[must_use]
 pub fn kinds() -> usize {
     shapes().len() + 1
@@ -91,22 +82,16 @@ pub fn groups() -> &'static [String] {
 
 /// Which tag slot a noun of `kind` is written into, in the spell register.
 ///
-/// # By kind, not by position — and the prompt keeps position
-///
-/// The prompt numbers a slot by where its argument sits in the canonical,
-/// because `move {reagent} {place}` has to know which of two spans is the thing
-/// and which the destination. That was this register's rule too, and it made the
-/// tagger's job contradict itself: a place was slot 0 in `if {place} is idle`
-/// and slot 1 in `let {name} be {place}` — and in every `move` the command class
-/// is taught from. The tagger runs before the class is decided and without it,
-/// so it put both words of *"nook from now on is the alembic"* in slot 0, and
-/// `let` read 25% of its holdout while `pull`, whose one slot is never a place,
-/// read 71%.
+/// By kind, not by position, though the prompt keeps position: `move {reagent}
+/// {place}` has to know which of two spans is the thing. That rule made the
+/// tagger's job contradict itself here, a place being slot 0 in `if {place} is
+/// idle` and slot 1 in `let {name} be {place}`, and the tagger runs before the
+/// class is decided — so `let` read 25% of its holdout while `pull`, whose one
+/// slot is never a place, read 71%.
 ///
 /// No spell shape carries two slots of one kind — a test holds that — so the
-/// kind alone can say which: a place is always 0, a reagent always 1, and a word
-/// of the player's own, a name or a set, always 2. The tagger learns one thing
-/// about a place, everywhere it meets one.
+/// kind alone can say which, and the tagger learns one thing about a place
+/// everywhere it meets one.
 #[must_use]
 pub const fn slot_for(kind: NounKind) -> usize {
     match kind {
@@ -142,19 +127,15 @@ pub fn ordered(class: usize, placed: &[Option<String>]) -> Option<Vec<String>> {
 
 /// The numbers a spell can be told, written out.
 ///
-/// **A count must be *in* the line.** `bide 10` is only ever offered for a line
-/// that says ten — as a digit or as one of these — because inventing a number
-/// for *"hang about a while"* would be **generation**, and nothing in this
-/// feature generates. A line with no number in it is left exactly as written.
+/// A count must be *in* the line. `bide 10` is only offered for a line that
+/// says ten — as a digit or as one of these — because inventing a number for
+/// *"hang about a while"* would be generation, and nothing here generates.
 ///
-/// # `one` is not here, and that is deliberate
-///
-/// It is the number English spends least on counting: *"one at a time"*, *"one
-/// by one"*, *"for every one of the ways"*, *"each one"*. Two of the four
-/// phrasings `for each` is measured on use it that way, and with `one` in this
-/// table [`accounts_for`] demanded a `1` in the reading — so the right answer,
-/// `for each way`, could never pass, and `bide 1` could and did. A count of one
-/// is `bide 1` or `repeat 1`, which a player writes as a digit or not at all.
+/// `one` is absent deliberately, being the number English spends least on
+/// counting: *"one at a time"*, *"for every one of the ways"*. Two of `for
+/// each`'s four measured phrasings use it that way, and with `one` here
+/// [`accounts_for`] demanded a `1` in the reading — so `for each way` could
+/// never pass and `bide 1` could.
 ///
 /// A const table rather than prose, for `Verb::canonical`'s reason: it is
 /// parser vocabulary, not writing.
@@ -199,30 +180,21 @@ pub fn count_in(line: &str) -> Option<u32> {
 /// Words a canonical statement is built out of, which the player need not have
 /// written.
 ///
-/// **The other half of *a count must be in the line*.** A shape's literal words
-/// are grammar the orb supplies — `is`, `has`, `be` — and grammar may be
-/// invented, because *"once the mortar falls quiet"* contains neither `is` nor
-/// `idle` and is still exactly `if mortar_and_pestle is idle`. A literal that is
-/// neither grammar nor a spell word has to appear in the line, or the shape is
-/// not offered.
+/// The other half of *a count must be in the line*. A shape's literal words are
+/// grammar the orb supplies — `is`, `has`, `be` — and grammar may be invented,
+/// because *"once the mortar falls quiet"* contains neither `is` nor `idle` and
+/// is still `if mortar_and_pestle is idle`. A literal that is neither grammar
+/// nor a spell word has to appear in the line.
 ///
-/// # Every name is a slot now
+/// Every name is a slot now. Three shapes carried one as a literal, and this
+/// rule stopped *"name the alembic hammer"* coming back as `let tool be alembic`
+/// — at the price of `tool`, `note` and `way` being the only names those shapes
+/// could offer. It guards the next template that writes a name down.
 ///
-/// Three shapes used to carry a name as a literal — `let tool be {place}`, `pull
-/// note from {place}`, `for each way` — and this rule was what stopped *"name
-/// the alembic hammer"* coming back as `let tool be alembic`. The price was that
-/// `tool`, `note` and `way` were the only names those shapes could ever offer.
-/// The name is a `{name}` slot and the set a `{group}` slot now, filled from the
-/// player's own words, and the rule is left guarding the next template that
-/// writes a name down.
-///
-/// # `satchel` is not here, and was for one measurement
-///
-/// Every satchel in the tower is called [`SATCHEL`](orbs_sim::tower::SATCHEL),
-/// so supplying the word invents no name — but it also removed the only evidence
-/// that a line was about a satchel at all. *"somebody left the clarity out"*
-/// came back `pull clarity from satchel`. The word has to be in the line, as it
-/// is in every phrasing of `pull` the corpus has.
+/// `satchel` was here for one measurement: every satchel is
+/// [`SATCHEL`](orbs_sim::tower::SATCHEL) so the word invents no name, but
+/// supplying it removed the only evidence a line was about a satchel and
+/// *"somebody left the clarity out"* came back `pull clarity from satchel`.
 const GRAMMAR: [&str; 11] = [
     "is", "be", "has", "from", "each", "idle", "empty", "not", "and", "or", "to",
 ];
@@ -242,11 +214,9 @@ const GRAMMAR: [&str; 11] = [
 /// - a candidate that does not stand on its own as a statement, or that drops a
 ///   word carrying meaning (see [`accounts_for`]).
 ///
-/// # It never returns the line back
-///
-/// A reading identical to what was typed is [`None`], not `Some`. The caller
+/// A reading identical to what was typed is [`None`], never `Some`. The caller
 /// stores readings that *differ* — `Reading::was` is what makes a misreading
-/// visible — and a reading that changed nothing would claim one had happened.
+/// visible — and one that changed nothing would claim a reading had happened.
 #[must_use]
 pub fn assemble(class: usize, line: &str, slots: &[String]) -> Option<String> {
     let shape = shape_of(class)?;
@@ -287,20 +257,18 @@ pub fn assemble(class: usize, line: &str, slots: &[String]) -> Option<String> {
 
 /// What a tagged span actually names, with the filler trimmed off its ends.
 ///
-/// **A span is the tagger's, and the tagger is 92% right.** `when nothing at all
-/// is in the alembic` came back with `at alembic` in the slot, which assembles
-/// into `if at alembic is empty` — a line that parses, means nothing, and is not
-/// what anyone wrote. §6's filler list is the parser's own answer to which words
-/// carry no reference, and using it here rather than a second list is the point.
+/// The tagger is 92% right: `when nothing at all is in the alembic` came back
+/// with `at alembic` in the slot, which assembles into `if at alembic is empty`
+/// — a line that parses and means nothing. §6's filler list already answers
+/// which words carry no reference, so it is used rather than a second list.
 ///
 /// [`None`] when nothing but filler was found: a slot the tagger filled with
 /// `the` is a slot it did not fill.
 fn named(span: &str) -> Option<String> {
-    // **A comma is not part of a name, and neither is `'s`.** *"call it hammer,
-    // meaning the alembic"* tags `hammer,`, and *"until the mortar's free"* tags
-    // `mortar's` — binding either would name something no later line could
-    // spell. `unfold` is what every other check in this file reads a line
-    // through, so a span is read the same way.
+    // A comma is not part of a name, and neither is `'s`: *"call it hammer,
+    // meaning the alembic"* tags `hammer,` and *"until the mortar's free"* tags
+    // `mortar's`, and binding either would name something no later line could
+    // spell. Read through `unfold`, as every other check in this file is.
     let unfolded = words_of(span);
     let mut words: Vec<&str> = unfolded.iter().map(String::as_str).collect();
     // A word spent on meaning is trimmed with the filler: the tagger ran *"keep
@@ -313,15 +281,15 @@ fn named(span: &str) -> Option<String> {
     while words.last().is_some_and(loose) {
         words.pop();
     }
-    // **One word, because every name the spell language takes is one.** `let`
-    // binds a single word, a place answers to its leaf, a reagent is hyphenated —
-    // so a span of two is two things the tagger ran together, not a name. Taking
-    // it built `repeat until nook lectern is idle` out of *"let nook refer to the
-    // lectern"*, and `if quill away is idle` out of a `pull`.
+    // One word, because every name the spell language takes is one: `let` binds
+    // a single word, a place answers to its leaf, a reagent is hyphenated. A
+    // span of two is two things the tagger ran together — taking it built
+    // `repeat until nook lectern is idle` out of *"let nook refer to the
+    // lectern"*.
     //
-    // **And never a word the checks count on**, which the trim above is also
-    // what does: *"unless the alembic is free"* came back `let unless be
-    // alembic` — one word, so a name. See `spent`.
+    // And never a word the checks count on, which the trim above also does:
+    // *"unless the alembic is free"* came back `let unless be alembic` — one
+    // word, so a name. See `spent`.
     match words.as_slice() {
         [word] => Some((*word).to_owned()),
         _ => None,
@@ -333,9 +301,8 @@ fn named(span: &str) -> Option<String> {
 /// so is never a name.
 ///
 /// Every one is a word [`accounts_for`] relies on surviving *as itself*. Bound
-/// as a name it survives as a name, the check that wanted it is satisfied, and
-/// what it meant is gone: `unless` became a variable, and the spell stopped
-/// asking anything at all.
+/// as a name it still survives, the check that wanted it is satisfied, and what
+/// it meant is gone: `unless` became a variable and the spell stopped asking.
 fn spent(word: &str) -> bool {
     NEGATIONS.contains(&word)
         || JOINS.contains(&word)
@@ -348,16 +315,13 @@ fn spent(word: &str) -> bool {
 
 /// A set's name, from a span that says it in either number.
 ///
-/// **Closed, unlike a name.** `for each` walks a set the room has, so a span is
-/// offered only when it *is* one of [`groups`] or one of them with an `s` on —
-/// *"work through the ways"* is `for each way`, and `for each ways` would parse
-/// and then find no set at cast. A word that is no set at all is not offered:
-/// `for each hammer` parses too, and walks nothing.
+/// Closed, unlike a name. `for each` walks a set the room has, so a span is
+/// offered only when it is one of [`groups`] or one of them with an `s` on;
+/// `for each ways` and `for each hammer` both parse and then walk nothing.
 ///
-/// **And closed is what lets one be picked out of a longer span**, which a name
-/// cannot be. The tagger ran *"for every one of the bands"* into `one bands`;
-/// exactly one of those words is a set, so that is the set. Any word at all could
-/// be a name, so [`named`] still refuses two.
+/// Closed is also what lets one be picked out of a longer span: the tagger ran
+/// *"for every one of the bands"* into `one bands`, and exactly one of those
+/// words is a set. Any word could be a name, so [`named`] still refuses two.
 fn set_named(span: &str) -> Option<String> {
     let sets: Vec<&String> = words_of(span)
         .iter()
@@ -375,12 +339,11 @@ fn set_named(span: &str) -> Option<String> {
 
 /// The words of `line` the game has no word for.
 ///
-/// **In a spell those are nearly always names.** A word the vocabulary knows can
-/// be spent on choosing a statement or a verb — *"once the mortar falls quiet"*
-/// spends `falls` and `quiet` on `idle` — but a word it does not know arrived as
-/// a hash bucket and gave the reader nothing to choose with. What is left for it
-/// to be is something the player named, which is why a reading that drops one is
-/// suspect. See `Scribe::reading` for what that is used to decide.
+/// In a spell those are nearly always names. A word the vocabulary knows can be
+/// spent on choosing a statement or a verb — *"once the mortar falls quiet"*
+/// spends `falls` and `quiet` on `idle` — but one it does not know arrived as a
+/// hash bucket and gave the reader nothing to choose with, so what is left for
+/// it to be is something the player named. See `Scribe::reading`.
 ///
 /// Filler and numbers are left out: filler is nothing, and a count is
 /// [`accounts_for`]'s business.
@@ -400,42 +363,33 @@ pub fn unknown_words(line: &str, vocabulary: &crate::Vocabulary) -> Vec<String> 
 /// [`holds_a_name`]: ones the game has no word for, that the tagger found as a
 /// name, or that it passed over while finding none.
 ///
-/// # A word the game does not know is a name — unless it is a typo
-///
-/// **Every reading with room for one is held to it, not only a command.** A
-/// statement is built from the tagger's spans, so it was taken to be unable to
-/// drop a name — and it could, whenever the tagger missed one: *"name the alembic bertha"* came
-/// back `if alembic is empty`, *"call the alembic zeph for short"* `repeat until
-/// alembic is idle`. Both parse, both run, and neither binds anything.
+/// Every reading with room for one is held to it, not only a command. A
+/// statement is built from the tagger's spans and so was taken to be unable to
+/// drop a name, but it could whenever the tagger missed one: *"name the alembic
+/// bertha"* came back `if alembic is empty`, which parses, runs and binds
+/// nothing.
 ///
 /// A typo arrives unknown too, and a reading that spends one on choosing its
-/// shape — *"otherwsie"* as `else`, *"teh"* as nothing — has read it, not
-/// dropped it. So a word one slip from a known one may be spent, **unless the
-/// tagger marked it**: *"nook"* is a slip of *"look"*, and in *"let nook refer
-/// to the lectern"* it is the name the tagger found, not a verb misspelt.
+/// shape — *"otherwsie"* as `else` — has read it rather than dropped it. So a
+/// word one slip from a known one may be spent, unless the tagger marked it: in
+/// *"let nook refer to the lectern"*, `nook` is the name it found.
 ///
-/// # Three kinds of unknown word that are never a name
+/// Three kinds of unknown word are never a name, each measured refusing correct
+/// readings in the first retrain:
 ///
-/// Each was measured refusing correct readings in the first retrain:
+/// - A word spent on meaning (see `spent`): *"whenever"* is in no template, so
+///   a reading that made it `if` read it.
+/// - A plural of the game's own word: `areas` reaches the table only as
+///   `{group}s`, so `for each` read 27% of its holdout.
+/// - Two letters, untagged. Nearly every two-letter word is one slip from
+///   another, so `near` cannot judge one, and a two-letter name the player
+///   means is one the tagger marks.
 ///
-/// - **A word spent on meaning** (see `spent`). *"whenever"* is in no template,
-///   so it is unknown — and a reading that made it `if` read it.
-/// - **A plural of the game's own word.** `areas` reaches the table only as
-///   `{group}s`, so it was unknown, and `for each area` was refused for dropping
-///   it: `for each` read 27% of its holdout.
-/// - **Two letters, untagged.** *"abide ye ten ticks"*: nearly every two-letter
-///   word is one slip from another, so `near` cannot judge one, and a two-letter
-///   name the player means is one the tagger marks.
-///
-/// # The tagger's own name decides the words it passed over
-///
-/// A word the tagger skipped is taken for a name only while its slot for one
-/// holds no unknown word. *"nickname the alembic nib"* put `nib` there, so
-/// `nickname` is a verb the game lacks and not a second name; *"take the next
-/// pip out of the satchel"* put `next` there — a word the game has — so `pip`,
-/// which it skipped, is the name it missed. And a span of several words is the
-/// tagger running things together (*"iterate over the bands"* came back
-/// `iterate bands`), so only a span of one word is a name it found.
+/// A word the tagger skipped is a name only while its slot for one holds no
+/// unknown word: *"nickname the alembic nib"* put `nib` there, so `nickname` is
+/// a verb the game lacks; *"take the next pip out of the satchel"* put `next`
+/// there, so the skipped `pip` is the name it missed. A span of several words
+/// is the tagger running things together, so only a span of one is a name.
 #[must_use]
 pub fn names_in(
     line: &str,
@@ -505,12 +459,10 @@ pub fn fills_from_the_line(class: usize) -> bool {
 /// Whether a reading of `class` holds a word of the player's own — a command's
 /// argument, or a shape's `{name}` or `{group}` — and so has a name to drop.
 ///
-/// **A shape with no room for a name is not asked to keep one**, and cannot
-/// pass for a reading of a line that names something either, because it has to
-/// be *said*: an `if` needs a line that asks, a `repeat until` one that loops, a
-/// count its number and unit, `else` and `end` their own words. Holding every
-/// reading to the names cost correct ones — *"once the alembic stops bubbling"*
-/// has an unknown word and no name in it at all.
+/// A shape with no room for a name is not asked to keep one, and cannot pass
+/// for a reading of a line that names something either, because it has to be
+/// *said*. Holding every reading to the names cost correct ones — *"once the
+/// alembic stops bubbling"* has an unknown word and no name in it at all.
 #[must_use]
 pub fn holds_a_name(class: usize) -> bool {
     class == command()
@@ -557,19 +509,17 @@ fn words_of(text: &str) -> Vec<String> {
 
 /// One written word as the words it stands for.
 ///
-/// **A contraction is two words, and one of them can be `not`.** *"isn't"*
-/// matched nothing in the negation rule, so *"when the alembic isn't free"*
-/// dropped its negation silently. A word ending *n't* unfolds to its stem and
-/// `not`; `'s`, `'re`, `'ll`, `'ve`, `'d` and `'m` are dropped, because none of
-/// them is anything a spell can say — and dropping `'s` is also what turns the
-/// span *mortar's* back into the name *mortar*. `_` and `-` are kept inside a
-/// word: `mortar_and_pestle` and `rock-salt` are one name each.
+/// A contraction is two words and one of them can be `not`: *"isn't"* matched
+/// nothing in the negation rule, so *"when the alembic isn't free"* dropped its
+/// negation silently. A word ending *n't* unfolds to its stem and `not`; `'s`,
+/// `'re`, `'ll`, `'ve`, `'d` and `'m` are dropped, none being anything a spell
+/// can say — and dropping `'s` turns *mortar's* back into *mortar*. `_` and `-`
+/// are kept, so `mortar_and_pestle` and `rock-salt` are one name each.
 fn unfold(word: &str) -> Vec<String> {
-    // **The reader's fold, with one difference.** A word ending *n't* is two
-    // words here and one row there: a check counts words, so *"isn't"* has to
-    // leave both `is` and `not` behind, while the reader cannot split a word
-    // without moving every span after it. Everything else is `fold_word`
-    // exactly, so the two cannot disagree about what a word is.
+    // The reader's fold, with one difference: a word ending *n't* is two words
+    // here and one row there, because a check counts words while the reader
+    // cannot split a word without moving every span after it. Everything else
+    // is `fold_word` exactly, so the two cannot disagree about what a word is.
     let lowered = word.replace('\u{2019}', "'").to_lowercase();
     let trimmed = lowered
         .trim_matches(|ch: char| !ch.is_alphanumeric() && ch != '\'')
@@ -591,66 +541,48 @@ fn unfold(word: &str) -> Vec<String> {
 
 /// Whether `reading` accounts for every word of `line` that carries meaning.
 ///
-/// **The rule a re-parse cannot express**, and the one that stops a plausible
-/// misreading. A dropped `or` clause, a dropped `not`, a commented-out line read
-/// as a command — all three parse perfectly and mean something else. §19 records
-/// four rewriter defects of exactly that shape, each *"fixed by another special
-/// case in the rewriter"* until the rewriter was deleted.
+/// The rule a re-parse cannot express: a dropped `or` clause, a dropped `not`, a
+/// commented-out line read as a command all parse perfectly and mean something
+/// else (§19 records four such defects).
 ///
-/// # Two classes of word, not every word
+/// Two classes of word, not every word — demanding every word survive was tried
+/// and is wrong, since `wait ten ticks` becomes `bide 10`. What is checked is
+/// what silently changes the meaning when lost:
 ///
-/// Demanding that *every* word survive is wrong and was tried: `wait ten ticks`
-/// becomes `bide 10`, and neither `wait` nor `ticks` appears in it — a statement
-/// word is spent on choosing the statement and a unit is spent on nothing. A
-/// rule that strict refuses every correct reading.
+/// - numbers — `ten` must reach the reading as `10`, not `30`.
+/// - joins — `and`, `or`, `but`, `except`: two things where the reading has room
+///   for one, so *"grind the sage and then wait ten ticks"* as `bide 10` runs
+///   the wait with the grind gone.
+/// - comparisons — `until`, `fewer`, `more`, on a condition.
+/// - negations — `not`, `no`, `never`, `unless`, every *n't*. A dropped one
+///   inverts the spell and still parses.
+/// - conditions — `if`, `when`, `whenever`, on a reading that asks nothing: a
+///   command has nowhere to put *when*, so it runs regardless.
+/// - units — a count in ticks is a wait and in times a repeat.
 ///
-/// What it checks instead is the two classes whose loss **silently changes the
-/// meaning**:
+/// Every excuse below was earned by a correct reading the flat rule refused, and
+/// the first version of one by a wrong reading it let through:
 ///
-/// - **numbers** — `ten` must reach the reading as `10`, and must not reach it
-///   as `30`. Checked on every reading.
-/// - **joins** — `and`, `or`, `but`, `except`. Two things where the reading has
-///   room for one: a dropped `or` halves a condition, and *"grind the sage and
-///   then wait ten ticks"* read as `bide 10` runs the wait with the grind gone.
-/// - **comparisons** — `until`, `fewer`, `more`, on a condition.
-/// - **negations** — `not`, `no`, `never`, `unless`, and every *n't*. A dropped
-///   one inverts the spell and still parses.
-/// - **conditions** — `if`, `when`, `whenever` and the rest, on a reading that
-///   asks nothing: a command has nowhere to put *when*, so it runs regardless.
-/// - **units** — a count in ticks is a wait and a count in times a repeat, so
-///   neither may become the other.
+/// - `else` and `end` carry nothing and cannot lose a clause; `bide 10` and
+///   `repeat 3` carry a count and are not excused.
+/// - A command is not held to the joins — *"take the husks out and throw them
+///   away"* is one action in two verbs and the language has no `and` to mean.
+///   It is held to the negations, having no `not` either.
+/// - `else` spends a negation, because it is one: *"and if it isn't"*.
+/// - A negation of an opposite: *"not busy"* is `idle`. The first version
+///   excused any negation whose next word the reading lacked and let *"not
+///   free"* through — a synonym, not an antonym — so only a word listed in
+///   `OPPOSITES` for the asserted state excuses one.
 ///
-/// # Where each is excused, and why each excuse is narrow
-///
-/// Every excuse here was earned by a correct reading the flat rule refused, and
-/// the first version of one was earned by a wrong reading it let through.
-///
-/// - **`else` and `end` cannot lose a clause**, because they carry nothing:
-///   *"or else"* and *"and that is that"* spend their connective on nothing.
-///   `bide 10` and `repeat 3` carry a count and are *not* excused — a join into
-///   one of those is a second thing dropped.
-/// - **A command is not held to the joins.** *"take the husks out and throw them
-///   away"* is `discard husks`, one action in two verbs, and the command language
-///   has no `and` for the word to have meant. It *is* held to the negations:
-///   it has no `not` either, so *"never grind the sage"* is not a command.
-/// - **`else` spends a negation**, because it is one: *"and if it isn't"*.
-/// - **A negation of an opposite.** *"not busy"* **is** `idle`. The first version
-///   excused any negation whose next word the reading lacked, and let *"not
-///   free"* through as `idle` — a synonym, not an antonym. Now only a word listed
-///   as the opposite of the state the reading asserts excuses one; see
-///   `OPPOSITES`.
-///
-/// A *span* is never dropped, because the assembler builds the line from the
-/// spans the tagger marked and the grammar list stops one being invented. A
-/// shape further down the ranking can have no slot for a noun the line says,
-/// though, so a thing the tower has — a substance or a place — and a verb's
-/// own word are checked: see the body.
+/// A span is never dropped, the assembler building the line from the tagger's
+/// spans. A shape further down the ranking can have no slot for a noun the line
+/// says, though, so a thing the tower has and a verb's own word are checked.
 #[must_use]
 pub fn accounts_for(line: &str, reading: &str) -> bool {
-    // **`till` and `til` are `until`**, as it is written in a hurry. Counted as
-    // themselves they were no comparison at all, so *"keep at it till the
-    // alembic is free"* could lose its bound unremarked — and counted as
-    // themselves but *listed*, the right reading, `repeat until`, would lose.
+    // `till` and `til` are `until` written in a hurry. Counted as themselves
+    // they were no comparison at all, so *"keep at it till the alembic is
+    // free"* could lose its bound unremarked — and counted as themselves but
+    // listed, the right reading, `repeat until`, would lose.
     let said: Vec<String> = words_of(line)
         .into_iter()
         .map(|word| match word.as_str() {
@@ -674,36 +606,34 @@ pub fn accounts_for(line: &str, reading: &str) -> bool {
     // spend a connective on nothing at all — *"or else"*, *"and that is that"*.
     let bare = statement.is_some() && kept.len() == 1;
 
-    // **A join, on anything that carries something.** Not only a condition:
-    // *"grind the sage and then wait ten ticks"* became `bide 10`, a count with
-    // no condition in it, and ran the wait with the grind gone. A command is the
-    // exception, because *"take the husks out and throw them away"* is one
-    // action phrased with two verbs and the command language has no `and`.
+    // A join, on anything that carries something — not only a condition:
+    // *"grind the sage and then wait ten ticks"* became `bide 10` and ran the
+    // wait with the grind gone. A command is the exception, having no `and` for
+    // *"take the husks out and throw them away"* to have meant.
     if statement.is_some() && !bare && dropped(&JOINS) {
         return false;
     }
     if has_a_condition(reading, &kept) && dropped(&COMPARISONS) {
         return false;
     }
-    // **A negation, everywhere but `else`** — which *is* a negation, so
-    // *"and if it isn't"* spends its `not` on choosing the shape.
+    // A negation, everywhere but `else` — which *is* a negation, so *"and if it
+    // isn't"* spends its `not` on choosing the shape.
     if statement != Some(SpellWord::Else) && !negations_kept(&said, &kept, statement.is_some()) {
         return false;
     }
-    // **A condition, on anything that does not ask one** — except `else`, which
+    // A condition, on anything that does not ask one — except `else`, which
     // spends one on choosing its shape as it spends a negation: *"if that
-    // fails"*. A command, a count or a binding has nowhere to put *when*, so a
-    // reading of that shape runs regardless: *"whenever the alembic has sage"*
-    // came back `distil sage`, and *"after the alembic has finished its work"*
-    // `wield alembic`. See `conditional` for where each word counts.
+    // fails"*. A command, a count or a binding has nowhere to put *when*, so it
+    // runs regardless: *"whenever the alembic has sage"* came back `distil
+    // sage`. See `conditional` for where each word counts.
     if !asks(reading) && statement != Some(SpellWord::Else) && conditional(line) {
         return false;
     }
-    // **A loop is said, never supplied.** `until` is a spell word, so the
-    // assembler may write it whether or not the line has it — and *"after the
-    // alembic has finished its work"* came back `repeat until alembic is idle`,
-    // a loop where the line asked once. Every phrasing the corpus teaches for it
-    // says `until` or `while`, and *"as long as"* is `while` in three words.
+    // A loop is said, never supplied. `until` is a spell word, so the assembler
+    // may write it whether or not the line has it — and *"after the alembic has
+    // finished its work"* came back `repeat until alembic is idle`, a loop
+    // where the line asked once. Every phrasing the corpus teaches says `until`
+    // or `while`, and *"as long as"* is `while` in three words.
     let inverts = said.iter().any(|word| word == "while" || word == "whilst")
         || said
             .windows(2)
@@ -712,20 +642,18 @@ pub fn accounts_for(line: &str, reading: &str) -> bool {
     if asks(reading) && statement == Some(SpellWord::Repeat) && !loops {
         return false;
     }
-    // **A condition is said, never supplied**, for the same reason: `if` is a
-    // spell word the assembler may write whatever the line says. Lines that
-    // name something came back as conditions — *"name the alembic bertha"* as
-    // `if alembic is empty`, *"pull out ozzy from the satchel"* as `if ozzy is
-    // empty` — and every one of them asks nothing.
+    // A condition is said, never supplied, for the same reason: `if` is a spell
+    // word the assembler may write whatever the line says. Lines that name
+    // something came back as conditions — *"name the alembic bertha"* as `if
+    // alembic is empty` — and every one of them asks nothing.
     if statement == Some(SpellWord::If) && !conditional(line) {
         return false;
     }
-    // **A statement leaves no command behind.** *"when the alembic is idle,
-    // grind the sage"* is two statements, and `if alembic is idle` is the first
-    // with the grind gone. A verb's own word that the statement is never taught
-    // with is a second thing where the reading has room for one — while
-    // *"hold for ten ticks"* spends `hold` on `bide`, which is how it is taught.
-    // `else` and `end` too: *"never grind the sage"* is no `else`.
+    // A statement leaves no command behind: *"when the alembic is idle, grind
+    // the sage"* is two statements, and `if alembic is idle` is the first with
+    // the grind gone. A verb's own word the statement is never taught with is a
+    // second thing where the reading has room for one — while *"hold for ten
+    // ticks"* spends `hold` on `bide`, which is how it is taught.
     if let Some(opens) = statement
         && said.iter().enumerate().any(|(at, word)| {
             Verb::ALL
@@ -738,12 +666,11 @@ pub fn accounts_for(line: &str, reading: &str) -> bool {
     {
         return false;
     }
-    // **A statement drops nothing the tower has** — no substance the content
-    // names, no place the tower raises. A shape further down the ranking can
-    // have no slot for one: *"when the alembic has a bit of sage"* came back `if
-    // alembic is idle` — the tagger missed the sage, `if {place} has {reagent}`
-    // could not be built, and the next shape could. A shape with no slot at all
-    // has room for none: `stop alembic`, a canonical command, came back `end`.
+    // A statement drops nothing the tower has. A shape further down the ranking
+    // can have no slot for one: *"when the alembic has a bit of sage"* came
+    // back `if alembic is idle` — the tagger missed the sage, `if {place} has
+    // {reagent}` could not be built, and the next shape could. A shape with no
+    // slot has room for none: `stop alembic` came back `end`.
     if statement.is_some()
         && said
             .iter()
@@ -751,19 +678,18 @@ pub fn accounts_for(line: &str, reading: &str) -> bool {
     {
         return false;
     }
-    // **An opposite said outright is the reading inverted.** *"loop while the
+    // An opposite said outright is the reading inverted: *"loop while the
     // alembic is busy"* came back `if alembic is idle`, with no negation to drop
     // and so nothing above to notice. A loop's `while` is the exception, since
-    // it inverts: *"keep at it while the alembic is busy"* is `repeat until
-    // alembic is idle`, and taught so.
+    // it inverts — and is taught so.
     if statement.is_some()
         && !(statement == Some(SpellWord::Repeat) && inverts)
         && contradicted(&said, &kept)
     {
         return false;
     }
-    // **A count keeps its unit.** *"hang on 5 ticks"* came back `repeat 5`: the
-    // number reached the reading and the ticks it was counting did not.
+    // A count keeps its unit. *"hang on 5 ticks"* came back `repeat 5`: the
+    // number reached the reading and the ticks it counted did not.
     let counts_in = |units: &[&str]| said.iter().any(|word| units.contains(&word.as_str()));
     match statement {
         Some(SpellWord::Repeat) if !asks(reading) && counts_in(&TICKS) => return false,
@@ -779,13 +705,11 @@ pub fn accounts_for(line: &str, reading: &str) -> bool {
 
 /// Words that mean the opposite of a state a condition asks about.
 ///
-/// **What makes *"not busy"* `idle` and *"not free"* not.** The first version of
-/// the negation rule excused any negation whose next word was missing from the
-/// reading, on the argument that the reading must have answered it with an
-/// antonym. It was answering with a *synonym* just as often: *"when the alembic
-/// isn't free"* became `if alembic is idle` and the spell ran on exactly the
-/// ticks it was written to skip. A negation is excused only for a word listed
-/// here as the opposite of the state the reading asserts.
+/// What makes *"not busy"* `idle` and *"not free"* not. The first version
+/// excused any negation whose next word was missing from the reading, arguing
+/// that the reading had answered it with an antonym; it was answering with a
+/// *synonym* just as often, so *"when the alembic isn't free"* became `if
+/// alembic is idle` and ran on exactly the ticks it was written to skip.
 ///
 /// A const table rather than prose, for `NUMBERS`' reason: it is parser
 /// vocabulary, not writing.
@@ -894,23 +818,22 @@ const NOTHING_SAID: [&str; 8] = ["is", "are", "so", "there", "here", "we", "now"
 
 /// Whether `line` makes something depend on the tower.
 ///
-/// **Where each word stands is the whole of this**, because every one of them
-/// has an ordinary use that asks nothing. *"if you would"* is manners and *"a
-/// while"* a length of time; `once`, `after` and `should` ask only where they
-/// open a clause — *"once the alembic is free"*, *"should sage lie within"* —
-/// and are an adverb, a preposition and a modal everywhere else: *"sample
-/// once"*, *"one socket after another"*, *"the alembic should stop"*, all of
-/// them lines the corpus teaches as commands. The rest ask wherever they stand.
+/// Where each word stands is the whole of this, every one of them having an
+/// ordinary use that asks nothing. *"if you would"* is manners and *"a while"*
+/// a length of time; `once`, `after` and `should` ask only where they open a
+/// clause, being an adverb, a preposition and a modal everywhere else —
+/// *"sample once"*, *"one socket after another"*, *"the alembic should stop"*,
+/// all lines the corpus teaches as commands. The rest ask wherever they stand.
 fn conditional(line: &str) -> bool {
     let raw: Vec<&str> = line.split_whitespace().collect();
     let words: Vec<String> = raw
         .iter()
         .map(|word| crate::vocabulary::fold_word(word))
         .collect();
-    // **A question about the tower asks**, whatever follows it: *"does the
-    // alembic have sage? then"* came back `distil sage`. The openers of a yes-or-no
-    // question only — *"could you grind the sage"* is a request, and *"have nook
-    // be the alembic"* an order, so neither `could` nor `have` is one.
+    // A question about the tower asks, whatever follows it: *"does the alembic
+    // have sage? then"* came back `distil sage`. Yes-or-no openers only —
+    // *"could you grind the sage"* is a request and *"have nook be the
+    // alembic"* an order, so neither `could` nor `have` is one.
     if words.first().is_some_and(|word| {
         matches!(
             word.as_str(),
@@ -928,10 +851,10 @@ fn conditional(line: &str) -> bool {
             || raw[at - 1].ends_with([',', ';', ':'])
             || before.is_some_and(|word| JOINS.contains(&word) || word == "then");
         match (word.as_str(), after) {
-            // **Openers the corpus teaches as phrases**, where no one word
-            // asks: *"the moment the alembic is empty"* came back `empty
-            // alembic`, the condition gone and the `empty` kept. `the second`
-            // only where it opens, since elsewhere it counts things.
+            // Openers the corpus teaches as phrases, where no one word asks:
+            // *"the moment the alembic is empty"* came back `empty alembic`,
+            // the condition gone and the `empty` kept. `the second` only where
+            // it opens, since elsewhere it counts things.
             ("as", Some("soon" | "long")) | ("the", Some("moment" | "instant" | "minute")) => true,
             ("the", Some("second")) => opens,
             ("in", Some("the")) if words.get(at + 2).map(String::as_str) == Some("event") => opens,
@@ -963,10 +886,10 @@ fn contradicted(said: &[String], kept: &[String]) -> bool {
 
 /// Whether a negation stands before `said[at]`, reached past `PAST`.
 ///
-/// **`nothing` and its kin count here**, and not in `NEGATIONS`: *"nothing
-/// running"* is not running, but *"the flask has nothing left"* spends its
-/// `nothing` on `empty` — so they excuse a state without being owed by one.
-/// So does a word that ends what follows it: *"stopped working"* is idle.
+/// `nothing` and its kin count here and not in `NEGATIONS`: *"nothing running"*
+/// is not running, but *"the flask has nothing left"* spends its `nothing` on
+/// `empty`, so they excuse a state without being owed by one. So does a word
+/// that ends what follows it: *"stopped working"* is idle.
 fn negated(said: &[String], at: usize) -> bool {
     said[..at]
         .iter()
@@ -1071,12 +994,11 @@ fn asks(reading: &str) -> bool {
 
 /// Whether `line` says the slotless `shape` — `else` or `end`.
 ///
-/// **They assemble out of any line at all**, having no slot and no count, so
-/// the head ranking one first was the only evidence there was: *"do it a few
-/// times"* came back `else`. The line has to say it now — a word beginning as
-/// one of the stems below, so that *"otherwsie"* and *"endeth"* still count —
-/// or, for `end`, nothing at all but filler: *"that's it"* and *"and that's
-/// that"* have nothing in them to run.
+/// They assemble out of any line at all, having no slot and no count, so the
+/// head ranking one first was the only evidence there was and *"do it a few
+/// times"* came back `else`. The line has to say it now — a word beginning with
+/// one of the stems below, so *"otherwsie"* and *"endeth"* still count — or,
+/// for `end`, nothing but filler, *"that's it"* having nothing in it to run.
 ///
 /// `every_phrasing_of_a_slotless_shape_says_it` holds `spellings.toml` to this.
 fn said_by(shape: &str, line: &str) -> bool {
@@ -1143,8 +1065,8 @@ mod tests {
         assert_eq!(count_in("wait ten ticks"), Some(10));
         assert_eq!(count_in("bide 30"), Some(30));
         assert_eq!(count_in("do that three times"), Some(3));
-        // **The one that matters.** No number, no reading — a `bide` assembled
-        // here would be a number the player never said.
+        // No number, no reading — a `bide` assembled here would be a number the
+        // player never said.
         assert_eq!(count_in("hang about a while"), None);
         assert_eq!(count_in("wait a bit"), None);
         assert_eq!(assemble(class("bide 10"), "hang about a while", &[]), None);
@@ -1184,7 +1106,7 @@ mod tests {
 
     #[test]
     fn a_name_is_whatever_word_the_player_chose() {
-        // **Any word, not only `tool`.** The shape used to carry `tool` as a
+        // Any word, not only `tool`: the shape used to carry `tool` as a
         // literal, so *"name the alembic hammer"* could only be refused.
         let named = |line: &str, slots: &[&str]| {
             let slots: Vec<String> = slots.iter().map(|slot| (*slot).to_owned()).collect();
@@ -1223,9 +1145,9 @@ mod tests {
 
     #[test]
     fn every_shape_reads_its_slots_by_kind_and_never_two_from_one() {
-        // **What makes numbering by kind possible at all.** A shape with two
-        // places would need two place slots, and the kind could no longer say
-        // which is which — the day one is written, this is what says so.
+        // What makes numbering by kind possible: a shape with two places would
+        // need two place slots, and the kind could no longer say which is
+        // which. The day one is written, this says so.
         for shape in shapes() {
             let slots: Vec<usize> = shape
                 .split_whitespace()
@@ -1346,10 +1268,10 @@ mod tests {
 
     #[test]
     fn the_gate_lets_a_loose_line_through_and_keeps_a_statement_out() {
-        // **`Scribe`'s first gate, from both sides.** It leaves alone anything
+        // `Scribe`'s first gate, from both sides. It leaves alone anything
         // `spell::reads_cleanly` accepts, and `content/spellings.toml` is
-        // authored so that no phrasing in it is such a line —
-        // `a_spelling_is_never_a_line_the_language_already_reads` holds that end.
+        // authored so no phrasing in it is such a line —
+        // `a_spelling_is_never_a_line_the_language_already_reads` holds that.
         for loose in [
             "when the alembic is free",
             "once the alembic has finished",
@@ -1402,10 +1324,10 @@ mod tests {
 
     #[test]
     fn a_negation_answered_by_an_antonym_is_accounted_for() {
-        // **The exemption, and it is not a loophole.** *"not busy"* is what the
-        // language spells `idle`, and the `not` is spent on a word the reading
-        // does not contain — which is exactly what separates it from the
-        // inversion above, where the negated word comes straight through.
+        // The exemption, and not a loophole: *"not busy"* is what the language
+        // spells `idle`, and the `not` is spent on a word the reading does not
+        // contain — unlike the inversion above, where the negated word comes
+        // straight through.
         assert!(accounts_for(
             "if the alembic is not busy",
             "if alembic is idle",
@@ -1521,10 +1443,10 @@ mod tests {
 
     #[test]
     fn every_phrasing_the_corpus_teaches_is_accounted_for_by_its_own_reading() {
-        // **Every rule here is a claim about how spells are written**, so the
-        // corpus is what they are held to. A phrasing its own canonical does not
-        // account for is one the reader is taught to answer and then forbidden
-        // to: the rules and the corpus disagree, and one of them is wrong.
+        // Every rule here is a claim about how spells are written, so the
+        // corpus is what they are held to. A phrasing its own canonical does
+        // not account for is one the reader is taught to answer and then
+        // forbidden to, so one of the two is wrong.
         let spellings = Phrasings::spellings();
         let scene = orbs_sim::content::corpus_scene();
         let refused: Vec<String> = spellings
@@ -1664,7 +1586,7 @@ mod tests {
 
     #[test]
     fn every_phrasing_of_a_slotless_shape_says_it() {
-        // **The table is a claim about the corpus**, so the corpus is what it is
+        // The table is a claim about the corpus, so the corpus is what it is
         // held to: a phrasing of `else` or `end` the rule would refuse is one
         // the reader is taught and then never allowed to answer.
         for entry in Phrasings::spellings()
@@ -1793,9 +1715,9 @@ mod tests {
 
     #[test]
     fn every_shape_assembles_into_something_that_reads_cleanly() {
-        // **The whole file, not a sample.** A template whose canonical the spell
-        // language cannot parse would be a class the assembler can never emit,
-        // and nothing else would say so.
+        // The whole file, not a sample: a template whose canonical the spell
+        // language cannot parse is a class the assembler can never emit, and
+        // nothing else would say so.
         for (at, shape) in shapes().iter().enumerate() {
             let slots: Vec<String> = shape
                 .split_whitespace()

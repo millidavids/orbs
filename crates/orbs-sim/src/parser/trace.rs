@@ -1,24 +1,22 @@
 //! Instrumentation — what the Phase 0 gate actually measures.
 //!
-//! DESIGN.md §6: *"Every resolution reproducible — full input, resolution, and
-//! candidate scores logged and exportable."* §15 sets the bar this feeds:
+//! §6: *"Every resolution reproducible — full input, resolution, and candidate
+//! scores logged and exportable."* §15 sets the bar this feeds:
 //!
-//! > ≥ 85% of inputs resolve to the intended action on first attempt, **and**
-//! > ≥ 95% of initially-unresolved inputs reach the intended action within two
-//! > further attempts, with zero dead ends.
+//! > ≥ 85% of inputs resolve to the intended action on first attempt, and ≥ 95%
+//! > of initially-unresolved inputs reach the intended action within two further
+//! > attempts, with zero dead ends.
 //! >
 //! > Act on the per-input failure *clustering*, not the aggregate.
 //!
-//! Clustering is why every candidate is kept and not just the winner: a miss
-//! caused by an unknown verb and a miss caused by an argument that did not exist
-//! look identical in an aggregate and need opposite fixes.
+//! Clustering is why every candidate is kept rather than the winner alone: a
+//! miss from an unknown verb and one from an argument that did not exist look
+//! identical in an aggregate and need opposite fixes.
 //!
-//! # Why TSV
-//!
-//! The consumer is a spreadsheet or a five-line script, run once per playtest by
-//! one person. TSV needs no dependency, survives `grep`, and pastes into
-//! anything. Records carry no timing — wall-clock in a sim record would make two
-//! runs of the same seed differ.
+//! TSV because the consumer is a spreadsheet or a five-line script, run once per
+//! playtest: no dependency, survives `grep`, pastes into anything. Records carry
+//! no timing, since wall-clock in a sim record would make two runs of the same
+//! seed differ.
 
 use core::fmt::Write as _;
 
@@ -69,11 +67,10 @@ pub struct ParseRecord {
     pub outcome: Outcome,
     /// Whether the augury worked this reading out rather than the orb reading it.
     ///
-    /// **A column of its own, because [`outcome`](Self::outcome) cannot carry
-    /// it.** `Divined` and `Forced` share the `≈` marker deliberately — one
-    /// fact, one glyph, for the player — but *which readings the model decided*
-    /// is the whole question a session gets sifted for, and it would be
-    /// invisible in the export otherwise.
+    /// A column of its own, because [`outcome`](Self::outcome) cannot carry it:
+    /// `Divined` and `Forced` share the `≈` marker deliberately — one fact, one
+    /// glyph — but *which readings the model decided* is the question a session
+    /// gets sifted for, and would be invisible in the export otherwise.
     pub divined: bool,
     /// The canonical echo, if a command was chosen.
     pub echo: Option<String>,
@@ -345,7 +342,7 @@ mod tests {
         // it takes `NounKind::Any`, required, so a bare one enumerates every
         // noun in the room.
         //
-        // **It was a bare `brew`**, which is a `recall` synonym — and `recall`'s
+        // It was a bare `brew`, which is a `recall` synonym — and `recall`'s
         // slot became optional so that `help` would list the vocabulary instead
         // of asking a lost player to pick between four arbitrary subjects (§19,
         // `TOPIC_OPTIONAL`). A bare `brew` now resolves at 1000, which is right
@@ -422,7 +419,7 @@ mod tests {
         let mut log = ParseLog::new();
         log.push(ParseRecord::new(0, input, Mode::Calm, &analysis));
 
-        // **Every row has the header's shape**, which is the property — not the
+        // Every row has the header's shape, which is the property — not the
         // number of rows. Counting them made this a test of how many candidates
         // the parser happened to find, so it broke the day a verb stopped taking
         // an argument and could complete on its own.

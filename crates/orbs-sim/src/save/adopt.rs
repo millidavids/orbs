@@ -23,10 +23,9 @@ use crate::tower::{self, Maze, Stock, Ward, spell};
 
 /// Put one node's components on, and take off anything the save says is absent.
 ///
-/// **Both directions matter.** A raised athanor is cold and a saved one may be
-/// burning; a raised log is clean and a saved one may be poisoned — but equally,
-/// a log the player `purge`d is clean in the save and would stay poisoned if
-/// this only ever inserted.
+/// Both directions matter: a raised athanor is cold and a saved one may be
+/// burning, and equally a log the player `purge`d is clean in the save and would
+/// stay poisoned if this only ever inserted.
 pub(super) fn apply(world: &mut World, entity: Entity, node: &NodeSave) {
     marker(world, entity, node.protected, tower::Protected);
     marker(world, entity, node.fixture, tower::Fixture);
@@ -38,9 +37,9 @@ pub(super) fn apply(world: &mut World, entity: Entity, node: &NodeSave) {
     marker(world, entity, node.poisoned, tower::Poisoned);
     marker(world, entity, node.log, tower::Log);
 
-    // **Removed then re-inserted, like every carried non-marker below.** A
-    // fixture that stopped being one of a set between two builds must lose the
-    // component, or a `for each` would walk a member the tower no longer groups.
+    // Removed then re-inserted, like every carried non-marker below: a fixture
+    // that stopped being one of a set between two builds must lose the
+    // component, or a `for each` walks a member the tower no longer groups.
     let mut at = world.entity_mut(entity);
     at.remove::<tower::Grouped>();
     if !node.group.is_empty() {
@@ -78,14 +77,11 @@ pub(super) fn apply(world: &mut World, entity: Entity, node: &NodeSave) {
             Stock::Counted(stock.parse().unwrap_or(1))
         });
     }
-    // **A reading goes back only on a line that still says what was read** —
-    // see `ReadSave` — and every other line is its own reading. So a save that
-    // predates readings, or had a line of `held` edited by hand, compiles that
-    // text as written rather than whatever used to stand in its place.
-    //
-    // **And nobody's, until a reader takes one** (`Read::by`). The lines compile
-    // exactly as they did before the save; the first write after a load reads
-    // them again with whatever reader is in hand now.
+    // A reading goes back only on a line that still says what was read
+    // (`ReadSave`), and every other line is its own reading — so a save that
+    // predates readings compiles that text as written. And nobody's until a
+    // reader takes one (`Read::by`): the first write after a load reads the
+    // lines again with whatever reader is in hand now.
     let readings = node.read.as_deref().unwrap_or_default();
     let reading_of = |lines: &[String]| {
         let read = lines
@@ -139,10 +135,9 @@ pub(super) fn apply(world: &mut World, entity: Entity, node: &NodeSave) {
             ticks: quick.ends.saturating_sub(quick.started),
         });
     }
-    // **A word the build no longer knows is dropped, not guessed.** `from_word`
-    // is exact, so a charm renamed between versions lapses rather than loading
-    // as whichever variant happened to sit nearest — which is the silent-wrong
-    // outcome the format guard exists to refuse in the large.
+    // A word the build no longer knows is dropped, not guessed: `from_word` is
+    // exact, so a charm renamed between versions lapses rather than loading as
+    // whichever variant sat nearest.
     let charms: Vec<tower::Charm> = node
         .charms
         .iter()
@@ -169,17 +164,16 @@ pub(super) fn apply(world: &mut World, entity: Entity, node: &NodeSave) {
     if let Some(ward) = node.ward.as_ref() {
         at.insert(Ward::from_save(ward));
     }
-    // **`None` raises no course at all**, which is the graceful end of a
-    // malformed one: the player walks into a sanctum they can `muster` in
-    // rather than one jammed on a course that can never finish. See
-    // `Course::from_save` for the four ways it says no.
+    // `None` raises no course at all, which is the graceful end of a malformed
+    // one: the player walks into a sanctum they can `muster` in rather than one
+    // jammed on a course that can never finish. `Course::from_save` has the
+    // four ways it says no.
     if let Some(course) = node.course.as_ref().and_then(tower::Course::from_save) {
         at.insert(course);
     }
-    // **The menagerie's, both directions**, which is the siege's rule below: a
-    // save taken before a beast arrived must *remove* one that is waiting, or
-    // loading it reopens the circle onto a beast the document never heard of.
-    // An unreadable beast raises none, and a circle with no beast is a `summon`
+    // The menagerie's, both directions, which is the siege's rule below: a save
+    // taken before a beast arrived must *remove* one that is waiting. An
+    // unreadable beast raises none, and a circle with no beast is a `summon`
     // away from fine.
     match node
         .beast
@@ -193,15 +187,13 @@ pub(super) fn apply(world: &mut World, entity: Entity, node: &NodeSave) {
             at.remove::<tower::circle::Beast>();
         }
     }
-    // **Straight back on**, with no `from_save` to validate through: a `Siege`
-    // saves as itself, so there is no derived shape that could disagree with the
-    // stored one. `serde` has already refused anything malformed.
+    // Straight back on, with no `from_save` to validate through: a `Siege` saves
+    // as itself, so there is no derived shape to disagree with the stored one.
     //
-    // **Both directions**, which is this function's own rule and which the first
-    // version of this arm broke: `apply` adopts onto the *live* world, so a save
-    // taken before a siege must *remove* one that is running — otherwise loading
-    // it reopens the bailey mid-fight against a siege the document has never
-    // heard of, with a stale `clear_at` gating `defend`.
+    // Both directions, which this arm's first version broke — `apply` adopts
+    // onto the *live* world, so a save taken before a siege must *remove* one
+    // that is running, or loading it reopens the bailey mid-fight with a stale
+    // `clear_at` gating `defend`.
     match node.siege.clone() {
         Some(siege) => {
             at.insert(siege);
@@ -210,10 +202,8 @@ pub(super) fn apply(world: &mut World, entity: Entity, node: &NodeSave) {
             at.remove::<tower::Siege>();
         }
     }
-    // **Both directions**, for the reason the siege above needs them: a save
-    // taken before a lattice was opened must *remove* one that is open, or
-    // loading it would reopen the forge onto a puzzle the document has never
-    // heard of.
+    // Both directions, for the siege's reason above: a save taken before a
+    // lattice was opened must *remove* one that is open.
     match node.binding.clone() {
         Some(binding) => {
             at.insert(binding);
@@ -243,11 +233,10 @@ pub(super) fn apply(world: &mut World, entity: Entity, node: &NodeSave) {
             at.remove::<tower::Retimed>();
         }
     }
-    // **Inserted only when there is something in it**, which mirrors `capture`
-    // writing `None` for an empty one. `raise` has already put a default
-    // `Satchel` on every one of these nodes, so an absent row means *the queue
-    // was empty*, not *this node has no satchel* — overwriting with an empty one
-    // would be the same answer and one more component insert per load.
+    // Inserted only when there is something in it, mirroring `capture` writing
+    // `None` for an empty one. `raise` has already put a default `Satchel` on
+    // every one of these nodes, so an absent row means *the queue was empty*
+    // rather than *this node has no satchel*.
     if let Some(queued) = node.satchel.as_ref() {
         at.insert(tower::Satchel::from_save(queued));
     }
@@ -306,28 +295,19 @@ pub(super) fn references(world: &mut World, save: &Save) {
 
 /// Put one part-way-through spell back.
 ///
-/// # Why the program is re-derived rather than carried
+/// The program is re-derived rather than carried, because the text is the single
+/// source of truth and the program is rebuilt at every cast
+/// (`tower::spell::program`).
 ///
-/// `tower::spell::program` is explicit that the **text is the single source of
-/// truth** and the program is rebuilt at every cast. Carrying a compiled tree in
-/// the save would give a spell two sources of truth that a hand-edited file
-/// could put out of step.
+/// Re-deriving it blind would not be safe, though: `pc` is a path into the tree
+/// the spell was cast against, and both the spell's own text and a reagent's
+/// name can have moved since — editing a spell mid-flight and §8.1's
+/// substitutions are both shipped features. A stale `pc` runs the wrong line, or
+/// `program::at` returns nothing and the run ends with no reason given.
 ///
-/// # ...and why re-deriving it blind would not be safe
-///
-/// `pc` is a *path into the tree the spell was cast against* — `[2, 1]` is the
-/// second step inside the third — and two things can have moved since: the
-/// spell's own text, because editing one mid-flight is a shipped feature, and a
-/// reagent's name, because §8.1's substitution surface is the whole point of the
-/// domain. Walk a stale `pc` into a freshly compiled tree and the orb runs the
-/// wrong line, or `program::at` returns nothing and the run ends with no reason
-/// given.
-///
-/// So the save carries a fingerprint of the text it compiled, and a mismatch
-/// **ends the run and says so** rather than resuming into a program that is not
-/// the one the position belongs to. A spell that is `Bound` will be cast again
-/// on the next tick from the top, which is the correct recovery and needs no
-/// code here at all.
+/// So the save carries a fingerprint of the text it compiled and a mismatch ends
+/// the run and says so. A `Bound` spell is cast again next tick from the top,
+/// which is the correct recovery and needs no code here.
 fn spell(world: &mut World, entity: Entity, node: &NodeSave) {
     {
         let Some(run) = node.running.as_ref() else {
@@ -356,10 +336,10 @@ fn spell(world: &mut World, entity: Entity, node: &NodeSave) {
             return;
         };
 
-        // **The fingerprint above asks about `Held`, this asks about the
-        // reading.** A save records what the player wrote, so a spell that has
-        // moved under a running cast is detected on their text; what it then
-        // compiles is what the orb read of that text.
+        // The fingerprint above asks about `Held`, this asks about the reading:
+        // a save records what the player wrote, so a spell that moved under a
+        // running cast is detected on their text, and what compiles is what the
+        // orb read of it.
         let program = spell::compile(world, spell, &spell::source(world, spell));
         world.entity_mut(entity).insert(spell::Running {
             spell: spell_id,
@@ -371,23 +351,21 @@ fn spell(world: &mut World, entity: Entity, node: &NodeSave) {
             unattended: run.unattended,
             at: at_id,
             waiting_since: run.waiting_since.map(Tick::new),
-            // **Carried, and it was not.** This dropped the count on the
-            // argument that a `bide` resumes by re-reading its delay from the
-            // world — true of `bide until`, and that form no longer exists. A
-            // literal has nothing to re-derive it from, so dropping it sent
-            // `run::bide` down its start arm to stamp a fresh `waiting_since`:
-            // a save taken four ticks into `bide 3600` reloaded into another
-            // whole hour.
+            // Carried, and it was not: dropping it argued a `bide` re-reads its
+            // delay from the world, which was true of the retired `bide until`.
+            // A literal has nothing to re-derive from, so `run::bide` took its
+            // start arm and stamped a fresh `waiting_since` — a save four ticks
+            // into `bide 3600` reloaded into another whole hour.
             biding: run.biding,
             said: run.said.clone(),
             vars: run.vars.clone(),
             part: run.part.clone(),
             stack: descents(&run.stack),
-            // **The flat fields are the first cursor, and `strands` is the rest
-            // of them.** A save written before forking existed has no `strands`
-            // table at all, and neither does any save of an ordinary spell — so
-            // an absent one means *one cursor*, rebuilt from the fields above,
-            // rather than a spell with nowhere to be.
+            // The flat fields are the first cursor and `strands` is the rest: a
+            // save written before forking has no `strands` table, and neither
+            // does any ordinary spell, so an absent one means *one cursor*
+            // rebuilt from the fields above rather than a spell with nowhere to
+            // be.
             strands: if run.strands.is_empty() {
                 vec![spell::Strand {
                     pc: run.pc.clone(),
@@ -439,10 +417,9 @@ pub(super) fn loop_code(open: &spell::Loop) -> i64 {
         spell::Loop::Repeat(Some(turns)) => i64::from(*turns),
         spell::Loop::Repeat(None) => -1,
         spell::Loop::Branch => -2,
-        // **Below the two markers, one step per member.** `-3` is the first,
-        // `-4` the second. A `for each` is the third block shape and the first
-        // to carry a number *and* need a tag, which is why it takes a range
-        // rather than a single value.
+        // Below the two markers, one step per member: `-3` is the first, `-4`
+        // the second. A `for each` is the first block shape to carry a number
+        // *and* need a tag, which is why it takes a range.
         spell::Loop::Each(index) => -3 - i64::from(*index),
     }
 }
@@ -489,10 +466,9 @@ fn loop_from(code: i64) -> spell::Loop {
 
 /// A cheap, stable hash of a spell's text.
 ///
-/// **FNV-1a written out, not `DefaultHasher`.** `RandomState` is seeded per
-/// process, so a fingerprint taken today and compared tomorrow would never
-/// match — the check would fire on every load and quietly stop every running
-/// spell, which is the opposite of what it is for.
+/// FNV-1a written out, not `DefaultHasher`: `RandomState` is seeded per process,
+/// so a fingerprint taken today would never match tomorrow and the check would
+/// fire on every load, stopping every running spell.
 pub(crate) fn fingerprint(lines: &[String]) -> u64 {
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
     for line in lines {

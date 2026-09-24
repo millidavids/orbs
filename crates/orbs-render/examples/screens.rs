@@ -36,10 +36,10 @@ fn main() {
     );
     speak(&boot);
 
-    // **The grid the game draws**, both times. These used to be two different
-    // grids because the focus mode changed the fidelity tier and so the cell
-    // count; §19 fixed the grid, so the pair is now what it always claimed to
-    // be — the same screen divided two ways.
+    // The grid the game draws, both times. These used to be two different grids
+    // because the focus mode changed the fidelity tier and so the cell count;
+    // §19 fixed the grid, so the pair is now what it always claimed to be — the
+    // same screen divided two ways.
     let deep = siege(GRID, DisplayMode::Deep);
     show("Siege — Deep focus, the 120×45 grid", &deep);
 
@@ -57,11 +57,11 @@ fn main() {
     show("Pylon — a course of wards, part hauled (§10)", &course);
     speak(&course);
 
-    // **After the pylon's `speak`, not before it.** Inserted between the two,
-    // the rampart's frame printed and then the *pylon's* utterances followed
-    // under the rampart's heading — reading as the siege's speech — and the
-    // rampart's own `announce` was never spoken at all, so the one §14 gate this
-    // example gives the new surface was not exercised.
+    // After the pylon's `speak`, not before it. Inserted between the two, the
+    // rampart's frame printed and the *pylon's* utterances followed under the
+    // rampart's heading, reading as the siege's speech, while the rampart's own
+    // `announce` went unspoken — so the one §14 gate this example gives the new
+    // surface was not exercised.
     let wall = rampart(GRID);
     show("Rampart — a siege, part fought (§5.1)", &wall);
     speak(&wall);
@@ -99,12 +99,12 @@ fn main() {
     show("The spell editor at the 80×22 floor (§8)", &editor);
     speak(&editor);
 
-    // **48×18 — narrower *and* shorter than this surface will now draw at.** A
-    // tiled session pane is 60 columns since the grid was fixed at 120×45, and
-    // the height is `loom::MIN_ROWS`, below which the real painter refuses
-    // rather than drawing something misleading. Kept at 48 deliberately: it was
-    // the real width and is now a margin, and a surface authored against the
-    // tighter number keeps working when the grid is next revisited.
+    // 48×18 — narrower *and* shorter than this surface will now draw at. A tiled
+    // session pane is 60 columns since the grid was fixed at 120×45, and the
+    // height is `loom::MIN_ROWS`, below which the real painter refuses rather
+    // than drawing something misleading. Kept at 48 deliberately: it was the real
+    // width and is now a margin, so a surface authored against the tighter number
+    // keeps working when the grid is next revisited.
     let weave = weave_screen(GridSize::new(48, 18));
     show(
         "The weave screen at the width a tiled pane gives it (§11.5)",
@@ -126,9 +126,9 @@ fn main() {
             511,
             false,
         ),
-        // The errand a scroll sets. **No `Ω` anywhere in this one**, which is
-        // the whole difference: the walk ends when the five `♦` are gathered,
-        // so a way out would be a mark on screen that nothing answers to.
+        // The errand a scroll sets. No `Ω` anywhere in this one, which is the
+        // whole difference: the walk ends when the five `♦` are gathered, so a
+        // way out would be a mark on screen that nothing answers to.
         ("set to glean — five spoils, and no way out", 120, true),
     ] {
         let map = stacks_screen(GridSize::new(35, 35), walked, gleaning);
@@ -144,16 +144,16 @@ fn main() {
 
 /// One screen leaving and the next arriving — `attend forge`, as text.
 ///
-/// **The only See-it a crossing has that is not a window.** `ORBS_DUMP` is a
-/// still photograph: it builds no `App` and advances no clock, so every frame of
-/// this would sit at progress zero. `ORBS_PASSAGE_AT` poses one frame of it in
-/// the running game's own layout; this poses eight in a row, which is the only
-/// place the *shape* of the motion can be read rather than inferred.
+/// The only See-it a crossing has that is not a window. `ORBS_DUMP` is a still
+/// photograph — it builds no `App` and advances no clock, so every frame of this
+/// would sit at progress zero. `ORBS_PASSAGE_AT` poses one frame in the running
+/// game's own layout; this poses eight in a row, the only place the *shape* of
+/// the motion can be read rather than inferred.
 ///
-/// What to look for: the seam travelling left to right with three cells of
-/// `▓▒░` trailing it, the whole strip empty at the midpoint, and the two ends
-/// being exactly the two screens — that last is the property everything else
-/// rests on, and `passage::tests::the_endpoints_are_identities` holds it.
+/// What to look for: the seam travelling left to right with three cells of `▓▒░`
+/// trailing it, the whole strip empty at the midpoint, and the two ends being
+/// exactly the two screens — that last is what everything else rests on, and
+/// `passage::tests::the_endpoints_are_identities` holds it.
 fn crossing() {
     const STRIP: GridSize = GridSize::new(52, 4);
 
@@ -209,10 +209,10 @@ const LABORATORY: [(&str, &str, &str); 4] = [
 /// The forge's, which is a different shape as well as different words — a
 /// crossing has to look right between two screens that share no column.
 ///
-/// **The glyphs are [`lattice`](orbs_render::lattice)'s own**, and the first
-/// draft's were not: `◇` and `◆` are outside CP437, so `Cell::new` substituted
-/// them and this example printed `???` across the arriving half. Nothing else in
-/// the project would have shown that — which is the thing `screens` is for.
+/// The glyphs are [`lattice`](orbs_render::lattice)'s own, and the first draft's
+/// were not: `◇` and `◆` are outside CP437, so `Cell::new` substituted them and
+/// this example printed `???` across the arriving half. Nothing else in the
+/// project would have shown that — which is what `screens` is for.
 const FORGE: [(&str, &str, &str); 4] = [
     ("apex", "☼·☼", "bound"),
     ("belt", "·☼·", "open"),
@@ -241,11 +241,11 @@ fn strip(frame: &mut Frame, rows: &[(&str, &str, &str)]) {
 
 /// The balneum mariae: a vessel of liquid, rolling as it digests.
 ///
-/// **The only place the roil can be looked at as text.** Every other instrument
+/// The only place the roil can be looked at as text. Every other instrument
 /// carries some of its motion in glyphs, so `ORBS_DUMP` shows it moving; this one
 /// carries *all* of its motion in colour by design — the glyph is `█` at every
-/// fill and every phase — so a dump of it is a solid bar that proves nothing.
-/// Printed as ramp steps, the roil is visible.
+/// fill and every phase — so a dump is a solid bar that proves nothing. Printed
+/// as ramp steps, the roil is visible.
 fn steeping() {
     const ROWS: u16 = 12;
     // Four ticks, which is exactly one beat of the bath's own tempo — long
@@ -337,11 +337,10 @@ fn steeping() {
 
 /// The alembic: the same vessel, boiling hard enough to throw bubbles out of it.
 ///
-/// **The one part of the liquid picture that is a glyph rather than a colour**,
-/// so unlike the roil above it survives a text dump — which is why this section
-/// is short. What it is here for is the *sweep*: a bubble appears above the
-/// face, climbs a cell or three, and goes out, and one still frame cannot show
-/// that.
+/// The one part of the liquid picture that is a glyph rather than a colour, so
+/// unlike the roil above it survives a text dump — which is why this section is
+/// short. What it is here for is the *sweep*: a bubble appears above the face,
+/// climbs a cell or three, and goes out, which one still frame cannot show.
 fn distilling() {
     const ROWS: u16 = 12;
     let tick = 1.0 / orbs_render::FLIP_HZ;
@@ -441,9 +440,9 @@ fn grinding() {
         .collect();
     println!("    {}", heights.join(""));
 
-    // The whole lifecycle. **Four of these five report no meter at all** — the
-    // sim has a quantity only while a run is going — so every one of them was a
-    // blank row before this picture existed.
+    // The whole lifecycle. Four of these five report no meter at all — the sim
+    // has a quantity only while a run is going — so every one was a blank row
+    // before this picture existed.
     //
     // The pour is sampled three times because it is an *edge*: the frame a
     // reagent enters an empty bowl, gone a tick later.
@@ -505,15 +504,13 @@ fn grinding() {
 
 /// The athanor's meter, burning, at several phases.
 ///
-/// **What this can and cannot check.** `orbs-render` has an empty
-/// `[dependencies]` and this example prints text, so it can show neither the
-/// flame ramp's colours nor the assembled instrument panel — `orbs::shell::panel`
-/// is private to the Bevy crate. What it does show is the thing that is
-/// genuinely at risk and that no unit test displays: whether the glyph pattern
-/// reads as *fire* rather than as noise, and whether the `█`/`░` join stays
-/// findable while everything around it moves.
-///
-/// The colours need eyes on a window. See CLAUDE.md's See-it lines.
+/// What this can and cannot check: `orbs-render` has an empty `[dependencies]`
+/// and this example prints text, so it can show neither the flame ramp's colours
+/// nor the assembled instrument panel (`orbs::shell::panel` is private to the
+/// Bevy crate). What it does show is what is genuinely at risk and no unit test
+/// displays — whether the glyph pattern reads as *fire* rather than as noise, and
+/// whether the `█`/`░` join stays findable while everything around it moves. The
+/// colours need eyes on a window; see CLAUDE.md's See-it lines.
 fn burning() {
     // A drained athanor: enough plume to see, enough fire to read.
     const ROWS: u16 = 16;
@@ -524,9 +521,9 @@ fn burning() {
 
     // Vertical, as the side panel draws it (§10.1), two cells wide.
     //
-    // **One tick apart**, so consecutive columns are consecutive frames of the
-    // animation rather than an arbitrary sample of it — that is what makes the
-    // plume's drift and the sparks' rise visible as motion in a still dump.
+    // One tick apart, so consecutive columns are consecutive frames of the
+    // animation rather than an arbitrary sample — which is what makes the plume's
+    // drift and the sparks' rise visible as motion in a still dump.
     let tick = 1.0 / orbs_render::FLIP_HZ;
     let burn = |phase: f32| Burn {
         phase,
@@ -582,13 +579,12 @@ fn burning() {
     // The states the same bar can be in — a running game shows one at a time,
     // and the flare is over in a second.
     //
-    // **Printed twice, as glyphs and as heat, and the heat is the point.** The
-    // flare is *entirely* a colour event: a front of ignition climbing from the
-    // base, with the glyphs deliberately identical throughout so the meter never
-    // misreports fuel. A dump showing only glyphs would print every frame of it
-    // the same and prove nothing, which is worse than not showing it at all.
-    // The digits are the ramp step, `1` coolest to `4` hottest — watch the `1`s
-    // give way from the left, which is the bottom of the bar.
+    // Printed twice, as glyphs and as heat, and the heat is the point: the flare
+    // is *entirely* a colour event, a front of ignition climbing from the base
+    // with the glyphs identical throughout so the meter never misreports fuel. A
+    // dump showing only glyphs would print every frame the same. The digits are
+    // the ramp step, `1` coolest to `4` hottest — watch the `1`s give way from
+    // the left, which is the bottom of the bar.
     println!("\n── kindling: cold, the flare climbing, guttering ──\n");
     println!("    glyphs: █ ▓ fire   ░ ▒ smoke   ∙ ° · sparks");
     println!("    heat:   1..4 ramp step, * spark, . : smoke, space nothing\n");
@@ -611,9 +607,9 @@ fn burning() {
         );
     }
 
-    // **The flare, sampled across its life rather than at one instant.** It is a
-    // front climbing from the base, so a single frame of it says nothing about
-    // whether it climbs — the heat column is where you watch the `1`s give way.
+    // The flare, sampled across its life rather than at one instant: it is a
+    // front climbing from the base, so a single frame says nothing about whether
+    // it climbs — the heat column is where you watch the `1`s give way.
     for fifth in 0..=5u16 {
         let flare = 1.0 - f32::from(fifth) / 5.0;
         show_hearth(
@@ -661,10 +657,10 @@ fn show_hearth(label: &str, done: u32, total: u32, burn: Burn, rows: u16) {
 
 /// The two gauges' colour ramp, printed as its steps.
 ///
-/// **This is the only See-it the ramp has.** Its whole transition is hue — the
-/// glyph is `|` at every step — so `ORBS_DUMP` shows a bar filling and says
-/// nothing at all about the warming. Printed as ramp letters, `A` through `F`,
-/// the red-to-green climb is text a person can check.
+/// The only See-it the ramp has. Its whole transition is hue — the glyph is `|`
+/// at every step — so `ORBS_DUMP` shows a bar filling and says nothing about the
+/// warming. Printed as ramp letters, `A` through `F`, the red-to-green climb is
+/// text a person can check.
 fn gauge_ramp() {
     println!("\n=== The gauges' fill, red through yellow to green (§11.5) ===\n");
     let mut frame = Frame::new(GridSize::new(40, 1));
@@ -696,10 +692,10 @@ fn gauge_ramp() {
 
 /// A depiction as one character, so a text dump can show colour it cannot draw.
 ///
-/// **This is the only See-it there is for the bath's roil.** All of that
-/// instrument's motion is in its colour — the glyph is `█` at every fill and
-/// every phase, by design — so `ORBS_DUMP` shows a solid bar and proves nothing.
-/// Printed as ramp steps, the roil is text.
+/// The only See-it there is for the bath's roil. All of that instrument's motion
+/// is in its colour — the glyph is `█` at every fill and every phase, by design —
+/// so `ORBS_DUMP` shows a solid bar and proves nothing. Printed as ramp steps,
+/// the roil is text.
 const fn depiction_mark(depiction: Depiction) -> char {
     match depiction {
         Depiction::SparkEmber
@@ -716,9 +712,9 @@ const fn depiction_mark(depiction: Depiction) -> char {
         Depiction::LiquidStirred => 'b',
         Depiction::LiquidRolling => 'c',
         Depiction::Sediment => ',',
-        // **The gauge ramp, and this is its only See-it.** Its whole transition
-        // is colour — the glyph is `|` at every step — so a dump shows a bar
-        // that proves nothing. Printed as ramp steps, the warming is text.
+        // The gauge ramp, and this is its only See-it: the whole transition is
+        // colour — the glyph is `|` at every step — so a dump shows a bar that
+        // proves nothing. Printed as ramp steps, the warming is text.
         Depiction::GaugeFaint => 'A',
         Depiction::GaugeLow => 'B',
         Depiction::GaugeMiddle => 'C',
@@ -731,26 +727,21 @@ const fn depiction_mark(depiction: Depiction) -> char {
 
 /// The spell editor, at the size where it is tightest (§8).
 ///
-/// **Hand-built from literals**, like `boot_report` and `siege` beside it: this
+/// Hand-built from literals, like `boot_report` and `siege` beside it: this
 /// example lives in `orbs-render`, whose `[dependencies]` is deliberately empty,
 /// so it cannot reach `orbs`'s editor or `orbs-sim`'s spells. What it checks is
-/// the thing that is genuinely at risk — that a gutter, a border, a filename, a
-/// status line and a caret position all fit in 80 columns with room left for a
-/// spell, and that every one of them **speaks**.
+/// what is genuinely at risk — that a gutter, a border, a filename, a status line
+/// and a caret position all fit in 80 columns with room left for a spell, and
+/// that every one of them *speaks*. The real painter is `orbs_shell::sheet`; if
+/// this layout stops fitting, that one has the same problem.
 ///
-/// The real painter is `orbs_shell::sheet`. If this layout stops fitting, that
-/// one has the same problem.
-///
-/// # What it deliberately does not show is the scribing guide
-///
-/// The guide needs a `Sim` — it lists the verbs of the spell's *domain* — so it
-/// cannot be reached from here at all, and a hand-built replica of it would be a
-/// second opinion about the vocabulary rather than a check on the layout.
-///
-/// It is also **absent at 80×22 in the real editor**, which is the size drawn
-/// here: the guide yields whole below 97 columns rather than cramping itself in.
-/// So this replica is accurate at the one size it draws, and `scripts/tui.sh` is
-/// the gate for the guide.
+/// It deliberately does not show the scribing guide, which needs a `Sim` — it
+/// lists the verbs of the spell's *domain* — so it cannot be reached from here,
+/// and a hand-built replica would be a second opinion about the vocabulary rather
+/// than a check on the layout. The guide is also absent at 80×22 in the real
+/// editor, the size drawn here: it yields whole below 97 columns rather than
+/// cramping itself in. So this replica is accurate at the one size it draws, and
+/// `scripts/tui.sh` is the gate for the guide.
 fn editor_screen(grid: GridSize) -> Frame {
     const GUTTER: u16 = 5;
     let mut frame = Frame::new(grid);
@@ -777,11 +768,10 @@ fn editor_screen(grid: GridSize) -> Frame {
     // The row that must never be blank: §6 forbids a dead end, and this is the
     // game's first modal surface — a player who does not know the words has
     // nowhere else to find them, so in command state this row *is* the whole
-    // interface.
-    // **The editor's real vocabulary**, which this said nothing of for three
-    // versions: `save` and `discard` were never words — the buffer writes itself
-    // out a beat after the typing stops — and `guide` and `interpret` both
-    // arrived without this replica hearing about it.
+    // interface. It carries the editor's real vocabulary, which this said nothing
+    // of for three versions: `save` and `discard` were never words (the buffer
+    // writes itself out a beat after the typing stops) and `guide` and
+    // `interpret` both arrived without this replica hearing about it.
     let status = grid.rows.saturating_sub(2);
     painter.span(
         Pos::new(1, status),
@@ -798,14 +788,13 @@ fn editor_screen(grid: GridSize) -> Frame {
 
 /// The archive's map, drawn by the painter the game actually uses (§10, §19).
 ///
-/// **Not a replica, unlike [`weave_screen`].** The weave screen is drawn in
-/// `orbs`, which this crate cannot reach, so that one is redrawn by hand and can
-/// drift. The maze picture lives *here*, so this calls straight into
-/// [`Painter::stacks`] and cannot disagree with the game about a single
-/// square.
+/// Not a replica, unlike [`weave_screen`]: the weave screen is drawn in `orbs`,
+/// which this crate cannot reach, so that one is redrawn by hand and can drift.
+/// The maze picture lives *here*, so this calls straight into
+/// [`Painter::stacks`] and cannot disagree with the game about a square.
 ///
 /// `walked` is how far along a snake through the grid the reading has gone,
-/// which is enough to exercise every glyph: fog, the two marks, and the way out.
+/// enough to exercise every glyph: fog, the two marks, and the way out.
 /// `gleaning` sets the errand a scroll sets — spoils scattered ahead of the
 /// reading, and no way out at all.
 fn stacks_screen(grid: GridSize, walked: usize, gleaning: bool) -> Frame {
@@ -880,24 +869,23 @@ fn stacks_screen(grid: GridSize, walked: usize, gleaning: bool) -> Frame {
 
 /// The weave screen at the width it actually gets (§11.5).
 ///
-/// **48 columns, not 80.** `DEEP_FOCUS_FLOOR` is 100×28 and panes tile side by
-/// side above it, so the session pane is half the grid — the 80-column floor is
-/// the *widest* single-pane case. Every sentence on this screen is authored
-/// against the number below, and this is the cheapest place to find out when one
-/// stops fitting, because it builds a Frame without a sim.
-///
-/// The real painter is `orbs::shell::loom`. If this stops fitting, so has that.
+/// 48 columns, not 80: `DEEP_FOCUS_FLOOR` is 100×28 and panes tile side by side
+/// above it, so the session pane is half the grid and the 80-column floor is the
+/// *widest* single-pane case. Every sentence on this screen is authored against
+/// the number below, and this is the cheapest place to find out when one stops
+/// fitting, because it builds a Frame without a sim. The real painter is
+/// `orbs::shell::loom`; if this stops fitting, so has that.
 fn weave_screen(grid: GridSize) -> Frame {
     let mut frame = Frame::new(grid);
     let area = Rect::new(0, 0, grid.cols, grid.rows);
     let mut painter = frame.painter(area);
     painter.border(area, Some("weave"), Style::DIM);
 
-    // **Progression runs rightward**, and the screen says so on both tracks:
-    // the bar fills right, the Ley Line runs right, and each room's mastery
-    // line runs right. The bar is measured against the line's last station —
-    // ten thousand, the soft ending — rather than a fixed hundred (§19), and
-    // the label is that wide here so the width left over is the real one.
+    // Progression runs rightward, and the screen says so on both tracks: the bar
+    // fills right, the Ley Line runs right, each room's mastery line runs right.
+    // The bar is measured against the line's last station — ten thousand, the
+    // soft ending — rather than a fixed hundred (§19), and the label is that wide
+    // here so the width left over is the real one.
     let label = "24 of 10000";
     let width = grid
         .cols
@@ -911,10 +899,10 @@ fn weave_screen(grid: GridSize) -> Frame {
     );
     painter.span(Pos::new(width + 2, 1), &Span::new(label));
 
-    // **Both headings, one track drawn.** Seven rooms' lines and a forked Ley
-    // Line do not both fit in eighteen rows beside a details panel, so the word
-    // the player typed decides which draws below; the headings say the other
-    // is there. This replica draws Mastery, the view with the most rows.
+    // Both headings, one track drawn. Seven rooms' lines and a forked Ley Line do
+    // not both fit in eighteen rows beside a details panel, so the word the
+    // player typed decides which draws below; the headings say the other is
+    // there. This replica draws Mastery, the view with the most rows.
     painter.span(
         Pos::new(1, 2),
         &Span::new("ley line").with_style(Style::DIM),
@@ -924,12 +912,12 @@ fn weave_screen(grid: GridSize) -> Frame {
         &Span::new("mastery").with_style(Style::default()),
     );
 
-    // **Seven lines, one per room**: a name, then a run with its stations
-    // standing on it, evenly spaced — a mastery station has no total, so
-    // position means *order* here where on the Ley Line it means cost. `[•]`
-    // reached, `[○]` the one being worked toward, `[·]` further along, and
-    // `«»` around the aimed one, Bright as well: the frame survives greyscale,
-    // the brightness is what the eye finds first.
+    // Seven lines, one per room: a name, then a run with its stations standing on
+    // it, evenly spaced — a mastery station has no total, so position means
+    // *order* here where on the Ley Line it means cost. `[•]` reached, `[○]` the
+    // one being worked toward, `[·]` further along, and `«»` around the aimed
+    // one, Bright as well: the frame survives greyscale, and the brightness is
+    // what the eye finds first.
     let rooms: [(&str, usize, usize); 7] = [
         ("laboratory", 6, 1),
         ("archive", 5, 0),
@@ -963,11 +951,10 @@ fn weave_screen(grid: GridSize) -> Frame {
             painter.glyphs(Pos::new(x - 1, y), open, Style::DIM);
             painter.glyphs(Pos::new(x, y), glyph, Style::default());
             painter.glyphs(Pos::new(x + 1, y), close, Style::DIM);
-            // **The glyph is drawn silently and the state is said as words**,
-            // which is the §14 property this screen exists to check:
-            // `Painter::span` would push `•` itself into the stream and tell a
-            // listener nothing. The real painter does exactly this — see
-            // `loom::station`.
+            // The glyph is drawn silently and the state is said as words, which
+            // is the §14 property this screen exists to check: `Painter::span`
+            // would push `•` itself into the stream and tell a listener nothing.
+            // The real painter does exactly this — see `loom::station`.
             painter.announce(
                 UtteranceKind::TableRow,
                 Role::Normal,
@@ -976,10 +963,10 @@ fn weave_screen(grid: GridSize) -> Frame {
         }
     }
 
-    // **The details panel**, bottom right: the aimed station's deed as a
-    // sentence, how much of it is done, where it stands, and what reaching it
-    // opens — which is what makes a line worth walking. Every line is authored
-    // to 28 cells, the panel's width inside its border.
+    // The details panel, bottom right: the aimed station's deed as a sentence,
+    // how much of it is done, where it stands, and what reaching it opens — which
+    // is what makes a line worth walking. Every line is authored to 28 cells, the
+    // panel's width inside its border.
     let panel = Rect::new(
         grid.cols.saturating_sub(31),
         grid.rows.saturating_sub(7),
@@ -1023,23 +1010,21 @@ fn weave_screen(grid: GridSize) -> Frame {
 /// DESIGN.md §15 asks for *"tier 2 at minimum supported window, four panes,
 /// siege in progress, peak-threat CRT, eldritch active, tester must spot a
 /// single-character sabotage tell"* — and, in the same breath, for the item to
-/// **establish the minimum window at which tier 2 is offered**.
+/// establish the minimum window at which tier 2 is offered.
 ///
-/// **The question changed with §19's fixed grid and the answer is now easier.**
-/// There are no tiers: the grid is [`GRID`] on every window, so the worst case
-/// is not "the smallest window that can still host four panes" but simply four
-/// panes, because that is the same screen everywhere. What the window decides is
-/// the *glyph*, and the hard case there is the smallest one the game will draw
-/// rather than refuse — [`minimum_window`], derived rather than written down,
-/// because §19's standing lesson from four failed attempts at the CRT overscan
-/// is *compute the constant, do not reason about it*.
+/// §19's fixed grid changed the question and made the answer easier. There are
+/// no tiers: the grid is [`GRID`] on every window, so the worst case is not "the
+/// smallest window that can still host four panes" but simply four panes. What
+/// the window decides is the *glyph*, and the hard case is the smallest one the
+/// game will draw rather than refuse — [`minimum_window`], derived rather than
+/// written down, because §19's standing lesson from four failed attempts at the
+/// CRT overscan is *compute the constant, do not reason about it*.
 ///
-/// Two of the six conditions are not in a [`Frame`] and cannot be. Peak-threat
-/// CRT and the phosphor are frontend enrichment — rule 2 — so they are read on
-/// the running game at this window with `F3`, and what this screen establishes
-/// is that everything *informational* survives at the smallest glyph the game
-/// ever draws. The final judgement is a human one; this prepares it and cannot
-/// make it.
+/// Two of the six conditions are not in a [`Frame`] and cannot be: peak-threat
+/// CRT and the phosphor are frontend enrichment (rule 2), so they are read on the
+/// running game at this window with `F3`. What this screen establishes is that
+/// everything *informational* survives at the smallest glyph the game ever draws.
+/// The final judgement is a human one; this prepares it and cannot make it.
 fn worst_case() {
     let window = minimum_window();
     let grid = GRID;
@@ -1111,10 +1096,10 @@ fn worst_case() {
 /// so this is the boundary, and the glyph here is the smallest one a player can
 /// be asked to read.
 ///
-/// A search rather than a constant anyone should retype, and searched **per
-/// axis**: [`scale_for`](orbs_render::scale_for) takes the smaller of the two
-/// ratios, so the smallest qualifying window is the pair of per-axis minima and
-/// searching both at once would be a slower way to the same number.
+/// A search rather than a constant anyone should retype, and searched per axis:
+/// [`scale_for`](orbs_render::scale_for) takes the smaller of the two ratios, so
+/// the smallest qualifying window is the pair of per-axis minima, and searching
+/// both at once would be a slower way to the same number.
 fn minimum_window() -> (u32, u32) {
     /// Past any window a 2026 desktop will present, and small enough to search
     /// exhaustively in microseconds.
@@ -1237,9 +1222,9 @@ fn siege(grid: GridSize, mode: DisplayMode) -> Frame {
 
         // The content area gets its OWN painter. Handing the pane's painter a
         // smaller rectangle would only be a suggestion — overflowing content
-        // would eat the bottom border, which is exactly what happened the first
-        // time this example ran. Clipping protects the boundary you establish,
-        // not the one you meant.
+        // would eat the bottom border, which is what happened the first time this
+        // example ran. Clipping protects the boundary you establish, not the one
+        // you meant.
         let inner = rect.inset(1);
         content(&mut painter.sub(inner), inner);
     }
@@ -1484,8 +1469,7 @@ fn records_screen(grid: GridSize, records: &Records) -> Frame {
     // three up front. The linear stream is captured in paint order, so bordering
     // everything first would give a reader three headings and then fourteen
     // unattributed rows — the `sift` results indistinguishable from the listing
-    // they were filtered out of. §14's parity is an ordering property, not just
-    // a completeness one.
+    // they were filtered out of. §14's parity is an ordering property too.
     let spoiled = Sift::new("spoil");
     for (index, (pane, title)) in panes.into_iter().enumerate() {
         painter.border(pane, Some(title), Style::DIM);
@@ -1554,13 +1538,12 @@ fn laboratory(painter: &mut Painter<'_>, area: Rect) {
         ("athanor", "burning", Some((22, 40))),
     ];
 
-    // `glyphs`, not `span`: every row here is **silent**. Drawn with `span` the
-    // rows spoke, and a Wide strip too short for the athanor then said one thing
-    // less than Deep did — which `parity` catches and §9 forbids outright, since
-    // a strip that shows less makes the display mode a difficulty choice.
-    //
-    // The panel's whole speech is the one summary below, which does not depend
-    // on how many rows happened to fit.
+    // `glyphs`, not `span`: every row here is silent. Drawn with `span` the rows
+    // spoke, and a Wide strip too short for the athanor then said one thing less
+    // than Deep did — which `parity` catches and §9 forbids outright, since a
+    // strip that shows less makes the display mode a difficulty choice. The
+    // panel's whole speech is the one summary below, which does not depend on how
+    // many rows happened to fit.
     for (row, (name, state, meter)) in PANEL.into_iter().enumerate() {
         let row = area.row + u16::try_from(row).unwrap_or(0);
         if row >= area.bottom() {
@@ -1633,10 +1616,10 @@ fn scrying(painter: &mut Painter<'_>, area: Rect) {
 
 /// A ward part-broken — the sheet a code-breaker keeps beside them (§10).
 ///
-/// **Every glyph here has to be one CP437 can draw**, and this example is where
-/// that gets caught: the board's own tests assert the repertoire, but only a
-/// rendered frame shows whether four sigils and four pegs read as two columns or
-/// as a smear. `▪` failed the first pass and became `■`.
+/// Every glyph here has to be one CP437 can draw, and this is where that gets
+/// caught: the board's own tests assert the repertoire, but only a rendered frame
+/// shows whether four sigils and four pegs read as two columns or as a smear.
+/// `▪` failed the first pass and became `■`.
 fn ward(grid: GridSize) -> Frame {
     let board = orbs_render::Board {
         attempts: vec![
@@ -1650,11 +1633,11 @@ fn ward(grid: GridSize) -> Frame {
                 aligned: 1,
                 astray: 2,
             },
-            // **A repeated sigil, and four pegs.** Both are things this sheet
-            // could not show before: a code may hold a sigil twice now (§19), so
-            // a figure may too — and `aligned + astray` reaching the full width
-            // is the widest the peg column ever gets. These three rows answer a
-            // real code, `quartz pewter pewter borax`.
+            // A repeated sigil, and four pegs — neither of which this sheet could
+            // show before: a code may hold a sigil twice now (§19), so a figure
+            // may too, and `aligned + astray` reaching the full width is the
+            // widest the peg column ever gets. These three rows answer a real
+            // code, `quartz pewter pewter borax`.
             orbs_render::Attempt {
                 figure: [4, 4, 2, 3],
                 aligned: 1,
@@ -1663,9 +1646,9 @@ fn ward(grid: GridSize) -> Frame {
         ],
         aperture: [4, 4, 2, 3],
         // `tower::ward`'s own words. The sim hands these through `Ward::view`; an
-        // example has no sim, so it repeats them — and this is the surface where a
-        // header wider than its column, or a legend that runs into the border,
-        // shows up as a picture rather than as a passing assertion.
+        // example has no sim, so it repeats them — and this is where a header
+        // wider than its column, or a legend running into the border, shows up as
+        // a picture rather than as a passing assertion.
         sockets: ["first", "second", "third", "fourth"],
         sigils: ["nitre", "alum", "borax", "quartz", "pewter", "ochre"],
     };
@@ -1706,24 +1689,24 @@ fn ward(grid: GridSize) -> Frame {
 
 /// A course of wards, part-drawn (§10, `tower::pylon`).
 ///
-/// **The one surface where a Hanoi position can actually be judged.** Every
-/// other check on this board is an assertion about widths; only a rendered frame
-/// shows whether three centred stacks of blocks read as three stacks or as a
-/// smear, and whether the staircase makes the rule — *a greater ward will not
-/// rest upon a lesser* — visible without a word of explanation.
+/// The one surface where a Hanoi position can actually be judged. Every other
+/// check on this board is an assertion about widths; only a rendered frame shows
+/// whether three centred stacks read as three stacks or as a smear, and whether
+/// the staircase makes the rule — *a greater ward will not rest upon a lesser* —
+/// visible without a word of explanation.
 ///
-/// The position is a real one and is **checked rather than invented**: it is
-/// where `cycle(4)` actually stands after seven hauls, with the greatest ward
-/// alone in the wellspring and the other three stacked in the conduit. The first
-/// version drew `[4,3] / [2,1] / []`, a legal position the solver never passes
-/// through — and since this screen is the one place a Hanoi position is judged by
-/// eye, a wrong literal here reads as a solver bug.
+/// The position is a real one and is checked rather than invented: it is where
+/// `cycle(4)` actually stands after seven hauls, the greatest ward alone in the
+/// wellspring and the other three stacked in the conduit. The first version drew
+/// `[4,3] / [2,1] / []`, a legal position the solver never passes through — and
+/// since this screen is where a Hanoi position is judged by eye, a wrong literal
+/// reads as a solver bug.
 /// A siege, part fought (§5.1, `tower::siege`).
 ///
-/// **The one place the board is drawn with no sim at all**, which is what makes
-/// it worth having: a bar wider than its box, a label that runs into its
-/// figures, or a row that does not reach the border all show up here as a
-/// *picture* rather than as a passing assertion.
+/// The one place the board is drawn with no sim at all, which is what makes it
+/// worth having: a bar wider than its box, a label that runs into its figures,
+/// or a row that does not reach the border all show up here as a *picture*
+/// rather than as a passing assertion.
 fn rampart(grid: GridSize) -> Frame {
     let siege = orbs_render::Rampart {
         // `tower::siege`'s own words. The sim hands these through `Siege::view`;
@@ -1744,10 +1727,10 @@ fn rampart(grid: GridSize) -> Frame {
         },
         turns: 5,
         // The allocation, with one area dark and one about to be thrown away —
-        // which is the state worth drawing with no sim behind it, because both
-        // are things a screen has to make obvious at a glance. `sortie` is the
-        // moot one, and it is the only place in this file that exercises the
-        // painter's one `Style::DIM` branch.
+        // the state worth drawing with no sim behind it, because both are things
+        // a screen has to make obvious at a glance. `sortie` is the moot one, and
+        // the only place in this file that exercises the painter's one
+        // `Style::DIM` branch.
         areas: vec![
             orbs_render::Allocation {
                 name: "line",
@@ -1775,13 +1758,11 @@ fn rampart(grid: GridSize) -> Frame {
             },
         ],
         // One die still in hand, so the row draws something. An empty coffer
-        // draws `--`, which is a state worth having a picture of too — but not
-        // at the cost of the only row that says what is left to spend.
-        //
-        // **Deliberately unaffordable**: the d12 costs 3 and 2 is left, which is
-        // the state the whole resource exists to create and the one a picture
-        // should be checked against. Nothing dims it — the arithmetic is on the
-        // row, and a player reads 3 against 2.
+        // draws `--`, worth a picture too, but not at the cost of the only row
+        // that says what is left to spend. Deliberately unaffordable: the d12
+        // costs 3 and 2 is left, the state the whole resource exists to create.
+        // Nothing dims it — the arithmetic is on the row, and a player reads 3
+        // against 2.
         coffer: vec![("d12".to_owned(), 3)],
         quintessence: 2,
         intent: "onslaught".to_owned(),
@@ -1804,16 +1785,16 @@ fn rampart(grid: GridSize) -> Frame {
     painter.border(at, Some("rampart"), Style::DIM);
     let inside = at.inset(1);
 
-    // **All thirteen rows `Rampart::rows()` promises, in `orbs_shell`'s order.**
-    // This drew seven of them into a fifteen-row box for two versions — no area
-    // rows and no coffer, which is the *entire* dice mechanic missing from the
-    // one screen whose job is to show the board without a sim. It read as a
-    // correct picture of the board the domain had before dice, and the box's own
-    // empty bottom half was the only thing on screen saying otherwise.
+    // All thirteen rows `Rampart::rows()` promises, in `orbs_shell`'s order. This
+    // drew seven of them into a fifteen-row box for two versions — no area rows
+    // and no coffer, the *entire* dice mechanic missing from the one screen whose
+    // job is to show the board without a sim. It read as a correct picture of the
+    // board the domain had before dice, and the box's empty bottom half was the
+    // only thing saying otherwise.
     //
     // The literals below are the rendered forms of `prose.toml`'s `siege_coming`
-    // and `siege_tally`. An example in `orbs-render` cannot reach `Prose` — that
-    // is rule 1 — so it repeats them, exactly as `pylon` and `boot_report` do.
+    // and `siege_tally`; an example in `orbs-render` cannot reach `Prose` (rule
+    // 1), so it repeats them, as `pylon` and `boot_report` do.
     painter.glyphs(
         Pos::new(inside.col, inside.row),
         "they mean to onslaught",
@@ -1886,18 +1867,17 @@ fn rampart(grid: GridSize) -> Frame {
 fn pylon(grid: GridSize) -> Frame {
     let course = orbs_render::Pylon {
         stations: [vec![4], vec![3, 2, 1], Vec::new()],
-        // `tower::pylon`'s own words. The sim hands these through
-        // `Course::view`; an example has no sim, so it repeats them — and this
-        // is the surface where a header wider than its column shows up as a
-        // picture rather than as a passing assertion.
+        // `tower::pylon`'s own words. The sim hands these through `Course::view`;
+        // an example has no sim, so it repeats them — and this is where a header
+        // wider than its column shows up as a picture rather than as an
+        // assertion.
         names: ["wellspring", "conduit", "barrier"],
         height: 4,
         hauls: 7,
         integrity: 62,
         // What `prose.toml`'s `pylon_tally` renders to. An example has no prose,
-        // so it repeats the line — the same dodge the sockets and sigils above
-        // take, and the same reason: this is where a line too wide for its box
-        // shows up as a picture rather than as an assertion.
+        // so it repeats the line — the same dodge the sockets and sigils take,
+        // and for the same reason.
         tally: "4 wards, 7 hauled".to_owned(),
     };
 
@@ -1938,9 +1918,9 @@ fn pylon(grid: GridSize) -> Frame {
 /// A beast at the circle, called in once and balking at one row (§10,
 /// `tower::circle`).
 ///
-/// **Called, not fresh**, because the answer row and the marks under it are the
-/// half of this board that can go wrong: a mark one column off its number
-/// sends a player to the wrong row, and only a picture shows that as a picture.
+/// Called, not fresh, because the answer row and the marks under it are the half
+/// of this board that can go wrong: a mark one column off its number sends a
+/// player to the wrong row, and only a picture shows that as a picture.
 ///
 /// `lesser` draws a sealed tower's first beasts instead — one line and four
 /// columns in the same footprint.
@@ -1960,8 +1940,8 @@ fn circle(grid: GridSize, lesser: bool) -> Frame {
     // `tower::circle`'s own words, and `prose.toml`'s senses. The sim hands these
     // through `Sim::circle`; an example has no sim, so it repeats them.
     let (board, spoken) = if lesser {
-        // **The same board with less on it**: the keystone over two senses,
-        // four columns, and the foot of the footprint left blank.
+        // The same board with less on it: the keystone over two senses, four
+        // columns, and the foot of the footprint left blank.
         let lit = |sense: usize| (0..4).map(|row| (row >> (1 - sense)) & 1 == 1).collect();
         let board = orbs_render::Circle {
             lines: vec![line("keystone", "heed", ["blood", "bone"])],
@@ -1975,8 +1955,8 @@ fn circle(grid: GridSize, lesser: bool) -> Frame {
         let spoken = "keystone is limned heed, over blood and bone. the temper is lit on rows 2 (bone), 3 (blood). the last call balked at row 4";
         (board, spoken)
     } else {
-        // **One turned wire**, on widdershins's breath: the answer row is what
-        // yoke, heed-over-turned-breath and oppose really answer, and the temper
+        // One turned wire, on widdershins's breath: the answer row is what yoke,
+        // heed-over-turned-breath and oppose really answer, and the temper
         // differs from it on row 7 alone.
         let lit = |sense: usize| (0..8).map(|row| (row >> (2 - sense)) & 1 == 1).collect();
         let board = orbs_render::Circle {
@@ -2029,18 +2009,17 @@ fn circle(grid: GridSize, lesser: bool) -> Frame {
 
 /// The forge's lattice, part-worked, with no sim behind it.
 ///
-/// **The board this example most needed and did not have.** The lattice is the
+/// The board this example most needed and did not have. The lattice is the
 /// densest *shape* in the game where the rampart is the densest numbers, and the
-/// failure it is prone to is invisible to every test in `orbs-sim`: a stride
-/// that drifts by one cell leaves the glyphs correct and the picture wrong, and
-/// a player reads *down* a column to see what a snap did.
+/// failure it is prone to is invisible to every test in `orbs-sim`: a stride that
+/// drifts by one cell leaves the glyphs correct and the picture wrong, and a
+/// player reads *down* a column to see what a snap did.
 ///
-/// Drawn in a state where all three of the things that can go wrong are on
-/// screen at once: a **mixed** row (so a lit and a dark glyph are compared side
-/// by side), a residue that **disagrees** with the bottom row of the grid (which
-/// is the normal case and the one a reader must not conflate), and a tally
-/// longer than the grid is wide (which is what makes the board's width the
-/// `max` of two things rather than one).
+/// Drawn with all three things that can go wrong on screen at once: a mixed row
+/// (a lit and a dark glyph side by side), a residue that disagrees with the
+/// bottom row of the grid (the normal case, and the one a reader must not
+/// conflate), and a tally longer than the grid is wide (what makes the board's
+/// width the `max` of two things rather than one).
 fn lattice(grid: GridSize) -> Frame {
     let board = orbs_render::LatticeBoard {
         // `tower::lattice`'s own words. The sim hands these through
@@ -2089,9 +2068,9 @@ fn lattice(grid: GridSize) -> Frame {
     row += 1;
     painter.glyphs(Pos::new(inside.col, row), &board.tally, Style::DIM);
 
-    // **The residue as words, which is the §14 gate this screen gives it.** A
-    // reader hears the sentence a sighted player reads off the strip — and the
-    // strip itself is padded glyph art, which is what this line said before.
+    // The residue as words, the §14 gate this screen gives it: a reader hears the
+    // sentence a sighted player reads off the strip, which is itself padded glyph
+    // art.
     painter.announce(
         UtteranceKind::Progress,
         Role::Normal,

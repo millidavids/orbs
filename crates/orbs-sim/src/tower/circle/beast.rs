@@ -28,31 +28,27 @@ pub enum Call {
 
 /// A beast at the circle: its temper, how it is wired, and how the glyphs stand.
 ///
-/// **There is no clock in here, and that is the design.** A beast waits for
-/// ever; nothing about it moves on a tick, so the circle has no system in the
-/// schedule and a player may take an hour over one glyph. §10.1's *"never a
-/// reflex"* holds in every room again, and §19 records the rhythm game this
-/// replaced.
+/// No clock, by design: a beast waits for ever, so the circle has no system in
+/// the schedule and a player may take an hour over one glyph — §10.1's *"never
+/// a reflex"* (§19).
 #[derive(Component, Debug, Clone, PartialEq, Eq)]
 pub struct Beast {
     /// Which circle holds it, and what it answers.
     shape: Shape,
     /// How the glyphs stand, in [`Glyph::ALL`]'s order.
     ///
-    /// **All three even at a lesser circle**, standing at the opening: the
-    /// dark two are never read, and one shape of array keeps a save and a
-    /// search the same whichever circle it is.
+    /// All three even at a lesser circle, where the dark two are never read:
+    /// one shape of array keeps a save and a search the same either way.
     glyphs: [Humour; 3],
     /// How many times the beast has been called in.
     ///
-    /// **The draw is not a call.** Only a `summon` with a beast already waiting
-    /// counts, and every one does — calling in a circle nobody changed tells a
-    /// player nothing they did not know, and it is theirs to spend.
+    /// The draw is not a call: only a `summon` with a beast already waiting
+    /// counts, and every one does — the calls are the player's to spend.
     calls: u32,
     /// What the circle answered the last time it was called, if it has been.
     ///
-    /// **The answer, not a count of rows**, because the board draws which rows
-    /// balked and a count cannot say which.
+    /// The answer, not a count of rows, because the board draws *which* rows
+    /// balked and a count cannot say.
     answer: Option<Temper>,
 }
 
@@ -78,13 +74,11 @@ impl Beast {
     /// Put one back as a save left it, or `None` if it is not a beast the
     /// circle could have drawn.
     ///
-    /// **Refused rather than repaired**, on `Chant::from_save`'s precedent: a
-    /// hand-edited temper no circle can answer would be unholdable, and no beast
-    /// at all is a `summon` away from fine. The draw is not repeated either — a
-    /// restore reads the beast rather than rolling one, or loading a tower would
-    /// move every later draw in the session.
+    /// Refused rather than repaired, on `Chant::from_save`'s precedent: no
+    /// beast is a `summon` away from fine. Not redrawn either, or loading a
+    /// tower would move every later draw in the session.
     ///
-    /// An answer of the wrong length is forgotten rather than refused: it only
+    /// An answer of the wrong length is forgotten rather than refused — it only
     /// draws the last call's row, and the next call writes it again.
     #[must_use]
     pub fn restored(
@@ -109,7 +103,7 @@ impl Beast {
         crate::save::BeastSave {
             sunwise: wiring.map(|wiring| wiring.sunwise),
             widdershins: wiring.map(|wiring| wiring.widdershins),
-            // **Absent when nothing is turned**, so a beast with no turned wire
+            // Absent when nothing is turned, so a beast with no turned wire
             // writes exactly what a format-13 document held.
             turned: (!turned.is_none()).then(|| turned.to_wires()),
             temper: self.shape.temper().to_rows(),
@@ -126,14 +120,12 @@ impl Beast {
     /// Put one back, or `None` if the document does not describe a beast the
     /// circle could have drawn.
     ///
-    /// **The temper's length says which circle**: four rows and no wiring is a
-    /// lesser beast, eight rows and both pairs a whole one, and anything else —
-    /// a lesser temper with wiring, a whole one without — is no beast.
+    /// The temper's length says which circle: four rows and no wiring is a
+    /// lesser beast, eight rows and both pairs a whole one, anything else no
+    /// beast.
     ///
-    /// **Turned wires belong to the whole circle.** Absent is none turned, which
-    /// is what every beast before turned wires was; a mask that is not four
-    /// `0`s and `1`s naming an allowed one is no beast, and so is any mask on a
-    /// lesser beast — even `0000`, since the lesser circle has no wires to turn.
+    /// Turned wires belong to the whole circle, and absent means none turned —
+    /// so any mask on a lesser beast is no beast, even `0000`.
     pub(crate) fn from_save(save: &crate::save::BeastSave) -> Option<Self> {
         let temper = Temper::from_rows(&save.temper)?;
         let shape = match (temper.senses(), save.sunwise, save.widdershins) {
@@ -215,14 +207,12 @@ impl Beast {
 
     /// How many troops a hold now would bring to the arsenal.
     ///
-    /// **Four within par, three past it** — the chant's clean figure and its
-    /// scraped one, so the siege's supply is what it was for a player who reads
-    /// the table, and a search pays the same three a scraped chant did. First
-    /// pass: `orbs-balance` measures what a bound search supplies against what a
-    /// siege spends, and this is the number that moves if it falls short.
+    /// Four within par, three past it — the chant's clean figure and its
+    /// scraped one, so the siege's supply is what it was. A first pass:
+    /// `orbs-balance` measures a bound search against what a siege spends.
     ///
-    /// **One at a lesser circle, either way** — it is a lesson, and the siege is
-    /// fed by the whole circle (see [`LESSER_TROOPS`]).
+    /// One at a lesser circle either way — it is a lesson, and the siege is fed
+    /// by the whole circle (see [`LESSER_TROOPS`]).
     #[must_use]
     pub const fn troops(&self) -> u32 {
         match self.shape {
@@ -239,10 +229,9 @@ impl Beast {
 
     /// Step a glyph to the next humour, wrapping, and say which it stands at now.
     ///
-    /// **What makes a search writable.** `for each humour` binds the set's own
-    /// word, so a spell cannot nest it three deep; three literal `repeat 6`
-    /// loops around a bare `limn <glyph>` can, and that is the lens's bare
-    /// `dial <socket>` one room over.
+    /// What makes a search writable: `for each humour` cannot nest three deep,
+    /// where three literal `repeat 6` loops around a bare `limn <glyph>` can.
+    /// The lens's bare `dial <socket>` one room over.
     pub const fn step(&mut self, glyph: Glyph) -> Humour {
         let next = self.glyphs[glyph.index()].next();
         self.glyphs[glyph.index()] = next;
@@ -267,12 +256,10 @@ impl Beast {
 
     /// One way of limning the circle that holds this beast.
     ///
-    /// **The first in `circuit::limnings`' order** — the one the proofs walk, so
-    /// the two cannot disagree about which solution comes first — and it is the
-    /// same answer on every run. At a lesser circle that leaves the dark glyphs
-    /// at the opening, where they stand, since the opening's humour leads. Only `debug_circle` asks — a tester's door past
-    /// the puzzle to what a hold does, as `debug_ward` is one room over — and
-    /// nothing a player or a spell can reach reads it.
+    /// The first in `circuit::limnings`' order — the one the proofs walk, so
+    /// the two cannot disagree — and the same answer every run. At a lesser
+    /// circle it leaves the dark glyphs at the opening. Only `debug_circle`
+    /// asks: a tester's door past the puzzle, as `debug_ward` is one room over.
     #[must_use]
     pub fn solution(&self) -> Option<[Humour; 3]> {
         circuit::limnings().find(|glyphs| self.shape.answer(*glyphs) == self.shape.temper())

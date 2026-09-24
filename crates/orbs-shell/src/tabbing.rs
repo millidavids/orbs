@@ -1,24 +1,17 @@
 //! What a Tab press does to a line — the prompt's and the spell editor's.
 //!
-//! # Why it is here and not on `Line`
+//! Here rather than on [`Line`](crate::Line), the prompt's buffer, because the
+//! spell editor has a buffer of its own: giving it Tab meant either a second
+//! implementation of readline's rules or this. A second would have drifted — the
+//! rules are not obvious enough to reconstruct, since *"the first Tab lists
+//! without changing the line"* is bash's default and the opposite of what a
+//! fresh implementation reaches for, and `advance`'s staleness guard exists
+//! because a forgotten cancellation splices a candidate mid-word.
 //!
-//! It was on [`Line`](crate::Line), which is the prompt's buffer, and the spell
-//! editor has a buffer of its own. Giving the editor Tab meant either a second
-//! implementation of readline's rules — extend to the longest common prefix,
-//! list when that adds nothing, then cycle — or this.
-//!
-//! A second one would have drifted. The rules are not obvious enough to
-//! reconstruct: *"the first Tab lists **without** changing the line"* is bash's
-//! default and the opposite of what a fresh implementation reaches for, and the
-//! staleness guard inside `advance` exists because a forgotten cancellation
-//! otherwise splices a candidate into the middle of a word.
-//!
-//! # A decision, not a mutation
-//!
-//! [`tab`] takes the text and hands back what should happen to it. The caller
-//! applies it, because the two callers keep their carets differently — `Line`
-//! counts characters, the editor keeps a row and a column — and a shared
-//! function that tried to move both would need to know about both.
+//! A decision, not a mutation: [`tab`] takes the text and hands back what should
+//! happen to it. The caller applies it, because the two keep their carets
+//! differently — `Line` counts characters, the editor a row and a column — and a
+//! shared function moving both would have to know about both.
 
 use core::ops::Range;
 
@@ -102,8 +95,8 @@ pub fn tab(text: &str, found: &Expectation, cycle: &mut Option<Cycle>) -> Tabbed
         *cycle = None;
         return Tabbed::Nothing;
     }
-    // **`Expectation`'s, not a local one.** The prompt's ghost draws exactly
-    // what this is about to take, so two implementations would have the ghost
+    // `Expectation`'s, not a local one: the prompt's ghost draws exactly what
+    // this is about to take, so two implementations would have the ghost
     // promising something Tab did not do.
     let common = found.common();
     let typed = text

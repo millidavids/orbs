@@ -4,15 +4,10 @@
 //! 3. Resolve against world state. 4. Score. 5. Disambiguate on ties.
 //! 6. Suggest when nothing scores — **never a bare error**.
 //!
-//! # Determinism
-//!
 //! Ranking is a total order: score first, then the verb's position in
-//! [`Verb::ALL`]. Nothing here consults an RNG. §6 anticipated a
-//! [`RngStream::Parser`](crate::RngStream::Parser) for breaking exact ties, but a
-//! random tie-break would make replay depend on how many times the parser had
-//! been called, and would make "the parser must explain itself" impossible to
-//! honour — the explanation for a coin flip is a coin flip. A total order gives
-//! the same stability for free.
+//! [`Verb::ALL`], and nothing here consults an RNG. §6 anticipated a
+//! [`RngStream::Parser`](crate::RngStream::Parser) for exact ties, but that
+//! would make replay depend on how often the parser had been called.
 
 use super::arguments;
 use super::fuzzy::{self, MIN_SIMILARITY};
@@ -33,18 +28,13 @@ const PHRASE_BONUS: u32 = 40;
 
 /// Extra credit for a verb whose instrument is standing right here.
 ///
-/// **Where you are is evidence about what you meant.** `grind` shares a prefix
-/// with `grimoire` and sits two edits from `bind`; on the page those are three
-/// words that could be confused, but in the laboratory — the only place `grind`
-/// is a word at all — a player reaching for it is reaching for the mortar. §7
-/// already makes place decide which *nouns* resolve; this is the same evidence
-/// applied to the verb.
+/// Where you are is evidence about what you meant: in the laboratory, the only
+/// place `grind` is a word at all, a player reaching for it means the mortar.
+/// §7 already makes place decide which *nouns* resolve.
 ///
-/// Sized like [`PHRASE_BONUS`] and for the same reason: it settles a tie without
-/// overturning a real difference. An exactly-typed `grimoire` still beats a
-/// two-edit `grind` by 400, and no bonus this side of absurd should change that.
-/// What it does decide is the case where both readings are equally plausible,
-/// and there the tool in front of you is the better guess.
+/// Sized like [`PHRASE_BONUS`]: it settles a tie without overturning a real
+/// difference. An exactly-typed `grimoire` still beats a two-edit `grind` by
+/// 400.
 const DOMAIN_BONUS: u32 = 40;
 
 /// The most readings a numbered prompt will offer.
@@ -56,10 +46,8 @@ const MAX_SUGGESTIONS: usize = 3;
 /// A resolution together with every reading that was considered.
 ///
 /// §6 requires that *"full input, resolution, and candidate scores"* be logged
-/// for every resolution — including the ones that succeeded. A clean win and a
-/// narrow win look identical in [`Resolution`] alone, and the difference is
-/// exactly what the Phase 0 gate needs in order to cluster near-misses before
-/// they become misses.
+/// for every resolution, including the ones that succeeded: a clean win and a
+/// narrow win look identical in [`Resolution`] alone.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Analysis {
     /// What the parser concluded.
@@ -71,54 +59,30 @@ pub struct Analysis {
 impl Analysis {
     /// Whether the orb read the line outright, or is guessing at it.
     ///
-    /// **The augury's router** (§6). A line this answers `true` for is answered
-    /// by the deterministic pipeline and the model never sees it; everything
-    /// else is a phrasing the model gets a chance at, and tier three is this
-    /// same analysis waiting behind it.
+    /// The augury's router (§6): a line this answers `true` for never reaches
+    /// the model.
     ///
-    /// # Two conditions, and both had to be found by building it
+    /// Two conditions. The verb was typed, not guessed — [`fuzzy::EXACT`] or
+    /// better, the domain bonus lifting an in-domain operation above the
+    /// ceiling. And nothing was left over: a fuzzy *noun* is fine (`brew clarty`
+    /// reaches `clarity` at 819), but an unexplained *word* means the reading
+    /// did not account for what the player said. [`Candidate::argument_score`]
+    /// folds both into one number, so [`Candidate::leftover`] is separate.
     ///
-    /// **The verb was typed, not guessed.** [`fuzzy::EXACT`] or better — better,
-    /// because the domain bonus lifts an in-domain operation above the ceiling,
-    /// which is why this is the same `>=` the exactness tier-break already uses.
-    ///
-    /// **Nothing was left over.** A fuzzy *noun* is fine and must stay here:
-    /// `brew clarty` reaches `clarity` at 819 and the matcher is better at that
-    /// than any model trained on phrasings will be. An unexplained *word* is not
-    /// fine, because it means the reading did not account for what the player
-    /// said. [`Candidate::argument_score`] folds both into one number, which is
-    /// why [`Candidate::leftover`] is carried separately.
-    ///
-    /// # Three answers are outright even though none of them runs a command
-    ///
-    /// `Elsewhere`, `InSpell` and `Incomplete` are all *right*, and §19 records
-    /// each existing for the same reason: *"I do not know that word"* would lie
-    /// about a word the game taught the player — in the room next door, in the
-    /// editor, or in the very line they are typing. Handing one to a model
-    /// trades a good answer for a guess.
-    ///
-    /// **`Incomplete` is the one that had to be found by testing.** A bare
-    /// `sift` carries no candidates at all — the verb matched at full score and
-    /// its free-text slot cannot be enumerated — so a rule that only consulted
-    /// `candidates` sent it to a reader, and a reader that answers everything
-    /// answered. The orb knowing the verb and wanting one more thing is not a
-    /// failure to understand.
+    /// `Elsewhere`, `InSpell` and `Incomplete` are outright though none runs a
+    /// command: *"I do not know that word"* would lie about a word the game
+    /// taught the player (§19). `Incomplete` had to be found by testing — a bare
+    /// `sift` carries no candidates, so a rule consulting only those sent it to
+    /// a reader that answers everything.
     #[must_use]
     pub fn reads_outright(&self) -> bool {
         match &self.resolution {
             Resolution::Elsewhere { .. } | Resolution::InSpell { .. } => true,
-            // **Two different `Incomplete`s, and only one is an outright
-            // reading.** A bare `sift` carries no candidates at all — the verb
-            // matched and its free-text slot cannot be enumerated — and the orb
-            // wanting one more thing is not a failure to understand. But a verb
-            // followed by words it could not use is now `Incomplete` too (§19),
-            // and that is a sentence: `take the husks out and throw them away`
-            // must reach a reader rather than be answered *"take what?"*.
-            //
-            // The leftover count is what separates them, and it is the same
-            // question the arm below asks. `TakesNothing` always has a word
-            // over, so it is never outright: *"status report"* is a sentence a
-            // reader should see before the orb says `status` takes nothing.
+            // Two different `Incomplete`s, and only one is outright. Wanting one
+            // more thing is not a failure to understand; a verb followed by
+            // words it could not use is `Incomplete` too (§19), and `take the
+            // husks out and throw them away` must reach a reader. The leftover
+            // count separates them, and `TakesNothing` always has a word over.
             Resolution::Incomplete { .. } | Resolution::TakesNothing { .. } => self
                 .candidates
                 .first()
@@ -144,21 +108,16 @@ pub fn resolve(input: &str, scene: &Scene, mode: Mode) -> Resolution {
     analyse(input, scene, mode).resolution
 }
 
-/// The reading to run, of several a reader offered for one line: **the reader's
-/// first choice that resolves** — unless that one left words unused, and a later
+/// The reading to run, of several a reader offered for one line: the reader's
+/// first choice that resolves — unless that one left words unused, and a later
 /// reading both uses every word it was handed and names something.
 ///
-/// # The question `reads_outright` asks, asked of the readings too
-///
-/// A reader offers several because it cannot see the world, and the caller took
-/// the first that resolved. [`Analysis::reads_outright`] already refuses to call
-/// a *typed* line outright when a word is left over; nothing asked the same of
-/// a reader's readings, so one that resolved with a word unused beat one behind
-/// it that used them all — *"stir the alembic"* ran as `distil alembic`, the
-/// alembic named and then ignored. [`Candidate::leftover`] is the answer.
+/// Nothing asked a reader's readings what [`Analysis::reads_outright`] asks a
+/// typed line, so *"stir the alembic"* ran as `distil alembic` with the alembic
+/// named and then ignored. [`Candidate::leftover`] is the answer.
 ///
 /// `Sim::submit_reading` and the parser bench both choose with this, so the
-/// bench measures the rule the game plays by rather than a looser one.
+/// bench measures the rule the game plays by.
 #[must_use]
 pub fn reading_to_run<'a>(readings: &'a [String], scene: &Scene, mode: Mode) -> Option<&'a String> {
     // The reader's first choice that resolves, once one has and left words over.
@@ -172,18 +131,14 @@ pub fn reading_to_run<'a>(readings: &'a [String], scene: &Scene, mode: Mode) -> 
         let uses_every_word = best.is_some_and(|best| best.leftover == 0);
         let names_something = best.is_some_and(|best| !best.intent.arguments.is_empty());
         match first {
-            // **The first choice runs when it used every word it was handed**,
-            // argument or none — there is nothing unused for a later reading to
-            // do better on. Refusing a bare verb this cost 33 corpus lines and
-            // 72 of five trained readers' holdout lines to a later reading that
-            // jumped it: `weave` for *"open the loom"* lost to `survey loom`.
+            // The first choice runs when it used every word it was handed.
+            // Refusing a bare verb this cost 33 corpus and 72 holdout lines —
+            // `weave` for *"open the loom"* lost to `survey loom`.
             None if uses_every_word => return Some(reading),
             None => first = Some(reading),
-            // **A later reading replaces a first that left words unused only by
-            // using words itself.** A bare verb uses every word it was handed by
-            // being handed none, so letting it jump was a sink: `[grind sage
-            // now, quit]` ran `quit`. Every such jump was measured — none right
-            // on any population, six of them displacing a right reading.
+            // A later reading replaces one that left words unused only by using
+            // words itself: a bare verb is handed none, so letting it jump made
+            // `[grind sage now, quit]` run `quit`.
             Some(_) if uses_every_word && names_something => return Some(reading),
             Some(_) => {}
         }
@@ -194,15 +149,12 @@ pub fn reading_to_run<'a>(readings: &'a [String], scene: &Scene, mode: Mode) -> 
 /// Resolve, keeping every scored reading for instrumentation.
 #[must_use]
 pub fn analyse(input: &str, scene: &Scene, mode: Mode) -> Analysis {
-    // **Spell words are answered before the matcher sees the line**, because the
-    // matcher's answer is worse than no answer. `wait for the mortar` used to
-    // open the editor on a new empty `mortar.spell` — `for`/`the` are filler,
-    // `wait` is a `meditate` synonym whose `Count` slot cannot take `mortar`, so
-    // the reading lost to `scribe <Name>`, which takes free text. `repeat 3`
+    // Spell words are answered before the matcher sees the line: `wait for the
+    // mortar` opened the editor on an empty `mortar.spell`, and `repeat 3`
     // resolved to `undo`.
     //
-    // Exact, never fuzzy: these are not in §6's vocabulary and must not compete
-    // with it. A typo like `waat` falls through and is answered as a typo.
+    // Exact, never fuzzy: these are not in §6's vocabulary. A typo like `waat`
+    // falls through and is answered as a typo.
     if let Some(word) = super::spellword::leading(input) {
         return Analysis {
             resolution: Resolution::InSpell { word },
@@ -222,21 +174,16 @@ pub fn analyse(input: &str, scene: &Scene, mode: Mode) -> Analysis {
         };
     }
 
-    // The verb matcher only looks at the head, so leading filler has to go
-    // first — "please go to the laboratory" opens on a word no phrase starts with.
-    // `skip_leading_filler` yields 0 when everything is filler, so this slice is
-    // never empty given `all` is not.
+    // The verb matcher only looks at the head, so leading filler goes first —
+    // "please go to the laboratory" opens on a word no phrase starts with.
+    // `skip_leading_filler` yields 0 when all is filler, so this is never empty.
     let words = &all[normalise::skip_leading_filler(&all)..];
 
     let (mut candidates, incomplete, elsewhere) = collect(words, scene);
 
-    // **A verb typed exactly beats a fuzzy reading of a different one**, even
-    // when the one typed belongs to another room. Without this, `grind sage` in
-    // the archive offered `sift sage archive.log` — `grind` is two edits from
-    // `find`, which `sift` claims — so scoping the verb to its domain would have
-    // *created* the silent misreading §19's naming pass exists to prevent
-    // instead of preventing it. Saying "not here" is the honest answer to a word
-    // the player knows.
+    // A verb typed exactly beats a fuzzy reading of a different one, even from
+    // another room: `grind sage` in the archive offered `sift sage archive.log`,
+    // `grind` being two edits from `find`. "Not here" is the honest answer.
     if let Some((score, verb)) = elsewhere
         && candidates
             .iter()
@@ -249,13 +196,11 @@ pub fn analyse(input: &str, scene: &Scene, mode: Mode) -> Analysis {
     }
 
     // A verb matched but its slot takes free text or a number, so there is no
-    // list to offer. Saying so beats falling through to Unresolved, which used
-    // to answer "I do not know that word" and then suggest the word just typed.
-    // **The one belonging to the verb that won**, of however many `collect`
-    // recorded. One `Option` kept whichever synonym reached it first, so an
-    // earlier entry's fuzzy reading claimed the slot and the exactly-typed verb
-    // below it had none: `quit gibberish` ran `quit` with the word thrown away,
-    // because `verify`'s `audit` scores 600 against `quit` and sits above it.
+    // list to offer. Saying so beats falling through to Unresolved.
+    //
+    // The one belonging to the verb that won: a single `Option` kept whichever
+    // synonym reached it first, so an earlier entry's fuzzy reading claimed the
+    // slot and `quit gibberish` ran `quit` with the word thrown away.
     let settle_incomplete = |candidates: Vec<Candidate>| {
         let wanted = candidates
             .first()
@@ -298,8 +243,7 @@ pub fn analyse(input: &str, scene: &Scene, mode: Mode) -> Analysis {
 
     // Total order: exact verb matches first, then score, then verb declaration
     // order, then the arguments themselves. Comparing rendered echoes here
-    // allocated two Strings per comparison on a path documented as
-    // sub-millisecond.
+    // allocated two Strings per comparison.
     candidates.sort_by(|a, b| {
         named_exactly(b)
             .cmp(&named_exactly(a))
@@ -313,32 +257,20 @@ pub fn analyse(input: &str, scene: &Scene, mode: Mode) -> Analysis {
         return settle_incomplete(candidates);
     }
 
-    // **A verb that explained none of what followed it does not run.** The sort
-    // above puts an exactly-typed verb first, which is what makes this safe:
-    // `grind gibberish` diverts here rather than falling to the `sift` reading
-    // sitting below it, and `settle_incomplete` answers *"grind what?"* instead
-    // of *"I do not know that word — perhaps grind"*. `status gibberish` diverts
-    // the same way and is answered as `TakesNothing`, having no slot to ask for.
+    // A verb that explained none of what followed it does not run. The sort
+    // puts an exactly-typed verb first, so `grind gibberish` diverts here rather
+    // than to the `sift` reading below it and is answered *"grind what?"*;
+    // `status gibberish` diverts as `TakesNothing`, having no slot.
     //
-    // Bare commands are untouched: `survey` has no arguments **and** nothing
-    // left over. So is a reading that used part of what it was handed, which is
-    // how `attend laboratory and then start the mortar` still reads.
-    // **Tied to the `Incomplete` `collect` recorded**, rather than re-deriving
-    // the test here. That is what carries the exemption across: `light athanor`
-    // records none, so it resolves as bare `kindle` exactly as it always has.
+    // Bare commands are untouched. Tying this to the `Incomplete` `collect`
+    // recorded, rather than re-deriving the test, carries the exemption across:
+    // `light athanor` records none, so it resolves as bare `kindle`.
     //
-    // **A siege runs it rather than refusing it.** §6 gives the mode its own
-    // answer to ambiguity — *"a modal prompt would make ambiguous phrasing cost
-    // siege time"* — and a verb that takes nothing has the same shape: `muster
-    // the troops` and `hold fast` are what a player types with the wall coming
-    // down, and the words over cost them a turn to be told about. Only the
-    // no-slot refusal is waived; a verb still asks for a slot it needs.
+    // A siege runs it rather than refusing it — §6 gives the mode its own answer
+    // to ambiguity. Only the no-slot refusal is waived.
     //
-    // **A reading that filled something diverts only to its own `Incomplete`.**
-    // `limn keystone xyzzy` fills `keystone` and its last slot refuses `xyzzy`,
-    // and the `Incomplete` recorded for it kept `keystone` — so the reading that
-    // would step the glyph asks instead. A reading of the same verb that filled
-    // something else is a different reading and is left to run.
+    // A reading that filled something diverts only to its own `Incomplete`:
+    // `limn keystone xyzzy` fills `keystone` and its last slot refuses `xyzzy`.
     let diverts = incomplete.iter().any(|wanted| {
         wanted.verb == candidates[0].intent.verb
             && (candidates[0].intent.arguments.is_empty()
@@ -397,22 +329,20 @@ fn collect(
     scene: &Scene,
 ) -> (Vec<Candidate>, Vec<Incomplete>, Option<(u32, Verb)>) {
     let mut candidates = Vec::new();
-    // **One per verb, not one for the line.** Which verb wins is decided after
-    // this returns, and the winner's own reason is the one worth answering with.
+    // One per verb, not one for the line: which verb wins is decided after this
+    // returns, and the winner's own reason is the one worth answering with.
     let mut incomplete: Vec<Incomplete> = Vec::new();
     // The best-scoring verb that would have matched if its instrument were here.
     let mut elsewhere: Option<(u32, Verb)> = None;
 
     for synonym in SYNONYMS {
-        // A per-instrument verb is only a word where its instrument is (§7, and
-        // `Scene::offers`). Skipping it *here* rather than refusing later is what
-        // makes the saving real: out of its domain the reading never exists, so
-        // it can neither win a tie, capture a typo meant for another domain's
-        // verb, nor be offered in a numbered prompt. That property is what keeps
-        // the vocabulary safe to grow as §10's five further domains land.
+        // A per-instrument verb is only a word where its instrument is (§7,
+        // `Scene::offers`). Skipped here rather than refused later, the reading
+        // never exists out of its domain, so it can neither win a tie, capture a
+        // typo, nor be offered in a numbered prompt.
         //
-        // It is still *remembered*, so the answer can be "not here" rather than
-        // "I do not know that word" — see `Resolution::Elsewhere`.
+        // It is still *remembered*, so the answer can be "not here" — see
+        // `Resolution::Elsewhere`.
         if !scene.offers(synonym.verb) {
             if let Some((score, _)) = match_phrase(synonym, words)
                 && elsewhere.is_none_or(|(best, _)| score > best)
@@ -443,7 +373,7 @@ fn collect(
                 for filler in fillers(missing.kind, missing.index, scene) {
                     // Into the empty slot, keeping every slot that resolved.
                     // Rebuilding the list from scratch dropped `sift`'s pattern
-                    // and left the file sitting in the pattern's position.
+                    // and left the file in the pattern's position.
                     let mut slots = filled.slots.clone();
                     if let Some(slot) = slots.get_mut(missing.index) {
                         *slot = Some(filler);
@@ -456,11 +386,9 @@ fn collect(
                     candidates.push(score(intent, verb_score, filled.score, filled.leftover));
                 }
 
-                // **Built once per verb**, and only where it is wanted: the
-                // eager form built the whole `Incomplete` — including
-                // `filled.arguments()`, which allocates a `Vec` — on every
-                // synonym of every verb, then threw it away. This runs once per
-                // vocabulary entry per keystroke.
+                // Built once per verb, and only where it is wanted: the eager
+                // form built the whole `Incomplete` — including the `Vec` from
+                // `filled.arguments()` — on every synonym of every verb.
                 if fillers(missing.kind, missing.index, scene).is_empty()
                     && !incomplete.iter().any(|held| held.verb == synonym.verb)
                 {
@@ -474,73 +402,36 @@ fn collect(
                 }
             }
             None => {
-                // **A verb whose argument explained nothing is `Incomplete`, not
-                // a bare verb.** An optional slot that cannot use the word it
-                // was handed sets no `missing` and consumes nothing, so `fill`
-                // scores it as though the player had typed the verb alone — and
-                // `score` weights the verb two thirds, so an exactly-typed one
-                // clears `MIN_SIMILARITY` by itself. `verify gibberish` audited
-                // the whole tower for twenty-one ticks and `digest husks` ran the
-                // balneum, both with the player's word discarded (§19).
+                // A verb whose argument explained nothing is `Incomplete`, not a
+                // bare verb: an optional slot that cannot use its word sets no
+                // `missing` and consumes nothing, so `verify gibberish` audited
+                // the whole tower with the word discarded (§19).
                 //
-                // **`Incomplete` is what makes refusing safe**, and its own doc
-                // says why: dropping the candidate instead sends the line to
-                // `Unresolved`, which answers *"I do not know that word"* and
-                // then suggests the word just typed. It also lets a *fuzzy*
-                // reading of a different verb take the line — `grind gibberish`
-                // became `sift gibberish arsenal.log`, because `sift`'s free-text
-                // slot swallows anything. Both were measured on the first
-                // attempt at this and are why it was reverted.
+                // `Incomplete` is what makes refusing safe — dropping the
+                // candidate lets a *fuzzy* reading of another verb swallow the
+                // line. It is still pushed, so `ParseLog` keeps the near-miss
+                // §6 wants.
                 //
-                // **The candidate is still pushed**, so `ParseLog` and `--tsv`
-                // keep the reading. §6 wants the near-misses recorded, and this
-                // is exactly the class that gets clustered.
+                // The exemptions. Naming the instrument you are operating is
+                // not an unexplained word: `light athanor` fills nothing —
+                // `kindle` takes fuel, the athanor is a place — yet bare
+                // `kindle` is right. A verb that takes nothing is the same case
+                // with no slot to name (`Resolution::TakesNothing`).
                 //
-                // **Naming the instrument you are operating is not an
-                // unexplained word.** `light athanor` fills nothing — `kindle`
-                // takes fuel, and the athanor is a place — but bare `kindle` is
-                // the right reading, and `light_the_athanor_lights_it_rather_
-                // than_listing_it` pins it.
+                // Naming where it acts is exempt, `Verb::anchor` saying where
+                // that is: a fixture's verb has a place to name, one the whole
+                // tower answers to has the tower and nothing narrower.
+                // Unbounded, it let `status laboratory` run with the word
+                // discarded.
                 //
-                // **A verb that takes nothing is the same case with no slot to
-                // name** (`Resolution::TakesNothing`): `status gibberish` ran
-                // `status` and `undo gibberish` acknowledged, each with the word
-                // thrown away.
+                // A plain-English *phrase* is not refused, talk running past the
+                // command. A phrase, not the register — exempting every plain
+                // synonym let `decode gibberish` run `research`.
                 //
-                // **Naming where it acts is exempt — where the verb acts
-                // somewhere.** `Verb::anchor` is that question already: a verb a
-                // fixture declares has a place to be named (`probe lens`,
-                // `wander stacks`, `research lectern`), and one the whole tower
-                // answers to has the tower and nothing narrower. Without it the
-                // exemption covered `status
-                // laboratory`, `quit laboratory` and `logout archive`, each of
-                // which ran with the word discarded — the defect this is here to
-                // end, wearing a place name.
-                //
-                // **And a plain-English *phrase* is not refused.** A sentence in
-                // the plain register is how a newcomer talks, and talk runs past
-                // the command: *"how are things going"* is the `status` synonym
-                // *"how are things"* with a word after it, and refusing it
-                // teaches nothing. The arcane and shell registers are exact, so
-                // a word over one of those is a mistake worth naming.
-                //
-                // **A phrase, not the register.** Exempting every plain synonym
-                // put the defect straight back: `decode` is one plain word for
-                // `research`, and `decode gibberish` ran it with the word thrown
-                // away. What carries the chatter is the sentence — so the
-                // exemption is for a synonym the matcher took more than one word
-                // of.
-                //
-                // **Filler is not a word handed over.** `strip_filler` never
-                // empties what it is given, so a tail of nothing but filler —
-                // *"status please"* — comes back whole, and asking only whether
-                // the tail was empty refused a polite line as a stray word.
-                // **Punctuation is not a word handed over either.** `fold` sheds
-                // a *trailing* stop but keeps a token that is nothing else whole
-                // — `?` and `./` are synonyms in their own right — so `status .`
-                // arrived carrying `.`, which is no filler, and a line that had
-                // always run was refused. A word says something when it has a
-                // letter or a digit in it.
+                // Neither filler nor punctuation is a word handed over (`?` and
+                // `./` are synonyms in their own right), so *"status please"*
+                // and `status .` were both refused. A word says something when
+                // it has a letter or a digit in it.
                 let explained = filled.slots.iter().any(Option::is_some);
                 let said_something = tail.iter().any(|word| {
                     word.matching.chars().any(char::is_alphanumeric)
@@ -548,23 +439,17 @@ fn collect(
                 });
                 if !explained && said_something {
                     let folded: Vec<&str> = tail.iter().map(|word| word.matching).collect();
-                    // **The whole tail, not a word of it.** `best_match` tries
-                    // the joined phrase *and* each word, so `undo laboratory
-                    // move` found `laboratory` and called the line a place;
+                    // The whole tail, not a word of it: `best_match` tries the
+                    // joined phrase *and* each word, so `undo laboratory move`
+                    // found `laboratory` and called the line a place.
                     // `NounMatch::words` is what tells those apart.
                     let place = scene
                         .best_match(NounKind::Place, &folded)
                         .filter(|place| place.words == folded.len());
                     let names_a_place = place.is_some();
-                    // The two exemptions, named so the guard below reads as the
-                    // rule: a verb naming where it acts — and a plain sentence
-                    // running past its command.
-                    //
-                    // **Where a verb acts is its anchor's, or the whole tower.**
-                    // One nothing anchors answers to every room at once, so the
-                    // tower is the one place it can name: *"overview of the
-                    // tower"* is `status` said about exactly what it reports on,
-                    // and was refused as a word thrown away.
+                    // Named so the guard below reads as the rule. Where a verb
+                    // acts is its anchor's, or the whole tower — *"overview of
+                    // the tower"* was refused as a word discarded.
                     let acts_there = match synonym.verb.anchor() {
                         Some(_) => names_a_place,
                         None => place
@@ -609,12 +494,10 @@ fn collect(
                         _ => {}
                     }
                 }
-                // **A word the last slot could not use is asked about, not
-                // dropped** — where the verb bare is a different act. `limn
-                // keystone xyzzy` ran `limn keystone`, which steps the glyph to a
-                // humour nobody named, and `dial first qqqq` turned the socket
-                // (§19). The slots that did fill are kept, so the prompt shows
-                // the player their own command back.
+                // A word the last slot could not use is asked about rather than
+                // dropped, where the verb bare is a different act — `limn
+                // keystone xyzzy` stepped the glyph to a humour nobody named
+                // (§19). Filled slots are kept, so the prompt echoes back.
                 if let Some(refused) = filled.refused
                     && !incomplete.iter().any(|kept| kept.verb == synonym.verb)
                 {
@@ -653,9 +536,8 @@ struct Incomplete {
 
 /// Whether `path` names the place every other place is inside — `/tower`.
 ///
-/// **By shape, not by spelling**: an absolute path of one segment. A bare leaf
-/// (`alembic`, as `corpus_scene` registers an instrument) has no leading slash
-/// and is not it.
+/// By shape, not by spelling: an absolute path of one segment. A bare leaf
+/// (`alembic`, as `corpus_scene` registers an instrument) has no leading slash.
 fn is_the_tower(path: &str) -> bool {
     path.strip_prefix('/')
         .is_some_and(|rest| !rest.is_empty() && !rest.contains('/'))
@@ -664,14 +546,12 @@ fn is_the_tower(path: &str) -> bool {
 /// Everything in the scene that could fill a slot of `kind`.
 ///
 /// [`NounKind::Any`] matches every noun — `verify` and `purge` reach all four
-/// sabotage surfaces (§8.1), and comparing kinds for equality silently excluded
-/// every one of them. [`NounKind::Pattern`] and [`NounKind::Count`] are free text
-/// and a number: nothing in the world enumerates them, so they yield no fillers
-/// and the caller reports [`Resolution::Incomplete`] instead.
+/// sabotage surfaces (§8.1). [`NounKind::Pattern`] and [`NounKind::Count`] are
+/// free text and a number, so they yield no fillers and the caller reports
+/// [`Resolution::Incomplete`] instead.
 fn fillers(kind: NounKind, slot: usize, scene: &Scene) -> Vec<super::intent::Argument> {
-    // `Name` joins them: a spell being coined does not exist, so the world has
-    // nothing to offer and a numbered prompt would list things the player is
-    // explicitly *not* naming.
+    // `Name` joins them: a spell being coined does not exist, so a numbered
+    // prompt would list things the player is explicitly *not* naming.
     if matches!(kind, NounKind::Pattern | NounKind::Count | NounKind::Name) {
         return Vec::new();
     }
@@ -733,9 +613,8 @@ pub(super) fn match_phrase(synonym: &Synonym, words: &[Word<'_>]) -> Option<(u32
 
 /// Collapse readings that would run the identical command, keeping the best.
 fn dedupe(mut candidates: Vec<Candidate>) -> Vec<Candidate> {
-    // Keyed on the intent itself rather than its rendered echo: identical echoes
-    // mean identical (verb, arguments), and building the String to find that out
-    // allocated twice per comparison.
+    // Keyed on the intent rather than its rendered echo: identical echoes mean
+    // identical (verb, arguments), and building the String allocated twice.
     candidates.sort_by(|a, b| {
         a.intent
             .verb
@@ -777,12 +656,8 @@ fn suggest(words: &[Word<'_>]) -> Vec<Verb> {
 /// Whether the player's words *named* this verb rather than approximating it.
 ///
 /// An exact phrase match outranks every approximate one, before score is even
-/// considered. Without this, a word that exactly names one verb could lose to a
-/// word that merely resembles another, on the strength of the argument: `take
-/// clarity` resolved to `decoct clarity` — brewing — because `take` reaches
-/// `make` at 750 and `clarity` is an essence, even though `take` *is* siphon.
-///
-/// Argument fit still decides between readings of equal exactness.
+/// considered. Without this `take clarity` resolved to `decoct clarity`, though
+/// `take` *is* siphon. Argument fit still decides within a tier.
 const fn named_exactly(candidate: &Candidate) -> bool {
     candidate.verb_score >= fuzzy::EXACT
 }

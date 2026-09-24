@@ -6,19 +6,17 @@
 //! [`ScreenLayout`](crate::ScreenLayout) already draws. A frontend supplies only
 //! the progress; nothing here knows what a second is.
 //!
-//! # Transitional layouts are not tiled layouts
+//! Transitional layouts are not tiled layouts. [`tiling`](crate::tiling)
+//! promises its layouts are total — every tiler covers its area exactly, no
+//! gaps, no overlap, no zero-area pane — and everything here breaks all three on
+//! purpose: a pane arriving is a zero-area rectangle for one frame, and a pane
+//! leaving is a gap closing.
 //!
-//! [`tiling`](crate::tiling) promises its layouts are **total**: every tiler
-//! covers its area exactly, with no gaps, no overlap, and no zero-area pane.
-//! Everything here breaks all three on purpose — a pane arriving *is* a
-//! zero-area rectangle for one frame, and a pane leaving *is* a gap closing.
-//!
-//! That exception is deliberate and bounded. It applies to the output of
-//! [`ScreenLayout::transition`](crate::ScreenLayout::transition) and to nothing
-//! else; `ScreenLayout::compute` keeps every guarantee it had, and the tiling
-//! tests still hold it to them. What survives here is the weaker invariant that
-//! actually matters: **a transitional pane never leaves the span of its own two
-//! endpoints**, so it cannot escape a grid that both endpoints fitted.
+//! The exception is bounded to the output of
+//! [`ScreenLayout::transition`](crate::ScreenLayout::transition);
+//! `ScreenLayout::compute` keeps every guarantee it had. What survives here is
+//! the weaker invariant that matters: a transitional pane never leaves the span
+//! of its own two endpoints, so it cannot escape a grid both endpoints fitted.
 
 use crate::geometry::Rect;
 use crate::layout::DisplayMode;
@@ -49,10 +47,9 @@ pub(crate) fn panes(
 
 /// The zero-area rectangle a pane grows out of, on the side it arrives from.
 ///
-/// **Not [`Rect::EMPTY`].** Interpolating from `EMPTY` is the obvious thing and
-/// is wrong: it is `(0, 0, 0, 0)`, so a pane grows diagonally out of the
-/// top-left corner at half height, straight through the pane it is supposed to
-/// be appearing beside.
+/// Not [`Rect::EMPTY`], which is the obvious thing and is wrong: it is
+/// `(0, 0, 0, 0)`, so a pane grows diagonally out of the top-left corner at half
+/// height, through the pane it is supposed to be appearing beside.
 ///
 /// Per mode, because §9 puts extra panes in different places. Deep tiles them
 /// side by side, so a pane slides in from the right edge of its own slot; Wide
@@ -68,13 +65,12 @@ const fn edge(rect: Rect, mode: DisplayMode) -> Rect {
 
 /// One rectangle partway to another.
 ///
-/// **The far edges are interpolated, not the extents.** Rounding an origin and
-/// its extent independently lets both round up at the same instant: a pane at
-/// `col 147.5, cols 12.5` becomes `col 148, cols 13`, whose right edge is a cell
-/// further right than *either* endpoint — off the grid, and the pane painting
-/// over its neighbour on the way. Interpolating the edges and subtracting keeps
-/// every transitional pane inside the span of its own endpoints, which is the
-/// invariant this module keeps in place of tiling's.
+/// The far edges are interpolated, not the extents. Rounding an origin and its
+/// extent independently lets both round up at once: a pane at `col 147.5,
+/// cols 12.5` becomes `col 148, cols 13`, whose right edge is a cell further
+/// right than either endpoint — off the grid, painting over its neighbour on the
+/// way. Interpolating the edges and subtracting keeps every transitional pane
+/// inside the span of its own endpoints, this module's invariant.
 fn lerp(a: Rect, b: Rect, t: f32) -> Rect {
     let col = mix(a.col, b.col, t);
     let row = mix(a.row, b.row, t);

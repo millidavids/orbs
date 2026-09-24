@@ -6,11 +6,11 @@
 //! streams that can disagree.
 //!
 //! §7 calls the filter *"the only model that survives the eldritch renderer
-//! corrupting output"*: matching runs over field values and never over anything a
-//! view put on screen, so a narrow window cannot change what a search returns and
-//! a **poisoned** log still yields its text.
+//! corrupting output"*: matching runs over field values and never over anything
+//! a view put on screen, so a narrow window cannot change what a search returns
+//! and a poisoned log still yields its text.
 //!
-//! **No prose here.** Rule 6 and §12 put authored text in content files.
+//! No prose here — rule 6 and §12 put authored text in content files.
 
 use bevy_ecs::prelude::*;
 use orbs_render::{FieldName, Record, RecordKind, Sift, Value};
@@ -24,13 +24,13 @@ use super::{LOG, acknowledge, missing};
 
 /// Read a file.
 ///
-/// `orb.log` is the whole stream. A **domain** log is that same stream filtered
-/// by where each line happened — see [`domain_names`].
+/// `orb.log` is the whole stream; a domain log is that stream filtered by where
+/// each line happened — see [`domain_names`].
 ///
-/// A file with nothing in it reads back as a count of zero, which is a true
-/// answer. It used to report success having read nothing, which is worse than an
-/// error — §6 forbids a bare error so a player is never left guessing, and a
-/// cheerful completion over an unread file leaves them guessing anyway.
+/// A file with nothing in it reads back as a count of zero, which is true. It
+/// used to report success having read nothing, which is worse than an error: §6
+/// forbids a bare error so a player is never left guessing, and a cheerful
+/// completion over an unread file leaves them guessing anyway.
 pub(super) fn peruse(intent: &Intent, world: &mut World) {
     // Snapshot first: the stream being read is the stream being written to.
     let tampered = tampered_source(world, intent);
@@ -59,9 +59,9 @@ pub(super) fn sift(intent: &Intent, world: &mut World) {
 /// signature a *speed bonus for observant players rather than a requirement* —
 /// and what makes sabotage playable at all without sight.
 pub(super) fn verify(intent: &Intent, world: &mut World) {
-    // **Bare is the audit** (§8.1's `verify --all`, spelled the way every other
-    // widening in this game is — see `Verb::signature`). It used to
-    // `acknowledge` and do nothing, which was the one form §8.1 actually prices.
+    // Bare is the audit — §8.1's `verify --all`, spelled the way every other
+    // widening here is (see `Verb::signature`). It used to `acknowledge` and do
+    // nothing, which was the one form §8.1 actually prices.
     let Some(target) = intent
         .arguments
         .first()
@@ -75,10 +75,9 @@ pub(super) fn verify(intent: &Intent, world: &mut World) {
         return;
     };
 
-    // **The cooldown is charged before the answer, and only for a surface.**
-    // §8.1 rations *"which surface do I inspect first"*; a node that is neither
-    // a log nor a shelf can never report tampering, so rationing it would be a
-    // wait with no information behind it — see `Surface::of`.
+    // Charged before the answer, and only for a surface. §8.1 rations *"which
+    // surface do I inspect first"*, and a node that is neither a log nor a shelf
+    // can never report tampering — see `Surface::of`.
     if let Some(surface) = tower::Surface::of(world, node) {
         let now = *world.resource::<crate::tick::Tick>();
         if let Some(left) = world.resource::<tower::Cooling>().left(surface, now) {
@@ -118,15 +117,13 @@ fn here_or_place(world: &World, target: &str) -> Option<Entity> {
 
 /// Which file an intent names, if any.
 ///
-/// **By the resolved `kind`, not by a `.log` suffix.** The parser has already
-/// proved this argument is a [`NounKind::File`] — `Verb::Peruse`'s signature says
-/// so — and re-deriving it from the string threw that work away. The first
-/// readable file that is not a `.log` (a `.spell` in Phase 1, a `notes.txt`)
-/// resolves cleanly, reaches here, matches nothing, and `peruse` reports a
-/// zero-length read: exactly the symptom
-/// `an_empty_file_reads_as_empty_rather_than_as_success` exists to make honest,
-/// so the suite stays green while the command is broken. Rule 4 — the resolved
-/// record is what downstream reads.
+/// By the resolved `kind`, not by a `.log` suffix: the parser has already proved
+/// this argument is a [`NounKind::File`], and re-deriving it from the string
+/// threw that work away. The first readable file that is not a `.log` resolved
+/// cleanly, reached here, matched nothing, and `peruse` reported a zero-length
+/// read — the symptom `an_empty_file_reads_as_empty_rather_than_as_success`
+/// exists to make honest, so the suite stayed green while the command was
+/// broken. Rule 4: the resolved record is what downstream reads.
 fn named_file(intent: &Intent) -> Option<&str> {
     intent
         .arguments
@@ -166,18 +163,16 @@ fn read_file(world: &World, intent: &Intent, pattern: Option<&str>) -> Listing {
         };
     };
 
-    // **Stored text wins, and does not fall through.** A `.spell` holds lines a
-    // player wrote (`tower::Held`); everything else is a *view* over the record
+    // Stored text wins and does not fall through. A `.spell` holds lines a
+    // player wrote (`tower::Held`); everything else is a view over the record
     // stream. Falling through on an empty spell would search the log for a file
-    // name and report whatever it found, which is the same class of defect as
-    // `bind` falling through to `sift` — a wrong answer wearing a right one's
-    // clothes. An empty spell reads as empty, which is true.
+    // name and report whatever it found — a wrong answer in a right one's
+    // clothes, the way `bind` falling through to `sift` was.
     //
-    // **It is also the script/log split**, and nothing else in the tower draws
-    // one: `tower::Held` is exactly "text a person wrote" and its absence is
-    // exactly "a view over records". That is why the kind is decided here rather
-    // than by looking at the `.spell` suffix, which is a naming convention and
-    // would answer wrongly the first time anything else holds text.
+    // It is also the script/log split, and nothing else in the tower draws one:
+    // `tower::Held` is exactly "text a person wrote". Hence the kind is decided
+    // here rather than from the `.spell` suffix, which is a naming convention
+    // and would answer wrongly the first time anything else holds text.
     if let Some(node) = here_or_place(world, file)
         && let Some(held) = world.get::<tower::Held>(node)
     {
@@ -204,11 +199,10 @@ fn read_file(world: &World, intent: &Intent, pattern: Option<&str>) -> Listing {
         // Never its own output, or each run would match everything the last one
         // emitted and the stream would double every time.
         //
-        // **Both listing kinds, not just the log.** `emit_lines` pushes whichever
-        // of the two the read was, so once a spell listing became `ScriptLine` a
-        // `peruse` of the log would have swept up the last `peruse` of a spell —
-        // the same doubling, arriving by the other kind and only after somebody
-        // had read a file the tower had never had a second kind of.
+        // Both listing kinds, not just the log: `emit_lines` pushes whichever of
+        // the two the read was, so once a spell listing became `ScriptLine` a
+        // `peruse` of the log swept up the last `peruse` of a spell — the same
+        // doubling, arriving by the other kind.
         .filter(|record| !matches!(record.kind(), RecordKind::LogLine | RecordKind::ScriptLine))
         .filter(|record| domain.as_ref().is_none_or(|names| in_domain(record, names)))
         .filter(|record| sift.as_ref().is_none_or(|sift| record.matches(sift)))
@@ -231,18 +225,16 @@ fn read_file(world: &World, intent: &Intent, pattern: Option<&str>) -> Listing {
 
 /// A domain's own name plus every fixture standing in it.
 ///
-/// **The domain log was permanently empty**, and the filter looked right: it
-/// compared `FieldName::Source` against `"laboratory"`. Nothing in §10.1's
-/// pipeline ever writes that — `transmute` puts the *instrument* in `Source`, and
-/// `carry` writes no `Source` at all — so `peruse laboratory.log` returned zero
-/// lines after a full brew, and the one test covering it passed by never brewing
-/// first.
+/// The domain log was permanently empty and the filter looked right: it compared
+/// `FieldName::Source` against `"laboratory"`, which nothing in §10.1's pipeline
+/// writes — `transmute` puts the instrument there and `carry` writes no `Source`
+/// at all. So `peruse laboratory.log` returned nothing after a full brew, and
+/// the one test covering it passed by never brewing first.
 ///
-/// A domain's log is what happened **in** that domain, which is the domain itself
-/// or anything standing in it. Derived from the world rather than stamped on each
-/// record, because the alternative is every `push` site remembering to carry a
-/// room it does not otherwise care about — and the sites that forgot are exactly
-/// how this broke.
+/// A domain's log is what happened in that domain: the domain itself or anything
+/// standing in it. Derived from the world rather than stamped on each record,
+/// because the alternative is every `push` site remembering to carry a room it
+/// does not care about — and the sites that forgot are how this broke.
 fn domain_names(world: &World, domain: &str) -> Vec<String> {
     let mut names = vec![domain.to_owned()];
     let Some(cwd) = world.get_resource::<Cwd>().map(|cwd| cwd.0) else {

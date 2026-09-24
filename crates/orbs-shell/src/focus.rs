@@ -4,37 +4,24 @@
 //! a *rule* and a second copy of a rule is how the two builds come to disagree.
 //! That is `shortcuts.rs`'s argument and this is the same shape.
 //!
-//! # Why it moved here
+//! It moved here because the Bevy build spent four resources, four run
+//! conditions and a four-term predicate on the question, and each term is a
+//! place to forget: a surface added without its term does not fail loudly, it
+//! types into an invisible prompt while the player looks elsewhere.
+//! `orbs-tui`'s `surfaces.rs` had already solved it, so this is that solution
+//! ported and shared rather than a third expression of it.
 //!
-//! The Bevy build spent four resources, four run conditions and a four-term
-//! predicate on this question, and `shell/input.rs` had already written down the
-//! ceiling: *"`wander` is the fourth and it is the last one that goes in here: a
-//! fifth surface refactors this first."* The reason it is worth naming rather
-//! than living with is in that same comment — **each term is a place to
-//! forget**, and a surface added without its term does not fail loudly. It types
-//! into an invisible prompt while the player is looking at something else, and
-//! the characters arrive later.
-//!
-//! `orbs-tui` had already solved it, in `surfaces.rs`, whose own doc comment
-//! points at the Bevy side and says so. So this is that solution **ported and
-//! shared**, not a third expression of it: the terminal keeps its `Surfaces`
-//! state machine and asks this for the verdict.
-//!
-//! # What this does *not* decide
-//!
-//! How a frontend throws a keystroke away. That genuinely differs and neither
-//! way is wrong: a terminal delivers one key at a time to whoever is asking, so
-//! declining is enough; Bevy's `MessageReader` carries a cursor per reader, so a
-//! system that simply does not run leaves the keys queued and they all arrive at
-//! once when it does. §19 records that defect — typing while the transcript was
-//! being read, then pressing Escape, put every character into the prompt.
+//! What it does *not* decide is how a frontend throws a keystroke away. That
+//! genuinely differs: a terminal delivers one key at a time to whoever is
+//! asking, so declining is enough, where Bevy's `MessageReader` carries a cursor
+//! per reader and a system that does not run leaves the keys queued to arrive at
+//! once. §19 records that defect.
 
 /// What each frontend can answer about its own surfaces.
 ///
-/// **Named fields rather than positional flags**, so the four cannot be
-/// transposed at a call site. Both frontends fill this from state they already
-/// hold; neither stores a `Focus`, because a stored verdict is one that can go
-/// stale against the state it was derived from.
+/// Named fields rather than positional flags, so they cannot be transposed at a
+/// call site. Both frontends fill this from state they already hold, and neither
+/// stores a `Focus` — a stored verdict can go stale against what it came from.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Open {
     /// A spell is being edited — `scribe`, then `edit`.
@@ -47,10 +34,17 @@ pub struct Open {
     pub reading: bool,
     /// The orb's menu is up — `quit`.
     ///
-    /// **The first that is not about the tower.** Everything
-    /// above it is a surface *inside* a game; this one is the way out of one, so
-    /// it wins the keyboard over all of them — see [`Focus::of`].
+    /// The first that is not about the tower: everything above it is a surface
+    /// *inside* a game and this is the way out of one, so it wins the keyboard
+    /// over all of them. See [`Focus::of`].
     pub menuing: bool,
+    /// The manual is open — `manual`, from the menu.
+    ///
+    /// Above the menu, because it opens *over* it: the menu is the only thing
+    /// that opens this and stays up behind it, so unlike every other pair here
+    /// these two really are open at once and the order is a fact rather than a
+    /// tie-break.
+    pub reading_manual: bool,
 }
 
 /// The surfaces that can hold the keyboard, in the order they take it.
@@ -58,20 +52,23 @@ pub struct Open {
 pub enum Focus {
     /// The command line. The default, and where everything returns to.
     ///
-    /// **The prompt is the default and a surface must be *entered* with a
-    /// word** — the editor's `edit`, the weave's `ley`/`mastery`, the map's
-    /// `wander`. §19: a surface that grabs the keyboard on open eats the
-    /// player's first keystroke.
+    /// The prompt is the default and a surface must be *entered* with a word —
+    /// the editor's `edit`, the weave's `ley`, the map's `wander`. §19: a
+    /// surface that grabs the keyboard on open eats the first keystroke.
     #[default]
     Prompt,
+    /// The manual, opened from the menu.
+    ///
+    /// First, above the menu, and for once the order is not a tie-break: the
+    /// menu opens this and stays up behind it, so the two really are open
+    /// together. Closing the manual gives the keyboard back where it came from.
+    Manual,
     /// The orb's menu, opened by `quit`.
     ///
-    /// **First in the order, and the only one that is not a surface of the
-    /// tower.** The four below it are places inside a game and cannot coexist;
-    /// this is the way out of the game, and it is reached by a word typed at the
-    /// prompt — so in principle it opens over nothing. It is ordered first
-    /// anyway, because if it ever did tie, the way *out* is the answer a player
-    /// meant.
+    /// First in the order, and the only one that is not a surface of the tower:
+    /// the four below are places inside a game and cannot coexist, where this is
+    /// the way out and is reached by a word typed at the prompt. Ordered first
+    /// anyway, because if it ever did tie, the way *out* is what a player meant.
     Menu,
     /// A spell, opened by `scribe`.
     Editor,
@@ -81,24 +78,25 @@ pub enum Focus {
     Maze,
     /// The transcript, opened by `unfurl`.
     ///
-    /// **There was a `Chant` above this**, the menagerie's figure on the arrow
-    /// keys, and it was the fifth surface this module was built for. The
-    /// menagerie is a logic puzzle now and is typed like every other room (§19),
-    /// so the variant went — and the module stays, because the reason for it was
-    /// never the chant: each surface is a term in a predicate somebody forgets.
+    /// There was a `Chant` above this — the menagerie's figure on the arrow keys,
+    /// the fifth surface this module was built for. The menagerie is a logic
+    /// puzzle now (§19) so the variant went, and the module stays, because the
+    /// reason was never the chant: each surface is a term somebody forgets.
     Reading,
 }
 
 impl Focus {
     /// Who the next keystroke belongs to.
     ///
-    /// **Order matters only because it must be decided.** None of these can be
-    /// open at once — the prompt is dead while any of them holds the keyboard,
-    /// so nothing can open a second — but a silent tie would be the harder bug
-    /// to find, so the newer surface never wins by accident.
+    /// Order matters only because it must be decided: none of these can be open
+    /// at once, since the prompt is dead while any holds the keyboard, but a
+    /// silent tie is the harder bug to find — so the newer surface never wins by
+    /// accident.
     #[must_use]
     pub const fn of(open: Open) -> Self {
-        if open.menuing {
+        if open.reading_manual {
+            Self::Manual
+        } else if open.menuing {
             Self::Menu
         } else if open.editing {
             Self::Editor
@@ -139,7 +137,10 @@ impl Focus {
     /// command block, because the answer to the word has painted over the block.
     #[must_use]
     pub const fn takes_the_pane(self) -> bool {
-        matches!(self, Self::Menu | Self::Editor | Self::Weave | Self::Maze)
+        matches!(
+            self,
+            Self::Manual | Self::Menu | Self::Editor | Self::Weave | Self::Maze
+        )
     }
 }
 
@@ -156,6 +157,13 @@ mod tests {
     #[test]
     fn each_surface_takes_the_keyboard_from_the_prompt() {
         let cases = [
+            (
+                Open {
+                    reading_manual: true,
+                    ..Open::default()
+                },
+                Focus::Manual,
+            ),
             (
                 Open {
                     menuing: true,
@@ -212,6 +220,15 @@ mod tests {
             walking: true,
             reading: true,
             menuing: true,
+            reading_manual: true,
+        };
+        // The one pair here that is not impossible: the manual is opened from
+        // the menu and the menu stays up behind it, so these two really are open
+        // together and this is a fact rather than a tie-break.
+        assert_eq!(Focus::of(all), Focus::Manual);
+        let all = Open {
+            reading_manual: false,
+            ..all
         };
         // The way *out* wins, which is the one tie whose resolution a player
         // would have an opinion about.
@@ -250,6 +267,7 @@ mod tests {
     /// Reading is the one that shares the screen, and the three modes do not.
     #[test]
     fn only_the_modal_surfaces_take_the_pane() {
+        assert!(Focus::Manual.takes_the_pane());
         assert!(Focus::Menu.takes_the_pane());
         assert!(Focus::Editor.takes_the_pane());
         assert!(Focus::Weave.takes_the_pane());

@@ -35,6 +35,11 @@ tracing.workspace = true
 serde.workspace = true
 toml.workspace = true
 
+# Where the towers and the settings live. See the workspace manifest: one crate
+# for one function, and the thing §13 and PRIVACY_POLICY.md both promised would
+# arrive with the settings screen.
+dirs.workspace = true
+
 # **Optional, and `orbs-tui` deliberately does not turn it on.** The trained
 # reader brings `burn` — 150 crates — and the terminal build is kept as the
 # no-GPU, instant-startup target. The Bevy build enables `augury`; everything

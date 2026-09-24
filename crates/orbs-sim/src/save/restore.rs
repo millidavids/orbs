@@ -1,42 +1,29 @@
 //! Putting a document back into a world.
 //!
-//! # Raise first, then adopt
+//! Raise first, then adopt. The caller has already run `tower::raise`, so the
+//! tower exists before a word of the save is applied, and this pass reconciles:
+//! a node the save knows is found by path and given its components, one the
+//! tower lacks is spawned under its parent, and a *stock* pile the tower raised
+//! that the save never heard of is despawned as a starting reagent the player
+//! used up. Letting the save own the whole tree is simpler and wrong on
+//! schedule — the domains that land later would be permanently missing from an
+//! old save, and refusing it by format version deletes it.
 //!
-//! The caller has already run `tower::raise`, so the tower exists before a word
-//! of the save is applied. This pass then reconciles: a node the save knows is
-//! **found by path** and given its components; one it knows and the tower does
-//! not is spawned under its parent; and a *stock* pile the tower raised that the
-//! save has never heard of is despawned, because that is a starting reagent the
-//! player used up.
+//! Nothing here draws from a random stream. `Ward::from_save` and
+//! `Maze::from_save` read their state rather than rolling it, and this pass
+//! calls no generator: a restore that re-dug the maze would move
+//! `RngStream::Archive` and diverge the loaded world from the one that saved
+//! it, on the same seed, for a reason nothing on screen could explain.
 //!
-//! The alternative — letting the save own the whole tree — is simpler and wrong
-//! in a way that arrives on schedule. Five more domains land between here and
-//! Phase 11a, and an authoritative save would open into a tower permanently
-//! lacking them. Refusing the old save by format version is not an answer,
-//! because it deletes it.
-//!
-//! # Nothing here draws from a random stream
-//!
-//! `Ward::from_save` and `Maze::from_save` read their state rather than rolling
-//! it, and this pass calls no generator. A restore that re-dug the maze would
-//! move `RngStream::Archive` and change every later roll in the session — which
-//! would show up as the loaded world diverging from the one that saved it, on
-//! the same seed, for a reason nothing on screen could explain.
-//!
-//! # Where the rest of it is
-//!
-//! This owns the world's **shape** — the clock, every stream position, the
-//! tree, and the resources. What is true of each *node* is [`super::adopt`], and
-//! the seam between them is real rather than a line count: everything there
+//! This owns the world's *shape* — the clock, every stream position, the tree,
+//! and the resources. What is true of each *node* is [`super::adopt`], which
 //! needs the tree to already exist.
 //!
-//! # What a bad file may do
-//!
-//! §15 accepts hand-editing: *"hand-editing a TOML file only affects the person
-//! doing it."* So every lookup here is fallible and nothing panics. A path that
-//! names nothing is skipped, a word that names no verb is dropped, and a `Cwd`
-//! that has gone missing falls back to `/tower` — a player standing nowhere is
-//! a game with no prompt.
+//! §15 accepts hand-editing — *"hand-editing a TOML file only affects the
+//! person doing it"* — so every lookup here is fallible and nothing panics. A
+//! path that names nothing is skipped, a word that names no verb is dropped,
+//! and a missing `Cwd` falls back to `/tower`, because a player standing
+//! nowhere is a game with no prompt.
 
 use bevy_ecs::prelude::*;
 use orbs_render::Records;
@@ -53,11 +40,10 @@ use crate::tower::{self, Cwd, Marks, Stock};
 
 /// Apply a save over a freshly raised tower.
 ///
-/// The order is load-bearing in one place: [`adopt::references`] runs **after**
+/// The order is load-bearing in one place: [`adopt::references`] runs after
 /// [`stream`], because a spell whose text has moved under it says so in a
-/// record, and a record pushed before the stream is rebuilt would be thrown
-/// away by the rebuild. (It was called `spells` when this was written, and the
-/// name outlived the function.)
+/// record, and a record pushed before the stream is rebuilt is thrown away by
+/// the rebuild.
 pub(crate) fn restore(world: &mut World, save: &Save) {
     clock_and_rolls(world, save);
     tree(world, save);
@@ -65,29 +51,26 @@ pub(crate) fn restore(world: &mut World, save: &Save) {
     stream(world, save);
     adopt::references(world, save);
     prompt(world, save);
-    // **What both tracks have already passed is opened again, silently.** What
-    // a station opened and the fact it was reached are two records of one thing
-    // and only the second is written down, so a document from before a station
-    // carried its `opens` comes back with the thing still shut — and nothing
-    // would ever open it, because both tracks apply an `opens` exactly once:
-    // `credit` crosses an edge now in the past, and `advance` skips a station
-    // already in `Reached`. Said nothing about, for `Experience::restore`'s
-    // reason — except what a mastery station reached only by this load opens,
-    // which the player has never been told (`mastery::caught_up`).
+    // What both tracks have already passed is opened again, silently. Only the
+    // *reached* half is written down, so a document from before a station
+    // carried its `opens` comes back with the thing shut and nothing to open it
+    // — both tracks apply an `opens` exactly once. Silent for
+    // `Experience::restore`'s reason, except what a mastery station reached only
+    // by this load opens, which the player has never been told
+    // (`mastery::caught_up`).
     tower::ley::caught_up(world);
     tower::mastery::caught_up(world);
-    // **After the tree, the progress and the catching up**, because the markers
-    // a shut room carries are derived from all three: which nodes exist, which
-    // rooms the document says are open, and which the line has since opened.
+    // After the tree, the progress and the catching up: a shut room's markers
+    // derive from all three — which nodes exist, which rooms the document calls
+    // open, and which the line has since opened.
     world.insert_resource(tower::Sealing(save.world.sealed));
     tower::seal(world);
-    // **A taken node above its fork's total is kept, deliberately.** When a
-    // node moves to a later station — `cursors_1` went from 40 to 400 when the
-    // lanes arrived (§19) — an older document holds it below the new total, and
-    // so does a tester's `debug_take`. Both are consistent: `ley_line` derives
-    // *spent* by membership, so the fork reads spent and the node stays in
-    // effect. Nothing the player earned is taken away, and a tester's shortcut
-    // survives the save round-trip `tests/strands.rs` holds it to.
+    // A taken node above its fork's total is kept. When a node moves to a later
+    // station — `cursors_1` went from 40 to 400 with the lanes (§19) — an older
+    // document holds it below the new total, and so does a tester's
+    // `debug_take`. Both are consistent, because `ley_line` derives *spent* by
+    // membership: nothing the player earned is taken away, and a tester's
+    // shortcut survives the round-trip `tests/strands.rs` holds it to.
 }
 
 /// The clock, and where each random stream stood.
@@ -121,21 +104,20 @@ fn tree(world: &mut World, save: &Save) {
         placed.push(entity);
     }
 
-    // **Anything raised that the save does not name, and that the player could
-    // have destroyed.** Stock and spells are the two kinds a command can remove
-    // — `purge` on a shipped `first_light.spell` is undone by the next load
-    // without this, in a release build.
+    // Anything raised that the save does not name and the player could have
+    // destroyed. Stock and spells are the two kinds a command can remove —
+    // without this, `purge` on a shipped `first_light.spell` is undone by the
+    // next load.
     //
-    // `Protected` and `Fixture` are the exemption, and they are what makes
-    // adopting worth doing: a room or an instrument the save has never heard of
-    // is a domain a later phase added, and despawning one would undo the
-    // upgrade the player just bought. The cost is stated rather than hidden — a
-    // *destructible* thing shipped in a later build (a new spell on the shelf)
-    // is swept the first time an older save is opened.
+    // `Protected` and `Fixture` are the exemption, and are what makes adopting
+    // worth doing: a room or instrument the save never heard of is a domain a
+    // later phase added, and despawning it would undo the upgrade the player
+    // just bought. The cost: a *destructible* thing shipped in a later build is
+    // swept the first time an older save is opened.
     //
-    // Collected first and re-checked inside the loop: `Children` is
+    // Collected first and re-checked inside the loop — `Children` is
     // `linked_spawn` in bevy_ecs 0.19, so despawning a parent takes its
-    // descendants, and a later entry in this list can already be gone.
+    // descendants and a later entry can already be gone.
     for entity in every_node(world) {
         if world.get_entity(entity).is_err() {
             continue;
@@ -149,27 +131,24 @@ fn tree(world: &mut World, save: &Save) {
         }
     }
 
-    // **The counter is wound past every id the save carried**, or the next node
-    // the tower issues collides with one just restored — two nodes with one
-    // identity, and `spell::advance`'s ordering key stops being an ordering.
+    // Wound past every id the save carried, or the next node the tower issues
+    // collides with one just restored — two nodes with one identity, and
+    // `spell::advance`'s ordering key stops being an ordering.
     let highest = save.nodes.iter().map(|node| node.id).max();
     if let Some(highest) = highest {
         world.resource_mut::<tower::NodeIds>().wind_past(highest);
     }
 
-    // **`Children` order is rebuilt to the document's**, and it is not cosmetic.
-    // `tower::node` opens by saying anything a player can see must come from
-    // walking `Children` in insertion order, because §6 resolves noun ties to
-    // whichever was registered first.
+    // `Children` order is rebuilt to the document's, and it is not cosmetic: §6
+    // resolves noun ties to whichever was registered first, so anything a player
+    // sees comes from walking `Children` in insertion order.
     //
     // A renamed node is what breaks it. `sabotage::substitute` renames a pile in
-    // place — `sage` becomes `sage-` — so on the next load its saved path matches
-    // nothing raised, it is *spawned* and appended, and the raised `sage` is
-    // swept above. The pile leaves its slot and lands last, and from then on an
-    // ambiguous phrase resolves to a different noun than it did before the save.
-    //
-    // Re-inserting `ChildOf` in document order costs one relationship hook per
-    // node at ~50 nodes and settles it for every cause, not only this one.
+    // place — `sage` becomes `sage-` — so its saved path matches nothing raised,
+    // it is spawned and appended, and from then on an ambiguous phrase resolves
+    // to a different noun than it did before the save. Re-inserting `ChildOf` in
+    // document order costs one hook per node at ~50 nodes and settles every
+    // cause, not only this one.
     for (entity, node) in placed.iter().zip(&save.nodes) {
         let (parent, _) = split(&node.path);
         if let Some(under) = tower::find_by_path(world, &parent) {
@@ -223,8 +202,8 @@ fn progress(world: &mut World, save: &Save) {
     world
         .resource_mut::<tower::Experience>()
         .restore(progress.experience);
-    // **Silent, like every other restore here.** `earn` says a sentence and a
-    // load must not congratulate the player on yesterday's work.
+    // Silent, like every other restore here: `earn` says a sentence, and a load
+    // must not congratulate the player on yesterday's work.
     world
         .resource_mut::<tower::Renown>()
         .restore(progress.renown);
@@ -233,36 +212,30 @@ fn progress(world: &mut World, save: &Save) {
     world
         .resource_mut::<tower::siege::Petitioned>()
         .restore(progress.petitioned);
-    // **Absent means whole, not nothing.** A save written before the
-    // sanctum existed says nothing about integrity, and defaulting a missing
-    // field to nought would hand every returning player a tower worn to the
-    // ground — see `ProgressSave::integrity`.
+    // Absent means whole, not nothing: a save written before the sanctum says
+    // nothing about integrity, and nought would hand every returning player a
+    // tower worn to the ground (`ProgressSave::integrity`).
     world
         .resource_mut::<tower::Integrity>()
         .restore(progress.integrity.unwrap_or(tower::STANDING));
-    // **Before the ceiling is read, because the ceiling now depends on it.**
-    // `pool_<n>` and `floor_<n>` are on the ceiling, and `grant::tiers` answers
-    // nought for a resource that is not there yet rather than panicking — so a
-    // ceiling read first came back as if the orb had taken nothing, and a
-    // document with no `quintessence` row filled the pool to the wrong number.
-    // The reader is deliberately forgiving; that makes the *order* the thing
-    // that has to be right, which is what this line is.
+    // Before the ceiling is read, because the ceiling depends on it: `pool_<n>`
+    // and `floor_<n>` sit on it, and `grant::tiers` answers nought for a
+    // resource not there yet rather than panicking — so a ceiling read first
+    // came back as if the orb had taken nothing. The reader is deliberately
+    // forgiving, which makes the order the thing that has to be right.
     world
         .resource_mut::<tower::Taken>()
         .restore(progress.taken.clone());
-    // **Absent means the ceiling, for the same reason and with a sharper edge.**
-    // A save from before the pool came up to the tower says nothing about it, and
-    // nought would hand a returning player an inert forge and a siege that
-    // cannot pledge until the trickle caught up. Read *after* integrity, because
-    // the ceiling is a function of it.
+    // Absent means the ceiling, for integrity's reason: a save from before the
+    // pool came up says nothing about it, and nought would hand a returning
+    // player an inert forge and a siege that cannot pledge. Read after
+    // integrity, because the ceiling is a function of it.
     //
-    // **Restored faithfully, never clamped.** The ceiling caps *regeneration*
-    // and nothing else: erosion lowers it without confiscating what the tower
-    // already holds, so a pool above the ceiling is a legal state a live world
-    // reaches by wearing down while full. Clamping here made a save round-trip
-    // lose a point — caught by `a_loaded_tower_keeps_running_the_same_world`,
-    // which is the whole reason that test drives a *lived* world rather than a
-    // fresh one.
+    // Restored faithfully, never clamped. The ceiling caps *regeneration* and
+    // nothing else, so a pool above it is a legal state a live world reaches by
+    // wearing down while full — clamping made a round-trip lose a point, caught
+    // by `a_loaded_tower_keeps_running_the_same_world`, which is why that test
+    // drives a *lived* world rather than a fresh one.
     let ceiling = tower::ceiling(world);
     world.insert_resource(tower::Quintessence::new(
         progress.quintessence.unwrap_or(ceiling),
@@ -277,25 +250,21 @@ fn progress(world: &mut World, save: &Save) {
     world
         .resource_mut::<tower::Tally>()
         .restore(progress.tally.clone());
-    // **Absent means full, not empty.** A store's standing is a *rate*, so an
-    // empty map reads as *nothing made lately* — every store out, and a
-    // returning player unable to spend a thing from a shelf they filled. A save
-    // written before stores existed says nothing about them, so it is stamped at
-    // the tick it is loading into and opens generously. `integrity` is the
-    // precedent one field up, for the same reason and with the same shape.
+    // Absent means full, not empty. A store's standing is a *rate*, so an empty
+    // map reads as *nothing made lately* — every store out, and a returning
+    // player unable to spend from a shelf they filled. A save written before
+    // stores existed is stamped at the tick it loads into instead; `integrity`
+    // one field up is the precedent.
     match progress.stores.clone() {
         // A document this build wrote. Taken at face value, empty or not — a
         // tower that has made nothing lately is a real state and must survive a
         // reload unchanged, or the round trip is not idempotent.
         Some(stores) => world.resource_mut::<tower::Stores>().restore(stores),
-        // **Written before stores existed.** Absent would otherwise read as
-        // *nothing made lately* — every store out, and a returning player unable
-        // to spend a thing from a shelf they filled.
+        // Written before stores existed — stamped now rather than read as out.
         None => {
             let now = world.resource::<crate::tick::Tick>().get();
-            // **Stock only.** `keeping` returns every child of the arsenal, and
-            // `arsenal.log` is one of them — stamping a log put a store on a
-            // file, which three round-trip tests caught immediately.
+            // Stock only: `keeping` returns every child of the arsenal,
+            // `arsenal.log` included, and stamping a log put a store on a file.
             let kept: Vec<String> = tower::keeping(world)
                 .into_iter()
                 .filter(|node| world.get::<tower::Stock>(*node).is_some())
@@ -311,20 +280,17 @@ fn progress(world: &mut World, save: &Save) {
     world
         .resource_mut::<tower::mastery::Reached>()
         .restore(progress.reached.clone());
-    // **Absent means everything open**, for `integrity`'s reason with a whole
-    // tower behind it: a save from before anything could be shut was a tower
-    // standing in all seven rooms, and an empty set would seal six of them on
-    // load. `Sim::restored` built the world open already, so only a document
-    // that says otherwise changes it.
+    // Absent means everything open, for `integrity`'s reason: a save from before
+    // anything could be shut was a tower standing in all seven rooms, and an
+    // empty set would seal six of them on load. `Sim::restored` builds the world
+    // open already, so only a document that says otherwise changes it.
     //
-    // **Unioned with what no station opens, never simply replaced.** That set is
-    // `Opened::start`'s own rule and it is derived from this build's content, so
-    // a charm, a gated product or a room this build ships *ungated* is in it —
-    // and a document written before that thing existed cannot name it. Replacing
-    // outright shut it for the life of every existing save, with nothing able to
-    // open it, which is the authoritative-save failure this module's header says
-    // the raise-then-adopt design exists to prevent, arriving through
-    // capabilities instead of nodes.
+    // Unioned with what no station opens, never simply replaced. That set is
+    // derived from this build's content (`Opened::start`), so a charm, a gated
+    // product or a room this build ships *ungated* is in it and an older
+    // document cannot name it — replacing outright shut it for the life of every
+    // existing save, which is the authoritative-save failure this header warns
+    // of, arriving through capabilities instead of nodes.
     if let Some(opened) = &progress.opened {
         let ungated = tower::Opened::start(
             world.resource::<Recipes>(),
@@ -383,16 +349,14 @@ fn stream(world: &mut World, save: &Save) {
         if let Some(spoken) = line.spoken.as_deref() {
             entry = entry.spoken(spoken);
         }
-        // **Asked for per record, not inherited from the stream.** `set_register`
-        // above decides what *new* records are spoken in; a saved record carries
-        // its own, and §8.1's poisoned-log tell is exactly that — `emit_lines`
-        // stamps `Presentation::Tampered` on every third row, so a restore that
-        // dropped this would answer `verify` with *tampered* and then draw the
-        // log with a plain face. Captured and never read, until now.
+        // Per record, not inherited from the stream. `set_register` decides what
+        // *new* records are spoken in; a saved one carries its own, and §8.1's
+        // poisoned-log tell is exactly that — `emit_lines` stamps
+        // `Presentation::Tampered` on every third row, so dropping this answered
+        // `verify` with *tampered* and drew the log with a plain face.
         //
         // Safe beside `spoken`: `finish` asserts an eldritch record carries an
-        // authored linear variant, and one that did not could never have been
-        // written in the first place — the same assertion fired at capture.
+        // authored linear variant, and the same assertion fired at capture.
         if let Some(register) = line.register.as_deref() {
             entry = entry.presentation(naming::register_from(register));
         }
@@ -417,26 +381,22 @@ fn stream(world: &mut World, save: &Save) {
 
 /// Ask the open numbered question again.
 ///
-/// **After the scene is rebuilt, which is why it is its own step.** `analyse`
-/// takes the `Scene` *resource*, and at the top of a restore that resource is
-/// still the empty default — `tower::raise` does not build one. Re-asking there
-/// resolved against a world that named nothing, so the prompt came back with a
-/// different list or none at all.
+/// Its own step, after the scene is rebuilt: `analyse` takes the `Scene`
+/// *resource*, and at the top of a restore that is still the empty default
+/// (`tower::raise` builds none), so re-asking there resolved against a world
+/// that named nothing.
 ///
-/// (`spell::compile` is not affected and was checked: `tower::scene_at` computes
-/// a scene from the world rather than reading the resource.)
+/// (`spell::compile` is unaffected — `tower::scene_at` computes a scene from
+/// the world rather than reading the resource.)
 fn prompt(world: &mut World, save: &Save) {
     tower::rebuild(world);
 
-    // **The numbered question, asked again.** The readings themselves are not in
-    // the document — an `Intent` would pin the format against every parser
-    // change — so the line is re-analysed here. §19 settled that the parser's
-    // tie-break draws no randomness, which is what makes that reproduce the same
-    // list rather than merely a similar one.
-    //
-    // A reading the restored scene can no longer offer is one the player could
-    // not have acted on either, so a shorter list is the honest answer and an
-    // empty one leaves no question open.
+    // The readings are not in the document — an `Intent` would pin the format
+    // against every parser change — so the line is re-analysed here. §19 settled
+    // that the parser's tie-break draws no randomness, which is what reproduces
+    // the same list rather than a similar one. A reading the restored scene can
+    // no longer offer is one the player could not have acted on either, so a
+    // shorter list is the honest answer.
     if let Some(line) = save.progress.asked.as_deref() {
         let analysis = crate::parser::analyse(
             line,

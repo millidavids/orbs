@@ -10,33 +10,29 @@
 //! [`grind`](crate::grind) and their successors. A picture decides what a cell
 //! *is*; this decides when it may become something else.
 //!
-//! # The rate is the safety property
+//! The rate is the safety property: no cell changes faster than [`FLIP_HZ`], by
+//! construction, because every animation is a function of the tick index this
+//! hands out and that advances [`FLIP_HZ`] times a second whatever the noise
+//! does.
 //!
-//! **No cell changes faster than [`FLIP_HZ`], by construction.** Every animation
-//! is a function of the tick index this hands out, and the tick index advances
-//! [`FLIP_HZ`] times a second and no faster, whatever any noise does.
+//! [`FLIP_HZ`] is 6 Hz, inside the 3–30 Hz photosensitive band, by deliberate
+//! and recorded exemption — the band is about flashes covering a substantial
+//! share of the visual field and these are bars two cells wide. §19 has the
+//! argument and the three mitigations it is conditional on. An instrument
+//! wanting a slower rhythm takes several ticks per beat, as the mortar's stroke
+//! does; nothing needs a faster one.
 //!
-//! [`FLIP_HZ`] is 6 Hz, which is inside the 3–30 Hz photosensitive band, by
-//! deliberate and recorded exemption — the band is about flashes covering a
-//! substantial share of the visual field and these are bars two cells wide. See
-//! DESIGN.md §19 for the argument and the three mitigations it is conditional
-//! on. An instrument wanting a *slower* rhythm than this simply takes several
-//! ticks per beat, which is what the mortar's stroke does; nothing needs a
-//! faster one.
-//!
-//! # Nothing here is random
-//!
-//! The noise is an integer hash of position and tick, never an RNG, so the same
-//! phase draws the same picture. That is what keeps `ORBS_DUMP` reproducible and
-//! keeps every instrument's animation out of `orbs-sim`'s seeded streams.
+//! Nothing here is random. The noise is an integer hash of position and tick, so
+//! the same phase draws the same picture — which keeps `ORBS_DUMP` reproducible
+//! and every animation out of `orbs-sim`'s seeded streams.
 
 use crate::tween;
 
 /// How often any one cell of an animated instrument may change, in hertz.
 ///
-/// **Not a tuning number.** See this module's header and DESIGN.md §19. Raising
-/// it, widening the bars, or removing a mitigation named there reopens the
-/// question for every instrument at once.
+/// Not a tuning number — see the module header and §19. Raising it, widening the
+/// bars, or removing a mitigation named there reopens the question for every
+/// instrument at once.
 pub const FLIP_HZ: f32 = 6.0;
 
 /// How long before the animations repeat themselves.
@@ -49,13 +45,12 @@ pub const FLIP_HZ: f32 = 6.0;
 /// 24 s is long enough that the loop is not something an eye finds, and it is a
 /// whole number of [`FLIP_HZ`] ticks so the wrap lands on a tick boundary.
 ///
-/// **A tick boundary is not automatically seamless**, and this said it was.
-/// Consecutive ticks are uncorrelated hashes for an ordinary cell, so the join
-/// there looks like every other one — but a *travelling* pattern correlates them
-/// on purpose, and for those the wrap was a 143-cell jump that re-randomised the
-/// picture in a single frame every twenty-four seconds. `rising` and `falling`
-/// are what close it; take a drift coordinate from them rather than subtracting
-/// a tick by hand.
+/// A tick boundary is not automatically seamless, and this said it was.
+/// Consecutive ticks are uncorrelated hashes for an ordinary cell, so that join
+/// looks like every other — but a travelling pattern correlates them on purpose,
+/// and for those the wrap was a 143-cell jump that re-randomised the picture in
+/// one frame every twenty-four seconds. `rising` and `falling` close it; take a
+/// drift coordinate from them rather than subtracting a tick by hand.
 pub const CYCLE_SECS: f32 = 24.0;
 
 /// How long one cell holds an appearance.
@@ -66,9 +61,9 @@ pub(crate) const TICKS_PER_CYCLE: u16 = 144;
 
 /// Which tick `phase` falls in for one cell, offset by that cell's [`stagger`].
 ///
-/// **This is the whole of the photosensitivity guarantee.** Appearance is a
-/// function of the value this returns, and this advances [`FLIP_HZ`] times a
-/// second, so no cell can flicker faster whatever the noise does.
+/// The whole of the photosensitivity guarantee: appearance is a function of what
+/// this returns, and this advances [`FLIP_HZ`] times a second, so no cell can
+/// flicker faster whatever the noise does.
 pub(crate) fn tick_of(phase: f32, lane: u16, step: u16) -> u16 {
     at(phase + stagger(lane, step) * TICK_SECS)
 }
@@ -115,7 +110,7 @@ pub(crate) fn noise(lane: u16, step: u16, tick: u16) -> u32 {
     hash(seed ^ u32::from(tick).wrapping_mul(PRIME_TICK)) >> 24
 }
 
-/// Noise for a travelling pattern, `0..=255` — **a function of position only**.
+/// Noise for a travelling pattern, `0..=255` — a function of position only.
 ///
 /// Separate from [`noise`] because the missing argument is the entire point: a
 /// pattern that depends on the tick cannot translate, it can only churn. What
@@ -127,31 +122,25 @@ pub(crate) fn drift_noise(lane: u16, drift: u16) -> u32 {
     hash(u32::from(lane).wrapping_mul(PRIME_TICK) ^ u32::from(drift)) >> 24
 }
 
-/// Where a pattern **travelling away from the bar's base** is sampled: the
-/// fire's plume and its sparks, rising one cell per tick.
+/// Where a pattern travelling away from the bar's base is sampled: the fire's
+/// plume and its sparks, rising one cell per tick.
 ///
 /// `travelled` is how many cells the pattern has moved since the cycle began,
 /// and `span` is how many it moves in a whole cycle — for a pattern moving a
 /// cell per tick that is [`TICKS_PER_CYCLE`], and for one moving every *n* ticks
 /// it is `TICKS_PER_CYCLE / n`, which must divide exactly.
 ///
-/// # The seam this closes
-///
-/// A translating picture is the one thing in this module that deliberately
-/// **correlates** consecutive ticks — that is what makes it move rather than
-/// churn — so it is also the only thing the cycle wrap can tear. [`shared_tick`]
-/// runs `143 → 0`, and a coordinate computed as `step - tick` therefore jumps
-/// 143 cells at that instant: the whole plume re-randomises once every 24
-/// seconds, in one frame, for no reason on screen.
+/// The seam this closes: a translating picture is the one thing here that
+/// deliberately correlates consecutive ticks, so it is the only thing the cycle
+/// wrap can tear. [`shared_tick`] runs `143 → 0`, so a coordinate computed as
+/// `step - tick` jumps 143 cells and the whole plume re-randomises in one frame
+/// every 24 seconds.
 ///
 /// [`CYCLE_SECS`] used to claim there was no seam, and for [`noise`] there is
-/// none — consecutive ticks *are* uncorrelated there, so the join looks like
-/// every other tick boundary. For a drift the argument runs backwards, and the
-/// tear was measured: 24 of 32 plume cells translated across the wrap against 31
-/// of 32 everywhere else, and 26 of 40 for the mortar's debris.
-///
-/// Reducing the coordinate modulo `span` closes it, because `143` and `-1` are
-/// then the same coordinate and the wrap is one more ordinary step.
+/// none. For a drift the argument runs backwards, and the tear was measured: 24
+/// of 32 plume cells translated across the wrap against 31 of 32 everywhere
+/// else. Reducing the coordinate modulo `span` closes it, because `143` and `-1`
+/// are then the same coordinate.
 pub(crate) const fn rising(step: u16, travelled: u16, span: u16) -> u16 {
     // `span - travelled` rather than a subtraction that could go negative. When
     // `travelled` is zero this is `span` itself, and the outer modulus takes it
@@ -159,7 +148,7 @@ pub(crate) const fn rising(step: u16, travelled: u16, span: u16) -> u16 {
     offset(step, span - travelled % span, span)
 }
 
-/// Where a pattern **travelling toward the bar's base** is sampled: the mortar's
+/// Where a pattern travelling toward the bar's base is sampled: the mortar's
 /// debris, falling a cell every [`FALL_EVERY`](crate::grind) ticks.
 ///
 /// The mirror of [`rising`], and it closes the same seam — see there.
@@ -188,7 +177,7 @@ pub(crate) fn shade(noise: u32) -> u16 {
     u16::try_from(noise >> 6).unwrap_or(0)
 }
 
-/// A **second** small integer from the same noise, `0..=3`.
+/// A second small integer from the same noise, `0..=3`.
 ///
 /// Different bits rather than a second hash: a picture's colour and its glyph
 /// often want to be correlated but not identical — the flame's cooler cells
@@ -264,13 +253,11 @@ mod tests {
         // The cycle must be a whole number of ticks, or the wrap lands mid-tick
         // and one cell gets two transitions inside one tick period.
         //
-        // **Exact, not within a tolerance.** This compared against `f32::EPSILON`
-        // — which is the gap between 1.0 and its successor, about 128 times
-        // *tighter* than one representable step at a magnitude of 144. So the
-        // tolerance was neither the slack it looked like nor a deliberate bound;
-        // it passed because the product happens to be exact. "A whole number of
-        // ticks" admits no slack anyway: half a tick of error is the entire
-        // defect.
+        // Exact, not within a tolerance. This compared against `f32::EPSILON` —
+        // the gap between 1.0 and its successor, about 128 times tighter than
+        // one representable step at a magnitude of 144 — so it was neither the
+        // slack it looked like nor a deliberate bound, and passed only because
+        // the product is exact. Half a tick of error is the whole defect.
         let ticks = CYCLE_SECS * FLIP_HZ;
         assert!(
             ticks.floor() == ticks && ticks == f32::from(TICKS_PER_CYCLE),

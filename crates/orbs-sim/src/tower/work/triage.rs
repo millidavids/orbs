@@ -36,17 +36,15 @@ pub fn purge(world: &mut World, target: Entity) {
     // tampering you cannot do anything about is its own dead end.
     if sabotage::poisoned(world, target) {
         world.entity_mut(target).remove::<sabotage::Poisoned>();
-        // **And put the name back**, for a substituted thing. Removing `Poisoned`
-        // alone reported `cleansed` and repaired nothing — the pile kept the name
-        // the enemy gave it, so the spell that named it stayed broken and the next
-        // roll renamed it again. §7 makes destruction maintenance; this is the
-        // half of that which is *repair*.
+        // And put the name back, for a substituted thing. Removing `Poisoned`
+        // alone reported `cleansed` and repaired nothing — the pile kept the
+        // name the enemy gave it, so the spell that named it stayed broken and
+        // the next roll renamed it again.
         let name = sabotage::restore(world, target).unwrap_or(name);
-        // **And the two adversarial surfaces, for exactly the same reason.** A
-        // rewritten spell and a retimed one are `Poisoned` like everything else,
-        // so without these two lines `purge` would clear the mark, report
-        // `cleansed`, and leave the spell corrupt — the defect the line above
-        // records for a substituted pile, one surface over.
+        // And the two adversarial surfaces, for the same reason. A rewritten
+        // spell and a retimed one are `Poisoned` like everything else, so
+        // without these two lines `purge` clears the mark, reports `cleansed`
+        // and leaves the spell corrupt.
         super::super::assault::unwrite(world, target);
         super::super::assault::untime(world, target);
         world
@@ -104,11 +102,10 @@ pub fn purge(world: &mut World, target: Entity) {
         // runs in §9's triage slot, which is a different pool from the
         // production one. So a purge starts happily during a brew, and this is
         // the one action in the domain that does not answer to `CAPACITY`.
-        // **A quickened room scours quickly too**, and this was the one duration
-        // in the tower that did not ask. §19 says of the scroll that *"everything
-        // the room starts inside that window takes half as long"*; a scour is
-        // something the room starts, and reaching for `PURGE_TICKS` raw made that
-        // sentence false without saying so anywhere.
+        // A quickened room scours quickly too, and this was the one duration in
+        // the tower that did not ask. §19 says of the scroll that *"everything
+        // the room starts inside that window takes half as long"*, and reaching
+        // for `PURGE_TICKS` raw made that sentence false silently.
         let now = *world.resource::<Tick>();
         let ticks = super::quicken::hastened(world, target, PURGE_TICKS);
         world.entity_mut(target).insert(Triaging {

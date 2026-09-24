@@ -1,20 +1,15 @@
 //! Guards on the two architectural rules this crate can now break silently.
 //!
 //! `orbs-sim` gained a dependency on `orbs-render` when the record model landed:
-//! a record is the *interface* between the two crates, and an interface belongs
-//! to whichever side both can depend on (see `orbs_render::record`). The cost is
-//! that this crate can now **name** [`Painter`] and `Frame`, which architectural
-//! rule 2 forbids it from using — `orbs-render` decides what appears and where,
-//! and the sim is not a participant in that decision.
+//! a record is the interface between the two crates, and an interface belongs to
+//! whichever side both can depend on. The cost is that this crate can now name
+//! [`Painter`] and `Frame`, which rule 2 forbids it from using.
 //!
-//! A comment would not hold. This does, and it is the same instrument the design
-//! already reaches for elsewhere: §16 fails the build if `unscii-16-full` ever
-//! appears in `assets/`, for exactly the same reason — a rule that is only
-//! written down is a rule that gets broken during a hurried phase.
+//! A comment would not hold and this does — the instrument §16 already uses,
+//! failing the build if `unscii-16-full` appears in `assets/`.
 //!
-//! These read the crate's own source. That is unusual and deliberate: the thing
-//! being asserted is what the source is *allowed to mention*, which no amount of
-//! runtime behaviour can express.
+//! These read the crate's own source, deliberately: what is being asserted is
+//! what the source may mention, which no runtime behaviour can express.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -45,13 +40,12 @@ fn sources() -> Vec<PathBuf> {
 
 #[test]
 fn the_sim_never_reaches_for_the_painter() {
-    // Rule 2. The sim emits records; deciding where a record lands on the grid
-    // is `orbs-render`'s job and a frontend's after that. If this ever needs to
-    // change, it is a design decision for DESIGN.md §19, not a use statement.
-    // `Fidelity` was the fifth until §19 fixed the grid and deleted it. Guarding
-    // a name that cannot exist is a boundary test quietly getting weaker, so it
-    // is replaced by what took its place: `scale_for` is the pixel arithmetic
-    // now, and `GRID` is the constant a sim reaching for layout would grab.
+    // Rule 2. The sim emits records; where one lands on the grid is
+    // `orbs-render`'s job. Changing that is a §19 decision, not a use statement.
+    //
+    // `Fidelity` was the fifth name until §19 fixed the grid and deleted it, and
+    // guarding a name that cannot exist is a boundary test getting weaker — so
+    // `scale_for` and `GRID` took its place.
     const FORBIDDEN: [&str; 5] = ["Painter", "Frame", "ScreenLayout", "scale_for", "GRID"];
 
     for path in sources() {
@@ -128,14 +122,13 @@ fn the_sim_never_touches_the_filesystem() {
     // `include_str!` is untouched: content compiled *into* the binary is the
     // opposite of this, and is what makes the headless promise keepable.
     //
-    // **A tripwire, not a wall, and worth saying so.** A substring scan is
-    // trivially walked around — `use std::fs;` then a bare `fs::write`, or
-    // `OpenOptions`, or `Command::new("cp")` — and it cannot see the thing the
-    // rule is most about, which is a filesystem-capable *dependency* arriving in
-    // `Cargo.toml`. It is aimed at the accidental `std::fs::write` in a hurried
-    // phase, which is the way this rule would actually be broken, and it catches
-    // that. `the_sim_never_depends_on_bevy_the_engine` above reads the manifest
-    // and is the shape to copy if a dependency ever needs guarding too.
+    // A tripwire, not a wall, and worth saying so. A substring scan is trivially
+    // walked around — `use std::fs;` then a bare `fs::write`, or `OpenOptions`,
+    // or `Command::new("cp")` — and it cannot see a filesystem-capable
+    // dependency arriving in `Cargo.toml`. It is aimed at the accidental
+    // `std::fs::write` in a hurried phase, which is how the rule would actually
+    // be broken. `the_sim_never_depends_on_bevy_the_engine` reads the manifest
+    // and is the shape to copy if a dependency needs guarding too.
     for path in sources() {
         let source = fs::read_to_string(&path).unwrap_or_else(|error| panic!("{path:?}: {error}"));
         // `std::fs` covers the module however it is spelled at the call site.

@@ -4,20 +4,14 @@ use super::Humour;
 
 /// One of the three places a humour is limned.
 ///
-/// **The keystone takes what the other two answer**; `sunwise` and `widdershins`
-/// each take two of the beast's three senses, and which two is drawn with the
-/// beast. So the shape of the circle never changes and its wiring does, which is
-/// the sanctum's jittered height one room over: a player who has learned *the*
-/// circle has to go on reading *this* one.
+/// The keystone takes what the other two answer; `sunwise` and `widdershins`
+/// each take two of the beast's three senses, drawn with the beast. So the shape
+/// of the circle never changes and its wiring does, and a player who has learned
+/// *the* circle still has to read *this* one.
 ///
-/// # The names
-///
-/// `dexter` and `sinister` were the first pair — heraldry's own left and right —
-/// and `dexter` scores 667 against both `pewter`, a lens sigil, and `enter`, an
-/// `attend` synonym. The way round a circle is older than heraldry: `sunwise` and
-/// `widdershins` are clean, and they say *which way round* rather than *which
-/// hand*, which is the truer word for a ring. `crown` was the keystone's first
-/// name and scores 800 against the shell's `cron`. §19 has the sweep.
+/// The names: `dexter` scored 667 against the lens's `pewter` and against
+/// `enter`, and `crown` 800 against the shell's `cron` — so the way round a ring
+/// rather than which hand (§19).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Glyph {
     /// Takes what the other two answer. What the beast is held by.
@@ -62,36 +56,30 @@ impl Glyph {
 
 /// The group `for each glyph` walks.
 ///
-/// **`glyph`, and `hand` was the first word.** It scores 750 against the
-/// bailey's `band` and against `and`, which is a word every `if` line may hold.
+/// `hand` was the first word: 750 against the bailey's `band` and against `and`,
+/// which every `if` line may hold.
 pub const GLYPHS: &str = "glyph";
 
 /// The group `for each humour` walks.
 ///
-/// **`humour`, and `kind` was the first word.** It scores 750 against `bind` and
-/// `find`, and `kin` prefixes `kindle`. A humour is also the older word for a
-/// temper's parts, which is what a beast's temper is made of.
+/// `kind` was the first word: 750 against `bind` and `find`, and `kin` prefixes
+/// `kindle`. A humour is also the older word for a temper's parts.
 pub const HUMOURS: &str = "humour";
 
 /// The reading on the circle: how many rows of the waiting beast's temper are lit.
 ///
-/// **A fact about the temper, which the player can see** — never a fact about
-/// the circle, and never a verdict on a glyph. It is what lets a spell that
-/// *knows the logic* skip humours that cannot be the keystone: a temper lit on
-/// one row of eight is a yoke or an eschew at the keystone, whatever the other
-/// two are.
+/// A fact about the temper the player can see, never a verdict on a glyph — so
+/// a spell that knows the logic can skip humours that cannot be the keystone: a
+/// temper lit on one row of eight is a yoke or an eschew there.
 ///
 /// Always between one and seven while a beast waits, because a temper lit on
-/// every row or none is refused when the table is built — so `raise_count` never
-/// sees nought, and **its absence means no beast**, which is what `is empty`
-/// answers.
+/// every row or none is refused when the table is built — so its absence means
+/// no beast, which is what `is empty` answers.
 ///
-/// **`fervour`, and two words came first.** `lit` is the forge's, scores 750
-/// against `list` and 600 against `light`, and would have broken the naming
-/// test's three pinned collisions. `choler` — the humour of temper — survived a
-/// sweep of every constant in the crate and then failed the real one at 667
-/// against the lens's `closer`, which is a word a spell asks one room over. A
-/// scrape is not the sweep; `tests/naming.rs` is.
+/// Two words came first: `lit` is the forge's and scores 750 against `list`,
+/// and `choler` survived a scrape of the crate's constants and then failed at
+/// 667 against the lens's `closer`. A scrape is not the sweep; `tests/naming.rs`
+/// is.
 pub const FERVOUR: &str = "fervour";
 
 /// The words a spell may ask the menagerie for.
@@ -99,12 +87,10 @@ pub const FERVOUR: &str = "fervour";
 /// Registered unconditionally in `tower::scene`, whether or not a beast waits,
 /// because a spell compiles at **cast** — the sanctum's `readings()` shape.
 ///
-/// **The humours are here because a glyph carries its humour as a reading**
-/// (`if the keystone has heed`), which is the lens's socket carrying its sigil.
-/// Nothing else is published: not how many rows balked, not which, and no
-/// *closer* or *further* between calls. §19 records why — a climb on those
-/// stalls on 37% of beasts, because one glyph can mask another, so publishing
-/// them would invite a solver that does not end.
+/// The humours are here because a glyph carries its humour as a reading (`if the
+/// keystone has heed`), as the lens's socket carries its sigil. Nothing else is
+/// published: a climb on rows-balked stalls on 37% of beasts, since one glyph
+/// can mask another (§19).
 #[must_use]
 pub fn readings() -> Vec<&'static str> {
     let mut words: Vec<&'static str> = Humour::ALL.into_iter().map(Humour::word).collect();

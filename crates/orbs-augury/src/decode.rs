@@ -1,12 +1,10 @@
 //! One line in, one forward pass, and the three answers that come back out.
 //!
-//! # Shared, because the two registers ask the same question
-//!
-//! *Is anything being asked for; which of the classes is it; which words are its
-//! argument.* The prompt's reader turns that into a command and the spell's into
-//! a statement, but the tensor work between the sentence and those three answers
-//! is identical — and a second copy of it is how the two would come to disagree
-//! about, say, which row a tag belongs to. §19 records that shape repeatedly.
+//! Shared by both registers, because they ask the same question: *is anything
+//! being asked for; which class is it; which words are its argument.* The
+//! prompt's reader makes a command of that and the spell's a statement, but the
+//! tensor work between is identical, and a second copy is how the two would come
+//! to disagree about which row a tag belongs to (§19).
 
 use burn::prelude::*;
 
@@ -17,8 +15,8 @@ use crate::{Batch, MAX_SLOTS, Reader, Sample, Tag, Vocabulary};
 pub struct Decoded {
     /// Whether the binary head found anything here to answer.
     ///
-    /// **Read this first.** The class head always names its best guess — it has
-    /// no way not to — so on a sentence that asks for nothing that guess means
+    /// Read this first. The class head always names its best guess — it has no
+    /// way not to — so on a sentence that asks for nothing that guess means
     /// nothing.
     pub answering: bool,
     /// Class rows, best first: the whole ranking rather than the argmax.
@@ -29,7 +27,7 @@ pub struct Decoded {
     /// found*, and a caller compares its length against what its own answer
     /// takes.
     pub slots: Vec<String>,
-    /// The same words **indexed by slot, with the empties kept**.
+    /// The same words indexed by slot, with the empties kept.
     ///
     /// What the spell register reads, because it numbers slots by kind — a place
     /// is slot 0 and a name slot 2 whether or not a reagent sits between them —
@@ -53,7 +51,7 @@ pub fn decode<B: Backend>(
     let batch = Batch::<B>::of(std::slice::from_ref(&sample), device);
     let reading = reader.forward(batch.tokens, batch.pad);
 
-    // **Whether, before which.** Row 1 is *"there is something here"*.
+    // Whether, before which. Row 1 is *"there is something here"*.
     let answering = reading
         .command
         .argmax(1)
@@ -129,13 +127,12 @@ pub fn decode<B: Backend>(
 /// A tagged word as an argument holds it: without the sentence's punctuation
 /// on its ends, or a trailing `'s`.
 ///
-/// **The tagger marks words, and the word it marked had the comma on.** *"grind
-/// the sage, please"* read as `grind sage,`. This sheds what the parser sheds
-/// before matching — `.,!;:?` — with the quotes and brackets around a word, and
-/// **keeps `-` and `_` at the end** as well as inside. `rock-salt` and
-/// `mortar_and_pestle` are names with them in, and `sage-` is sabotage: the
-/// sigil `tower::claimed` appends precisely so the resolver will not
-/// fold the lie back, which a reader must not do either — `fold_word` would.
+/// The tagger marks whole words, so *"grind the sage, please"* read as `grind
+/// sage,`. Sheds what the parser sheds before matching — `.,!;:?`, and the
+/// quotes and brackets around a word — but keeps a trailing `-` or `_`:
+/// `rock-salt` and `mortar_and_pestle` are names with them in, and `sage-` is
+/// sabotage, the sigil `tower::claimed` appends so that nothing folds the lie
+/// back.
 ///
 /// Case is left alone. A slot can be a spell's name, and a file is found by the
 /// name the player gave it.

@@ -1,18 +1,13 @@
 //! Which circle a beast is held by: the keystone alone, or all three glyphs.
 //!
-//! # Composition, as the genre teaches it
-//!
-//! Every logic-gate game starts with one gate — *whose table is this?* — and
-//! builds circuits after (§19). **The lesser circle is that first lesson**: a
-//! beast with two senses and a four-row temper, held by the keystone alone,
-//! which is the question *"which humour is this?"* asked five ways. A sealed
+//! Every logic-gate game starts with one gate and builds circuits after (§19).
+//! The lesser circle is that first lesson: two senses, a four-row temper, held
+//! by the keystone alone — *"which humour is this?"* asked five ways. A sealed
 //! tower draws nothing else until `menagerie_2` opens the whole circle, and an
-//! open tower — every test, dump and balance policy — never draws one at all.
+//! open tower never draws one at all.
 //!
-//! **A shape of beast rather than a second kind of circle**, so the circle's
-//! verbs, readings, board and save stay one set: `limn` asks whether a glyph is
-//! lit, the board draws the lines it is given, and a save says which by the
-//! length of the temper.
+//! A shape of beast rather than a second kind of circle, so the verbs, readings,
+//! board and save stay one set — a save says which by the length of the temper.
 
 use super::circuit::{self, Puzzle, Turned, Wiring};
 use super::temper::{self, OPENING, PAR, Temper};
@@ -24,9 +19,8 @@ pub const LESSER_SENSES: usize = 2;
 
 /// How many calls a lesser beast may take and still pay in full: one.
 ///
-/// **A four-row table read is a hold in one call**, and there is nothing to
-/// check a guess against but the call itself — so PAR is the reading, and a
-/// player stepping through the five is searching rather than reading.
+/// A four-row table is read in one call, and nothing checks a guess but the
+/// call itself — a player stepping through the five is searching, not reading.
 pub const LESSER_PAR: u32 = 1;
 
 /// Troops a lesser hold brings, within par or past it.
@@ -34,10 +28,9 @@ pub const LESSER_TROOPS: u32 = 1;
 
 /// A lesser hold earns a quarter of what a whole one does.
 ///
-/// **A lesson, priced as one.** It is a quarter of the work — one glyph of
-/// three, four rows of eight — and a player on it is learning the six rather
-/// than feeding a siege; five holds open the whole circle, and it is the whole
-/// circle the economy is measured on.
+/// A lesson, priced as one: a quarter of the work — one glyph of three, four
+/// rows of eight — and the economy is measured on the whole circle, which five
+/// holds open.
 pub const LESSER_SHARE: u64 = 4;
 
 /// The circle a beast is held by, and what it answers.
@@ -52,11 +45,11 @@ pub enum Shape {
 impl Shape {
     /// Draw a beast's shape: a whole puzzle, or a lesser temper.
     ///
-    /// **One value from the stream either way** — the forge's rule, kept in
-    /// `circuit::pick` for both draws: a tower opening the whole circle moves no
-    /// later draw by more than the one it already took.
+    /// One value from the stream either way — the forge's rule, kept in
+    /// `circuit::pick` for both draws — so a tower opening the whole circle
+    /// moves no later draw.
     ///
-    /// **A lesser beast is never given a turned wire.** A turned input to a lone
+    /// A lesser beast is never given a turned wire: a turned input to a lone
     /// keystone answers something none of the six humours does over the plain
     /// senses, so *"which humour is this?"* would stop having an answer.
     #[must_use]
@@ -193,8 +186,8 @@ mod tests {
     use super::*;
     use crate::rng::RngStream;
 
-    /// **Five, all different, and each held by exactly one humour** — so a
-    /// lesser beast *is* the question *"which humour is this?"*, with one answer.
+    /// Five, all different, each held by exactly one humour — so a lesser beast
+    /// is the question *"which humour is this?"* with one answer.
     #[test]
     fn five_lesser_tempers_each_held_by_one_humour_and_none_by_the_opening() {
         let tempers = lessers();

@@ -10,7 +10,7 @@ members = ["crates/*"]
 #
 # It becomes ordinary semver at 1.0, and the switch is one-way: DESIGN.md §19
 # records it so the jump from `0.<phase>` to `1.<minor>` is not read as a phase.
-version = "0.15.7"
+version = "0.16.13"
 edition = "2024"
 # bevy_ecs 0.19 requires 1.95. Declaring it makes the resolver MSRV-aware and
 # turns "too old toolchain" into a clear error instead of a cryptic type failure.
@@ -125,6 +125,25 @@ tracing = "0.1"
 # runtime, no async, nothing that reaches the filesystem from inside the sim.
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.9"
+
+# Where a player's towers and settings live (DESIGN.md §13, §19). One crate, one
+# function — `save::chosen` — and it does nothing but name the platform's own
+# application-data directory: `~/.local/share` on Linux, `Application Support` on
+# macOS, `AppData\Roaming` on Windows.
+#
+# **It arrives with the settings screen, which is what §13 and PRIVACY_POLICY.md
+# both promised.** Until then the save sat in the working directory, which for a
+# Steam install can be read-only — an install nobody can save in, discovered by a
+# player rather than by us.
+#
+# MIT OR Apache-2.0 itself — but auditing it is what **corrected** §19's
+# dependency-licence table rather than confirming it. `dirs` pulls `dirs-sys`,
+# which pulls `option-ext`, which is **MPL-2.0**; the table had claimed `r-efi`
+# was the only copyleft entry in the tree. It was already there and already
+# reachable (so is `colored`, via `burn`), and MPL-2.0 is GPL-compatible with no
+# "Incompatible With Secondary Licenses" notice on either — but the table was
+# wrong and now says so. DESIGN.md §19 has the sweep.
+dirs = "6.0"
 
 # The balance harness's CLI, and nowhere else (DESIGN.md §13). `derive` only —
 # it never reaches the sim, which takes its input as command lines exactly as a

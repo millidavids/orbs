@@ -1,33 +1,26 @@
 //! The player's side of the world: what they typed, what the orb said back, and
 //! what is waiting for the next tick.
 //!
-//! # Why the scrollback lives here and not in a frontend
+//! The scrollback lives here and not in a frontend because it is not a display
+//! buffer. DESIGN.md §3 forbids unlogged output, so this stream *is* the log —
+//! the scrollback, the file a player `peruse`s, the source a pipe stage reads
+//! and the balance harness's transcript are one stream read four ways. A
+//! frontend-owned scrollback would leave two streams that could disagree about
+//! what the orb had said.
 //!
-//! It is not a display buffer. DESIGN.md §3 forbids unlogged output, so this
-//! stream **is** the log — the scrollback, the file a player `peruse`s, the
-//! source a pipe stage reads, and the balance harness's transcript are one
-//! stream read four ways. A frontend-owned scrollback would mean the first
-//! domain has to move it, and until it did there would be two streams that could
-//! disagree about what the orb had said. That is the mistake the record model
-//! exists to prevent, one layer up.
-//!
-//! # The two clocks
-//!
-//! [`Sim::submit`](crate::Sim::submit) resolves **immediately**; the resulting
-//! [`Intent`] runs on the **next tick**.
-//!
-//! Both halves are load-bearing. Ticks are 1 Hz (§5.0), so resolving inside
-//! `step()` would put up to a full second between pressing Enter and seeing the
-//! echo — and a terminal that takes a second to answer reads as broken, while §6
-//! makes the echo the mechanism players learn the canonical vocabulary from.
-//! Effects, meanwhile, must land on a tick boundary or replay and offline/online
-//! parity stop holding.
+//! Two clocks: [`Sim::submit`](crate::Sim::submit) resolves immediately, the
+//! resulting [`Intent`] runs on the next tick. Both halves are load-bearing.
+//! Ticks are 1 Hz (§5.0), so resolving inside `step()` would put up to a full
+//! second between pressing Enter and seeing the echo — a terminal that takes a
+//! second to answer reads as broken, and §6 makes the echo how players learn
+//! the canonical vocabulary. Effects must land on a tick boundary or replay and
+//! offline/online parity stop holding.
 //!
 //! Determinism survives because a frontend calls `submit` from its own update
 //! and `step` from its fixed update, and Bevy runs the fixed loop *first* in a
 //! frame: a line submitted in frame F always resolves against world state as of
 //! the last completed tick in F. [`Submissions`] records the pairing, which is
-//! all a replay needs — and is also what §6's command-anchored `undo` will want.
+//! all a replay needs — and what §6's command-anchored `undo` will want.
 
 use bevy_ecs::prelude::*;
 use orbs_render::Records;
@@ -60,19 +53,19 @@ pub enum Queued {
     /// A resolved command the augury read rather than the orb (§6) — see
     /// [`Sim::submit_divined`](crate::Sim::submit_divined).
     ///
-    /// **Its own variant, because a verb may answer a guess differently from a
-    /// word the player typed.** `summon` is the first that does: it takes no
+    /// Its own variant, because a verb may answer a guess differently from a
+    /// word the player typed. `summon` is the first that does: it takes no
     /// argument and resolves in any menagerie, so it is what a reader reaches
-    /// for when a sentence defeats it — and with a beast waiting it spends a
-    /// call against par. Replay is unaffected, since `Submission::Divined`
-    /// comes back through the same door.
+    /// for when a sentence defeats it, and with a beast waiting it spends a
+    /// call against par. Replay is unaffected — `Submission::Divined` comes
+    /// back through the same door.
     Divined(Intent),
     /// A spell to write out — see [`Sim::write_spell`](crate::Sim::write_spell).
     ///
-    /// **In the same queue as commands, deliberately.** A save and a typed line
-    /// both land on the next tick, and two queues would mean an ordering between
-    /// them that nothing states — so `scribe morning` followed immediately by a
-    /// save could apply in either order.
+    /// In the same queue as commands, deliberately: a save and a typed line
+    /// both land on the next tick, and two queues would leave an ordering
+    /// between them that nothing states — `scribe morning` followed immediately
+    /// by a save could apply in either order.
     Write {
         /// The spell's filename, extension included.
         name: String,
@@ -94,11 +87,10 @@ pub enum Queued {
     Take(String),
     /// A tester asking for reagents — see [`execute::debug`](crate::execute).
     ///
-    /// **On the same queue, and that is the point.** A debug tool that mutated
-    /// the world from inside an input call would land off a tick boundary, which
-    /// is the one thing `session` is explicit that nothing may do: the state it
-    /// produced could not be reproduced from `(seed, submissions)`, and the tool
-    /// meant to help find bugs would be a source of them.
+    /// On the same queue, and that is the point. A debug tool that mutated the
+    /// world from inside an input call would land off a tick boundary, so the
+    /// state it produced could not be reproduced from `(seed, submissions)` —
+    /// the tool meant to help find bugs would be a source of them.
     #[cfg(debug_assertions)]
     Spawn(crate::execute::SpawnOrder),
 }
@@ -134,9 +126,9 @@ impl Pending {
 
     /// The reading the latest queued write of `name` carries, if one is waiting.
     ///
-    /// **Newer than the node's.** A write lands on the next tick, so on the beat
-    /// the editor saves and then reads its buffer, this is the reading that is
-    /// about to compile and the node's is the one before it.
+    /// Newer than the node's: a write lands on the next tick, so on the beat
+    /// the editor saves and then reads its buffer, this is the reading about to
+    /// compile and the node's is the one before it.
     #[must_use]
     pub fn written(&self, name: &str) -> Option<crate::tower::Read> {
         self.0.iter().rev().find_map(|queued| match queued {
@@ -181,23 +173,20 @@ impl Pending {
 
 /// Who is at the orb.
 ///
-/// §4's framing is *"always inside"* — the player never sees the wizard, because
-/// the player **is** the wizard. So the name at the prompt is world state rather
-/// than a display setting: it belongs in a save, it is the same in every
-/// frontend, and it is one of the few places the game says the player's own word
-/// back to them.
+/// §4's framing is *"always inside"* — the player never sees the wizard,
+/// because the player *is* the wizard. So the name at the prompt is world state
+/// rather than a display setting: it belongs in a save, it is the same in every
+/// frontend, and it is one of the few places the game says the player's own
+/// word back to them. Here rather than in `orbs-render` because a name is
+/// content, and `orbs-render` decides *where* things appear rather than what
+/// they are called.
 ///
-/// Lives here rather than in `orbs-render` because a name is content, and
-/// `orbs-render` decides *where* things appear rather than what they are called.
-///
-/// # It is world state, so a save outranks the environment
-///
-/// A frontend seeds this from the environment when it builds a **new** world.
-/// That is the only moment it may: once a save exists it carries its own name,
-/// and loading it must overwrite this rather than have the current machine's
-/// login quietly rename someone else's wizard. Nothing in the sim reads the name
-/// — it feeds the prompt and nothing else — so it cannot make two runs from one
-/// seed diverge, and this note is here to keep it that way.
+/// Being world state, a save outranks the environment. A frontend seeds this
+/// from the environment only when it builds a *new* world: once a save exists
+/// it carries its own name, and loading it must overwrite this rather than have
+/// the current machine's login quietly rename someone else's wizard. Nothing in
+/// the sim reads the name — it feeds the prompt and nothing else — so it cannot
+/// make two runs from one seed diverge, and this note keeps it that way.
 #[derive(Resource, Debug, Clone)]
 pub struct Wizard {
     name: String,
@@ -240,29 +229,27 @@ impl Wizard {
 /// The readings the orb is waiting for the player to pick between.
 ///
 /// §6: when several readings score alike in calm mode the orb asks, numbering
-/// them, and the player answers with a digit. Without somewhere to hold the list
-/// the question is rhetorical — the prompt appears, the digit resolves against
-/// the verb vocabulary as a miss, and the player is in a **dead end**. §15's gate
-/// calls the dead-end metric more important than the raw resolution rate.
+/// them, and the player answers with a digit. Without somewhere to hold the
+/// list the question is rhetorical — the prompt appears, the digit resolves
+/// against the verb vocabulary as a miss, and the player is in a dead end,
+/// which §15's gate weighs above the raw resolution rate.
 ///
 /// Emptied the moment anything else is typed: §6 forbids a modal prompt, so
-/// walking away from the question by asking a different one has to be free.
+/// walking away from the question has to be free.
 #[derive(Resource, Debug, Default)]
 pub struct Choices {
     readings: Vec<Intent>,
     /// The line that raised the question, so a save can ask it again.
     ///
-    /// **The line, not the readings.** An [`Intent`] is the parser's resolved
-    /// form with typed arguments, and putting it in a save would drag the whole
-    /// parser type surface into the format and pin it against every future
+    /// The line, not the readings. An [`Intent`] is the parser's resolved form
+    /// with typed arguments, and putting it in a save would drag the parser's
+    /// whole type surface into the format and pin it against every future
     /// parser change — for a question that survives until the next command.
     ///
     /// The line costs one string and reproduces the readings exactly, because
-    /// §19 settled that the parser's tie-break uses **no randomness**: ranking
-    /// is a total order over score, position in `Verb::ALL`, and the canonical
-    /// echo. `analyse` is a pure function of the line and the scene, so asking
-    /// it again on the way back in gives the same numbered list the player was
-    /// looking at.
+    /// §19 settled that the parser's tie-break uses no randomness: `analyse` is
+    /// a pure function of the line and the scene, so asking it again on the way
+    /// back in gives the same numbered list the player was looking at.
     asked: String,
 }
 
@@ -343,23 +330,18 @@ pub enum Submission {
     Typed(String),
     /// A line the augury worked out rather than the orb reading it (§6).
     ///
-    /// # Why the canonical form travels, when [`Wrote`](Self::Wrote)'s does not
+    /// The canonical form travels, where [`Wrote`](Self::Wrote)'s does not, and
+    /// that difference is the whole reason this variant exists. Re-deriving is
+    /// safe when the derivation is `analyse`, which is pure, integer-scored and
+    /// has no RNG. It is *not* safe when a trained model did the reading: the
+    /// same line on a different GPU, driver or backend need not produce the
+    /// same spans, so a replay that re-read the line could diverge from the
+    /// session it claims to reproduce — silently, and only on someone else's
+    /// machine.
     ///
-    /// `Wrote` records the buffer *before* canonicalisation on the explicit
-    /// ground that replaying should re-derive the canonical form rather than
-    /// trust one recorded beside it. That is right there and wrong here, and the
-    /// difference is the whole reason this variant exists.
-    ///
-    /// Re-deriving is safe when the derivation is `analyse`, which is pure,
-    /// integer-scored and has no RNG. It is **not** safe when a trained model
-    /// did the reading: the same line on a different GPU, a different driver or
-    /// a different backend need not produce the same spans, so a replay that
-    /// re-read the line could diverge from the session it claims to reproduce —
-    /// silently, and only on someone else's machine.
-    ///
-    /// So the model runs exactly once, at the moment the player was there to see
-    /// the echo, and what replays is what they saw. **The augury is outside the
-    /// determinism boundary; the echo is the boundary.**
+    /// So the model runs exactly once, while the player was there to see the
+    /// echo, and what replays is what they saw. The augury is outside the
+    /// determinism boundary; the echo is the boundary.
     Divined {
         /// Exactly what the player typed. Kept for the transcript and the trace,
         /// never re-read.
@@ -369,32 +351,28 @@ pub enum Submission {
     },
     /// A spell saved out of the editor.
     ///
-    /// # Why the whole text, and not the keystrokes
-    ///
-    /// Editing is the first thing in the game that takes input without every
-    /// keypress being a decision. A cursor moving left reaches nothing, changes
-    /// no state the world can see, and must not enter a replay — recording it
+    /// The whole text, not the keystrokes. Editing is the first thing in the
+    /// game that takes input without every keypress being a decision: a cursor
+    /// moving left reaches nothing and must not enter a replay — recording it
     /// would bloat the log by orders of magnitude *and* couple replay to editor
     /// internals, so changing how `Home` behaves would break every saved
-    /// session.
-    ///
-    /// The save is the decision, so the save is the entry. One per `:w`,
-    /// carrying what the buffer held.
+    /// session. The save is the decision, so the save is the entry: one per
+    /// `:w`, carrying what the buffer held.
     Wrote {
         /// The spell's filename.
         name: String,
-        /// Its lines, exactly as the buffer held them — **before**
+        /// Its lines, exactly as the buffer held them — *before*
         /// canonicalisation, so replaying re-derives the same canonical form
         /// rather than trusting one recorded alongside it.
         lines: Vec<String>,
-        /// The same lines as the orb *read* them, carried rather than re-derived.
+        /// The same lines as the orb *read* them, carried rather than
+        /// re-derived.
         ///
-        /// **The exception the doc above describes, and the reason it is one.**
-        /// Re-deriving is safe while the derivation is `analyse`, which is
-        /// deterministic; it is not safe once a trained reader did part of it,
-        /// because a replay on a machine with no weights — or with different
-        /// ones — would build a different program from the same submissions.
-        /// `Submission::Divined` carries its echo for exactly this reason.
+        /// The exception the doc above describes. Re-deriving is safe while the
+        /// derivation is `analyse`, which is deterministic; not once a trained
+        /// reader did part of it, because a replay on a machine with no weights
+        /// — or different ones — would build a different program from the same
+        /// submissions. `Submission::Divined` carries its echo for this reason.
         ///
         /// Equal to `lines` when nothing read them.
         read: Vec<String>,
@@ -404,29 +382,25 @@ pub enum Submission {
     },
     /// One cell of the archive's stacks, walked by hand (§10, §19).
     ///
-    /// # Why this is not a [`Typed`](Self::Typed) `follow east`
+    /// Not a [`Typed`](Self::Typed) `follow east`, because the two run at
+    /// different moments and a replay that could not tell them apart would put
+    /// this one a tick out: a typed line is *queued* and executes at the start
+    /// of the next tick, an arrow in `wander` mode executes immediately, so it
+    /// lands after the step of the tick it is recorded against.
     ///
-    /// Because the two run at different moments, and a replay that could not
-    /// tell them apart would put this one a tick out. A typed line is *queued*
-    /// and executes at the start of the next tick; an arrow in `wander` mode
-    /// executes **immediately**, so it lands after the step of the tick it is
-    /// recorded against rather than before the next one.
-    ///
-    /// That is the whole of the difference and it is recoverable from the
-    /// variant alone: replay a tick, then apply the walks recorded against it,
-    /// in list order. Nothing else about the pairing is ambiguous, because the
-    /// prompt is dead while the arrows have the maze — so a tick can never
-    /// contain both a walk and a typed line.
+    /// That is recoverable from the variant alone — replay a tick, then apply
+    /// the walks recorded against it, in list order. Nothing else about the
+    /// pairing is ambiguous, because the prompt is dead while the arrows have
+    /// the maze, so a tick can never hold both a walk and a typed line.
     Walked(String),
     /// A mastery node taken on the weave screen.
     ///
-    /// # Why the id and not the keystrokes
-    ///
-    /// [`Wrote`](Self::Wrote)'s argument, one screen along: aiming the cursor
-    /// with the arrows reaches nothing and changes no state the world can see,
-    /// so recording it would bloat the log and couple replay to the screen's
-    /// internals. **The take is the decision, so the take is the entry** — and
-    /// the id is what the world stores, so nothing is re-derived on the way in.
+    /// The id, not the keystrokes — [`Wrote`](Self::Wrote)'s argument, one
+    /// screen along: aiming the cursor with the arrows reaches nothing and
+    /// changes no state the world can see, so recording it would bloat the log
+    /// and couple replay to the screen's internals. The take is the decision,
+    /// so the take is the entry, and the id is what the world stores, so
+    /// nothing is re-derived on the way in.
     ///
     /// It executes at the start of the next tick, like a typed line: the screen
     /// hands the sim a request and the world answers on its own clock.
@@ -612,8 +586,8 @@ mod tests {
 
     #[test]
     fn saving_a_spell_is_one_submission_carrying_the_whole_buffer() {
-        // **The editor's replay contract.** Keystrokes reach no decision and
-        // never enter this log; the save does, once, with what the buffer held.
+        // The editor's replay contract. Keystrokes reach no decision and never
+        // enter this log; the save does, once, with what the buffer held.
         // Recording the *typed* lines rather than the canonical ones is
         // deliberate — a replay re-derives the canonical form, so the
         // canonicaliser changing cannot make an old session replay into a
@@ -629,9 +603,9 @@ mod tests {
                 Submission::Wrote {
                     name: "morning.spell".to_owned(),
                     lines: vec!["make a potion of clarity".to_owned()],
-                    // **Equal to `lines`, and that is the assertion.** Nothing
-                    // read this spell, so the reading is the text — which is the
-                    // identity case every build without a reader is in.
+                    // Equal to `lines`, and that is the assertion: nothing read
+                    // this spell, so the reading is the text — the identity
+                    // case every build without a reader is in.
                     read: vec!["make a potion of clarity".to_owned()],
                     by: crate::augur::Verbatim::IDENTITY,
                 },
@@ -667,13 +641,12 @@ mod tests {
         assert_eq!(spell_of(&live), spell_of(&replayed));
         assert!(spell_of(&live).is_some(), "the spell was never written");
 
-        // **And what it *compiles* from, which is the half `spell` cannot see.**
-        // `Sim::spell` returns `Held`, and `Held` is byte-identical across a
-        // replay by construction — the submission carries those very lines. So
-        // this test could not have caught a reading that failed to travel, and a
-        // session a model had read would have replayed unread into a different
-        // program. `Submission::Wrote` carries the reading for that reason, and
-        // this is the assertion that says so.
+        // And what it *compiles* from, the half `spell` cannot see. `Sim::spell`
+        // returns `Held`, which is byte-identical across a replay by
+        // construction, so this test could not have caught a reading that
+        // failed to travel and a session a model had read would have replayed
+        // unread into a different program. `Submission::Wrote` carries the
+        // reading for that reason, and this is the assertion that says so.
         let reading_of = |sim: &Sim| -> Option<Vec<String>> {
             let world = sim.world();
             world
@@ -702,11 +675,10 @@ mod tests {
 
     #[test]
     fn stacks_walked_by_hand_replay_to_the_same_cell() {
-        // **The claim `Sim::walk` makes, tested rather than argued.** It is the
+        // The claim `Sim::walk` makes, tested rather than argued. It is the
         // third entry point and the only one that does not go through the tick,
         // so it is the one that could quietly put a replay a step out — and a
-        // maze is the ideal witness, because being one cell wrong is visible
-        // rather than subtle.
+        // maze is the ideal witness, because being one cell wrong is visible.
         let mut live = Sim::new(4);
         live.submit("attend archive");
         live.step();
@@ -782,10 +754,9 @@ mod tests {
     ///
     /// Was `decoct nonsense` against the laboratory's three essences until
     /// `decoct` was retired (§19), then `divine nonsense` against the archive's
-    /// three fragments until `divine` stopped taking one — it opens the stacks
-    /// now. The dispensary's three reagents are the same shape of
-    /// question, and `move` is the verb whose first slot is *required* — which
-    /// is what makes the prompt appear at all.
+    /// three fragments until `divine` stopped taking one. The dispensary's
+    /// three reagents are the same shape of question, and `move` is the verb
+    /// whose first slot is *required* — which is what makes the prompt appear.
     fn asked(seed: u64) -> Sim {
         let mut sim = Sim::new(seed);
         sim.submit("attend laboratory");

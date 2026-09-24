@@ -10,9 +10,17 @@ Run orbs.exe (Windows), orbs (Linux), or double-click O.R.B.S..app (macOS).
 
 The game is played entirely by typing. There is no mouse input.
 
-Type "help" at the prompt. The orb explains where you are standing and lists
-every word it will answer to there. Type "help" again after moving to a new
-room -- each room has words of its own.
+The orb opens on its own menu, which is typed like everything else. Type
+"play", then "new", pick how long a game you want, and you are in. Next time,
+"play" lists the towers the orb is keeping and a number opens one.
+
+"manual" on that same menu is the whole book: how to play, how every system
+works, and how scripting works. "settings" is where the sound, the glass and
+the accessibility options live, and it remembers what you choose.
+
+Then type "help" at the prompt. The orb explains where you are standing and
+lists every word it will answer to there. Type "help" again after moving to a
+new room -- each room has words of its own.
 
 Your first line is:
 
@@ -20,21 +28,29 @@ Your first line is:
 
 ...and then "help" again.
 
+Type "menu" at any time to get back to the orb's menu.
+
 
 Save Data
 ---------
-Your progress is saved to a single file named "orbs-save.toml", written next to
-the game's executable.
+Your towers are saved in your operating system's standard application data
+folder, in a folder named "orbs":
 
-It is plain text. You can open it in any editor, read it, and back it up by
-copying it somewhere safe.
+  Linux     ~/.local/share/orbs/
+  macOS     ~/Library/Application Support/orbs/
+  Windows   %APPDATA%\orbs\
 
-  NOTE: Moving the save into the standard per-user application data folder for
-  your operating system -- and Steam Cloud support -- arrives with the settings
-  screen in a later update. Until then it lives beside the executable.
+The orb keeps up to six towers, named "orbs-save.toml" through
+"orbs-save-6.toml", with your settings in "orbs-settings.toml" beside them.
 
-If the folder the game is installed in is read-only, the save will fail. If that
-happens, see "Choosing where the save lives" below.
+They are plain text. You can open them in any editor, read them, and back them
+up by copying them somewhere safe.
+
+  NOTE: If you played an earlier build, your towers were saved next to the
+  game's executable. The first time this build runs it COPIES them into the
+  folder above and leaves the originals alone, so nothing is lost.
+
+  Steam Cloud support arrives in a later update.
 
 
 Choosing where the save lives
@@ -49,8 +65,12 @@ On Steam you can set this in the game's Launch Options.
 
 Clearing Progress
 -----------------
-Quit the game, then delete "orbs-save.toml". The next launch starts a fresh
-tower.
+From the orb's menu, type "play", then "abandon" and the number of the tower --
+"abandon 2". It asks first; typing the same words again does it. The tower is
+renamed rather than deleted, so you can put it back by hand if you change your
+mind.
+
+To clear everything, quit the game and delete the "orbs" folder named above.
 
 There is no in-game "clear progress" button yet, and no automatic backup is
 kept. If you want to keep your old tower, copy the file somewhere safe before
@@ -90,8 +110,14 @@ Comfort and Accessibility
 
 Nothing in this game flashes. No mechanic requires fast typing.
 
-Settings are not yet saved between sessions -- you will need to press F3 again
-each launch. Persisting them arrives with the settings screen.
+The orb makes sound: a click under each key, a chime when something finishes,
+and a low hum under it all. Every one of those says something the screen says at
+the same moment, so turning them off loses nothing. "settings", then "sound":
+"voice" is the cues and "hum" is the tube, and they move separately.
+
+All of these are remembered between sessions. Every function key above is also a
+row under "settings", and they are the same setting seen twice -- press F3 or
+set "crt off", whichever you prefer, and it is still off next launch.
 
 See HEALTH_WARNING.md before playing.
 

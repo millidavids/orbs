@@ -5,10 +5,10 @@
 //! Inference was measured the day it shipped — 436µs a line — and the load
 //! never was, so whether it needs to hide behind the POST card was a guess.
 //!
-//! **Ignored, because it prints a number for a person rather than asserting
-//! one.** Whether a pause at boot is acceptable is a judgement, and the answer
-//! differs by profile: `cargo run -p orbs` builds this crate unoptimised, while
-//! a player gets a release build. Run it both ways:
+//! Ignored, because it prints a number for a person rather than asserting one.
+//! Whether a pause at boot is acceptable is a judgement, and the answer differs
+//! by profile: `cargo run -p orbs` builds this crate unoptimised, where a player
+//! gets a release build. Run it both ways:
 //!
 //! ```text
 //! cargo test -p orbs-augury --test loading -- --ignored --nocapture

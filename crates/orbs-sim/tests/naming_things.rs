@@ -6,18 +6,16 @@
 //! four ways, 52 lines, because *"the way with the fewest marks"* was
 //! inexpressible.
 //!
-//! **Driven through a real `Sim`, never by hand**, which is the shape
-//! `tests/solver.rs` set: there is no public way to put a value in a spell's
-//! store, so a test that reached in would be pinning a state the game cannot
-//! reach. Every claim here is a spell, written and cast the way a player writes
-//! and casts one.
+//! Driven through a real `Sim`, as `tests/solver.rs` does: there is no public
+//! way to put a value in a spell's store, so a test that reached in would pin a
+//! state the game cannot reach.
 
 use orbs_sim::Sim;
 
 /// A tower standing in the archive with a maze open.
 ///
-/// The archive is where both features earn their keep: it is the one room with a
-/// set worth walking (`for each way`) and a quantity worth comparing (`marks`).
+/// The one room with a set worth walking (`for each way`) and a quantity worth
+/// comparing (`marks`).
 fn in_the_stacks(seed: u64) -> Sim {
     let mut sim = Sim::new(seed);
     for line in ["attend archive", "research"] {
@@ -39,10 +37,9 @@ fn cast(sim: &mut Sim, name: &str, lines: &[&str], ticks: u64) {
 
 /// Every word the session has put on the record stream, one entry per record.
 ///
-/// **Every text field, not just `Message`.** A `survey` answers with a `Heading`
-/// carrying `reading` and a `TableRow` carrying `passage`, and neither of those
-/// is a message — so a helper that read only messages saw an empty screen and
-/// three of these tests failed against a game that was working.
+/// Every text field, not just `Message`: a `survey` answers with a `Heading`
+/// and a `TableRow`, so a messages-only helper saw an empty screen and three
+/// of these tests failed against a working game.
 fn said(sim: &Sim) -> Vec<String> {
     use orbs_render::{FieldName, Value};
     sim.scrollback()
@@ -71,11 +68,10 @@ fn a_bound_name_stands_for_a_place_in_a_command() {
     // The smallest claim there is: `let bowl be mortar_and_pestle` and then
     // `grind sage` into `bowl`.
     //
-    // **In the laboratory, because its refusals name the instrument.** A walk
-    // that lands is `quiet` by design (§19 — the map already shows it), so the
-    // archive gives nothing to match on; here, emptying an empty mortar answers
-    // with a sentence carrying the mortar's own name, and that sentence is only
-    // reachable if the substitution happened.
+    // In the laboratory, because its refusals name the instrument: a walk that
+    // lands is quiet by design (§19), so the archive gives nothing to match on.
+    // Emptying an empty mortar names the mortar, and only a substitution gets
+    // you that sentence.
     let mut sim = Sim::new(3);
     sim.submit("attend laboratory");
     sim.step();
@@ -103,12 +99,9 @@ fn a_bound_name_stands_for_a_place_in_a_command() {
 fn a_bound_name_stands_for_a_place_in_a_question() {
     // The other half, and the one the accumulator needs: a variable has to be
     // usable where a *place* stands in a condition, on both sides of it.
-    // **Positive and seed-independent, and the first draft was neither.** It
-    // asked whether a bound name and a plain one took the *same* branch, which
-    // is satisfied when neither does — and an unresolvable name answers `None`,
-    // so a broken substitution ran no branch at all and the test agreed with
-    // itself. A fresh mortar is idle in every world; an endless shelf has more
-    // sage than an empty bowl in every world.
+    // Positive and seed-independent, where the first draft was neither — it
+    // asked whether two names took the *same* branch, which is satisfied when
+    // neither does.
     let mut sim = Sim::new(3);
     sim.submit("attend laboratory");
     sim.step();
@@ -127,20 +120,18 @@ fn a_bound_name_stands_for_a_place_in_a_question() {
         12,
     );
 
-    // **`first_light`, not `spell`.** The cast itself echoes `invoke
-    // asking.spell`, so a needle of `spell` is in the transcript before the
-    // question is ever asked — the test passed with the substitution disabled.
-    // The shipped spell's name appears only in a grimoire listing.
+    // `first_light`, not `spell`: the cast echoes `invoke asking.spell`, so a
+    // needle of `spell` is in the transcript before the question is asked and
+    // the test passed with the substitution disabled.
     assert!(
         anything_said(&sim, "first_light"),
         "`if bowl is idle` decided nothing, so the bound name never reached the \
          question: {:?}",
         said(&sim),
     );
-    // The arsenal is empty in a fresh tower and a `survey` of an empty shelf
-    // says nothing, so this asks the question the other way round: the *second*
-    // branch is the one that must have run, and the only way to see it is that
-    // the spell reached the end rather than stopping at an unanswerable line.
+    // A `survey` of the fresh tower's empty arsenal says nothing, so this asks
+    // the other way round: the spell reached the end rather than stopping at an
+    // unanswerable line.
     assert!(
         !anything_said(&sim, "there is no arsenal"),
         "a comparison against a bound place could not find it: {:?}",
@@ -150,13 +141,11 @@ fn a_bound_name_stands_for_a_place_in_a_question() {
 
 #[test]
 fn a_for_each_walks_every_member_of_its_set() {
-    // **Four, because the archive publishes four ways.** The set is declared by
-    // `build::Branch::group` and nothing else — `Role::Reading` covers the
-    // lens's ten sockets and sigils too, which is exactly why the group is a
-    // fact of its own.
+    // Four, because the archive publishes four ways. The set is declared by
+    // `build::Branch::group` alone — `Role::Reading` also covers the lens's
+    // sockets and sigils, which is why the group is a fact of its own.
     //
-    // Counted by what the loop *says*: `survey way` prints the readings of the
-    // way it is on, and four passes is four surveys.
+    // Counted by what the loop *says*: four passes is four surveys.
     let mut sim = in_the_stacks(3);
     let before = said(&sim).len();
     cast(
@@ -180,14 +169,13 @@ fn a_for_each_walks_every_member_of_its_set() {
 #[test]
 fn a_for_each_over_a_set_the_room_lacks_walks_nothing() {
     // The lens has sockets and the archive does not. A loop over a set that is
-    // not here must step **past** rather than into — descending would put the
-    // path somewhere `at` cannot resolve, which the runner reads as the end of
-    // the spell, so the lines after it would silently never run.
-    // **Both lines must be ones that always speak**, which is the trap this test
-    // fell into first: `survey cabinet` on an empty shelf answers *nothing*, so
-    // an assertion on it passed and failed for reasons that had nothing to do
-    // with the loop. A way always publishes a reading and the grimoire always
-    // holds spells.
+    // not here must step *past* rather than into — descending puts the path
+    // somewhere `at` cannot resolve, which the runner reads as the end of the
+    // spell, so the lines after it never run.
+    //
+    // Both lines must be ones that always speak: `survey cabinet` on an empty
+    // shelf answers nothing, so an assertion on it passes and fails for reasons
+    // unrelated to the loop.
     let mut sim = in_the_stacks(3);
     cast(
         &mut sim,
@@ -209,14 +197,13 @@ fn a_for_each_over_a_set_the_room_lacks_walks_nothing() {
 
 #[test]
 fn a_cursor_and_an_accumulator_pick_the_least_walked_way() {
-    // **The sentence the language could not say**, and the reason this work
-    // happened: `threading` is 52 lines of hand-unrolled ladder because a
-    // comparison could name a number and not a place, and nothing could hold the
-    // answer while the rest of the set was checked.
+    // The sentence the language could not say, and the reason for this work:
+    // `threading` is 52 hand-unrolled lines because a comparison could name a
+    // number and not a place, and nothing could hold the answer.
     //
-    // Driven as `dev_spells.toml`'s `roaming` writes it, and asserted on the one
-    // thing that cannot happen by accident: a fragment in the cabinet is a maze
-    // walked end to end.
+    // Driven as `dev_spells.toml`'s `roaming` writes it, and asserted on the
+    // one thing that cannot happen by accident: a fragment in the cabinet is a
+    // maze walked end to end.
     let mut sim = in_the_stacks(3);
     cast(
         &mut sim,
@@ -268,9 +255,7 @@ fn fragments(sim: &Sim) -> usize {
 #[test]
 fn a_half_written_binding_refuses_the_line_rather_than_guessing() {
     // `let best` binds nothing and `let be north` names nothing. Either read as
-    // the other is the orb writing down a line the player did not — the defect
-    // class §19 records four separate times, and the one the whole
-    // report-do-not-rewrite posture exists to close.
+    // the other is the orb writing down a line the player did not (§19).
     let sim = Sim::new(3);
     for half in ["let best", "let be north", "let the best way be north"] {
         let readings = sim.read_spell("archive", &[half.to_owned()]);
@@ -283,10 +268,9 @@ fn a_half_written_binding_refuses_the_line_rather_than_guessing() {
 
 #[test]
 fn a_spell_line_whose_verb_takes_nothing_says_so_rather_than_naming_a_referent() {
-    // The prompt names the verb and the words it could not use. A spell answered
-    // §8's **Referent missing** — *"nothing here answers to …"* — which is the
-    // one thing that is not wrong with the line: `status report` names nothing
-    // that has gone, it hands a verb words it has no slot for.
+    // The prompt names the verb and the words it could not use. A spell used to
+    // answer §8's *Referent missing*, which is the one thing not wrong with the
+    // line: `status report` hands a verb words it has no slot for.
     let sim = Sim::new(3);
     let readings = sim.read_spell("archive", &["status report".to_owned()]);
     let fault = readings[0]
@@ -299,10 +283,9 @@ fn a_spell_line_whose_verb_takes_nothing_says_so_rather_than_naming_a_referent()
 
 #[test]
 fn a_for_without_its_particle_opens_no_block() {
-    // `for way` is missing the word that makes the sentence one, and **no block
-    // is opened** — so the `end` below it is a stray one and says so too.
-    // Opening an unnamed block instead would swallow the body into a loop over
-    // nothing, silently.
+    // `for way` is missing the word that makes the sentence one, so no block
+    // opens and the `end` below it is a stray. Opening an unnamed block would
+    // swallow the body into a loop over nothing, silently.
     let sim = Sim::new(3);
     let readings = sim.read_spell(
         "archive",
@@ -321,11 +304,9 @@ fn a_for_without_its_particle_opens_no_block() {
 
 #[test]
 fn the_orb_quotes_a_bound_name_rather_than_resolving_it() {
-    // **`follow best` read back as `follow west`**, which is the fuzzy matcher
-    // finding the nearest place in the room — the one thing `best` is certainly
-    // not. The runner was always right (it substitutes before the parser sees
-    // the line); `interpret` was the liar, which is the exact shape of the bug
-    // that surface exists to catch.
+    // `follow best` read back as `follow west`: the fuzzy matcher finding the
+    // nearest place in the room. The runner substitutes before the parser sees
+    // the line and was always right; `interpret` was the liar.
     let sim = Sim::new(3);
     let readings = sim.read_spell(
         "archive",
@@ -344,9 +325,9 @@ fn the_orb_quotes_a_bound_name_rather_than_resolving_it() {
 #[test]
 fn a_bound_name_is_not_a_place_the_tower_is_missing() {
     // A variable reaches `compile` looking exactly like a place the room does
-    // not have. Reporting it as one would put `spell_nowhere` on every correct
-    // `for each` in the game, every cast — and the complaint is `Role::Danger`,
-    // so it would also latch the rail's fault mark on a working spell.
+    // not have. Reporting it as one puts `spell_nowhere` on every correct `for
+    // each` in the game — and it is `Role::Danger`, so it would latch the
+    // rail's fault mark on a working spell.
     let sim = Sim::new(3);
     let readings = sim.read_spell(
         "archive",
@@ -369,20 +350,13 @@ fn a_bound_name_is_not_a_place_the_tower_is_missing() {
 #[test]
 fn a_binding_survives_the_orb_being_closed_and_opened() {
     // §8 requires in-flight state be serialisable, and a store is in-flight
-    // state: a spell suspended half way through filling an accumulator has to
-    // come back holding what it had. **The completeness lint cannot see this** —
-    // it keys on `TypeId`, so a new *field* on an existing component is
-    // invisible to it, which is why this is written by hand.
-    // **The observable has to be the *value*, and both halves of the first
-    // draft were vacuous.** Looking for `best` in the document found the spell's
-    // own saved text — a save carries `Held`, and `let best be north` is one of
-    // its lines. Counting records after the restore found the run still
-    // emitting, which it does either way: a name it cannot place is a record
-    // too.
+    // state. Written by hand because the completeness lint keys on `TypeId`, so
+    // a new *field* on an existing component is invisible to it.
     //
-    // So: the bound *pair* in the file, and a refusal that names the mortar. An
-    // unbound `bowl` says *"there is no bowl within reach"* instead, which is a
-    // different sentence and the whole point.
+    // The observable has to be the *value*: looking for `best` in the document
+    // found the spell's own saved text, and counting records found a run that
+    // emits either way. So the bound *pair* in the file, and a refusal naming
+    // the mortar — an unbound `bowl` says *"there is no bowl within reach"*.
     let mut sim = Sim::new(3);
     sim.submit("attend laboratory");
     sim.step();

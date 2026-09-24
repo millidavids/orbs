@@ -1,18 +1,14 @@
 //! §8.1's two forms of `verify`, driven through the real parser and schedule.
 //!
-//! `tower::audit`'s own tests prove the curve and the cooldown arithmetic; these
-//! prove the *game* — that a bare `verify` is the expensive audit, that it holds
-//! the production slot while it runs, and that checking one surface costs you
-//! that surface and not the other.
+//! `tower::audit`'s own tests prove the curve and the cooldown arithmetic;
+//! these prove the game — that a bare `verify` is the expensive audit, that it
+//! holds the production slot, and that checking one surface costs you that
+//! surface and not the other.
 //!
-//! # Why this is Phase 1 debt rather than Phase 8 work
-//!
-//! `sabotage::verify`'s doc has said the expensive form *"arrives with the
-//! remaining surfaces in Phase 1"* since Phase 0, and Phase 1 closed without it.
-//! Until then four instant checks audited the whole tower for nothing, which is
-//! the collapse §8.1 names by name: *"'which surface do I inspect first' would
-//! stop being a decision, and the four-surface model would collapse on move
-//! one."*
+//! Phase 1 debt rather than Phase 8 work: `sabotage::verify` promised the
+//! expensive form in Phase 1 and Phase 1 closed without it, leaving four
+//! instant checks that audited the whole tower for nothing — the collapse §8.1
+//! names by name.
 
 use orbs_render::{FieldName, Value};
 use orbs_sim::{Save, Sim};
@@ -56,11 +52,10 @@ fn verdicts(sim: &Sim) -> Vec<String> {
         .collect()
 }
 
-/// **A bare `verify` is the audit**, which is the whole of what was missing.
+/// A bare `verify` is the audit, which is the whole of what was missing.
 ///
-/// §8.1 writes it `verify --all`; the parser has no flag syntax at all, so it is
-/// spelled the way every other widening in this game is — bare is the wide
-/// scope, exactly as `survey` and `recall` already are.
+/// §8.1 writes it `verify --all`; the parser has no flag syntax, so bare is the
+/// wide scope, as it already is for `survey` and `recall`.
 #[test]
 fn a_bare_verify_audits_the_whole_tower() {
     let mut sim = in_the_laboratory();
@@ -82,12 +77,11 @@ fn a_bare_verify_audits_the_whole_tower() {
     );
 }
 
-/// **Production-class, which is the price §8.1 sets.**
+/// Production-class, which is the price §8.1 sets.
 ///
-/// *"`verify --all` is Production-class, and its duration scales with the
-/// tower."* So it answers to `CAPACITY` and an audit means you are not brewing —
-/// §5.0's *"occupies the pane for its duration, during which you are not
-/// brewing"* applied to the one command that would otherwise be free.
+/// Its duration scales with the tower, so it answers to `CAPACITY` and an audit
+/// means you are not brewing — §5.0's rule applied to the one command that
+/// would otherwise be free.
 #[test]
 fn an_audit_holds_the_production_slot() {
     let mut sim = in_the_laboratory();
@@ -99,9 +93,9 @@ fn an_audit_holds_the_production_slot() {
         "an audit did not contend for the slot: {:?}",
         said(&sim),
     );
-    // **And the refusal names what holds it.** The run hangs on `/tower` rather
-    // than on the nameless filesystem root, which it did first — and `work_busy`
-    // then read *"the  is busy verifying"*, a refusal naming nothing.
+    // And the refusal names what holds it: the run hangs on `/tower`, not the
+    // nameless filesystem root, where `work_busy` read *"the  is busy
+    // verifying"*.
     assert!(
         ever_said(&sim, "the tower is busy"),
         "the refusal did not name the tower: {:?}",
@@ -109,12 +103,10 @@ fn an_audit_holds_the_production_slot() {
     );
 }
 
-/// **The cooldown rations a surface, and the other stays open.**
+/// The cooldown rations a surface, and the other stays open.
 ///
-/// This is the decision §8.1 is buying: *"There are only four surfaces; four
-/// free instant checks **are** `verify --all` by another name."* Checking a log
-/// puts every log beyond reach, and the shelf is still there to check — so
-/// *which surface do I inspect first* costs something.
+/// The decision §8.1 is buying: four free instant checks are `verify --all` by
+/// another name, so *which surface do I inspect first* has to cost something.
 #[test]
 fn checking_one_surface_costs_that_surface_and_not_the_other() {
     let mut sim = in_the_laboratory();
@@ -160,11 +152,9 @@ fn a_cooled_surface_comes_back() {
     );
 }
 
-/// **A cooldown a player could clear by quitting is not a cooldown.**
-///
-/// §19 calls that shape an exploit that then needs its own rule, so `Cooling`
-/// travels in the save — and an absent row reads as *nothing is cooling*, which
-/// is what a document written before this existed honestly says.
+/// A cooldown a player could clear by quitting is not a cooldown (§19), so
+/// `Cooling` travels in the save. An absent row reads as *nothing is cooling*,
+/// which is what an older save honestly says.
 #[test]
 fn a_cooldown_survives_a_save() {
     let mut sim = in_the_laboratory();
@@ -182,11 +172,9 @@ fn a_cooldown_survives_a_save() {
     );
 }
 
-/// **A thing that can never be tampered with is never rationed.**
-///
-/// §8.1 rations *which surface do I inspect first*; an instrument is neither a
-/// log nor a shelf, so a cooldown on it would be a wait with no information
-/// behind it.
+/// A thing that can never be tampered with is never rationed. An instrument is
+/// neither a log nor a shelf, so a cooldown on it would be a wait with no
+/// information behind it.
 #[test]
 fn checking_something_that_is_not_a_surface_costs_nothing() {
     let mut sim = in_the_laboratory();
@@ -200,8 +188,8 @@ fn checking_something_that_is_not_a_surface_costs_nothing() {
     );
 }
 
-/// **The audit finds what a targeted check would have**, which is what makes it
-/// worth its duration rather than a slower way to be told the same nothing.
+/// The audit finds what a targeted check would have, which is what makes it
+/// worth its duration.
 #[cfg(debug_assertions)]
 #[test]
 fn an_audit_names_what_is_lying() {
@@ -211,8 +199,7 @@ fn an_audit_names_what_is_lying() {
     sim.step_n(40);
 
     // `debug_swap` renames a base reagent, so the audit reports it by name —
-    // §8.1's *"the skill is knowing which surface to inspect, not deciphering an
-    // obscure clue"*, once the audit has been paid for.
+    // §8.1's skill is knowing which surface to inspect, not decoding a clue.
     assert!(
         verdicts(&sim).iter().any(|state| state == "tampered"),
         "the audit missed a swap it was standing next to: {:?}",

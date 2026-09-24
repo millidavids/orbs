@@ -1,5 +1,5 @@
 //! `defend`, `pledge`, `deploy`, `quaff` and `hold` — the bailey's five words
-//! (§5.1). **Count them from `Verb::anchor`, never from this line** — `pledge`
+//! (§5.1). Count them from `Verb::anchor`, never from this line — `pledge`
 //! arrived fifth and left six doc sites saying four.
 //!
 //! The shape is the sanctum's, two rooms over: `defend` lets an enemy arrive the
@@ -8,19 +8,15 @@
 //! [`tower::siege::readings`](crate::tower::siege::readings) is registered
 //! unconditionally in the scene.
 //!
-//! **None of the five takes the production slot**, which is §19's *"a domain
-//! stands alone"* applied to the domain that most needs it: a siege exists to
-//! test the automation, so freezing the automation while it runs would leave the
-//! enemy nothing to attack. A bound brewing spell keeps working while you fight.
+//! None of the five takes the production slot — §19's *"a domain stands
+//! alone"*, applied to the domain that most needs it: a siege exists to test
+//! the automation, so a bound brewing spell keeps working while you fight.
 //!
-//! # `hold` is the only one that advances the world
+//! `hold` is the only one that advances the world. Everything else on your turn
+//! is free and instant (§5.0), which is what makes the siege turn-based rather
+//! than merely slow: nothing races you while you read the board.
 //!
-//! Everything else on your turn is free and instant, which is §5.0's *"no
-//! per-command tick cost"* preserved exactly. That is what makes the siege
-//! turn-based rather than merely slow, and it is what the whole domain's
-//! accessibility rests on: nothing is racing you while you read the board.
-//!
-//! # How it is split
+//! Split by *when*, not by what:
 //!
 //! | File | Lines | What it is |
 //! |---|---|---|
@@ -30,11 +26,10 @@
 //! | `publish` | 141 | Every reading the bailey publishes, which is the half the scripting rests on |
 //! | `shared` | 36 | The rampart, and the one-line `say` all four use |
 //!
-//! **The seam is *when*, not *what*.** `verbs` is what a player types, `spending`
-//! is what it costs, `report` is what comes back, and `publish` is what a spell
-//! can then ask about. The alternative cut — one file per verb — would have put
-//! four copies of *find the siege, refuse if there is none* in four places, which
-//! is the duplication `spend` exists to avoid in the first place.
+//! `verbs` is what a player types, `spending` what it costs, `report` what
+//! comes back, `publish` what a spell can then ask about. One file per verb
+//! would have put four copies of *find the siege, refuse if there is none* in
+//! four places — the duplication `spend` exists to avoid.
 
 mod publish;
 mod report;

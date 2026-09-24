@@ -1,22 +1,17 @@
 //! The intervals themselves: what is in flight, and what may start.
 //!
-//! # Stored as an interval, not a countdown
+//! Stored as an interval, not a countdown: §8 wants in-flight actions to be
+//! *"first-class serialisable entities with start and completion ticks"*, and
+//! comparing against the clock is idempotent, survives `meditate` running
+//! hundreds of ticks inside one `step`, and makes the progress fraction a pure
+//! function of the tick.
 //!
-//! §8 requires in-flight actions be *"first-class serialisable entities with
-//! start and completion ticks"*. Comparing against the clock rather than
-//! decrementing a counter is idempotent, survives `meditate` running hundreds of
-//! ticks inside one `step`, serialises without interpretation, and makes the
-//! progress fraction a pure function of the tick.
-//!
-//! # Two pools, and why they are two types
-//!
-//! §9 reserves the **production** slot for an in-flight manual action for its
-//! whole duration, and grants a per-pane **triage** slot beside it so short work
-//! still runs during a brew. [`Triaging`] is a separate component from
-//! [`Working`] rather than a flag on it, because the whole point is that
-//! [`in_flight`] and [`CAPACITY`] *cannot see it*: sharing the type would mean
-//! every counter had to remember to filter, and the first one that forgot would
-//! refuse a purge during a brew — the exact inversion of the rule.
+//! Two pools, and two types. §9 reserves the production slot for a manual action
+//! and grants a per-pane triage slot beside it so short work still runs during a
+//! brew. [`Triaging`] is a separate component rather than a flag on [`Working`]
+//! because [`in_flight`] and [`CAPACITY`] must not see it: one shared type means
+//! every counter has to remember to filter, and the first that forgot would
+//! refuse a purge during a brew.
 
 use bevy_ecs::prelude::*;
 use orbs_render::{FieldName, RecordKind, Role};
@@ -38,18 +33,16 @@ pub const DIVINE_TICKS: u64 = 12;
 
 /// How long clearing an instrument takes.
 ///
-/// §11.5's Triage band is 10–30 s and this sits well under it, deliberately: at
-/// the band's own numbers, clearing four instruments is two minutes of a loop
-/// whose whole point is not feeling like a chore. A placeholder like every other
-/// duration here — the balance CLI sweeps it, and this is the one most likely to
-/// move once a whole brew can be timed end to end.
+/// §11.5's Triage band is 10–30 s and this sits well under it: at the band's own
+/// numbers, clearing four instruments is two minutes of a loop whose point is
+/// not feeling like a chore. A placeholder the balance CLI sweeps, and the one
+/// most likely to move once a whole brew can be timed end to end.
 pub const PURGE_TICKS: u64 = 4;
 
 /// How many production actions may be in flight at once.
 ///
-/// §11.5's opening multiplex capacity. Raising it is a **progression unlock**,
-/// not a tuning knob — §9 keeps panes and capacity as separate unlocks that
-/// "must not be conflated".
+/// §11.5's opening multiplex capacity. Raising it is a progression unlock rather
+/// than a tuning knob — §9 keeps panes and capacity separate.
 pub const CAPACITY: usize = 1;
 
 /// Work in progress.
@@ -83,10 +76,9 @@ impl Working {
 
 /// Short work, running beside a production action.
 ///
-/// §9 grants **one triage slot per pane** alongside the production slot: *"a
-/// 6-minute brew occupies the laboratory's production slot while a 20-second
-/// purge can still run in its triage slot."* §11.5 puts *"purge byproduct"* in
-/// the Triage band at 10–30 s, and it is the only occupant so far.
+/// §9 grants one triage slot per pane alongside the production slot, so a
+/// 6-minute brew and a 20-second purge run together. `purge byproduct` is the
+/// only occupant so far.
 #[derive(Component, Debug, Clone, Copy)]
 pub struct Triaging {
     /// When it started.
@@ -112,9 +104,9 @@ pub fn occupied(world: &mut World) -> Option<(Verb, Entity)> {
 /// Everything in flight, in insertion order.
 ///
 /// §9's per-pane cap was amended in Phase 1 so the laboratory may hold as many
-/// production actions as it has instruments — but they are drawn from the **same
-/// tower-wide pool**, which is what this counts. At [`CAPACITY`] 1 that is one
-/// action anywhere, so starting the mortar still means you are not deciphering.
+/// production actions as it has instruments, but they come from the same
+/// tower-wide pool, which is what this counts. At [`CAPACITY`] 1 that is one
+/// action anywhere, so starting the mortar means you are not deciphering.
 #[must_use]
 pub fn in_flight(world: &mut World) -> Vec<(Verb, Entity)> {
     world
@@ -132,8 +124,8 @@ pub fn in_flight(world: &mut World) -> Vec<(Verb, Entity)> {
 pub fn begin(world: &mut World, place: Entity, verb: Verb, subject: NodeId, ticks: u64) -> bool {
     // An instrument already busy refuses on its own account, whatever the pool
     // looks like — §10.1's lock is what makes different recipes need different
-    // scripts. **Scouring counts**: starting a run on an instrument a purge is
-    // about to empty loses the reagent and the slot both.
+    // scripts. Scouring counts: starting a run on an instrument a purge is about
+    // to empty loses the reagent and the slot both.
     if let Some(why) = busy(world, place) {
         refuse_busy(world, verb, place, why);
         return false;
@@ -145,11 +137,10 @@ pub fn begin(world: &mut World, place: Entity, verb: Verb, subject: NodeId, tick
         let name = world
             .get::<Name>(at)
             .map_or_else(String::new, |name| name.0.clone());
-        // The fields carry the facts (rule 4 — `sift` and §14 read these); the
-        // message carries the sentence, authored in `content/prose.toml` rather
-        // than here (rule 6). Without it this record drew as three bare values —
-        // `decoct decoct laboratory` — which named what held the slot without
-        // ever telling the player they had been refused.
+        // The fields carry the facts (rule 4); the sentence is authored in
+        // `content/prose.toml` (rule 6). Without it this drew as three bare
+        // values — `decoct decoct laboratory` — naming what held the slot
+        // without ever saying the player had been refused.
         let message = world.resource::<Prose>().line(
             "work_busy",
             &[("source", &name), ("state", holder.participle())],
@@ -167,17 +158,15 @@ pub fn begin(world: &mut World, place: Entity, verb: Verb, subject: NodeId, tick
         return false;
     }
 
-    // **Speed is read here and nowhere else**, and it follows heat: §10.1 checks
-    // the athanor when a run *begins* and lets the run finish even if the fire
-    // dies under it. A run started inside a quickened window is short and stays
-    // short, which keeps `Working` an interval set once — the property
-    // `meditate` idempotence rests on. Applied per tick it would be the
-    // countdown §19 refused, wearing a multiplier.
+    // Speed is read here and nowhere else, following heat: §10.1 checks the
+    // athanor when a run *begins* and lets it finish even if the fire dies. A
+    // run started inside a quickened window stays short, which keeps `Working`
+    // an interval set once — what `meditate` idempotence rests on. Per tick it
+    // would be the countdown §19 refused, wearing a multiplier.
     let ticks = super::quicken::hastened(world, place, ticks);
-    // **`haste` is the orb's speed, never the tool's** (§19, struck invariant
-    // 3 landing "as a thing you buy"): a run a *spell* issued lands sooner by
-    // the tiers taken, and a player's own run does not. Read here with the
-    // charm, for the reason the charm is: an interval set once.
+    // `haste` is the orb's speed, never the tool's (§19): a run a *spell* issued
+    // lands sooner by the tiers taken, and a player's own run does not. Read
+    // here with the charm, and for its reason — an interval set once.
     let ticks = if bidder(world).is_some() {
         let sooner = crate::tower::grant::haste_percent(world);
         (ticks.saturating_mul(100u64.saturating_sub(sooner)) / 100).max(1)
@@ -191,16 +180,14 @@ pub fn begin(world: &mut World, place: Entity, verb: Verb, subject: NodeId, tick
         started: now,
         ends: Tick::new(now.get().saturating_add(ticks)),
     });
-    // **Who asked for this run**, carried on the instrument so the completion
-    // can be credited to them ticks later. A spell charges the mortar and the
-    // mortar yields on its own schedule, in a different system — so without
-    // this, the one line a loop emits most often is the one the transcript still
-    // showed, and hiding a spell's own output only got most of the way there.
-    // **Set or cleared, never just set.** An insert with no matching clear left
-    // the credit on the instrument when a run was cancelled — and the player's
-    // own next run on that tool inherited it, so their completion was attributed
-    // to a spell and the transcript filtered it out entirely. They typed a
-    // command, waited twenty seconds, and nothing ever appeared.
+    // Who asked for this run, carried on the instrument so the completion can be
+    // credited to them ticks later: a spell charges the mortar and the mortar
+    // yields on its own schedule, in a different system.
+    //
+    // Set or cleared, never just set. An insert with no matching clear left the
+    // credit on a cancelled run, so the player's own next run on that tool
+    // inherited it and the transcript filtered their completion out entirely —
+    // they typed a command, waited twenty seconds, and nothing appeared.
     match bidder(world) {
         Some(spell) => {
             world.entity_mut(place).insert(Bidden(spell));
@@ -231,11 +218,10 @@ pub(crate) fn bidder(world: &World) -> Option<String> {
 
 /// Why an instrument will not accept a command right now.
 ///
-/// **Both states, always together.** `Working` was guarded for and `Triaging`
-/// was not, so a scour could be started on a charged instrument and four ticks
-/// later despawn the inputs of a run that began in between — the reagent gone,
-/// nothing produced, and the tower's one production slot spent. Returning them
-/// from one function is what stops the next caller checking only half.
+/// Both states, always together. `Working` was guarded for and `Triaging` was
+/// not, so a scour on a charged instrument could despawn the inputs of a run
+/// that began in between — reagent gone, nothing produced, the slot spent.
+/// Returning them from one function stops the next caller checking half.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Busy {
     /// A run is in flight.
@@ -287,13 +273,11 @@ pub fn busy(world: &World, place: Entity) -> Option<Busy> {
 
 /// Refuse `verb` because `place` is mid-something, and say so.
 ///
-/// **One shape, one site.** This record was hand-built at four call sites and
-/// three of them disagreed: `purge`'s put the instrument in `Name` with no
-/// `Path`, while `move`'s and `wield`'s put the *verb* in `Name` and the
-/// instrument in `Path`. Rule 4 makes fields the thing `sift`, pipes and §14's
-/// linearisation read, so one refusal in three shapes is three things a pipeline
-/// has to match — and `sift working orb.log` returned rows whose columns meant
-/// different things.
+/// One shape, one site. Hand-built at four call sites, three of them disagreed:
+/// `purge`'s put the instrument in `Name` with no `Path`, `move`'s and `wield`'s
+/// put the *verb* in `Name`. Rule 4 makes fields what `sift`, pipes and §14's
+/// linearisation read, so `sift working orb.log` returned rows whose columns
+/// meant different things.
 pub fn refuse_busy(world: &mut World, verb: Verb, place: Entity, why: Busy) {
     let name = world
         .get::<Name>(place)
@@ -343,10 +327,10 @@ pub fn stop(world: &mut World, place: Entity) -> bool {
     let name = world
         .get::<Name>(place)
         .map_or_else(String::new, |name| name.0.clone());
-    // **Asked once.** This used to encode the answer as a prose key and then
-    // recover it with `key == "stop_done"`, so renaming the key in
-    // `content/prose.toml` would have left `stopped` false forever — every stop
-    // reporting `idle` while the component *was* removed, with no compiler
+    // Asked once. It used to encode the answer as a prose key and recover it
+    // with `key == "stop_done"`, so renaming the key in `content/prose.toml`
+    // would leave `stopped` false for ever — every stop reporting `idle` while
+    // the component *was* removed, with no compiler
     // complaint and no test on the returned bool.
     let stopped = world.get::<Working>(place).is_some();
     if stopped {

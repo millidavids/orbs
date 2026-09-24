@@ -2,28 +2,23 @@
 
 /// What one glyph does with the two things it is given.
 ///
-/// # Six, and all of them symmetric
+/// Six, and all of them symmetric: the two-input gates whose answer does not
+/// care which input is which — AND, NAND, OR, NOR, XOR and XNOR. Symmetry is
+/// what lets the circle draw a glyph's two inputs without saying which is first,
+/// and what keeps the puzzle a question about logic rather than wiring order; an
+/// implication gate would make every glyph's two wires a second decision.
 ///
-/// These are the six two-input gates whose answer does not care which input is
-/// which: AND, NAND, OR, NOR, XOR and XNOR. **Symmetry is what lets the circle
-/// draw a glyph's two inputs without saying which is first**, and it is what
-/// keeps the puzzle a question about *logic* rather than about wiring order —
-/// an implication gate would make every glyph's two wires a second decision.
+/// The names are not the logician's. `and`, `or` and `not` are the spell
+/// language's connectives and `either` and `both` its brackets, so a humour
+/// called `or` would be a word no `if` line could say. The rest collide with
+/// each other by construction: `nand` is one edit from `and`, `nor` from `or`,
+/// `xnor` from `xor`. So the canonical register is arcane, as §6 wants anyway,
+/// and `recall <humour>` teaches the logician's name beside it.
 ///
-/// # The names, and why they are not the logician's
-///
-/// `and`, `or` and `not` are the spell language's own connectives
-/// (`parser::question`), and `either` and `both` are its brackets — a humour
-/// called `or` would be a word no `if` line could ever say. The rest collide
-/// with each other by construction: `nand` is one edit from `and`, `nor` from
-/// `or`, `xnor` from `xor`. So the canonical register is arcane, as §6 wants
-/// anyway, and `recall <humour>` teaches the logician's name beside it.
-///
-/// **Each second word is the first one negated**: a yoke pulls only when both
-/// pull, and to spurn the yoke is to answer whenever they do not; to heed is to
-/// answer to either, and to eschew is to answer to neither; to oppose is to
-/// answer when they differ, and to mirror is to answer when they agree. §19
-/// records the sweep, and the words it rejected on the way.
+/// Each second word is the first one negated: a yoke pulls only when both pull,
+/// and to spurn the yoke is to answer whenever they do not; to heed is to answer
+/// to either, and to eschew to neither; to oppose is to answer when they differ,
+/// to mirror when they agree. §19 records the sweep and the words it rejected.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Humour {
     /// Lit when both are lit. What a logician calls AND.
@@ -43,9 +38,9 @@ pub enum Humour {
 impl Humour {
     /// Every humour, in the order a bare `limn` steps through them.
     ///
-    /// **Each pair together**, so stepping a glyph passes a humour and then its
-    /// negation — which is the order a player learning the six meets them in, and
-    /// the one [`OPENING`](super::OPENING) starts at the head of.
+    /// Each pair together, so stepping a glyph passes a humour and then its
+    /// negation — the order a player learning the six meets them in, and the one
+    /// [`OPENING`](super::OPENING) starts at the head of.
     pub const ALL: [Self; 6] = [
         Self::Yoke,
         Self::Spurn,
@@ -118,10 +113,10 @@ impl Humour {
 
     /// The humour that answers the same when both its inputs are turned over.
     ///
-    /// **De Morgan, as a function.** `heed` over two things is `spurn` over their
-    /// opposites, and `yoke` is `eschew`'s; `oppose` and `mirror` do not care. It
-    /// is why no circle has one solution: negate both outer glyphs and swap the
-    /// keystone for its dual, and every row answers as before.
+    /// De Morgan, as a function: `heed` over two things is `spurn` over their
+    /// opposites and `yoke` is `eschew`'s, where `oppose` and `mirror` do not
+    /// care. It is why no circle has one solution — negate both outer glyphs and
+    /// swap the keystone for its dual, and every row answers as before.
     #[must_use]
     pub const fn dual(self) -> Self {
         match self {
@@ -177,7 +172,7 @@ mod tests {
         }
     }
 
-    /// **Symmetric, all six** — the property the circle's drawing rests on.
+    /// Symmetric, all six — the property the circle's drawing rests on.
     #[test]
     fn no_humour_cares_which_input_is_which() {
         for humour in Humour::ALL {

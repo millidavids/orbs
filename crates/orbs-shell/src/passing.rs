@@ -1,35 +1,22 @@
 //! The clock a screen leaves and arrives on.
 //!
 //! [`orbs_render::passage`] decides what a crossing *looks* like; this decides
-//! *when* — the division `tween`, `bench` and `reveal` already draw, and the
-//! reason nothing in `orbs-render` knows what a second is.
+//! *when*, because nothing in `orbs-render` knows what a second is.
 //!
-//! It is [`PaneTransition`](crate::PaneTransition)'s twin and deliberately its
-//! shape: that one animates a pane's **geometry**, this one animates a pane's
-//! **content**. They are two clocks because they answer to different events —
-//! `F4` and the multiplex move rectangles, `attend` and `wander` move screens —
-//! and one clock doing both would have to interleave them.
+//! [`PaneTransition`](crate::PaneTransition)'s twin: that animates a pane's
+//! geometry, this animates its content. Two clocks because they answer to
+//! different events — `F4` moves rectangles, `attend` moves screens — and one
+//! doing both would have to interleave them.
 //!
-//! # What a crossing is between
+//! There is no `Screen` enum in this crate; which view draws is re-derived every
+//! frame by [`prompt::paint`](crate::paint). So this watches a derived value,
+//! [`Showing`], whose three fields each guard a specific false positive.
 //!
-//! There is no `Screen` enum in this crate. Which view draws is **never
-//! stored**: it is re-derived every frame by the branch chain in
-//! [`prompt::paint`](crate::paint) from four independent pieces of state. So
-//! this watches a derived value, [`Showing`], whose three fields are each chosen
-//! against a specific false positive — see there.
-//!
-//! # It is off when the tube is off
-//!
-//! §14 requires motion be disableable and `court_wizard` ships a health warning
-//! for motion sickness. The crossing rides the frontend's own motion switch,
-//! passed to [`Passing::advance`] rather than queried here, exactly as
-//! [`Bench`](crate::Bench) does — and `crt::settings` documents at length why
-//! that distinction is load-bearing.
-//!
-//! **With motion off there is nothing kept and no crossing to freeze.** Not "a
-//! quieter animation": DESIGN.md §19 records three animations that
-//! independently learned *"a picture may never be able to vanish"*, because
-//! reduce-motion pinned a phase and froze a blank. A crossing frozen at its
+//! §14 requires motion be disableable. The crossing rides the frontend's own
+//! motion switch, passed to [`Passing::advance`] rather than queried here,
+//! exactly as [`Bench`](crate::Bench) does. With motion off there is nothing
+//! kept and no crossing to freeze — §19 records three animations that learned
+//! *"a picture may never be able to vanish"*, and a crossing frozen at its
 //! midpoint is an empty pane for the session.
 
 use bevy_ecs::prelude::Resource;
@@ -41,31 +28,20 @@ use super::prompt::Crossed;
 
 /// How long a whole crossing takes: out, then in.
 ///
-/// **Settled by looking, and it went up.** It shipped at `0.24` — the number
-/// [`PaneTransition`](crate::PaneTransition) uses for a pane arriving, borrowed
-/// on the argument that a crossing should be *felt rather than watched*. Played,
-/// that was wrong in a way no test could have said: a seam crossing a hundred
-/// columns in seven frames reads as a flicker rather than as travel, and a
-/// motion nobody can follow is decoration rather than a passage. §19 made the
-/// same correction to the boot sequence, four times over, and recorded the
-/// judgement — *"a boot sequence nobody can read is worse than one that takes a
-/// beat."*
+/// Settled by looking, and it went up. It shipped at `0.24`, borrowed from
+/// [`PaneTransition`](crate::PaneTransition); played, a seam crossing a hundred
+/// columns in seven frames read as a flicker rather than as travel. §19 made the
+/// same correction to the boot sequence four times — *"a boot sequence nobody
+/// can read is worse than one that takes a beat."* At half a second the seam
+/// moves about seven columns a frame at 60 Hz.
 ///
-/// At half a second the seam moves about seven columns a frame at 60 Hz, which
-/// is travel a person can follow across a pane.
-///
-/// **It is bounded on both sides, and neither bound is taste.** §19 caps any
-/// animation at one world tick — *"the longest an animation can run and still
-/// finish before anything it describes can change"* — and [`FLOOR`] is that same
-/// tick. So this must stay **under** the floor, or a crossing would still be
-/// running when the next one became permissible and crossings would be paced by
-/// their own length instead of by the bound with the safety argument attached.
-/// Half of it leaves as much margin again.
+/// Bounded on both sides. §19 caps any animation at one world tick, which is
+/// [`FLOOR`], so this must stay under the floor or crossings would be paced by
+/// their own length rather than by the bound with the safety argument attached.
 const DURATION: f32 = 0.5;
 
-// The invariant the two constants above share, asserted rather than remembered:
-// the floor is what bounds the rate, and a duration that reached it would
-// quietly take over that job.
+// Asserted rather than remembered: the floor bounds the rate, and a duration
+// that reached it would quietly take over that job.
 const _: () = assert!(
     DURATION < FLOOR,
     "a crossing must finish before the next one may begin",
@@ -73,32 +49,27 @@ const _: () = assert!(
 
 /// The shortest time between two crossings *starting*, in seconds.
 ///
-/// **One world tick, and it is the photosensitivity bound rather than a taste
-/// one.** A crossing moves a cell's coverage one way and then back, which §19
-/// counts as exactly one flash — *"a flash is a pair of opposing changes"* — so
-/// what has to be bounded is not the shape but how often one may begin.
+/// One world tick, and a photosensitivity bound rather than a taste one: §19
+/// counts a crossing as exactly one flash — *"a flash is a pair of opposing
+/// changes"* — so what needs bounding is how often one may begin.
 ///
-/// One per second against WCAG 2.3.1's limit of three, with the margin spent on
-/// the thing that is actually uncertain: how much of the field a crossing
-/// covers. It costs nothing real, because §5.0 turns the world at 1 Hz and a
-/// room change cannot arrive faster than this. What it can refuse is a crossing
-/// the *keyboard* makes — `F5` mashed, a tool opened and shut — and those cut,
-/// which is what they did before any of this existed.
+/// One per second against WCAG 2.3.1's limit of three, the margin spent on how
+/// much of the field a crossing covers. It costs nothing, since §5.0 turns the
+/// world at 1 Hz. What it refuses is a crossing the *keyboard* makes — `F5`
+/// mashed, a tool opened and shut — and those cut.
 const FLOOR: f32 = 1.0;
 
 /// What the pane is showing. Two of these differing is a crossing.
 ///
-/// **Three fields rather than one, and each earns its place by a false positive
-/// it prevents.** A fourth would need the same argument.
+/// Three fields, each earning its place by a false positive it prevents. A
+/// fourth would need the same argument.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Showing {
     /// The surface that has taken the whole pane, if one has.
     ///
-    /// [`Focus::takes_the_pane`], **not the whole `Focus`**. `Focus::Reading`
-    /// would fire a crossing on `PgUp`, and the transcript scrolling back
-    /// replaces nothing — so it is not a screen change. (A menagerie chant on the
-    /// arrow keys was the second case this guarded, until the menagerie stopped
-    /// being played on the keys at all — §19.)
+    /// [`Focus::takes_the_pane`], not the whole `Focus`: `Focus::Reading` would
+    /// fire a crossing on `PgUp`, and a scrolled-back transcript replaces
+    /// nothing.
     tool: Option<Focus>,
     /// The room. [`Panel::room`], which is the room and not the leaf.
     room: String,
@@ -122,23 +93,20 @@ impl Showing {
         Self {
             tool,
             room: panel.room.clone(),
-            // **Only when a tool is not already holding the pane**, which is the
-            // order `prompt::paint_view` branches in: the editor, the weave
-            // screen and the maze all return before it ever asks whether the
-            // mirror is up. `F5` is not gated on focus, so pressing it inside the
-            // editor flipped this and peeled the editor apart and back together
-            // over a screen that had not changed at all.
+            // Only when a tool is not already holding the pane, the order
+            // `prompt::paint_view` branches in. `F5` is not gated on focus, so
+            // pressing it inside the editor peeled the editor apart and back
+            // together over a screen that had not changed.
             mirrored: mirrored && tool.is_none(),
         }
     }
 
     /// What kind of change this is, if it is one.
     ///
-    /// **Ordered, because two can differ at once** — `wander` in the archive
-    /// changes nothing else, but a spell that walks and then opens a maze can
-    /// move both in one tick. The pane-replacing kinds win, because a shape that
-    /// spared the transcript while the transcript was being replaced would draw a
-    /// crossing around a hole with nothing in it.
+    /// Ordered, because two can differ at once: a spell that walks and then
+    /// opens a maze moves both in one tick. The pane-replacing kinds win —
+    /// sparing the transcript while it is being replaced draws a crossing around
+    /// a hole.
     fn change(&self, next: &Self) -> Option<Change> {
         if self.tool != next.tool {
             Some(Change::Tool)
@@ -190,25 +158,20 @@ pub struct Passing {
     /// The shape the current crossing runs by. Set when one starts; read until
     /// it settles.
     ///
-    /// **The shape only, not which regions move.** That used to be here too, and
-    /// it was a second answer to a question `prompt::paint` already has to
-    /// settle: it is the painter that knows whether a surface replaced the pane,
-    /// because it is the painter that put it there. Two expressions of one rule
-    /// is how they come to disagree — §19 is full of it.
+    /// The shape only, not which regions move: the painter knows whether a
+    /// surface replaced the pane, because the painter put it there. Two
+    /// expressions of one rule is how they come to disagree.
     shape: Passage,
     /// The screen being left.
     kept: Kept,
     /// The regions that screen was using.
     ///
-    /// Beside [`kept`](Self::kept) because they are the two halves of one
-    /// snapshot: its cells and where its parts were. See
-    /// [`remember`](Self::remember).
+    /// Beside [`kept`](Self::kept) because they are two halves of one snapshot:
+    /// its cells and where its parts were. See [`remember`](Self::remember).
     ///
-    /// **The painter's own type, not three rectangles in a tuple.** It was the
-    /// latter, and `View`'s doc names that exact hazard one module over — *"the
-    /// kind of signature where transposing two compiles cleanly"*. Three
-    /// same-typed positional values, passed through two functions, is the shape
-    /// that warning is about.
+    /// The painter's own type, not three rectangles in a tuple — *"the kind of
+    /// signature where transposing two compiles cleanly"*, as `View`'s doc puts
+    /// it one module over.
     regions: Crossed,
     /// Whether the tower has been woken out of the boot card yet.
     ///
@@ -217,9 +180,8 @@ pub struct Passing {
     woken: bool,
     /// Whether the crossing in flight is that one.
     ///
-    /// It is the only crossing that moves the **tower rail**, which every other
-    /// one deliberately leaves standing: the rail is awareness and is drawn on
-    /// every branch, so a room change must not take it away. Arriving out of
+    /// The only crossing that moves the tower rail: the rail is awareness drawn
+    /// on every branch, so a room change must not take it away. Arriving out of
     /// boot is the one moment it is not there yet.
     waking: bool,
     /// Whether the effect runs at all — the tube's switch, this session.
@@ -237,10 +199,8 @@ impl Default for Passing {
         Self {
             showing: None,
             elapsed: None,
-            // **The floor starts elapsed.** Seeded at zero, the very first
-            // screen change of a session would be refused — and the first one is
-            // a player walking out of the laboratory, which is the crossing this
-            // whole thing is for.
+            // The floor starts elapsed, or the first screen change of a session
+            // — a player walking out of the laboratory — would be refused.
             since: FLOOR,
             shape: Passage::Wipe,
             kept: Kept::default(),
@@ -261,10 +221,9 @@ fn permitted() -> bool {
 impl Passing {
     /// Note what the pane is showing, starting a crossing if it changed.
     ///
-    /// **The first `Showing` ever seen settles rather than crosses.** Otherwise
-    /// the frame after the boot sequence would cross out of nothing into the
-    /// laboratory, and every `scripts/dumps.sh` baseline in the repository would
-    /// move. `Reveal::observe` resyncs the same way when its stream shrinks.
+    /// The first `Showing` ever seen settles rather than crosses, or the frame
+    /// after boot would cross out of nothing into the laboratory and move every
+    /// `scripts/dumps.sh` baseline. `Reveal::observe` resyncs the same way.
     pub fn observe(&mut self, showing: &Showing) {
         let Some(was) = self.showing.as_ref() else {
             self.showing = Some(showing.clone());
@@ -273,10 +232,9 @@ impl Passing {
         let Some(change) = was.change(showing) else {
             return;
         };
-        // **A change during a crossing does not restart it**, and a change too
-        // soon after one is refused. The arriving half already draws whatever is
-        // live, so a change mid-arrival needs no new crossing at all; the floor
-        // is what stops a held key or a mashed `F5` from strobing the pane.
+        // A change during a crossing does not restart it: the arriving half
+        // already draws whatever is live. The floor stops a held key or a mashed
+        // `F5` from strobing the pane.
         if self.enabled && self.elapsed.is_none() && self.since >= FLOOR && !self.kept.is_empty() {
             self.shape = change.passage();
             // An ordinary crossing, so the rail stays where it is.
@@ -289,16 +247,13 @@ impl Passing {
 
     /// The game arriving out of the boot card.
     ///
-    /// **An arriving half only.** `Stage::Close` has already taken the card away
-    /// — the screen this departs from is gone, and there is nothing to leave —
-    /// so this starts at the midpoint and runs to the end. The furniture pushes
-    /// in from the edges it lives against: the tower rail from the right, the
-    /// gauges and the road from the top.
+    /// An arriving half only: `Stage::Close` has already taken the card away, so
+    /// this starts at the midpoint. The furniture pushes in from the edges it
+    /// lives against — the rail from the right, the gauges from the top.
     ///
-    /// **Called every live frame and does something once.** The first frame the
-    /// game paints *is* the boot edge, because everything here is gated on
-    /// `booted`; latching is cheaper than making a system remember, and it
-    /// cannot fire twice on a hitch the way an edge test could.
+    /// Called every live frame and does something once. Latching is cheaper than
+    /// making a system remember, and cannot fire twice on a hitch the way an
+    /// edge test could.
     pub fn wake(&mut self) {
         if self.woken {
             return;
@@ -329,9 +284,8 @@ impl Passing {
     /// records what treating them alike cost the fire.
     pub fn advance(&mut self, delta: f32, motion: Option<bool>) {
         if let Some(on) = motion {
-            // **The cached read, not a fresh one**, and `Bench::advance` makes
-            // the same point: `ORBS_PASSAGE=0` is a scripted run's answer and the
-            // tube's switch must not be able to undo it.
+            // The cached read, not a fresh one: `ORBS_PASSAGE=0` is a scripted
+            // run's answer and the tube's switch must not undo it.
             let permitted = self.permitted;
             self.set_enabled(on && permitted);
         }
@@ -366,24 +320,17 @@ impl Passing {
 
     /// Keep this frame, for the next crossing to depart from.
     ///
-    /// **A no-op while a crossing is running**, or it would overwrite its own
-    /// source with its own output and eat itself. Called by a frontend just
-    /// before `Frame::reset` blanks the screen, which is the last moment the
-    /// previous frame exists at all.
+    /// A no-op while a crossing runs, or it overwrites its own source with its
+    /// own output. Called by a frontend just before `Frame::reset` blanks the
+    /// screen, the last moment the previous frame exists.
     ///
-    /// # The whole grid, not the pane
-    ///
-    /// The pane's interior is smaller and would be the obvious thing to keep. It
-    /// is also a rectangle only [`prompt::paint`](crate::paint) knows, and this
-    /// is called from a frontend before that runs — so keeping the pane would
-    /// mean plumbing last frame's layout back out through a resource, and a
-    /// stored rectangle is one that can go stale against the layout it came
-    /// from.
-    ///
-    /// Keeping the grid costs 43 KiB against about 30, into a buffer that is
-    /// reused, and it buys two things outright: [`Kept::area`] then answers *"is
-    /// this a picture of the screen we still have?"* by itself, and a Tab
-    /// listing shifting the pane by one row stops being a case at all.
+    /// The whole grid, not the pane: the pane's rectangle is only
+    /// [`prompt::paint`](crate::paint)'s and this runs before it, so keeping it
+    /// would mean plumbing last frame's layout out through a resource that can
+    /// go stale. The grid costs 43 KiB against 30 into a reused buffer, and buys
+    /// two things: [`Kept::area`] answers *"is this a picture of the screen we
+    /// still have?"* by itself, and a Tab listing shifting the pane by one row
+    /// stops being a case.
     pub fn keep(&mut self, frame: &Frame) {
         if self.enabled && self.is_settled() {
             frame.keep(frame.area(), &mut self.kept);
@@ -392,12 +339,11 @@ impl Passing {
 
     /// Whether the kept screen still describes the frame being painted.
     ///
-    /// **A grid that changed under a crossing invalidates it**, and there are
-    /// several ways to change one: a window resize, `ORBS_GRID`, a terminal
-    /// dragged narrower. `orbs-tui`'s `Session::resized` records the same hazard
-    /// for its own shadow buffer — *"the diff is addressed by `(col, row)`, so
+    /// A grid that changed under a crossing invalidates it — a window resize,
+    /// `ORBS_GRID`, a terminal dragged narrower. `orbs-tui`'s `Session::resized`
+    /// records the same hazard: *"the diff is addressed by `(col, row)`, so
     /// keeping it across a resize would write this frame's cells at last frame's
-    /// coordinates."* A crossing would do exactly that.
+    /// coordinates."*
     #[must_use]
     pub fn describes(&self, frame: &Frame) -> bool {
         self.kept.area() == frame.area()
@@ -425,14 +371,12 @@ impl Passing {
     /// Pose a crossing that no clock produced — `ORBS_PASSAGE_AT`.
     ///
     /// A dump builds no `App` and advances no `Time`, so without this every
-    /// crossing draws at progress zero for ever and the See-it line degrades to
-    /// *"it compiles"*. `Bench::set_flare` exists for the same reason and says
-    /// so.
+    /// crossing draws at progress zero and the See-it line degrades to *"it
+    /// compiles"*. `Bench::set_flare` exists for the same reason.
     pub fn pose(&mut self, progress: f32, passage: Passage) {
-        // `ORBS_PASSAGE=0` outranks `ORBS_PASSAGE_AT`, for the reason `ORBS_FIRE`
-        // outranks `ORBS_FIRE_PHASE`: the off switch is what a scripted run sets,
-        // and a pose that could defeat it would make `dumps.sh` depend on which
-        // of the two a capture line happened to mention.
+        // `ORBS_PASSAGE=0` outranks `ORBS_PASSAGE_AT`, as `ORBS_FIRE` outranks
+        // `ORBS_FIRE_PHASE`: a pose that defeated the off switch would make
+        // `dumps.sh` depend on which of the two a capture line mentioned.
         if !self.permitted {
             return;
         }
@@ -444,21 +388,18 @@ impl Passing {
     /// Note the regions the settled screen is using, for the next crossing to
     /// leave from.
     ///
-    /// The cells are [`keep`](Self::keep)'s and come from the frontend before the
-    /// frame is blanked; these are the *rectangles* and come from the painter
-    /// after it has drawn, because that is the only thing that knows where a
-    /// screen put its boards. Two halves of one snapshot, taken a few lines
-    /// apart for the same reason.
+    /// The cells are [`keep`](Self::keep)'s, from the frontend before the frame
+    /// is blanked; these are the rectangles, from the painter after it has
+    /// drawn, because only it knows where a screen put its boards.
     pub(crate) const fn remember(&mut self, regions: Crossed) {
         self.regions = regions;
     }
 
     /// The regions the screen being left was using.
     ///
-    /// `pub(crate)` with [`remember`](Self::remember), unlike the rest of this
-    /// type: [`Crossed`] is the painter's private shape and a frontend has no
-    /// business holding one. Both frontends hand a `Passing` to `paint` and it
-    /// fills this in for them.
+    /// `pub(crate)` with [`remember`](Self::remember): [`Crossed`] is the
+    /// painter's private shape, and both frontends hand a `Passing` to `paint`
+    /// to have it filled in.
     #[must_use]
     pub(crate) const fn remembered(&self) -> Crossed {
         self.regions
@@ -466,10 +407,9 @@ impl Passing {
 
     /// Pose the crossing that arrives out of boot — `ORBS_PASSAGE_AT=wake:…`.
     ///
-    /// `progress` runs across the **arriving half**, because that is all this
-    /// crossing has: `0.0` is the empty screen the card left behind and `1.0` is
-    /// the tower. A dump reaches it no other way — [`wake`](Self::wake) is
-    /// called by a system, on the one frame the sequence hands over.
+    /// `progress` runs across the arriving half, all this crossing has: `0.0` is
+    /// the empty screen the card left behind, `1.0` the tower. A dump reaches it
+    /// no other way — [`wake`](Self::wake) is called by a system.
     pub fn pose_wake(&mut self, progress: f32) {
         if !self.permitted {
             return;
@@ -532,17 +472,15 @@ mod tests {
         passing.observe(&showing("laboratory"));
         passing.observe(&showing("forge"));
         assert!(!passing.is_settled());
-        // A `Wipe` is what a room change gets, and the shape is the whole of
-        // what this resource decides — which regions move is the painter's, and
-        // `prompt::Crossed` is where it is decided.
+        // The shape is the whole of what this resource decides; which regions
+        // move is the painter's, in `prompt::Crossed`.
         assert_eq!(shape(&passing), Some(Passage::Wipe));
     }
 
     #[test]
     fn each_kind_of_change_has_its_own_shape() {
-        // §19's *"tempo is the organising principle"*, applied to screens: what
-        // is running should be legible from across the room without reading a
-        // word. Three kinds of change, three motions, and the table is asserted
+        // §19's *"tempo is the organising principle"*: what is running should be
+        // legible from across the room. Three kinds, three motions, asserted
         // rather than left to the one place that writes it.
         let tool = Showing::of(
             Open {

@@ -1,38 +1,22 @@
 //! A spell's lines, read as a program.
 //!
-//! # Derived, never stored
+//! Derived, never stored: [`Held`](crate::tower::Held) is the truth and this a
+//! view over it, rebuilt at every cast. §8's hot-reload and §8.1's sabotage
+//! both need the program to be whatever the text now means.
 //!
-//! [`Held`](crate::tower::Held) stays the single source of truth and this is a
-//! **view** over it, rebuilt whenever a spell is cast. Two design commitments
-//! are line-anchored and would break if the program became the truth:
-//!
-//! - §8's hot-reload: *"only lines the player actually changed are re-resolved
-//!   by name; untouched lines stay bound by ID."*
-//! - §8.1's script-text sabotage surface: *"a flag altered, a target changed,
-//!   **a line reordered**."* An enemy mutates the text, and the program has to
-//!   be whatever that text now means.
-//!
-//! # Malformed spells run
-//!
-//! §8 fixes both ends of this and leaves exactly one gap to fill. A spell
-//! **cannot be refused at save** — *"`bind` always succeeds"*, and *"a draft you
-//! cannot save is a dead end"* — and it **cannot halt at cast**, because the
-//! failure taxonomy is titled *"scripts always log and never halt."*
-//!
-//! So an unmatched `repeat` is **closed at end of file**, an unmatched `end` is
-//! dropped, and each is reported once naming the line. The spell runs. That is
-//! the only answer both rules allow.
+//! Malformed spells run. §8 forbids refusing at save (*"`bind` always
+//! succeeds"*) and halting at cast (*"scripts always log and never halt"*), so
+//! an unmatched `repeat` is closed at end of file, an unmatched `end` dropped,
+//! each reported once naming the line.
 
 use crate::parser::{Condition, SpellWord, spell_argument, spell_word};
 
 /// One thing a spell does, and the line of the file it came from.
 ///
-/// The line is carried rather than derived because the program is a **tree** and
-/// the file is a list: blank lines and comments are not steps at all, and a step
-/// inside two blocks is three path elements deep with no arithmetic relating
-/// that to a line number. The editor draws a marker beside the line a running
-/// spell is on, and a spell that says *"line 3"* about the wrong line is worse
-/// than one that says nothing.
+/// The line is carried rather than derived: the program is a tree and the file
+/// a list, so no arithmetic relates a step three path elements deep to a line
+/// number. The editor marks the line a running spell is on, and a wrong
+/// *"line 3"* is worse than saying nothing.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Step {
     /// Which line of the spell this came from, counting from one.
@@ -48,23 +32,17 @@ pub enum Kind {
     Command(String),
     /// Hold until something the spell names happens.
     ///
-    /// §8's smallest control structure, and per the Autonauts precedent the one
-    /// that gives a non-programmer conditional behaviour without a condition
-    /// vocabulary: it needs no comparison, no truthiness, only a noun.
+    /// §8's smallest control structure: per Autonauts, conditional behaviour
+    /// for a non-programmer with no comparison and no truthiness — only a noun.
     Wait(String),
     /// Spend a number of ticks doing nothing.
     ///
-    /// **A count, where [`Wait`](Self::Wait) is a noun**, and the two are not
-    /// versions of each other: a wait ends when the world says so and a bide
-    /// ends when the spell's own arithmetic says so. The menagerie is what
-    /// needs the second, because *when* is the puzzle there and a blocking wait
-    /// would hand that decision back to the world (§19).
+    /// A count, where [`Wait`](Self::Wait) is a noun: a wait ends when the
+    /// world says so, a bide when the spell's own arithmetic does. The
+    /// menagerie needs the second, since *when* is the puzzle there (§19).
     ///
-    /// **A literal, and only ever a literal.** It was `Delay::Ticks(u32) |
-    /// Delay::Reading(String)`, and `bide until` — the reading form — was the
-    /// whole of why the menagerie's solver was trivial: a spell that reads its
-    /// delay off the world computes nothing. Every count in the language is a
-    /// literal again, as `repeat 5` and `has 4 fragment` always were.
+    /// Only ever a literal. `Delay::Reading` let `bide until` read its delay
+    /// off the world, so the menagerie's solver computed nothing.
     Bide(u32),
     /// Do the enclosed steps, `times` of them, or for ever if `None`.
     Repeat {
@@ -76,15 +54,13 @@ pub enum Kind {
         times: Option<u32>,
         /// The question that ends it, if it is bounded by one instead.
         ///
-        /// **Asked before the first pass and again at the end of each**, which
-        /// is Autonauts' rule and makes `repeat until <already true>` run zero
-        /// times rather than one. A do-while would be the other choice and it is
-        /// the wrong one: a guard that cannot prevent the first pass is not a
-        /// guard, and the first pass is where a spell does damage.
+        /// Asked before the first pass and again at the end of each —
+        /// Autonauts' rule, so `repeat until <already true>` runs zero times.
+        /// Not a do-while: a guard that cannot prevent the first pass is not a
+        /// guard.
         ///
-        /// **Never set alongside `times`.** Two bounds on one loop is a
-        /// semantics nobody asked for and a thing to teach; `repeat 5 until X`
-        /// is refused at parse, naming the line.
+        /// Never set alongside `times`: two bounds is a rule to teach, so
+        /// `repeat 5 until X` is refused at parse, naming the line.
         until: Option<crate::parser::Condition>,
         /// What to do each time.
         body: Block,
@@ -103,8 +79,8 @@ pub enum Kind {
     },
     /// Bind a name to a place, for the lines after it — `let best be north`.
     ///
-    /// **One line, no block.** It is the accumulator half of *"follow the way
-    /// with the fewest marks"*: something to compare against and then act on.
+    /// One line, no block. The accumulator half of *"follow the way with the
+    /// fewest marks"*: something to compare against and then act on.
     Let {
         /// The word the spell will use.
         name: String,
@@ -115,15 +91,13 @@ pub enum Kind {
     /// Take the oldest name out of a satchel and bind it —
     /// `pull note from satchel`.
     ///
-    /// **[`Let`](Self::Let)'s shape with the value coming from the world**, and
-    /// the two are the whole of what writes to `vars`. It is a control word
-    /// rather than a verb for exactly that reason: dispatch hands back records,
-    /// so a `pull` verb could empty the satchel and would have nowhere to put
-    /// what it took.
+    /// [`Let`](Self::Let)'s shape with the value from the world; the two are
+    /// the whole of what writes to `vars`. A control word rather than a verb
+    /// because dispatch hands back records, so a `pull` verb would have nowhere
+    /// to put what it took.
     ///
-    /// **It yields while the satchel is empty** and never reaches `PATIENCE` —
-    /// a consumer caught up with its producer is a working pipeline, not a
-    /// fault. `bide`'s road, and `run::pull` says the rest.
+    /// It yields while the satchel is empty and never reaches `PATIENCE`: a
+    /// consumer caught up with its producer is a working pipeline, not a fault.
     Pull {
         /// The word the spell will use for whatever comes out.
         name: String,
@@ -143,58 +117,49 @@ pub enum Kind {
     },
     /// A named run of lines — `part gathering()`, `part between(here, there)`.
     ///
-    /// **A definition, so reaching it executes nothing.** The runner steps past
-    /// this exactly as a reader's eye does; the body runs only where a
-    /// [`Call`](Self::Call) says so. It stays a step of the tree rather than
-    /// being hoisted into a table beside it, because the tree is what the save,
-    /// `interpret` and the editor's gutter all address by **line** — a
-    /// definition lifted out of the body is a run of lines with no place in the
-    /// file it came from.
+    /// A definition, so reaching it executes nothing: the body runs only where
+    /// a [`Call`](Self::Call) says so. It stays a step of the tree rather than
+    /// a table beside it, because the save, `interpret` and the editor's gutter
+    /// all address the tree by line.
     Part {
         /// What the part is called, without its parentheses.
         name: String,
         /// The names its arguments arrive under, in order.
         ///
-        /// **These are the part's whole store**, not additions to the caller's:
+        /// The part's whole store, not additions to the caller's:
         /// [`Descent`](super::Descent) keeps the caller's bindings and the part
-        /// opens with only these. Empty for `part gathering()`, which is the
-        /// shape every spell shipped before parameters existed.
+        /// opens with only these. Empty for `part gathering()`.
         params: Vec<String>,
         /// What it does.
         body: Block,
     },
     /// Do a part — `gathering()`, `between(wellspring, near)`.
     ///
-    /// Carries the **name** rather than a path to the definition, which is what
-    /// lets a spell be edited while it runs (§8): a definition that moves up the
-    /// file is still the same part, and a path would point at whatever took its
-    /// place.
+    /// Carries the name rather than a path to the definition, so a spell can be
+    /// edited while it runs (§8): a definition that moves up the file is still
+    /// the same part, and a path would point at whatever took its place.
     Call {
         /// Which part.
         name: String,
         /// The names handed to it, in order, exactly as written.
         ///
-        /// **Resolved against the caller's store where the call runs**, not
-        /// here — `between(wellspring, near)` passes whatever `near` stands for
-        /// at that moment, and a literal stands for itself. One level, which is
-        /// the rule a bound name follows everywhere else in the language.
+        /// Resolved against the caller's store where the call runs, not here:
+        /// `between(wellspring, near)` passes whatever `near` stands for then,
+        /// and a literal stands for itself. One level, as everywhere else.
         args: Vec<String>,
     },
     /// Set a part running as a second cursor and carry on —
     /// `alongside gathering()`.
     ///
-    /// **[`Call`](Self::Call)'s fields and none of its waiting.** A call
-    /// suspends the caller onto a [`Descent`](super::Descent) and resumes it
-    /// when the part returns; this starts a
-    /// [`Strand`](super::Strand) on the part and leaves the caller exactly where
-    /// it stands. The forked cursor has an empty stack because nothing is
-    /// waiting for it: running off the end ends the strand and no more.
+    /// [`Call`](Self::Call)'s fields and none of its waiting: a call suspends
+    /// the caller onto a [`Descent`](super::Descent), this starts a
+    /// [`Strand`](super::Strand) and leaves the caller where it stands. The
+    /// forked cursor's stack is empty because nothing waits for it.
     ///
-    /// Arguments resolve in the caller's store at the moment of the fork, which
-    /// is a call's rule and has to be — a part's brackets are the whole of what
-    /// it can see (§19), and a cursor that could read the caller's bindings
-    /// *while the caller kept changing them* would be worse than the shared
-    /// store that decision removed.
+    /// Arguments resolve in the caller's store at the fork, as a call's do — a
+    /// part's brackets are the whole of what it can see (§19), and reading
+    /// bindings the caller kept changing would be worse than the shared store
+    /// §19 removed.
     Alongside {
         /// Which part to set running.
         name: String,
@@ -217,18 +182,14 @@ pub struct Complaint {
 
 /// A spell's text, read as a shape — before any name in it has been resolved.
 ///
-/// **Not runnable, and the type is what says so.** A draft's questions still
-/// hold the words the player typed (`the mortar`, `the shelf`), which
-/// [`holds`](super::holds) compares exactly and would find nothing for. Running
-/// one would give a spell whose every condition answered "there is no such
-/// place" — the exact silent failure §19 records as *"it looked exactly like the
-/// condition being inverted"*.
+/// Not runnable, and the type says so: a draft's questions still hold the words
+/// the player typed (`the mortar`), which [`holds`](super::holds) compares
+/// exactly and finds nothing for, so every condition would answer "there is no
+/// such place" — §19's *"it looked exactly like the condition being inverted"*.
 ///
-/// [`compile`](super::compile()) turns one into a [`Program`], and nothing else
-/// can. That is a weaker guarantee than it sounds — `Program::new` is reachable
-/// from anywhere in this module — but it is the one that matters, because the
-/// callers that would otherwise reach for the parser directly (`invoke`,
-/// `scribe`'s reload) are *outside* it and now cannot.
+/// [`compile`](super::compile()) turns one into a [`Program`] and nothing else
+/// can. `Program::new` is reachable in this module, but `invoke` and `scribe`'s
+/// reload are outside it.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Draft {
     /// What it does.
@@ -292,22 +253,19 @@ enum Open {
 
 /// One entry on the block stack: where it opened, what it is, what is in it.
 ///
-/// Deliberately **not** the obvious word for a stack entry: `tests/boundaries.rs`
-/// forbids the four layout type names anywhere under `orbs-sim/src` — rule 2 —
-/// and it matches by *substring*, so the guard is unarguable rather than clever.
-/// A parser's stack entry is a false positive, and renaming costs less than
-/// weakening the one test that keeps the sim away from the painter. (This
-/// sentence cannot name the word either, which is the guard working.)
+/// Deliberately not the obvious word for a stack entry: `tests/boundaries.rs`
+/// rule 2 forbids the four layout type names anywhere under `orbs-sim/src`, by
+/// *substring*. A parser's stack entry is a false positive, and renaming costs
+/// less than weakening the one test that keeps the sim away from the painter.
 struct Nesting {
     line: usize,
     kind: Open,
     body: Block,
-    /// Opened by `else if`, so one `end` closes this **and** what it hangs from.
+    /// Opened by `else if`, so one `end` closes this and what it hangs from.
     ///
-    /// An `else if` chain is one construct to the player — four rungs and one
-    /// `end` — and a tree of nested `if`s to the runner. This is the only thing
-    /// that has to be remembered to keep those two views apart, and it is why the
-    /// desugaring needs no new [`Kind`] and no runner change at all.
+    /// A chain is one construct to the player and nested `if`s to the runner;
+    /// remembering this is all that keeps the two apart, and why the desugaring
+    /// needs no new [`Kind`] and no runner change.
     chained: bool,
 }
 
@@ -336,32 +294,23 @@ pub(super) fn read(lines: &[String]) -> Draft {
         match spell_word(trimmed) {
             Some(SpellWord::Repeat) => {
                 let argument = spell_argument(trimmed);
-                // **One bound per loop.** `repeat` alone is unbounded, `repeat 5`
-                // counts, `repeat until X` asks — and `repeat 5 until X` is two
-                // bounds whose interaction would be a rule to teach for a shape
-                // nobody reaches for. Refused by name rather than resolved by
-                // precedence, which is the same call `debug_spawn` makes about a
-                // count it cannot read.
+                // One bound per loop: `repeat 5 until X` is two, and their
+                // interaction would be a rule to teach for a shape nobody
+                // reaches for. Refused by name rather than resolved by
+                // precedence, as `debug_spawn` does with a count it cannot
+                // read.
                 let counted = count_of(argument);
-                // **The word anywhere, not just in front.** `repeat 5 until X`
-                // has `until` in second place, so looking only at the head would
-                // read it as `repeat 5` and drop the rest in silence — the quiet
-                // reinterpretation this file refuses everywhere else.
+                // The word anywhere, not just in front: `repeat 5 until X` has
+                // it second, so looking only at the head would read `repeat 5`
+                // and drop the rest in silence.
                 let mentions = argument
                     .split_whitespace()
                     .any(|word| word.eq_ignore_ascii_case(SpellWord::Until.canonical()));
                 let guard = guard_of(argument);
-                // **A bound the orb cannot read makes the loop run nought times,
-                // not for ever.** `(None, None)` is `Loop::Repeat(None)`, which
-                // `step_past` loops unbounded — so a typo in a guard produced the
-                // exact opposite of what `spell_two_bounds` and
-                // `spell_unreadable_until` both say, and worse than either. A
-                // player who mistypes one word got an infinite loop and a message
-                // reading *"the repeat stops"*.
-                //
-                // `Some(0)` is stepped past by the runner without entering, which
-                // is the same treatment `repeat 0` gets and is what the prose
-                // describes.
+                // A bound the orb cannot read runs the loop nought times, not
+                // for ever: `(None, None)` loops unbounded, so one mistyped
+                // word bought an infinite loop under *"the repeat stops"*.
+                // `Some(0)` is stepped past without entering, as `repeat 0` is.
                 let refused = (Some(0), None);
                 let (times, until) = if mentions && counted.is_some() {
                     complaints.push(Complaint {
@@ -415,18 +364,14 @@ pub(super) fn read(lines: &[String]) -> Draft {
                 });
             }
             Some(SpellWord::Else) => {
-                // **`else if` is a chained `if`, not a new word.** The ladder is
-                // the shape every solver in the game is written in — the ward's
-                // four rungs, the maze's twenty-four — and without this each rung
-                // nests one deeper and pays for an `end` at the bottom. Half of
-                // `threading` is `end` and `else`: 49 lines of 98.
+                // `else if` is a chained `if`, not a new word. Every solver is
+                // a ladder, and without this each rung nests one deeper and
+                // pays for an `end`: half of `threading` was `end` and `else`.
                 //
-                // What follows `else` is read as an `if` line, so there is one
-                // reader for a condition and one set of complaint keys. A
-                // desugaring rather than a `Kind`, so the runner, `step_past`,
-                // `guard_answers`, the save format and `interpret` all need
-                // nothing: what they see is the nested tree that was always
-                // written by hand.
+                // What follows is read as an `if` line, so one reader and one
+                // set of complaint keys. A desugaring rather than a `Kind`, so
+                // the runner, the save format and `interpret` see the nested
+                // tree that was always written by hand.
                 let tail = spell_argument(trimmed).trim();
                 let chaining = spell_word(tail) == Some(SpellWord::If);
 
@@ -481,8 +426,8 @@ pub(super) fn read(lines: &[String]) -> Draft {
                     });
                     continue;
                 }
-                // **One `end` closes the whole chain.** Each `else if` pushed a
-                // frame; the player wrote one block and owes one close, so the
+                // One `end` closes the whole chain: each `else if` pushed a
+                // frame, the player wrote one block and owes one close, so the
                 // unwind continues while the frame it just shut was chained.
                 while let Some(frame) = open.pop() {
                     let chained = frame.chained;
@@ -500,13 +445,10 @@ pub(super) fn read(lines: &[String]) -> Draft {
                 let argument = strip_filler(spell_argument(trimmed));
                 match count_of(&argument) {
                     Some(ticks) => push(&mut open, at, Kind::Bide(ticks)),
-                    // **A bare word is a complaint again.** It used to compile to
-                    // `Delay::Reading`, so `bide until` read the delay off the
-                    // world and the menagerie's solver had no arithmetic left in
-                    // it. Refusing it here is what puts the counting back, and it
-                    // catches `bide sage` — a typo that answered `Endless` and
-                    // bided `u32::MAX` — as the same complaint rather than as
-                    // four billion ticks of silence.
+                    // A bare word is a complaint: it compiled to
+                    // `Delay::Reading`, so `bide until` left the menagerie's
+                    // solver no arithmetic. Also catches `bide sage`, a typo
+                    // that answered `Endless` and bided `u32::MAX`.
                     None => complaints.push(Complaint {
                         line: at,
                         key: "spell_unreadable_bide",
@@ -515,26 +457,20 @@ pub(super) fn read(lines: &[String]) -> Draft {
             }
             Some(SpellWord::Let) => match binding(spell_argument(trimmed)) {
                 Some((name, value)) => push(&mut open, at, Kind::Let { name, value }),
-                // **A complaint, not a guess.** `set best` names nothing to bind
-                // and `set to north` binds nothing — either read as the other
-                // would be the orb writing a line the player did not, which is
-                // what every refusal in this file is protecting against.
+                // A complaint, not a guess: `set best` names nothing to bind
+                // and `set to north` binds nothing, and reading either as the
+                // other is the orb writing a line the player did not.
                 None => complaints.push(Complaint {
                     line: at,
                     key: "spell_unreadable_let",
                 }),
             },
-            // **`strip_filler` here, and `let` above deliberately without it.**
-            // `spell_argument` does not strip — `bide` calls it separately and
-            // this has to as well, or `pull note from satchel` arrives as three
-            // words and is refused. It cost one See-it line to find, and the
-            // failure is the quiet kind: a complaint on a line that reads
-            // perfectly.
-            //
-            // `let` must *not* strip, because its keyword is ` be ` and
-            // `binding` splits the raw text on it. Stripping first would leave
-            // the value shorn of a `the` the player typed and then match a name
-            // that never appeared in the file.
+            // `strip_filler` here, and `let` above deliberately without it.
+            // `spell_argument` does not strip, so without this `pull note from
+            // satchel` arrives as three words and is refused. `let` must *not*
+            // strip: its keyword is ` be ` and `binding` splits the raw text on
+            // it, so stripping would shear a `the` off the value and match a
+            // name that never appeared in the file.
             Some(SpellWord::Pull) => match pulled(&strip_filler(spell_argument(trimmed))) {
                 Some((name, from)) => push(&mut open, at, Kind::Pull { name, from }),
                 // `let`'s refusal, for `let`'s reason: `pull note` names no
@@ -552,9 +488,9 @@ pub(super) fn read(lines: &[String]) -> Draft {
                     body: Vec::new(),
                     chained: false,
                 }),
-                // **No block is opened**, so the `end` the player wrote below is
-                // a stray one and says so. Opening an unnamed block instead
-                // would swallow the body into a loop over nothing, silently.
+                // No block is opened, so the `end` below is a stray one and
+                // says so. Opening an unnamed block would silently swallow the
+                // body into a loop over nothing.
                 None => complaints.push(Complaint {
                     line: at,
                     key: "spell_unreadable_for",
@@ -567,29 +503,26 @@ pub(super) fn read(lines: &[String]) -> Draft {
                     body: Vec::new(),
                     chained: false,
                 }),
-                // **No block is opened**, exactly as an unreadable `for each`
-                // opens none — so the `end` below is a stray one and says so.
-                // Opening an unnamed part instead would swallow the body into
-                // something nothing can ever call.
+                // No block is opened, as an unreadable `for each` opens none,
+                // so the `end` below is a stray one and says so. An unnamed
+                // part would swallow the body into something nothing can call.
                 None => complaints.push(Complaint {
                     line: at,
                     key: "spell_unreadable_part",
                 }),
             },
-            // **A fork is a call with a word in front of it**, so it reuses the
-            // same parser rather than growing a second one — `alongside
-            // between(a b)` has to be the same complaint as `between(a b)`, or
-            // the two spellings of one mistake read differently.
+            // A fork is a call with a word in front, so it reuses the same
+            // parser rather than growing a second — `alongside between(a b)`
+            // has to be the same complaint as `between(a b)`.
             Some(SpellWord::Alongside) => match call_of(spell_argument(trimmed)) {
                 Some(Some((name, args))) => push(&mut open, at, Kind::Alongside { name, args }),
                 Some(None) => complaints.push(Complaint {
                     line: at,
                     key: "spell_unreadable_call",
                 }),
-                // **No brackets at all**, which is its own complaint: `alongside
-                // gathering` reads as a bare name, and a bare name is the one
-                // thing a call may not be. Saying so beats reading it as a call
-                // the player did not punctuate.
+                // No brackets at all, its own complaint: `alongside gathering`
+                // is a bare name, which is the one thing a call may not be.
+                // Better said than read as a call the player did not punctuate.
                 None => complaints.push(Complaint {
                     line: at,
                     key: "spell_unreadable_alongside",
@@ -611,8 +544,8 @@ pub(super) fn read(lines: &[String]) -> Draft {
         }
     }
 
-    // **Unmatched opens are closed here**, innermost first, each reported once.
-    // §8 leaves no other option: the save could not refuse and the cast may not
+    // Unmatched opens are closed here, innermost first, each reported once. §8
+    // leaves no other option: the save could not refuse and the cast may not
     // halt, so the spell runs as if the player had finished typing it.
     while open.len() > 1 {
         let Some(frame) = open.pop() else {
@@ -630,10 +563,9 @@ pub(super) fn read(lines: &[String]) -> Draft {
         close(&mut open, frame);
     }
 
-    // **No `expect`.** The outermost block cannot be popped by the loops
-    // above — both are guarded on `len() > 1` — but writing that as a panic
-    // would be a claim the compiler cannot check and a crash if it ever
-    // stopped being true. An empty spell is a real thing anyway.
+    // No `expect`: the loops above are guarded on `len() > 1`, but writing that
+    // as a panic is a claim the compiler cannot check and a crash the day it
+    // stops being true. An empty spell is a real thing anyway.
     let mut body = open.pop().map(|frame| frame.body).unwrap_or_default();
     settle_parts(&mut body, &mut complaints);
 
@@ -642,18 +574,14 @@ pub(super) fn read(lines: &[String]) -> Draft {
 
 /// Enforce the two rules a definition has, after the tree is built.
 ///
-/// A pass of its own rather than a check inside [`read`], because both rules are
-/// about a definition's **place among the others** and neither can be answered
-/// while the block that holds it is still open.
+/// Its own pass rather than a check inside [`read`]: both rules are about a
+/// definition's place among the others, unanswerable while the block holding it
+/// is still open.
 ///
-/// - **Top-level only.** [`tree`] looks no deeper, so a `part` inside a `repeat`
-///   would be a run of lines nothing could ever call — and silently, since the
-///   runner steps past a definition wherever it finds one. Dropped and said.
-/// - **One name, one part.** Two definitions sharing a name make `tree` answer
-///   with whichever is written first, so the second is a block the player wrote
-///   and the orb will never run. The same call `progression.toml` makes about a
-///   duplicate node id, for the same reason: two entries under one name mean
-///   naming either names both.
+/// - Top-level only. [`tree`] looks no deeper, so a `part` inside a `repeat` is
+///   lines nothing can ever call — and silently. Dropped and said.
+/// - One name, one part. `tree` answers with whichever is written first, so the
+///   second would never run — `progression.toml`'s call about a duplicate id.
 fn settle_parts(body: &mut Block, complaints: &mut Vec<Complaint>) {
     // Kept in writing order, so the *first* definition of a name is the one that
     // survives — which is what `tree` would have answered with anyway.
@@ -715,11 +643,9 @@ fn strip_nested(kind: &mut Kind, said: &mut Vec<Complaint>) {
 
 /// What an open block on the runner's stack is.
 ///
-/// A plain count was enough while `repeat` was the only block. An `if` has
-/// **two** bodies, so the path has to say which one execution went into — and
-/// walking back out of a branch pops one more path element than walking out of a
-/// loop does. Recording the kind is what keeps those two exits from being one
-/// piece of arithmetic that is right for one of them.
+/// A plain count was enough while `repeat` was the only block. An `if` has two
+/// bodies, so the path must say which one execution entered, and walking out of
+/// a branch pops one element more than out of a loop.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Loop {
     /// A `repeat`, with the turns it has left.
@@ -728,28 +654,20 @@ pub enum Loop {
     Branch,
     /// A `for each`, with the index of the member currently bound.
     ///
-    /// # An index, not the members themselves
-    ///
-    /// The set is re-read from the world at the top of every pass, and this says
-    /// only how far along it the loop has got. Two reasons, and the second is the
-    /// one that decides it:
-    ///
-    /// - a `Loop` is `Copy` and travels to a save as **one integer per open
-    ///   block**, which the save format's own note prefers to a tagged table;
-    /// - a spell runs in a live world, so a set that changes under it should be
-    ///   walked as it now is. Carrying a snapshot would have `for each way`
-    ///   iterate a maze that has since closed.
+    /// An index, not the members: the set is re-read at the top of every pass
+    /// and this says only how far the loop has got. A `Loop` is `Copy` and
+    /// saves as one integer per open block; and, deciding it, a snapshot would
+    /// have `for each way` iterate a maze that has since closed.
     Each(u32),
 }
 
 /// The step at `pc`, if the path resolves.
 ///
 /// A path rather than an index: `[0]` is the first step, `[2, 1]` the second
-/// step inside the third. Blocks made a single line number insufficient the
-/// moment they arrived.
+/// step inside the third. Blocks made a single line number insufficient.
 ///
-/// **An `if` costs two path elements**, not one: the branch, then the step
-/// within it. `[2, 0, 1]` is the second step of the `then` half of step three.
+/// An `if` costs two path elements, not one: the branch, then the step within
+/// it. `[2, 0, 1]` is the second step of the `then` half of step three.
 #[must_use]
 pub fn at<'a>(body: &'a Block, pc: &[usize]) -> Option<&'a Step> {
     let (&first, rest) = pc.split_first()?;
@@ -758,9 +676,9 @@ pub fn at<'a>(body: &'a Block, pc: &[usize]) -> Option<&'a Step> {
         return Some(step);
     }
     match &step.kind {
-        // **One path element, exactly like a `repeat`.** A `for each` has one
-        // body and no second half, so the arithmetic that walks out of it is the
-        // loop's rather than the branch's — see [`Loop::Each`].
+        // One path element, like a `repeat`: one body and no second half, so
+        // walking out is the loop's arithmetic rather than the branch's — see
+        // [`Loop::Each`].
         Kind::Repeat { body, .. } | Kind::Each { body, .. } => at(body, rest),
         Kind::If {
             body, otherwise, ..
@@ -768,10 +686,9 @@ pub fn at<'a>(body: &'a Block, pc: &[usize]) -> Option<&'a Step> {
             let (&branch, inner) = rest.split_first()?;
             at(if branch == 0 { body } else { otherwise }, inner)
         }
-        // **A definition is not descended into from the body it sits in.** It is
-        // reached by name through [`tree`], which is what lets a call find it
-        // after an edit has moved it — so a path that points *into* one is a
-        // path nothing builds, and answering `None` says so.
+        // A definition is not descended into from the body it sits in; it is
+        // reached by name through [`tree`], so a call still finds it after an
+        // edit moves it. A path pointing *into* one is a path nothing builds.
         Kind::Command(_)
         | Kind::Wait(_)
         | Kind::Bide(_)
@@ -785,14 +702,11 @@ pub fn at<'a>(body: &'a Block, pc: &[usize]) -> Option<&'a Step> {
 
 /// The body a frame walks: the spell's own, or a named part's.
 ///
-/// **Found by name at every step, never cached.** A part is a run of lines in a
-/// file the player may be editing while it runs (§8), so the answer to *which
-/// lines is `gathering`* has to be asked of the text as it now is. A path or an
-/// index taken at the call would point at whatever moved into its place.
-///
-/// Definitions are **top-level only** — see `spell_nested_part` — so this looks
-/// no deeper, and a part inside a `repeat` is unreachable by design rather than
-/// by oversight.
+/// Found by name at every step, never cached: the file may be edited while the
+/// spell runs (§8), so a path taken at the call would point at whatever moved
+/// into its place. Definitions are top-level only — see `spell_nested_part` —
+/// so this looks no deeper, and a part inside a `repeat` is unreachable by
+/// design.
 #[must_use]
 pub fn tree<'a>(body: &'a Block, part: Option<&str>) -> Option<&'a Block> {
     let Some(wanted) = part else {
@@ -806,11 +720,10 @@ pub fn tree<'a>(body: &'a Block, part: Option<&str>) -> Option<&'a Block> {
 
 /// The names one part takes its arguments under, if it is defined at all.
 ///
-/// **`None` and an empty list are different answers**, which is why this is not
-/// folded into [`parts`]: no such part is a missing name the orb says once, and
-/// a part taking nothing is `gathering()` working normally. Found by name at
-/// every call for the reason [`tree`] is — a definition that moves while the
-/// spell runs is still the same part.
+/// `None` and an empty list are different answers, which is why this is not
+/// folded into [`parts`]: no such part is a missing name said once, a part
+/// taking nothing is `gathering()` working. Found by name for [`tree`]'s
+/// reason.
 #[must_use]
 pub fn signature(body: &Block, part: &str) -> Option<Vec<String>> {
     body.iter().find_map(|step| match &step.kind {
@@ -821,10 +734,9 @@ pub fn signature(body: &Block, part: &str) -> Option<Vec<String>> {
 
 /// Every part the spell defines and how many names it takes, in writing order.
 ///
-/// The count travels with the name because the only two questions anyone asks
-/// of this list are *is there such a part* and *does this call fit it*, and
-/// answering the second from a second walk of the tree is how two expressions of
-/// one rule come to disagree.
+/// The count travels with the name because this list answers both *is there
+/// such a part* and *does this call fit it*, and a second walk of the tree for
+/// the second is how one rule comes to disagree with itself.
 #[must_use]
 pub fn parts(body: &Block) -> Vec<(&str, usize)> {
     body.iter()
@@ -835,28 +747,22 @@ pub fn parts(body: &Block) -> Vec<(&str, usize)> {
         .collect()
 }
 
-/// Move `pc` past the step it points at, closing and repeating blocks as needed.
+/// Move `pc` past the step it points at, closing and repeating blocks as
+/// needed.
 ///
-/// Returns `false` when the program has run out — which is the only way a spell
+/// Returns `false` when the program has run out — the only way a spell
 /// finishes, since §8's taxonomy forbids halting on a failure.
 ///
-/// # The loop stack is why a save needs more than a `pc`
+/// Each open `repeat` keeps a count on `loops`, outermost first, which is why a
+/// save needs more than a `pc`: restoring from one alone would resume every
+/// enclosing loop from its first iteration, and §8 requires in-flight state be
+/// serialisable.
 ///
-/// Each open `repeat` has a count on `loops`, outermost first. Restoring a
-/// suspended spell from a `pc` alone would resume every enclosing loop from its
-/// first iteration — §8 requires in-flight state be serialisable, and a spell
-/// inside a loop is exactly that.
 /// `again` is asked whether a block that has just run off the end may go round,
-/// with the path pointing at the block's own step and the [`Loop`] that was
-/// popped. A `repeat` with no `until` answers yes; a `for each` answers whether
-/// the set still has a member after the one just finished.
-///
-/// **It takes the popped loop as well as the path**, because those two questions
-/// need different things: the guard needs the step (to find its `until`) and the
-/// set needs the index (to know which member is next). This is the only thing in
-/// the walker that consults the world, and it is a closure rather than a
-/// `&World` parameter because `step_past` is otherwise pure and its test callers
-/// have no world to give it.
+/// given the path to the block's own step and the [`Loop`] popped. It takes
+/// both because a guard needs the step (to find its `until`) and a set needs
+/// the index. The only thing here that consults the world, and a closure
+/// because `step_past` is otherwise pure and its test callers have no world.
 pub fn step_past(
     body: &Block,
     pc: &mut Vec<usize>,
@@ -879,16 +785,12 @@ pub fn step_past(
         }
         pc.pop();
         match loops.pop() {
-            // Unbounded, or more to go: back to the top of this block — **and
-            // only if the guard still says so**. `again` is asked with the path
-            // pointing at the `repeat` itself, which is how the caller finds the
-            // step and its `until`; a loop with no guard answers yes and behaves
-            // exactly as it always did.
+            // Unbounded, or more to go: back to the top of this block, and only
+            // if the guard still says so. `again` is asked with the path on the
+            // `repeat` itself, which is how the caller finds its `until`.
             //
-            // **Asked after the count, never before it.** `repeat 3 until X` is
-            // refused at parse, so the two never meet here — but short-circuiting
-            // keeps an exhausted loop from putting a question to the world on its
-            // way out, which would be a read nobody asked for.
+            // Asked after the count, so short-circuiting keeps an exhausted
+            // loop from putting a question to the world on its way out.
             Some(Loop::Repeat(left))
                 if left.is_none_or(|turns| turns > 1) && again(pc, Loop::Repeat(left)) =>
             {
@@ -896,18 +798,17 @@ pub fn step_past(
                 pc.push(0);
                 return true;
             }
-            // **The set is asked, not counted here.** A `for each` walks a live
-            // world, so whether there is another member is a question for the
-            // tick the loop laps on rather than for the tick it started — see
-            // [`Loop::Each`].
+            // The set is asked, not counted here: a `for each` walks a live
+            // world, so another member is a question for the tick the loop laps
+            // on rather than the tick it started — see [`Loop::Each`].
             Some(Loop::Each(index)) if again(pc, Loop::Each(index)) => {
                 loops.push(Loop::Each(index + 1));
                 pc.push(0);
                 return true;
             }
-            // A branch runs once, and cost **two** path elements going in — the
-            // half, then the step. Popping only one would leave the path
-            // pointing at the other half of the `if` and run it as well.
+            // A branch runs once and cost two path elements going in — the
+            // half, then the step. Popping one would leave the path on the
+            // other half of the `if` and run it as well.
             Some(Loop::Branch) => {
                 pc.pop();
                 if let Some(last) = pc.last_mut() {
@@ -928,19 +829,14 @@ pub fn step_past(
 
 /// Every name a spell binds, anywhere in it.
 ///
-/// # Lexical, and deliberately not scoped
+/// Lexical and deliberately not scoped: a `set` inside an `if` binds a name the
+/// lines after the `end` can still say, and a `for each` cursor outlives its
+/// loop. §8's language has no declarations, so `set best to north` in a branch
+/// and `best` read below it mean what the player wrote; scoping is a rule to
+/// teach and to get wrong, for a program that fits on a screen.
 ///
-/// A `set` inside an `if` binds a name the lines after the `end` can still say,
-/// and a `for each` cursor outlives its loop holding the last member. Both are
-/// the simple reading, and the simple reading is the right one here: §8's
-/// language has no declarations, so a player who writes `set best to north`
-/// inside a branch and reads `best` below it means what they wrote. Scoping
-/// would be a rule to teach and a rule to get wrong, for a program that fits on
-/// a screen.
-///
-/// The list is what [`compile`](mod@super::compile) uses to tell a variable from a
-/// place the room does not have — a distinction it cannot otherwise make, since
-/// both are words that resolve to nothing at cast.
+/// [`compile`](mod@super::compile) uses the list to tell a variable from a
+/// place the room does not have — both resolve to nothing at cast.
 #[must_use]
 pub(super) fn bindings(body: &Block) -> Vec<String> {
     let mut names = Vec::new();
@@ -969,17 +865,13 @@ fn gather(body: &Block, names: &mut Vec<String>) {
                 gather(body, names);
                 gather(otherwise, names);
             }
-            // **A part's parameters and its `let`s are gathered too, even
-            // though they are scoped to it.** This list has exactly one job —
-            // stopping `check_commands` and `interpret` resolving a line that
-            // names a variable against the room — and for that a name too many
-            // is harmless where a name too few is a working line painted red.
-            //
-            // So it is deliberately the *file's* names rather than any one
-            // frame's: a part's `here` reaches this list, and the only cost is
-            // that a caller writing `follow here` outside the part is quoted
-            // rather than resolved. The runner is the thing that scopes (see
-            // [`Descent::vars`](super::Descent)); this is a lint's input.
+            // A part's parameters and its `let`s are gathered too, though
+            // scoped to it: the list only stops `check_commands` and
+            // `interpret` resolving a variable against the room, and there a
+            // name too many is harmless where a name too few is a working line
+            // painted red. So it is the *file's* names, at the cost of a
+            // caller's `follow here` being quoted. The runner scopes (see
+            // [`Descent::vars`](super::Descent)).
             Kind::Part { params, body, .. } => {
                 for param in params {
                     if !names.iter().any(|already| already == param) {
@@ -988,12 +880,9 @@ fn gather(body: &Block, names: &mut Vec<String>) {
                 }
                 gather(body, names);
             }
-            // **A `pull` binds a name and is gathered as one.** It is `let`'s
-            // arm in every way that matters here — the lint's whole job is to
-            // stop a line naming a variable being resolved against the room, and
-            // `limn keystone note` after `pull note from satchel` is exactly that
-            // line.
-            // Missing it would paint a working line red.
+            // A `pull` binds a name and is gathered as one: `limn keystone
+            // note` after `pull note from satchel` is exactly the line the lint
+            // must not paint red.
             Kind::Pull { name, .. } => {
                 if !names.iter().any(|already| already == name) {
                     names.push(name.clone());
@@ -1025,8 +914,8 @@ pub fn enter_each(pc: &mut Vec<usize>, loops: &mut Vec<Loop>) {
 
 /// Descend into one half of an `if`.
 ///
-/// Pushes the half **and** the step within it, which is what makes an `if` two
-/// path elements deep — see [`at`].
+/// Pushes the half and the step within it, which is what makes an `if` two path
+/// elements deep — see [`at`].
 pub fn enter_branch(pc: &mut Vec<usize>, loops: &mut Vec<Loop>, taken: bool) {
     loops.push(Loop::Branch);
     pc.push(usize::from(!taken));
@@ -1042,9 +931,9 @@ fn push(open: &mut [Nesting], line: usize, kind: Kind) {
 
 /// Turn a finished frame into a step of the block that encloses it.
 ///
-/// `Open::Spell` cannot reach here — both callers guard on `len() > 1` — but it
-/// is folded in rather than panicked on, because a claim the compiler cannot
-/// check is a crash waiting for the day it stops being true.
+/// `Open::Spell` cannot reach here — both callers guard on `len() > 1` — but is
+/// folded in rather than panicked on: a claim the compiler cannot check is a
+/// crash waiting for the day it stops being true.
 fn close(open: &mut [Nesting], frame: Nesting) {
     let line = frame.line;
     let kind = match frame.kind {
@@ -1082,22 +971,18 @@ fn close(open: &mut [Nesting], frame: Nesting) {
 
 /// `between(here, there)` → the name and the names its arguments arrive under.
 ///
-/// **The parentheses are optional on a definition only while it takes nothing.**
-/// A heading is already unambiguous — `part` says what the line is — so
-/// demanding them for `part gathering` would be ceremony; the moment there is a
-/// parameter list there is nowhere else to put it. At a call site they are the
-/// entire notation and are always required.
+/// The parentheses are optional on a definition only while it takes nothing:
+/// `part` already says what the line is, so demanding them is ceremony, and a
+/// parameter list has nowhere else to go. At a call site they are the entire
+/// notation and always required.
 ///
 /// `None` for a name that is empty, is more than one word, or has a parameter
 /// list the orb cannot read — an unclosed bracket, an empty slot from a trailing
-/// comma, a parameter that is a phrase rather than a name. `part gather the
-/// sage` is a sentence rather than a heading, and reading it as one would set
-/// aside a body under a name nothing can call.
+/// comma, a parameter that is a phrase. Reading `part gather the sage` as a
+/// heading would file a body under a name nothing can call.
 ///
-/// **A repeated parameter is refused here rather than shadowed.** `part
-/// between(here, here)` would bind the second over the first and leave the
-/// caller's first argument unreachable, which is the quiet reinterpretation this
-/// file refuses everywhere.
+/// A repeated parameter is refused rather than shadowed: `part between(here,
+/// here)` would leave the caller's first argument unreachable.
 fn part_signature(argument: &str) -> Option<(String, Vec<String>)> {
     let trimmed = argument.trim();
     let Some((head, rest)) = trimmed.split_once('(') else {
@@ -1122,9 +1007,8 @@ fn part_signature(argument: &str) -> Option<(String, Vec<String>)> {
 /// `here, there` → the names, lowercased. `None` if any slot is not one name.
 ///
 /// Empty text is no parameters, which is what `()` means. Everything else must
-/// be comma-separated single words: a trailing comma leaves an empty slot and is
-/// refused rather than dropped, because a player who wrote one meant to type
-/// another name.
+/// be comma-separated single words; a trailing comma leaves an empty slot and
+/// is refused rather than dropped, since whoever wrote it meant to type a name.
 fn parameters(inside: &str) -> Option<Vec<String>> {
     if inside.trim().is_empty() {
         return Some(Vec::new());
@@ -1151,23 +1035,19 @@ type Call = (String, Vec<String>);
 /// `between(wellspring, near)` → the part it calls and what it hands over.
 ///
 /// Three answers, not two: `None` for a line that is not a call, `Some(None)`
-/// for one that is a call and is malformed, and `Some(Some((name, args)))` for a
-/// good one. Collapsing the middle into "not a call" would send `between(a b)`
-/// to the command resolver, which would report that the tower has no
-/// `between(a b)` — true, unhelpful, and about the wrong thing.
+/// for a malformed one, `Some(Some(..))` for a good one. Collapsing the middle
+/// would send `between(a b)` to the command resolver, which would answer that
+/// the tower has no `between(a b)` — true, and about the wrong thing.
 ///
-/// **The line must *end* with the bracket**, which is what `strip_suffix` says
-/// and is the rule `lexeme::call_runs` has to match: `gathering() # note` is a
-/// command, not a call with something after it.
+/// The line must *end* with the bracket, the rule `lexeme::call_runs` has to
+/// match: `gathering() # note` is a command.
 ///
-/// **Whether the count is right is not asked here**, and deliberately: that
-/// needs the definition, which is a fact about the file rather than about the
-/// line. `compile::check_calls` answers it beside *is there such a part at all*,
-/// so both arrive as one report about the spell.
+/// Whether the count is right needs the definition, a fact about the file
+/// rather than the line, so `compile::check_calls` answers it beside *is there
+/// such a part* and both arrive as one report.
 ///
-/// **An argument may repeat where a parameter may not.** `between(here, here)`
-/// as a *call* is two slots given the same name, which is ordinary; as a
-/// heading it would be one name shadowing another, which is not.
+/// An argument may repeat where a parameter may not: two slots given one name
+/// is ordinary in a call, shadowing in a heading.
 pub(super) fn call_of(line: &str) -> Option<Option<Call>> {
     let trimmed = line.trim();
     let (head, rest) = trimmed.split_once('(')?;
@@ -1204,23 +1084,18 @@ fn arguments(inside: &str) -> Option<Vec<String>> {
 
 /// `best be north` → the name and what it stands for.
 ///
-/// # `be`, and not `to`
+/// `be`, not `to`: `to` is on §6's filler list, so a keyword `to` would be
+/// invisible to every reader but this one, which sees the text before
+/// normalisation. `let best be north` is the English either way.
 ///
-/// `to` is on §6's filler list — `move sage to mortar` fills two slots
-/// positionally and the preposition carries nothing — so a keyword `to` would be
-/// invisible to every reader in the parser except this one, which sees the text
-/// before normalisation. `be` carries the same sentence with none of that, and
-/// `let best be north` is the English either way.
-///
-/// **Both halves are required.** `let best` has nothing to bind and `let be
-/// north` has no name; either read as the other is the orb writing a line the
-/// player did not.
+/// Both halves are required. `let best` has nothing to bind and `let be north`
+/// has no name; either read as the other is the orb writing a line the player
+/// did not.
 fn binding(argument: &str) -> Option<(String, String)> {
     let (name, value) = argument.split_once(" be ")?;
     let (name, value) = (name.trim(), value.trim());
-    // A name is **one word**. `let the best way be north` would otherwise bind
-    // something no later line could spell, since a use site is matched word by
-    // word.
+    // A name is one word: `let the best way be north` would bind something no
+    // later line could spell, since a use site is matched word by word.
     if name.is_empty() || value.is_empty() || name.split_whitespace().count() != 1 {
         return None;
     }
@@ -1229,14 +1104,14 @@ fn binding(argument: &str) -> Option<(String, String)> {
 
 /// `note from satchel` → the name to bind, and the satchel to take it from.
 ///
-/// **`from` is already gone by here.** It is on §6's filler list, so
-/// `spell_argument` hands over `note satchel` — two words, positional. That is
-/// why this splits on whitespace where [`binding`] splits on a keyword: `let`'s
-/// `be` survives normalisation and carries the grammar, and `from` is decoration
-/// a reader wants. `pull note satchel` is the same line and is accepted.
+/// `from` is on §6's filler list and already gone, so `spell_argument` hands
+/// over `note satchel` — two words, positional. Hence splitting on whitespace
+/// where [`binding`] splits on a keyword: `let`'s `be` survives normalisation
+/// and carries the grammar, `from` is decoration. `pull note satchel` is
+/// accepted.
 ///
-/// **Not checked against the world here**, like every other name in a [`Draft`]:
-/// a satchel the room does not have is `compile`'s to catch, in the room.
+/// Not checked against the world here, like every name in a [`Draft`]: a
+/// satchel the room does not have is `compile`'s to catch, in the room.
 fn pulled(argument: &str) -> Option<(String, String)> {
     let mut words = argument.split_whitespace();
     let name = words.next()?;
@@ -1254,9 +1129,9 @@ fn pulled(argument: &str) -> Option<(String, String)> {
 /// The particle is required and carries nothing:
 /// [`SpellWord::particle`](crate::parser::SpellWord::particle) says why.
 ///
-/// **Not checked against the world here.** `read` resolves nothing — that is the
-/// whole of what [`Draft`] means — so a set the room does not have is caught by
-/// [`compile`](mod@super::compile), in the room, where every other name is.
+/// Not checked against the world here: `read` resolves nothing, which is what
+/// [`Draft`] means, so a set the room does not have is
+/// [`compile`](mod@super::compile)'s to catch, in the room.
 fn walked(argument: &str) -> Option<String> {
     let mut words = argument.split_whitespace();
     let particle = SpellWord::For.particle()?;
@@ -1274,28 +1149,22 @@ fn walked(argument: &str) -> Option<String> {
 
 /// `repeat 3` → `Some(3)`; a bare `repeat` → `None`.
 ///
-/// A word that is not a number is **not** an error, and it used to be this
-/// function's job to say why — the doc here named `repeat until the mortar` as
-/// *"a reasonable thing to try"* that was read as an unbounded loop because the
-/// language had no `until`. It has one now, so that case is handled properly
-/// above and this stays lenient only for the rest.
+/// A word that is not a number is not an error. This used to excuse `repeat
+/// until the mortar` as an unbounded loop, because the language had no `until`;
+/// it has one now, handled above, so this stays lenient only for the rest.
 fn count_of(argument: &str) -> Option<u32> {
     argument.split_whitespace().next()?.parse().ok()
 }
 
 /// What follows `until` in a `repeat`'s argument, if it opens with one.
 ///
-/// **The word must be first.** `repeat until X` is the shape; anything else with
-/// `until` buried in it is a question the player wrote oddly, and finding the
-/// word anywhere would make `repeat 3 until` and `repeat the until room` both
-/// mean something. §6's rule is that the orb says what it could not read.
+/// The word must be first. Finding it anywhere would make `repeat 3 until` and
+/// `repeat the until room` both mean something; §6's rule is that the orb says
+/// what it could not read.
 fn after_until(argument: &str) -> Option<&str> {
-    // **Case-folded, because every other control word is.** `spell_word`
-    // lowercases the first word, so `Repeat Until the mortar is idle` is
-    // recognised as a repeat — and this then failed to see its own keyword,
-    // which made `mentions` (case-insensitive) and this disagree: the player was
-    // told the question meant nothing, for a line differing from a working one by
-    // a capital letter.
+    // Case-folded, because every other control word is. `spell_word` lowercases
+    // the first word, so `Repeat Until ...` is a repeat while this missed its
+    // own keyword: a capital letter bought *the question meant nothing*.
     let keyword = SpellWord::Until.canonical();
     let head = argument.get(..keyword.len())?;
     if !head.eq_ignore_ascii_case(keyword) {
@@ -1401,7 +1270,7 @@ mod tests {
 
     #[test]
     fn a_repeat_is_bounded_by_a_number_or_a_question_and_never_both() {
-        // **One bound per loop**, refused by name rather than resolved by
+        // One bound per loop, refused by name rather than resolved by
         // precedence. `repeat 5 until X` read as `repeat 5` would drop half of
         // what the player wrote in silence.
         let program = read(&lines(&[
@@ -1516,10 +1385,9 @@ mod tests {
 
     /// Every command a program runs, in order, with a step budget.
     ///
-    /// Walks a [`Draft`] rather than a [`Program`], because what is under test
-    /// here is the *shape* — `at`, `step_past` and the branch arithmetic — and
-    /// none of it looks at a name. Resolution is `compile`'s, and it has its own
-    /// tests against a real world.
+    /// Walks a [`Draft`] rather than a [`Program`]: what is under test is the
+    /// *shape* — `at`, `step_past`, the branch arithmetic — none of which looks
+    /// at a name. Resolution is `compile`'s, with its own tests.
     fn run(program: &Draft, budget: usize) -> Vec<String> {
         run_with(program, budget, true)
     }
@@ -1554,11 +1422,9 @@ mod tests {
     #[test]
     fn an_unbounded_repeat_never_runs_out() {
         // Safe because the caller's budget bounds a tick — the loop wastes
-        // itself rather than hanging the game.
-        //
-        // One step of the budget goes on **entering** the block, which is what
-        // makes that guard real: a body that spent nothing would otherwise spin
-        // for ever inside one tick.
+        // itself rather than hanging the game. One step of that budget goes on
+        // entering the block; a body that spent nothing would spin for ever in
+        // one tick.
         let program = read(&lines(&["repeat", "grind sage", "end"]));
         assert_eq!(run(&program, 5).len(), 4, "5 steps: 1 to enter, 4 to run");
         assert_eq!(run(&program, 40).len(), 39, "and it never finishes");
@@ -1576,9 +1442,9 @@ mod tests {
     /// The world these tests pretend to have: every guard says go round, and
     /// every set has exactly two members.
     ///
-    /// **Two, not one and not none**, because the arithmetic that can be wrong
-    /// is the lap: a set of one enters and leaves without ever exercising
-    /// `step_past`'s `Each` arm, and a set of none never enters at all.
+    /// Two, because the lap is the arithmetic that can be wrong — a set of one
+    /// never exercises `step_past`'s `Each` arm, and a set of none never
+    /// enters.
     fn a_set_of_two(_: &[usize], popped: Loop) -> bool {
         match popped {
             Loop::Each(index) => index + 1 < 2,
@@ -1617,9 +1483,9 @@ mod tests {
                     }
                     continue;
                 }
-                // **A set of two, always**, so the walker needs no world. The
-                // runner reads the real one; what is under test here is the
-                // path arithmetic, which does not care what a member is called.
+                // A set of two, always, so the walker needs no world. The
+                // runner reads the real one; what is under test is the path
+                // arithmetic, which does not care what a member is called.
                 Some(Kind::Each { body, .. }) => {
                     if body.is_empty() {
                         if !step_past(&program.body, &mut pc, &mut loops, a_set_of_two) {
@@ -1630,20 +1496,18 @@ mod tests {
                     }
                     continue;
                 }
-                // **Stepped past, exactly as the runner does.** A definition is
-                // not run where it stands, and this walker has to agree about
-                // that or the path arithmetic it exists to test would be
-                // measured against a different program.
+                // Stepped past, as the runner does: a definition is not run
+                // where it stands, and a walker that disagreed would measure
+                // the path arithmetic against a different program.
                 Some(Kind::Part { .. }) => {
                     if !step_past(&program.body, &mut pc, &mut loops, a_set_of_two) {
                         break;
                     }
                     continue;
                 }
-                // A leaf here, because this walker has **no frame stack** — what
-                // a call does is the runner's, and `tests.rs` drives that
-                // through a real `Sim`. Emitting the name keeps a call visible
-                // in the shape tests without pretending it was entered.
+                // A leaf: this walker has no frame stack — what a call does is
+                // the runner's, driven through a real `Sim` in `tests.rs`. The
+                // name keeps a call visible without pretending it was entered.
                 Some(Kind::Call { name, args }) => {
                     out.push(format!("{name}({})", args.join(", ")));
                 }
@@ -1686,10 +1550,9 @@ mod tests {
 
     #[test]
     fn an_if_takes_one_half_and_carries_on_past_both() {
-        // **The arithmetic most likely to be wrong.** A branch costs two path
-        // elements going in, so walking out has to pop two — pop one and the
-        // path lands on the *other* half and runs it as well, which looks like
-        // an `if` that executes both sides.
+        // The arithmetic most likely to be wrong: a branch costs two path
+        // elements going in, so walking out pops two — pop one and the path
+        // lands on the *other* half and runs it as well.
         let program = read(&lines(&[
             "if the dispensary has sage",
             "grind sage",
@@ -1741,18 +1604,15 @@ mod tests {
         assert!(run_with(&program, 20, false).is_empty());
     }
 
-    /// **`bide` takes a number and nothing else**, and it did not.
+    /// `bide` takes a number and nothing else, and it did not.
     ///
-    /// A bare word compiled to `Delay::Reading`, which is how `bide until` read
-    /// its delay off the circle — the menagerie's whole puzzle answered by the
-    /// world instead of by the author. Withdrawing the form is what puts the
-    /// arithmetic back, and it closes a second hole with it: `bide sage` in the
-    /// laboratory was a plausible typo that resolved to an *endless* pile and
-    /// bided `u32::MAX`.
+    /// A bare word compiled to `Delay::Reading`, so `bide until` read its delay
+    /// off the circle and the world answered the menagerie's puzzle.
+    /// Withdrawing the form also closes `bide sage`, a plausible typo that
+    /// resolved to an *endless* pile and bided `u32::MAX`.
     ///
-    /// **Nothing anywhere tested `bide` before this** — not the word, not the
-    /// count, not the reading form the domain was built on. That is why the
-    /// shipped solver could stop compiling with the whole suite green.
+    /// Nothing tested `bide` before this, which is why the shipped solver could
+    /// stop compiling with the whole suite green.
     #[test]
     fn bide_takes_a_count_and_a_bare_word_is_refused() {
         for line in ["bide until", "bide sage", "bide"] {
@@ -1804,10 +1664,9 @@ mod tests {
 
     #[test]
     fn else_if_is_exactly_the_nesting_it_saves_writing() {
-        // **The whole claim, as an equality.** `else if` adds no `Kind` and no
-        // runner change; it is a desugaring, so the tree it builds must be the
-        // one a player gets today by nesting and paying for the `end`s. If these
-        // two ever differ, the shorter form has become a second language.
+        // The whole claim, as an equality. `else if` is a desugaring, so its
+        // tree must be the one nesting by hand builds; if the two ever differ,
+        // the shorter form has become a second language.
         let ladder = read(&lines(&[
             "if the mortar is idle",
             "grind sage",
@@ -1829,10 +1688,9 @@ mod tests {
             "end",
         ]));
 
-        // **Compared without line numbers, and that difference is not a defect.**
-        // The two spellings occupy different lines and each `Step` carries its
-        // own, because §8.1's contract is that the log names the line the player
-        // wrote. What must match is the tree.
+        // Compared without line numbers: the two spellings occupy different
+        // ones and each `Step` carries its own, because §8.1's contract is that
+        // the log names the line the player wrote. What must match is the tree.
         assert_eq!(
             shape(&ladder.body),
             shape(&by_hand.body),

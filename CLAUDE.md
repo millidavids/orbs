@@ -16,10 +16,19 @@ CRT glowing in the dark.
 its exit with three boxes deliberately left. Phase 9 (Enchanting) is met on three
 of its five boxes — the shared-engine extraction, split into a refactor and a
 behaviour box, is what is left. Renown closed at `0.11.14` and the interlude at
-`0.11.10`. `0.12` — the orb's menu — is in hand.** The determinism spine, the Frame boundary, the parser, the
-cell renderer, brewing, the archive, the lens, the sanctum, the menagerie, the
-bailey, the forge, the tower rail, the balance harness, the spell engine and its
-scripting language are built and the game plays.
+`0.11.10`. `0.16` — the threshold — closed at `0.16.13`: eleven boxes, and three
+more for the corrections two `/code-review max` passes found in them.** The
+determinism spine, the Frame boundary, the parser, the cell renderer, brewing,
+the archive, the lens, the sanctum, the menagerie, the bailey, the forge, the
+tower rail, the balance harness, the spell engine and its scripting language are
+built and the game plays.
+
+**The orb has a front door.** It wakes to its own menu rather than to a tower:
+`play` opens or raises one, `settings` is four remembered pages, `manual` is
+nineteen chapters reachable before there is a tower, and `quit` asks once. Saves
+and settings live in the platform's app-data directory, and the orb makes a
+sound — cues generated in code, every one chosen from what the transcript
+already draws.
 
 **§10's seven domains are all raised, and a fresh game opens them one at a
 time.** `Sim::new` is the open tower every test, dump and balance policy uses;
@@ -194,6 +203,18 @@ mistakes caught late.
 
 Inherited from `court_wizard` (sibling repo, shipped) unless noted.
 
+### Comments are short
+
+A line or two. Say *why*, not what — the code says what. No bolded lead-ins, no
+`# Headings` inside doc comments, no multi-paragraph essays.
+
+Long rationale goes in DESIGN.md §19, which is the decisions log and already
+holds most of it. A comment that wants three paragraphs is a §19 entry with a
+one-line pointer next to the code.
+
+This replaces the old house style, which ran to 36% of the tree by line and
+duplicated §19 in the margins.
+
 - **Feature-sliced modules.** Group by *concern*, one file per feature
   (`parsing.rs`, `escrow.rs`), not by file type. Prefer a `damage.rs` holding the
   component + system + constants together over splitting across
@@ -300,7 +321,7 @@ semver at 1.0 is one-way.
 
 ```toml
 [workspace.package]
-version = "0.12.3"    # the orb's menu, third iteration
+version = "0.16.3"    # the threshold, third iteration
 ```
 
 All five crates inherit it (`version.workspace = true`), so there is exactly one

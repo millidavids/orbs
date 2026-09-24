@@ -7,20 +7,16 @@
 //! cargo run --release -p orbs-augury --example measure --features train -- --reader target/seeds/try/reader-7 --scores
 //! ```
 //!
-//! **The fourth line of `orbs-sim`'s `--bench`, and it has to live here.**
-//! `orbs-sim` must never depend on this crate (CLAUDE.md rule 1), so the bench
-//! that measures the matcher cannot reach the model. The scoring rule is
-//! deliberately the same: a reading counts when the command it produces
-//! *resolves to the canonical form the corpus meant*, which is what
-//! `Sim::submit_reading` would do with it.
+//! The fourth line of `orbs-sim`'s `--bench`, and it has to live here: rule 1
+//! forbids `orbs-sim` depending on this crate, so the bench that measures the
+//! matcher cannot reach the model. The scoring rule is deliberately the same — a
+//! reading counts when the command it produces resolves to the canonical form
+//! the corpus meant, which is what `Sim::submit_reading` would do.
 //!
-//! `--spells` measures the scrivener instead, and its rule is stricter for the
-//! reason DESIGN.md §9999 gives — *"a spell resolves with nobody watching"*. A
-//! statement counts only when the line it produces **is** the canonical one; a
-//! command line inside a spell is scored the prompt's way, because that is the
-//! reader it is handed to.
-//!
-//! # Other weights, and only the numbers
+//! `--spells` measures the scrivener instead, stricter for §9999's reason — *"a
+//! spell resolves with nobody watching"*. A statement counts only when the line
+//! it produces *is* the canonical one; a command line inside a spell is scored
+//! the prompt's way, because that is the reader it is handed to.
 //!
 //! `--reader` and `--scribe` measure weights other than the shipped ones, each a
 //! path without its `.bin`, and `--scores` prints nothing but the numbers — one
@@ -73,10 +69,9 @@ fn spells(scores: bool) {
         return;
     };
 
-    // **Per shape, because one number hides the shapes with nothing to expand
-    // over.** `end` and `else` are twenty authored sentences apiece against `if
-    // {place} has {reagent}`'s sixteen thousand, and a corpus-wide percentage is
-    // mostly a report on the widest one.
+    // Per shape, because one number hides the shapes with nothing to expand
+    // over: `end` and `else` are twenty authored sentences apiece against `if
+    // {place} has {reagent}`'s sixteen thousand.
     let mut right = vec![0usize; shapes.len()];
     let mut seen = vec![0usize; shapes.len()];
     // One misreading per shape, so the list is a spread rather than eight
@@ -105,10 +100,9 @@ fn spells(scores: bool) {
             println!("    {rate:>6.1}%   {shape}   ({} held back)", seen[at]);
         }
     }
-    // **The mean over shapes, and it is the one to read.** A holdout expands
-    // over the noun tables, so `if {place} has {reagent}` is 86% of these lines
-    // for the same arithmetic reason `move` was 47% of the prompt's corpus — an
-    // example-weighted total is mostly a report on that one shape.
+    // The mean over shapes, and the one to read. A holdout expands over the noun
+    // tables, so `if {place} has {reagent}` is 86% of these lines — the same
+    // arithmetic that made `move` 47% of the prompt's corpus.
     let each = mean(
         &(0..shapes.len())
             .map(|at| percent(right[at], seen[at].max(1)))
@@ -147,10 +141,9 @@ fn spells(scores: bool) {
         println!("\n  and on the lines that must come back untouched:\n");
     }
 
-    // **Two populations again, and they fail differently.** An already-canonical
-    // statement is caught by `reads_cleanly` before the model is consulted; a
-    // sentence that asks for nothing at all reaches the model and is the refusal
-    // head's own work.
+    // Two populations again, failing differently: an already-canonical statement
+    // is caught by `reads_cleanly` before the model is consulted, where a
+    // sentence asking for nothing reaches the model and is the refusal head's.
     let untouched = |what: &str, lines: &[String]| {
         let left = lines
             .iter()
@@ -234,12 +227,11 @@ fn prompt(scores: bool) {
         let by_model = read
             .iter()
             .any(|echo| reaches(echo, &example.canonical, &scene));
-        // **And the one the orb would actually run**, which is the reading
+        // And the one the orb would actually run — the reading
         // `Sim::submit_reading` and the bench both take. The line above counts a
-        // hit when *any* of four readings reaches the command — the rule
-        // `orbs-sim`'s bench calls flattering, since it credits a reader that
-        // offers four and means none of them. Both are printed: the looser one
-        // is what every number in §19 before `0.14.11` was measured with.
+        // hit when any of four readings reaches the command, which `orbs-sim`'s
+        // bench calls flattering. Both are printed: the looser one is what every
+        // number in §19 before `0.14.11` was measured with.
         model_ran += usize::from(
             orbs_sim::parser::reading_to_run(&read, &scene, Mode::Calm)
                 .is_some_and(|line| reaches(line, &example.canonical, &scene)),
@@ -266,10 +258,9 @@ fn prompt(scores: bool) {
     }
 
     let total = holdout.len().max(1);
-    // **Two populations, scored opposite ways round.** On commands a refusal is
-    // a miss; on sentences that ask for nothing it is the right answer. Reading
-    // one number for both is how *"it refused 0.0%"* got reported as a failure
-    // when, on the command holdout, nought is exactly right.
+    // Two populations, scored opposite ways round: on commands a refusal is a
+    // miss, on sentences that ask for nothing it is the right answer. One number
+    // for both is how *"it refused 0.0%"* got reported as a failure.
     let refusals = phrasings.refused_holdout(&scene);
     let correctly_refused = refusals
         .iter()
@@ -317,11 +308,10 @@ fn prompt(scores: bool) {
         percent(refused, total),
     );
 
-    // **The number that decides whether a worker thread is needed at all.** §6
-    // requires the echo be immediate — *"a terminal that takes a second to
-    // answer reads as broken"* — and the plan assumed a reader slow enough to
-    // need a thread, a channel and a deadline. One short sentence on the CPU
-    // backend may simply not be.
+    // The number that decides whether a worker thread is needed at all. §6 wants
+    // the echo immediate — *"a terminal that takes a second to answer reads as
+    // broken"* — and the plan assumed a reader slow enough to need a thread, a
+    // channel and a deadline. One short sentence on the CPU backend may not be.
     let sentences: Vec<&str> = holdout.iter().take(200).map(|e| e.said.as_str()).collect();
     let started = std::time::Instant::now();
     for line in &sentences {

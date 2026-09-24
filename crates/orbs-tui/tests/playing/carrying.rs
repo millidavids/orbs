@@ -21,14 +21,9 @@ fn a_name_nothing_answers_to_is_answered_with_names_that_do() {
     if !available() {
         return;
     }
-    // **This asserted `"zzz"` and passed on its own argument.** The needle was a
-    // substring of the line being typed, and the block it was searched in began
-    // with that line — so the wait was satisfied by the echo and the refusal was
-    // never read. It is the reason `block` drops its header.
-    //
-    // What actually happens is better than a refusal: the parser answers an
-    // unplaceable noun with numbered suggestions drawn from what is really on
-    // the shelf, so the reply names three reagents the room has.
+    // This asserted `"zzz"` and passed on the echo of its own argument, which
+    // is why `block` drops its header. The parser answers an unplaceable noun
+    // with numbered suggestions drawn from what is really on the shelf.
     let game = Game::start();
     game.does("attend laboratory", "/tower/laboratory")
         .does("move zzz to mortar_and_pestle", "»")
@@ -54,8 +49,8 @@ fn spawned_stock_lands_in_the_room_that_makes_it() {
     if !available() {
         return;
     }
-    // **`tower::home` is a rule over the content, not a list**, so this asks
-    // for three things from one room and checks each went somewhere different.
+    // `tower::home` is a rule over the content, not a list, so this asks for
+    // three things from one room and checks each went somewhere different.
     let game = Game::start();
     game.does("attend archive", "/tower/archive")
         .does("debug_spawn fragment 4", "all along")
@@ -106,10 +101,9 @@ fn a_way_is_a_fixture_and_not_a_shelf() {
     if !available() {
         return;
     }
-    // **The one that surprises.** A `way` carries `Fixture` so the maze can
-    // publish readings into it, and `research::refresh` despawns everything in
-    // one on the step after — so a reagent put there would be a pile that
-    // vanishes with no line saying so.
+    // A `way` carries `Fixture` so the maze can publish readings into it, and
+    // `research::refresh` despawns its contents on the step after — a reagent
+    // put there would vanish with no line saying so.
     let game = Game::start();
     game.does("attend archive", "/tower/archive")
         .does("debug_spawn sage 1 north", "there is no shelf here");
@@ -132,9 +126,7 @@ fn a_potion_carries_from_the_room_that_made_it_to_every_other() {
     if !available() {
         return;
     }
-    // **The whole reason the arsenal exists** (§19): before it, a potion made
-    // in the laboratory could not leave the laboratory, because `move` wants a
-    // fixture where you are standing. Brewed here rather than spawned, because
+    // Why the arsenal exists (§19). Brewed rather than spawned, because
     // spawning puts it in the arsenal already and would test nothing.
     let game = Game::start();
     game.does("attend laboratory", "/tower/laboratory")
@@ -154,10 +146,9 @@ fn a_kept_potion_can_be_named_from_any_room() {
     if !available() {
         return;
     }
-    // **Nameable is not enough.** `purge` and `verify` take `NounKind::Any`, so
-    // they can name a potion from anywhere — and a verb that names what it
-    // cannot reach says *"there is no clarity within reach"*, which is the one
-    // answer that is false.
+    // `purge` and `verify` take `NounKind::Any`, so they can name a potion from
+    // anywhere; answering *"there is no clarity within reach"* while the
+    // arsenal holds it is the one false reply.
     let game = Game::start();
     game.does("attend archive", "/tower/archive")
         .does("debug_spawn clarity", "all along")
@@ -180,12 +171,8 @@ fn purging_a_kept_potion_actually_empties_the_arsenal() {
         .does("debug_spawn clarity", "all along")
         .does("survey arsenal", "clarity")
         .does("purge clarity", "clarity")
-        // **A tick between the purge and the look, or this is a race.** A
-        // `purge` queues its despawn for the *next* tick like every other
-        // effect, and `does` waits only for the echo — which the prompt prints
-        // at once. Two lines can therefore land inside one tick, and the survey
-        // then reads a world the purge has not been applied to yet. It passed
-        // for as long as the screen happened to be slow enough.
+        // A tick between the purge and the look, or this races: `purge` queues
+        // its despawn for the next tick, and `does` waits only for the echo.
         .wait_ticks(2)
         .does("survey arsenal", "arsenal");
     assert!(

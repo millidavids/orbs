@@ -2,38 +2,25 @@
 //!
 //! DESIGN.md §4 makes *the tower's* boot a status report reflecting real world
 //! state, and that report is built and shipped (`orbs_sim::tower::boot`). This
-//! is the **machine** waking up in front of it: the frame drawing itself, and
-//! the dependencies the game is made of reporting in.
+//! is the machine waking up in front of it: the frame drawing itself, and the
+//! dependencies reporting in.
 //!
-//! **There is no prompt on any of these screens.** One typed itself here once,
-//! caret and all, before the frame existed — an input line offered where nothing
-//! can be typed, since every keyed system is gated on `booted`. The first
-//! affordance the game showed was one that did not work.
+//! No prompt on any of these screens: every keyed system is gated on `booted`,
+//! so one that typed itself here was an affordance that did not work.
 //!
-//! It opens on **black and nothing else**. A CRT strike shipped here first — a
-//! flash and a sweeping band, then a flash alone — and neither survived being
-//! looked at: the game is a wizard finding a computer inside a scrying orb, and
-//! an orb does not power on like a monitor.
+//! It opens on black and nothing else. A CRT strike shipped here first and did
+//! not survive being looked at — an orb does not power on like a monitor.
 //!
-//! Two screens, deliberately, and they must not read as one thing twice. The
-//! split is visual as well as sequential — the POST is a centred title card with
-//! no pane and no `name qty state` columns, and the pane border does not exist
-//! until [`Stage::Post`] draws it. What follows the card is the tower's report,
-//! already sitting in the scrollback where `Sim::new` put it.
+//! Two screens, and the split is visual as well as sequential: the POST is a
+//! centred title card with no pane, and the pane border does not exist until
+//! [`Stage::Post`] draws it. What follows is the tower's report, already in the
+//! scrollback where `Sim::new` put it.
 //!
-//! # It is wall-clock, so it lives here and not in the sim
+//! Wall-clock, so it lives here and not in the sim (rule 3): frontend state
+//! driven by `Time`, as `render::blink` is.
 //!
-//! Architectural rule 3: the sim advances only through `step()`, and nothing it
-//! can observe may depend on how long a frame took. A boot animation is entirely
-//! frame-rate driven, so it is frontend state driven by `Time` — the same
-//! arrangement `render::blink` uses and for the same reason.
-//!
-//! # Nothing here touches a Bevy resource
-//!
-//! `shell::dump` runs before `App::new()` and builds no `App` at all, which §19
-//! records as deliberate. A boot screen that could only be painted from inside a
-//! system would be a screen `ORBS_DUMP` could never show, so painting takes a
-//! stage, a progress value and a `Frame` and nothing else.
+//! Nothing here touches a Bevy resource, because `shell::dump` builds no `App`
+//! (§19). Painting takes a stage, a progress value and a `Frame`.
 
 use core::time::Duration;
 
@@ -41,52 +28,32 @@ use bevy_ecs::prelude::Resource;
 
 /// The stages, in order, with how long each lasts.
 ///
-/// Just under thirteen seconds all told, and it runs every time: the keypress
-/// skip is gone (§19), and §4's *sticky* skip waits on Phase 13's settings.
+/// Just under thirteen seconds all told, and it runs unless the player has said
+/// not to — §4's sticky skip, which [`Boot::default`] consults (§19).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Stage {
     /// A dark tube. Nothing has happened yet.
     ///
-    /// **The screen simply opens black.** A flash-and-strike shipped here first,
-    /// then a flash alone, and neither earned its place: the game is a wizard
-    /// looking into a scrying orb, and an orb does not power on like a monitor.
-    /// What is left is a beat of dark before the frame draws, which reads as the
-    /// orb being *found* rather than switched on.
+    /// A beat of dark before the frame draws reads as the orb being *found*
+    /// rather than switched on.
     Dark,
-    // A `Prompt` stage lived here, and the input line typed itself before the
-    // frame drew. It is gone with the prompt it existed for: **nothing can be
-    // typed during boot** — every keyed system is gated on `booted` — so an
-    // input line on that screen was an affordance that did not work, offered
-    // before anything else on screen did.
-    //
-    // Removing the drawing alone would have left the stage as 1.2 s of black
-    // indistinguishable from a slow launch, which is the trap `Dark`'s own
-    // duration note warns about.
+    // A `Prompt` stage that typed an input line lived here, and went: nothing
+    // can be typed during boot. Removing only the drawing would have left
+    // 1.2 s of black indistinguishable from a slow launch.
     /// The card: the border draws itself while the logo prints and the
     /// dependencies report in.
     ///
-    /// **One stage, because they happen at once.** The border used to have a
-    /// stage of its own that finished before the card began, which made the
-    /// opening two waits in a row — three and a bit seconds of a box drawing
-    /// itself against nothing, and only then a name. They start together now,
-    /// and the box closes while the logo is still spelling itself out.
+    /// One stage, because they happen at once. A separate border stage made the
+    /// opening two waits in a row.
     Post,
     /// The card leaving: everything inside the box flies into the middle.
     ///
-    /// **The handover, given a beat of its own.** The card used to be replaced
-    /// by the game between one frame and the next — the same cut §19 spent a
-    /// whole interlude removing from every *other* screen change, left in the
-    /// one place a player meets first.
+    /// The handover, given a beat of its own rather than the between-frames cut
+    /// §19 spent an interlude removing from every other screen change. It is
+    /// [`Passage::Gather`](orbs_render::Passage)'s leaving half.
     ///
-    /// It is [`Passage::Gather`](orbs_render::Passage)'s leaving half, which is
-    /// the motion a full-pane surface already uses: the orb closing one thing
-    /// before opening another.
-    ///
-    /// **The box stays.** Only what is inside it leaves, because the border the
-    /// card drew for itself is the pane the game arrives in — taking it away
-    /// would mean drawing a second one over the hole a frame later. What moves
-    /// it instead is the tower rail, pushing in from the right and narrowing the
-    /// pane to make room as the tower opens.
+    /// The box stays: the border the card drew is the pane the game arrives in,
+    /// and the tower rail narrows it as it pushes in from the right.
     Close,
     /// The game.
     Live,
@@ -99,46 +66,28 @@ impl Stage {
     /// How much of the card's time the border spends closing.
     ///
     /// The four runs cover a quarter of the cells one continuous line did, so
-    /// this is a shorter *and* faster reveal than the stage it replaced: the box
-    /// is whole while the logo is still arriving, which is the point — it frames
-    /// the name rather than waiting for it.
+    /// the box is whole while the logo is still arriving.
     pub const FRAME_SHARE: f32 = 0.22;
 
     /// How long this stage lasts.
     ///
-    /// **Paced to be read, not to be got past.** The first version ran the whole
-    /// sequence in 4.4 s and the stages that animate — the frame drawing itself,
-    /// the dependencies reporting — went by faster than anyone could follow.
-    /// Four times slower is the difference between a flicker and a screen.
+    /// Paced to be read, not got past: at 4.4 s for the sequence the animated
+    /// stages went by faster than anyone could follow. [`Stage::Dark`] is the
+    /// exception and is short, being a screen doing nothing.
     ///
-    /// [`Stage::Dark`] is the exception and is *short*: it was 1.6 s when a
-    /// flash punctuated the end of it, and with the flash gone it is a screen
-    /// that does nothing, which is indistinguishable from a slow launch. Long
-    /// enough to be a beat, not long enough to be a wait.
-    ///
-    /// `ORBS_BOOT=0` skips the whole thing, and is a development affordance —
-    /// boot runs once a launch and every "see it" pass would otherwise pay for
-    /// it. There is no player-facing skip.
+    /// `ORBS_BOOT=0` skips the whole thing, since every "see it" pass would
+    /// otherwise pay for it. No player-facing skip.
     #[must_use]
     pub const fn duration(self) -> Duration {
         Duration::from_millis(match self {
             Self::Dark => 600,
-            // **9 s, and now 5.5.** §19's four-times-slower correction was made
-            // when the whole card was one clock — the logo printing left to
-            // right, the words riding along with it — and a stage that read as
-            // one slow event needed the room. It is three now, in sequence: the
-            // name a letter at a time, then what it stands for, then what the orb
-            // is made of. Each one is legible on its own, so the pauses that were
-            // holding them apart were only holding the card open.
-            //
-            // The lesson is intact and is why this is not 4.4 again: the letters
-            // still get about a quarter of a second each and the report still
-            // gets the bulk of it.
+            // 9 s, then 5.5: §19's four-times-slower correction was made when
+            // the card read as one slow event. It is three legible events in
+            // sequence now, so the pauses between them only held it open. The
+            // letters still get about a quarter-second each.
             Self::Post => 5500,
-            // **Half a second, which is a whole crossing's length.** The card
-            // only spends the *leaving* half here, so it runs at half a
-            // crossing's pace — slower than a screen change on purpose, because
-            // this one is the tower opening rather than a room changing.
+            // Half a crossing's length: the card spends only the *leaving* half
+            // here, because this is the tower opening, not a room changing.
             Self::Close => 500,
             Self::Live => 0,
         })
@@ -156,12 +105,9 @@ impl Stage {
 
     /// Whether the tower's clock may run.
     ///
-    /// **Not cosmetic.** `tower::drift` rolls once per tick, so a sim left
-    /// running through boot advances its RNG stream by a wall-clock- and
-    /// skip-dependent number of draws: the same seed would produce a different
-    /// world depending on how long the animation took and whether anyone
-    /// skipped it. The player would also read a tick-0 report beside a telemetry
-    /// pane saying tick 4.
+    /// Not cosmetic: `tower::drift` rolls once per tick, so a sim running
+    /// through boot advances its RNG stream by a wall-clock-dependent number of
+    /// draws and the same seed builds a different world.
     #[must_use]
     pub const fn world_runs(self) -> bool {
         matches!(self, Self::Live)
@@ -169,8 +115,8 @@ impl Stage {
 
     /// Whether the pane border is on screen yet.
     ///
-    /// **[`Stage::Close`] still draws it**, because it is what that stage takes
-    /// away: the box has to be on screen to shrink with everything else in it.
+    /// [`Stage::Close`] still draws it: the box has to be on screen to shrink
+    /// with everything else in it.
     #[must_use]
     pub const fn has_frame(self) -> bool {
         matches!(self, Self::Post | Self::Close | Self::Live)
@@ -178,7 +124,7 @@ impl Stage {
 
     /// How far through the card's departure, or `None` if it is not leaving.
     ///
-    /// Handed to [`Passage::Gather`](orbs_render::Passage) as the **leaving**
+    /// Handed to [`Passage::Gather`](orbs_render::Passage) as the *leaving*
     /// half, so it runs `0.0` to the midpoint across this stage and the card is
     /// a single cell by the end of it.
     #[must_use]
@@ -208,12 +154,15 @@ pub struct Boot {
 
 impl Default for Boot {
     fn default() -> Self {
-        // `ORBS_BOOT=0` lands straight in the game. Boot happens once per launch,
-        // so without this every "see it" pass on anything else costs a four-second
-        // wait — and CLAUDE.md's warning about unmaintained debug affordances is
-        // about inventing surfaces nobody uses, not about the one that makes the
-        // gate cheap to run.
+        // `ORBS_BOOT=0` lands straight in the game, so a "see it" pass on
+        // anything else does not pay the wait.
         if std::env::var("ORBS_BOOT").is_ok_and(|value| value == "0") {
+            return Self::finished();
+        }
+        // §4's sticky skip, set once in `settings`, `habits` (§19). `ORBS_BOOT`
+        // outranks it: a setting that could override the switch would make a
+        // capture depend on whose machine it ran on.
+        if crate::settings::skips_boot() {
             return Self::finished();
         }
         Self::new()
@@ -263,9 +212,8 @@ impl Boot {
 
     /// Let `delta` pass, moving through as many stages as it covers.
     ///
-    /// Catching up in whole stages rather than clamping to one per frame: a
-    /// stall during boot should not leave the sequence stuck part-way, for the
-    /// same reason `render::blink` catches its phase up in whole half-cycles.
+    /// Catching up in whole stages rather than one per frame, so a stall does
+    /// not strand the sequence — as `render::blink` catches its phase up.
     pub fn advance(&mut self, delta: Duration) {
         if self.is_live() {
             return;
@@ -277,14 +225,9 @@ impl Boot {
         }
     }
 
-    // There was a `skip()` here, driven by any keystroke. It is gone: the
-    // sequence is short and it is *character*, and a keypress skip made the
-    // first thing a player does to the game be dismissing it (§19).
-    //
-    // §4's **sticky** skip is a different thing and still stands — a remembered
-    // setting for someone on their fortieth launch, not a per-launch keypress —
-    // and it needs somewhere to persist, which arrives with §15's Phase 13
-    // settings screen. `Boot::finished` is the state it will select.
+    // A keystroke-driven `skip()` lived here and went (§19): the first thing a
+    // player does to the game should not be dismissing it. §4's *sticky* skip
+    // stands — `settings::skips_boot()` answers, `Boot::default` asks.
 }
 
 #[cfg(test)]
@@ -307,8 +250,8 @@ mod tests {
     fn it_passes_through_every_stage_in_order() {
         let mut boot = Boot::new();
         let mut seen = vec![boot.stage()];
-        // Run against the sequence's own length rather than a fixed step count,
-        // so retiming a stage cannot silently stop this reaching the end.
+        // Against the sequence's own length, so retiming a stage cannot
+        // silently stop this reaching the end.
         let step = Duration::from_millis(50);
         let limit = total().saturating_add(step);
         let mut elapsed = Duration::ZERO;
@@ -326,10 +269,8 @@ mod tests {
 
     #[test]
     fn one_long_stall_does_not_strand_it_mid_sequence() {
-        // A hitch during startup is exactly when this is most likely — the atlas
-        // is being built and the shader compiled — and a sequence that advances
-        // one stage per frame would still be in `Dark` well after the tube had
-        // finished striking.
+        // A hitch is likeliest at startup — atlas built, shader compiled — and
+        // one stage per frame would still be in `Dark` long after.
         let mut boot = Boot::new();
         boot.advance(Duration::from_secs(30));
         assert!(boot.is_live());
@@ -337,9 +278,8 @@ mod tests {
 
     #[test]
     fn the_world_is_stopped_until_the_game_arrives() {
-        // The determinism half: `tower::drift` rolls once per tick, so ticks
-        // during boot would advance the RNG stream by a wall-clock-dependent
-        // amount and the same seed would build a different world.
+        // `tower::drift` rolls once per tick, so ticks during boot advance the
+        // RNG stream by a wall-clock-dependent amount.
         for stage in Stage::SEQUENCE {
             assert!(!stage.world_runs(), "{stage:?} let the clock run");
         }
@@ -348,9 +288,8 @@ mod tests {
 
     #[test]
     fn a_finished_boot_is_the_same_state_as_a_watched_one() {
-        // `ORBS_BOOT=0` and §4's future sticky skip both select `finished()`,
-        // and it has to land in exactly the state sitting through the sequence
-        // reaches — otherwise the dump and the game are drawing different worlds.
+        // Both skips select `finished()`, which must land in the state sitting
+        // through the sequence reaches, or dump and game draw different worlds.
         let finished = Boot::finished();
 
         let mut waited = Boot::new();
@@ -362,9 +301,8 @@ mod tests {
 
     #[test]
     fn the_screen_opens_black_and_does_not_dwell_there() {
-        // Nothing flashes any more, so `Dark` is a screen doing nothing — and a
-        // screen doing nothing for long enough is indistinguishable from a slow
-        // launch. A beat, not a wait.
+        // `Dark` is a screen doing nothing, and for long enough that is
+        // indistinguishable from a slow launch. A beat, not a wait.
         assert!(
             Stage::Dark.duration() <= Duration::from_millis(900),
             "the black screen outstays a beat",
@@ -377,26 +315,22 @@ mod tests {
 
     #[test]
     fn the_sequence_opens_on_nothing_at_all() {
-        // The whole of "just open to black": the first stage puts nothing on
-        // screen, and the sequence starts by *appearing* rather than by an
-        // effect announcing it.
+        // The sequence starts by *appearing* rather than by an effect
+        // announcing it.
         assert!(!Stage::Dark.has_frame());
         assert!(Stage::Post.has_frame());
     }
 
     #[test]
     fn the_border_and_the_card_start_together() {
-        // **They used to be two waits in a row**: three and a bit seconds of a
-        // box drawing itself against nothing, and only then a name. One stage
-        // now, so the first frame of the card has both a border beginning and a
-        // logo beginning.
+        // They used to be two waits in a row: a box drawing itself against
+        // nothing, and only then a name.
         assert_eq!(Stage::Post.frame_progress(0.0), 0.0);
         assert!(
             Stage::Post.frame_progress(Stage::FRAME_SHARE / 2.0) > 0.0,
             "the border had not started while the card was running",
         );
-        // ...and the box is whole well before the card is done, so it frames the
-        // name rather than racing it to the end.
+        // ...and whole well before the card is done, so it frames the name.
         assert_eq!(Stage::Post.frame_progress(Stage::FRAME_SHARE), 1.0);
         assert!(
             Stage::Post.frame_progress(0.5) >= 1.0,
@@ -406,17 +340,9 @@ mod tests {
 
     #[test]
     fn no_stage_offers_a_prompt() {
-        // Nothing can be typed during boot — every keyed system is gated on
-        // `booted` — so an input line on those screens was an affordance that
-        // did not work, offered before anything else on screen did. The stage
-        // that existed to draw it went with it — as, later, did the one that
-        // drew the border on its own.
-        //
-        // **This counted the stages, and the count was a proxy.** What it meant
-        // was *"the prompt stage is gone"*, and it fired when `Close` was added
-        // for an unrelated reason — while a `Prompt` stage coming back alongside
-        // a removal would have slipped through it. The properties are asserted
-        // directly now.
+        // Nothing can be typed during boot, so the stage that drew an input
+        // line went. This used to count the stages, which fired when `Close`
+        // was added and would have missed a returning `Prompt` beside it.
         assert!(
             !Stage::SEQUENCE.iter().any(|stage| stage.world_runs()),
             "a boot stage let the world run",
@@ -429,11 +355,9 @@ mod tests {
 
     #[test]
     fn the_sequence_is_the_path_next_actually_walks() {
-        // **Two expressions of one order**, which is how they come to disagree:
-        // `SEQUENCE` is what a dump and the tests iterate, `next` is what the
-        // clock follows. `Close` was added to the enum and to `next` before it
-        // was added here, and nothing but this would have said so — the sequence
-        // would simply have been one stage short of the thing it describes.
+        // Two expressions of one order: `SEQUENCE` is what a dump and the tests
+        // iterate, `next` is what the clock follows. `Close` reached the enum
+        // and `next` before it reached here.
         let mut walked = Vec::new();
         let mut stage = Stage::SEQUENCE[0];
         while !stage.world_runs() {
@@ -446,17 +370,12 @@ mod tests {
 
     #[test]
     fn the_animated_stages_are_slow_enough_to_follow() {
-        // The reason for the pacing: at 4.4 s for the whole sequence, the frame
-        // drawing itself and the dependencies reporting were both over before
-        // they could be read. A stage that animates needs to be seconds, not
-        // fractions of one.
+        // At 4.4 s for the whole sequence it was over before it could be read.
         assert!(
             Stage::Post.duration() >= Duration::from_secs(3),
             "the card is too quick to read",
         );
-        // The border is a share of it rather than a stage, so it needs checking
-        // in its own right: a quarter of nine seconds is two, which is a box
-        // drawing itself rather than a box appearing.
+        // The border is a share rather than a stage, so it needs its own check.
         assert!(
             Stage::Post.duration().mul_f32(Stage::FRAME_SHARE) >= Duration::from_millis(1200),
             "the border closes too fast to watch",

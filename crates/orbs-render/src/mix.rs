@@ -1,10 +1,8 @@
 //! What two things becoming one looks like.
 //!
-//! # The bar is the flask, and it is divided
-//!
-//! `flask_and_rod` is §10.1's only instrument that takes **two** inputs, and
-//! that is the whole picture: the vessel starts as two unmixed bands, and the
-//! mixture grows from the floor as both of them are used up.
+//! The bar is the flask, divided. `flask_and_rod` is §10.1's only instrument
+//! taking two inputs, and that is the whole picture: the vessel starts as two
+//! unmixed bands, and the mixture grows from the floor as both are used up.
 //!
 //! ```text
 //!   charged        working          ...later          ready
@@ -17,32 +15,22 @@
 //!    ██  a          ██               ██                ██
 //! ```
 //!
-//! Glyphs never change — `█` throughout, exactly as the bath. **All three bands
-//! are told apart by colour and by nothing else**, which sounds like it breaks
-//! §14 and does not: what the bar has to carry without colour is its *value*, and
-//! the value is where the mixture ends. That boundary is the one thing here that
-//! is also a glyph edge, because above it the vessel is `▓` and below it is `█`.
+//! Glyphs never change — `█` throughout, exactly as the bath — and all three
+//! bands are told apart by colour alone. That sounds like it breaks §14 and does
+//! not: what the bar must carry without colour is its *value*, and the value is
+//! where the mixture ends. That boundary is also a glyph edge, because above it
+//! the vessel is `▓` and below it `█`.
 //!
-//! # Two ingredients, and neither is favoured
+//! Neither ingredient is favoured. The unmixed remainder splits evenly, the
+//! lower band the first input and the upper the second, both shrinking at the
+//! same rate as the mixture climbs — the same conservation the mortar holds.
+//! Order comes from the world rather than the recipe: the bands are in the order
+//! the flask holds its contents, which is the order `survey` lists them.
 //!
-//! The unmixed remainder splits evenly, the lower band being the first input and
-//! the upper the second. Both shrink at the same rate as the mixture climbs, so
-//! at every moment the bar is full of material and what changes is how much of it
-//! has combined — the same conservation the mortar holds, arrived at for the same
-//! reason.
-//!
-//! **Order comes from the world, not from the recipe.** The bands are in the
-//! order the flask holds its contents, which is the order `survey` lists them,
-//! so what the player sees on the panel and what they read in the transcript
-//! agree.
-//!
-//! # The mixture has texture
-//!
-//! It carries the bath's roil ([`crate::Roil`]) — liquids being combined are not flat —
-//! at the same slow tempo, so the two liquid instruments read as the same kind of
-//! thing. The unmixed bands do **not** move: nothing is happening to them yet,
-//! and motion there would say the whole vessel was working when only part of it
-//! is.
+//! The mixture has texture. It carries the bath's roil ([`crate::Roil`]) at the
+//! same slow tempo, so the two liquid instruments read as the same kind of
+//! thing. The unmixed bands do not move: nothing is happening to them yet, and
+//! motion there would say the whole vessel was working.
 
 use crate::liquid;
 pub(crate) use crate::liquid::Motion;
@@ -70,9 +58,8 @@ pub struct Stir {
     pub phase: f32,
     /// What the mixture is doing.
     ///
-    /// **Never [`Motion::Bubbling`]**, however hard it is working: nothing heats
-    /// a flask, and bubbles are what heat looks like. See
-    /// [`liquid`].
+    /// Never [`Motion::Bubbling`], however hard it is working: nothing heats a
+    /// flask, and bubbles are what heat looks like. See [`liquid`].
     pub motion: Motion,
     /// How far through the current world tick, `0.0..1.0`. See
     /// [`Grind::advance`](crate::Grind).
@@ -116,8 +103,8 @@ pub(crate) fn cell(
         };
     }
 
-    // **Never nothing.** A charged flask reports no meter, so without a floor it
-    // would draw an empty vessel — which is what an *empty* flask looks like.
+    // Never nothing: a charged flask reports no meter, so without a floor it
+    // would draw an empty vessel — which is what an empty flask looks like.
     let mixed = filled.max(FLOOR).min(total);
     if work.leavings && step < LEES && mixed > LEES {
         return ('▓', Depiction::Sediment, Some(Band::Mixed));
@@ -138,10 +125,10 @@ pub(crate) fn cell(
     // climbs, rather than one being eaten before the other is touched.
     let remaining = total - mixed;
     let boundary = mixed + remaining.div_ceil(2);
-    // **`▓` at the top of the first band.** The bands are told apart by colour,
-    // which §14 will not let carry the *value* — so the one boundary that is the
-    // reading gets a glyph too. This is that boundary seen from below: the
-    // mixture's surface is where `█` meets `▓`.
+    // `▓` at the top of the first band. The bands are told apart by colour,
+    // which §14 will not let carry the value, so the one boundary that is the
+    // reading gets a glyph too — seen from below, the mixture's surface is where
+    // `█` meets `▓`.
     let band = if step < boundary {
         Band::First
     } else {

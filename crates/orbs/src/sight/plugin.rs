@@ -18,12 +18,10 @@ impl Plugin for SightPlugin {
         embedded_asset!(app, "sight.wgsl");
 
         app.insert_resource(Vision(seeded()))
-            // **F8, because §14's rule is that a player can reach it.** The
-            // phosphor got `F2` and the tube got `F3` for exactly this reason
-            // and with exactly this justification — an interim key until Phase
-            // 11's settings screen, because an accommodation reachable only
-            // through an environment variable is not reachable by the person it
-            // is for. A shipped build has no shell.
+            // F8, because §14's rule is that a player can reach it. The phosphor
+            // got `F2` and the tube `F3` for the same reason: an accommodation
+            // reachable only through an environment variable is not reachable by
+            // the person it is for, and a shipped build has no shell.
             //
             // Guarded on boot like every other key: during the sequence, a
             // keystroke means skip. See `boot::plugin::skip`.
@@ -42,13 +40,13 @@ impl Plugin for SightPlugin {
             .add_systems(ExtractSchedule, extract)
             .add_systems(RenderStartup, init_pipeline)
             .add_systems(Render, prepare.in_set(RenderSystems::Prepare))
-            // **`.after(crt::CrtPass)`, and the `in_set` is load-bearing.**
+            // `.after(crt::CrtPass)`, and the `in_set` is load-bearing.
             // `crt/plugin.rs` records what an edge to `tonemapping` alone cost:
-            // unordered against `main_pass_2d` and `upscaling`, the pass landed
-            // at a different point every frame and the tube flashed. This has
-            // the same exposure and one more constraint — it must be *after* the
-            // tube, because the grille, the aberration and the flash all put hue
-            // back into a pixel that had none.
+            // unordered against `main_pass_2d` and `upscaling` the pass landed
+            // somewhere different every frame and the tube flashed. This has the
+            // same exposure plus one constraint — it must run after the tube,
+            // because the grille, the aberration and the flash all put hue back
+            // into a pixel that had none.
             .add_systems(
                 Core2d,
                 sight_pass

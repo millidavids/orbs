@@ -1,9 +1,9 @@
 //! The lesser circle: a sealed tower's first beasts, the keystone alone over two
 //! senses, until `menagerie_2` opens the whole circle (§19).
 //!
-//! **Driven through real verbs in a sealed tower**, because the lesser circle
-//! exists only there — `Sim::new` is the open tower every other test, dump and
-//! balance policy uses, and it must never draw one.
+//! Driven through real verbs in a sealed tower, because the lesser circle exists
+//! only there — `Sim::new` is the open tower every other test, dump and balance
+//! policy uses, and it must never draw one.
 
 use orbs_render::{FieldName, Value};
 use orbs_sim::Sim;
@@ -41,9 +41,9 @@ fn sealed_at_the_circle(seed: u64) -> Sim {
     sim
 }
 
-/// **The claim the box makes, end to end.** Five lesser beasts held, the
-/// second station reached, the whole circle opened and said so — and the sixth
-/// beast is a whole one.
+/// The claim the box makes, end to end: five lesser beasts held, the second
+/// station reached, the whole circle opened and said so, and the sixth beast a
+/// whole one.
 #[cfg(debug_assertions)]
 #[test]
 fn a_sealed_towers_first_beasts_are_lesser_and_the_sixth_is_whole() {
@@ -79,10 +79,10 @@ fn a_sealed_towers_first_beasts_are_lesser_and_the_sixth_is_whole() {
     assert_eq!(board.temper.len(), 8);
 }
 
-/// **Five at every length a player can choose.** `Sim::sealed` runs the curve
-/// as authored, and the second station on a line is ramped by length — so a test
-/// only at the authored curve passed while a medium game asked eleven lesser
-/// beasts and a long one thirty-five. `fixed` is what holds it at five.
+/// Five at every length a player can choose. `Sim::sealed` runs the curve as
+/// authored and the second station is ramped by length, so a test only at the
+/// authored curve passed while a medium game asked eleven lesser beasts and a
+/// long one thirty-five. `fixed` holds it at five.
 #[cfg(debug_assertions)]
 #[test]
 fn the_whole_circle_opens_after_five_lesser_beasts_at_every_length() {
@@ -107,13 +107,13 @@ fn the_whole_circle_opens_after_five_lesser_beasts_at_every_length() {
     }
 }
 
-/// **Both shipped searches hold a lesser beast, of every temper, and latch no
-/// fault.** Written for the whole circle, both spend most of a lesser search on
-/// `limn`s the circle refuses as dark — `taming` holds anyway because its
-/// keystone steps every thirty-six calls, `winnowing` because its ladder's rungs
-/// all hold the keystone's answer. Every sealed game's first menagerie is this
-/// case, so a change that let a cost refusal stop a spell would break both where
-/// no open-tower test could see it.
+/// Both shipped searches hold a lesser beast, of every temper, and latch no
+/// fault. Written for the whole circle, both spend most of a lesser search on
+/// `limn`s the circle refuses as dark — `taming` holds because its keystone
+/// steps every thirty-six calls, `winnowing` because its rungs all hold the
+/// keystone's answer. Every sealed game's first menagerie is this case, so a
+/// change letting a cost refusal stop a spell would break both where no
+/// open-tower test could see it.
 #[cfg(debug_assertions)]
 #[test]
 fn both_shipped_searches_hold_every_lesser_beast_without_a_fault() {
@@ -155,8 +155,8 @@ fn both_shipped_searches_hold_every_lesser_beast_without_a_fault() {
     }
 }
 
-/// **Only the keystone answers**: a dark glyph is refused as a cost and carries
-/// no reading, so a spell asking what sunwise is limned with hears nothing.
+/// Only the keystone answers: a dark glyph is refused as a cost and carries no
+/// reading, so a spell asking what sunwise is limned with hears nothing.
 #[cfg(debug_assertions)]
 #[test]
 fn a_lesser_circle_refuses_a_dark_glyph_and_publishes_only_the_keystone() {
@@ -182,8 +182,8 @@ fn a_lesser_circle_refuses_a_dark_glyph_and_publishes_only_the_keystone() {
     assert!(sim.holds_reading("menagerie", "keystone", "spurn"));
 }
 
-/// **One troop and a quarter of the price** — within par, which is one call —
-/// and the quarter of three quarters past it.
+/// One troop and a quarter of the price within par, which is one call, and the
+/// quarter of three quarters past it.
 #[cfg(debug_assertions)]
 #[test]
 fn a_lesser_hold_pays_one_troop_and_a_quarter_of_the_price() {
@@ -212,7 +212,7 @@ fn a_lesser_hold_pays_one_troop_and_a_quarter_of_the_price() {
     );
 }
 
-/// **The open tower never draws one**, whatever the seed — every test, dump and
+/// The open tower never draws one, whatever the seed — every test, dump and
 /// balance policy stands in it.
 #[test]
 fn an_open_tower_never_draws_a_lesser_beast() {
@@ -248,9 +248,9 @@ fn a_lesser_beast_saved_mid_call_comes_back_lesser() {
     );
 }
 
-/// **12 → 13.** An open tower's document lists every key it had, and `circle`
-/// was not one — so without the migration it would load drawing lesser beasts
-/// for ever with nothing able to open the circle.
+/// 12 → 13: an open tower's document lists every key it had and `circle` was not
+/// one, so without the migration it loads drawing lesser beasts for ever with
+/// nothing able to open the circle.
 #[test]
 fn an_open_towers_older_document_keeps_the_whole_circle() {
     let sim = Sim::new(1);
@@ -275,11 +275,10 @@ fn an_open_towers_older_document_keeps_the_whole_circle() {
     assert_eq!(restored.circle().map(|board| board.lines.len()), Some(3));
 }
 
-/// **A sealed one past the station catches up on its own** — the migration
-/// leaves sealed towers to `mastery::caught_up`, and this is the case that
-/// leaning on it has to be right about: a document that reached `menagerie_2`
-/// without the key opens the whole circle on load, silently — the station was
-/// reached, so its player was told when it was.
+/// A sealed one past the station catches up on its own: the migration leaves
+/// sealed towers to `mastery::caught_up`, and a document that reached
+/// `menagerie_2` without the key opens the whole circle on load, silently —
+/// the station was reached, so its player was told when it was.
 #[cfg(debug_assertions)]
 #[test]
 fn a_sealed_towers_older_document_past_the_station_opens_the_circle_on_load() {
@@ -311,12 +310,11 @@ fn a_sealed_towers_older_document_past_the_station_opens_the_circle_on_load() {
     );
 }
 
-/// **A document that met the station without reaching it reaches it on load.**
-/// A medium tower saved seven holds into `menagerie_2`'s old ramped eleven has
-/// met the fixed five — and `advance` runs after a completion, never on load,
-/// so without catching up it drew lesser beasts until something unrelated
-/// finished. Built here as a sealed tower with five holds and the station struck
-/// out of the document, which is the same state.
+/// A document that met the station without reaching it reaches it on load. A
+/// medium tower saved seven holds into the old ramped eleven has met the fixed
+/// five, and `advance` runs after a completion and never on load, so without
+/// catching up it drew lesser beasts until something unrelated finished. Built
+/// as a sealed tower with five holds and the station struck out.
 #[cfg(debug_assertions)]
 #[test]
 fn a_document_whose_holds_meet_the_station_reaches_it_on_load() {
@@ -348,8 +346,8 @@ fn a_document_whose_holds_meet_the_station_reaches_it_on_load() {
         restored.has_opened("circle"),
         "the whole circle stayed shut"
     );
-    // **Said by the load, once** — a document short of the station never told
-    // its player what a `~` wire is, and the next beast arrives with them. The
+    // Said by the load, once: a document short of the station never told its
+    // player what a `~` wire is, and the next beast arrives with them. The
     // station itself is not congratulated.
     assert_eq!(
         saying(&restored),
@@ -368,8 +366,8 @@ fn a_document_whose_holds_meet_the_station_reaches_it_on_load() {
     );
 }
 
-/// **A sealed one is left alone** — short of `menagerie_2`, it draws lesser
-/// beasts, which is the new rule rather than a loss.
+/// A sealed one is left alone: short of `menagerie_2` it draws lesser beasts,
+/// which is the new rule rather than a loss.
 #[test]
 fn a_sealed_towers_older_document_is_not_given_the_circle() {
     let sim = Sim::sealed(1);

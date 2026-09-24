@@ -6,12 +6,11 @@
 //! which is what survives the eldritch renderer corrupting output. A spell is
 //! not that: it is lines a player wrote, kept verbatim until they change them.
 //!
-//! # Not hot-reloadable, for the reason recipes are not
-//!
-//! [`Prose`](super::Prose) reloads because no line of it reaches a decision.
-//! A spell is *nothing but* decisions, so swapping one mid-session would break
+//! Not hot-reloadable, for the reason recipes are not.
+//! [`Prose`](super::Prose) reloads because no line of it reaches a decision; a
+//! spell is nothing but decisions, so swapping one mid-session would break
 //! replay from `(seed, submissions)` unless the content were versioned into the
-//! submission log. `Sim` loads these once at construction and never again.
+//! submission log. `Sim` loads these once at construction.
 
 use std::collections::BTreeMap;
 

@@ -1,29 +1,19 @@
 //! The scribing guide: what the words mean, beside the words.
 //!
-//! # Why the editor needs one and the manual is not enough
+//! `recall <word>` is a command, so reaching it means leaving the editor — the
+//! one place a player is when they need it. The language has grown past the
+//! size one person holds in their head: nine control words, seventeen
+//! comparison spellings, parts, variables and sets. A reference you have to
+//! close your work to read is a reference nobody reads. So the guide is the
+//! same prose, in the same pane, reacting to the caret.
 //!
-//! `recall <word>` has answered *what does `repeat` do* since Phase 1, and it is
-//! the wrong shape for writing a spell: it is a **command**, so reaching it means
-//! leaving the editor, which is the one place a player is when they need it. The
-//! language has since grown to nine control words, a question grammar with
-//! seventeen comparison spellings, parts, variables and sets — past the size one
-//! person holds in their head. A reference you have to close your work to read
-//! is a reference nobody reads.
+//! It writes nothing new: every line comes from `recall_<word>` and
+//! `using_<word>` in `prose.toml`, 98 entries held by
+//! `every_word_a_spell_is_written_with_has_a_page`. Rule 6 keeps prose out of
+//! Rust, so a word authored tomorrow appears here with no code change.
 //!
-//! So the guide is the same prose, in the same pane, reacting to the caret.
-//!
-//! # It writes nothing new
-//!
-//! Every line here comes from `recall_<word>` and `using_<word>` in
-//! `prose.toml` — 98 entries that already existed, one definition and one worked
-//! example per word, held by `every_word_a_spell_is_written_with_has_a_page`.
-//! Rule 6 keeps prose out of Rust and this obeys it by having none of its own:
-//! a word authored tomorrow appears here with no code change.
-//!
-//! # Information, not enrichment
-//!
-//! Unlike the syntax highlighting beside it, this is **content** — §14 therefore
-//! requires it to reach the linear stream, so `sheet` draws it with
+//! Unlike the highlighting beside it, this is content — §14 requires it to
+//! reach the linear stream, so `sheet` draws it with
 //! [`Painter::span`](orbs_render::Painter::span) rather than the silent `glyphs`
 //! the buffer uses.
 
@@ -87,9 +77,9 @@ pub fn guide(sim: &Sim, lines: &[String], caret: (usize, usize), domain: &str) -
     }
 
     let found = expected(sim, lines, caret, domain);
-    // **Part way through a line, the expectation *is* the guide.** At a line
-    // start it is the whole vocabulary again, which the listing below says
-    // better — with headings, and with the verbs the reference wants.
+    // Part way through a line the expectation is the guide. At a line start it
+    // is the whole vocabulary again, which the listing below says better — with
+    // headings, and with the verbs the reference wants.
     if started(lines, caret) && !found.is_empty() {
         return Guide::Next {
             entries: found.expected.iter().map(entry_for).collect(),
@@ -97,11 +87,10 @@ pub fn guide(sim: &Sim, lines: &[String], caret: (usize, usize), domain: &str) -
     }
 
     Guide::Vocabulary {
-        // **Not all nine.** `until` never opens a line, `end` needs something
-        // open and `else` needs an `if` directly above — so a listing of all
-        // nine offers three ways to make the orb refuse the line it just
-        // suggested. `expect` already knows which; asking it here is what stops
-        // the guide keeping a second opinion about the block rules.
+        // Not all nine: `until` never opens a line, `end` needs something open,
+        // `else` needs an `if` directly above — listing all nine offers three
+        // ways to make the orb refuse the line it just suggested. Asking
+        // `expect` stops the guide keeping a second opinion about block rules.
         control: found
             .expected
             .iter()
@@ -135,12 +124,10 @@ fn expected(
     (row, column): (usize, usize),
     domain: &str,
 ) -> orbs_sim::parser::Expectation {
-    // **A caret that is nowhere asks about a fresh line, not about nothing.**
-    // `Editor::refresh` passes `usize::MAX` in command mode, where there is no
-    // caret in the buffer at all — and answering with an empty expectation
-    // emptied the listing's control column, so the whole `the language` heading
-    // vanished the moment the editor was not being typed into. Which is most of
-    // the time it is open.
+    // A caret that is nowhere asks about a fresh line, not about nothing.
+    // `Editor::refresh` passes `usize::MAX` in command mode, and an empty
+    // expectation emptied the listing's control column — the whole `the
+    // language` heading vanished whenever the editor was not being typed into.
     let Some(line) = lines.get(row) else {
         return orbs_sim::spell_expect(sim.world(), domain, "", 0, &[]);
     };
@@ -167,31 +154,19 @@ fn entry_for(one: &orbs_sim::parser::Expected) -> Entry {
 
 /// The word the caret has reached, if it has reached one.
 ///
-/// # "At the end of", and the start of a word is not it
+/// Touching the word is a page; past it is an expectation.
 ///
-/// A player types `repeat` and the caret finishes *past* the `t` — no character
-/// is under it at all. So the page has to answer for a caret at `run.end`.
+/// A caret finishes *past* the `t` of `repeat`, so the page has to answer at
+/// `run.end`. A caret at `run.start` deliberately does not match: that is where
+/// it sits when a spell is merely opened, and `scribe threading` would get a
+/// page about its first word instead of the listing. The first version had both
+/// halves wrong in one predicate — `start <= at && at <= run.end` — under a doc
+/// comment claiming the opposite.
 ///
-/// A caret at `run.start` is **not** the same thing and deliberately does not
-/// match: it is where the caret sits when a spell is merely *opened*, and
-/// answering there would show `scribe threading` a page about its first word
-/// instead of the listing it is supposed to open on.
-///
-/// The first version of this got both halves wrong in one predicate —
-/// `start <= at && at <= run.end` matched the start and missed the end — under a
-/// doc comment claiming the opposite. That is the defect §19 records over and
-/// over: a comment claiming parity, sitting next to the code that broke it.
-///
-/// # The whitespace *after* a word is not this question any more
-///
-/// It was, for one version: a caret in the run of spaces after `repeat` read as
-/// still being on `repeat`. That was right when a page was the only thing the
-/// guide could show, and it is wrong now — a player who has typed the space has
-/// finished with the word and is asking **what comes next**, which
-/// [`guide`] answers from `expect`. Keeping both would mean `if ` explains `if`
-/// while `is ` lists the states, for no reason a player could ever infer.
-///
-/// So the rule is: touching the word is a page, past it is an expectation.
+/// The whitespace *after* a word used to read as still being on it. Wrong now
+/// that [`guide`] can answer from `expect`: a player who typed the space has
+/// finished with the word. Keeping both would mean `if ` explains `if` while
+/// `is ` lists the states, for no reason a player could infer.
 fn under_caret(lines: &[String], (row, column): (usize, usize)) -> Option<String> {
     let line = lines.get(row)?;
     // The caret is a count of characters; the lexer speaks in bytes.
@@ -210,22 +185,19 @@ fn under_caret(lines: &[String], (row, column): (usize, usize)) -> Option<String
 
 /// One word's page, if the manual has one for it.
 ///
-/// # Two key families, because the manual has two
+/// Two key families, because the manual has two: a control word is authored as
+/// `recall_<word>` and `using_<word>`, a verb as `man_<verb>_gloss` and
+/// `man_<verb>_use`. Both are read here rather than one normalised into the
+/// other — the manual is the authority, and rewriting its keys to suit this
+/// pane would be the tail wagging the dog.
 ///
-/// A **control word** is authored as `recall_<word>` and `using_<word>` — a
-/// definition and a worked example. A **verb** is authored as `man_<verb>_gloss`
-/// and `man_<verb>_use` — what it does, and the shape it takes. Both are read
-/// here rather than one being normalised into the other, because the manual is
-/// the authority and rewriting its keys to suit this pane would be the tail
-/// wagging the dog.
-///
-/// A word in neither is not a word the manual knows — a part the player named,
+/// A word in neither is one the manual does not know — a part the player named,
 /// a reagent, a typo — and the guide falls back to the listing rather than
 /// showing an empty page.
 fn page(prose: &Prose, word: &str) -> Option<Guide> {
-    // **A call names a part, and a part is the player's own word.** The manual
-    // has no page for `gathering`, and inventing one would be the guide claiming
-    // to know something about a name only this file defines.
+    // A call names a part, which is the player's own word: the manual has no
+    // page for `gathering`, and inventing one would claim to know a name only
+    // this file defines.
     let word = word.strip_suffix("()").unwrap_or(word);
 
     for (does, using) in [
@@ -251,12 +223,11 @@ fn page(prose: &Prose, word: &str) -> Option<Guide> {
 
 /// The verbs a spell written for `domain` may issue.
 ///
-/// **Two filters, and both are the spell's rather than the player's.** A verb is
-/// listed when its fixture stands in that domain — `grind` in the laboratory,
-/// `follow` in the archive — *and* when a spell is allowed to issue it at all.
-/// The second is why `attend`, `meditate` and `scribe` are absent: `may_issue`
-/// refuses them, and a guide that offered a word the runner then refused would be
-/// teaching the player a line that cannot work.
+/// Two filters, both the spell's rather than the player's: the verb's fixture
+/// stands in that domain — `grind` in the laboratory, `follow` in the archive —
+/// *and* a spell is allowed to issue it at all. The second is why `attend`,
+/// `meditate` and `scribe` are absent: offering a word `may_issue` refuses
+/// teaches a line that cannot work.
 fn verbs_for(sim: &Sim, domain: &str) -> Vec<Entry> {
     orbs_sim::spell_vocabulary(sim.world(), domain)
         .into_iter()
@@ -269,18 +240,16 @@ fn verbs_for(sim: &Sim, domain: &str) -> Vec<Entry> {
 
 /// Draw the guide into `pane`.
 ///
-/// # Every row is announced, and each is one utterance
-///
-/// This is **content**, not decoration: §14 requires a definition a sighted
-/// player can read to reach a listener too. So rows go through
+/// This is content, not decoration: §14 requires a definition a sighted player
+/// can read to reach a listener too. So rows go through
 /// [`Painter::span`](orbs_render::Painter::span) rather than the silent `glyphs`
-/// the buffer uses — and each wrapped row is announced whole, because a sentence
-/// broken across three rows is still one sentence and three utterances would be
-/// the `0.3.23` defect wearing a different pane.
+/// the buffer uses, and each wrapped row is announced whole — a sentence broken
+/// across three rows is still one sentence, and three utterances would be the
+/// `0.3.23` defect in a different pane.
 ///
-/// They carry [`UtteranceKind::Guide`], which exists so a reader can drop the
-/// lot: the stream is rebuilt every frame, so a standing reference with no kind
-/// of its own would be recited continuously.
+/// They carry [`UtteranceKind::Guide`] so a reader can drop the lot: the stream
+/// is rebuilt every frame, and a standing reference with no kind of its own
+/// would be recited continuously.
 pub fn paint(frame: &mut Frame, pane: Rect, guide: &Guide, prose: &Prose) {
     let mut painter = frame.painter(pane);
     let area = painter.area();
@@ -364,11 +333,10 @@ mod tests {
 
     /// At the top of an empty spell, the words that may actually open a line.
     ///
-    /// **Six, not nine, and it listed nine for a version.** `until` never opens
-    /// a line — it is `repeat`'s guard, written on `repeat`'s own line — and
-    /// `end` and `else` need something open above them. A guide listing all
-    /// nine offers three ways to make the orb refuse the line it just suggested,
-    /// which is the dead end §15 weighs above the resolution rate, taught.
+    /// It listed all nine for a version. `until` is `repeat`'s guard, written
+    /// on `repeat`'s own line, and `end` and `else` need something open above
+    /// them — so nine offers three ways to make the orb refuse the line it just
+    /// suggested, which is §15's dead end taught.
     #[test]
     fn it_lists_only_the_words_that_can_open_a_line_here() {
         let guide = guide(&tower(), &lines(&[""]), (0, 0), "laboratory");
@@ -492,10 +460,9 @@ mod tests {
 
     #[test]
     fn the_caret_at_the_end_of_a_word_opens_its_page() {
-        // **The case that matters**, because it is what typing looks like: the
-        // caret is past the last character rather than on it. A guide that
-        // answered only for a caret strictly inside a word would react to
-        // arrowing around and not to writing.
+        // What typing looks like: the caret is past the last character, not on
+        // it. A guide that answered only for a caret strictly inside a word
+        // would react to arrowing around and not to writing.
         let sim = tower();
         let text = lines(&["repeat 3"]);
         let Guide::Word { name, does, using } = guide(&sim, &text, (0, 6), "laboratory") else {
@@ -535,15 +502,11 @@ mod tests {
 
     /// Touching the word is a page; past it is an expectation.
     ///
-    /// **The space used to still name the word**, on the argument that the
-    /// moment a player most wants `repeat`'s page is right after typing it. It
-    /// is not: what they want then is `repeat`'s *argument*, which is the thing
-    /// the guide could not say at all until `expect` existed.
-    ///
-    /// Keeping the old rule alongside the new one would have made `if `
-    /// explain `if` while `is ` listed the states, for no reason a player could
-    /// ever infer — the difference being only whether the manual happens to
-    /// have a page for the word.
+    /// The space used to still name the word. What a player wants after typing
+    /// `repeat ` is its *argument*, which the guide could not say until
+    /// `expect` existed. Keeping both rules would have made `if ` explain `if`
+    /// while `is ` listed the states, on nothing but whether the manual happens
+    /// to have a page.
     #[test]
     fn touching_a_word_is_a_page_and_past_it_is_what_follows() {
         let sim = tower();

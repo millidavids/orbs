@@ -1,42 +1,20 @@
 //! Drawing the weave screen (DESIGN.md §11.5, §19).
 //!
-//! # Why here rather than in `orbs-render`
+//! Here rather than in `orbs-render`, for `sheet.rs`'s reason: what appears is
+//! the sim's decision, arriving through `Tapestry`; only *where in the pane*
+//! is decided here.
 //!
-//! The same answer `sheet.rs` gives: `ScreenLayout` hands this function a
-//! rectangle and it draws inside it. What appears is the sim's decision — the
-//! tracks, the states and the totals all arrive through `Tapestry` — and only
-//! *where in the pane* is decided here.
+//! Progression runs rightward on both tracks. One track draws below the
+//! headings at a time — seven rooms' lines and a forked Ley Line do not both
+//! fit in eighteen rows beside a details panel — with both headings always
+//! drawn so the other track is visibly there. A fork's nodes stack downward:
+//! rightward is progress, downward is a choice.
 //!
-//! # The shape: a bar, two headings, and one track at a time
+//! The bar and the Ley Line share one scale, the last station's total, so a
+//! node's position *is* its cost (§19).
 //!
-//! **Progression runs rightward**, and the screen says so on both tracks: the
-//! experience bar fills to the right, the Ley Line runs right, and each room's
-//! line runs right. A vertical list said none of it — it drew what you had as a
-//! set of rows, and a player reading it could not see that the thing was a
-//! *track* at all. That was the first version and it was replaced for that.
-//!
-//! **One track draws below the headings at a time**, and the word the player
-//! typed decides which. Seven rooms' lines and a forked Ley Line do not both fit
-//! in eighteen rows beside a details panel, and a screen that showed one of
-//! them at half size would say the wrong thing about both. Both headings are
-//! always drawn, so a player who has not asked for the other track can see it is
-//! there.
-//!
-//! On the Ley Line a fork's nodes stack **downward**, which is the other axis
-//! and the other meaning: rightward is progress, downward is a choice. On
-//! Mastery there are no choices; downward is the next room.
-//!
-//! **The bar and the Ley Line share one scale** — the last station's total, so a
-//! node's position *is* its cost, read against the same cells the bar fills.
-//! §19 records that this was a fixed hundred and would become derived when the
-//! curve reached it.
-//!
-//! # The names live in the details panel, not on the nodes
-//!
-//! The session pane is 48 columns in Deep focus. Nothing survives putting a
-//! sentence beside every node at that width, so a node is a glyph, and what it
-//! *is* goes in a boxed panel in the bottom right, for the one thing you are
-//! aimed at.
+//! Names live in the details panel, not on the nodes: at 48 columns nothing
+//! survives a sentence beside every node.
 
 use orbs_render::{Frame, Intensity, Painter, Pos, Rect, Role, Span, Style, UtteranceKind};
 use orbs_sim::{Line, Node, Prose, Stop, Walk};
@@ -60,9 +38,8 @@ const STRIDE: u16 = 4;
 
 /// The details panel's size: a border, a sentence, a cost, and the two states.
 ///
-/// **Bounded rather than proportional.** It holds three short authored lines,
-/// and a panel that grew with the pane would leave three quarters of itself
-/// blank on a wide window while the sentences stayed the same length.
+/// Bounded rather than proportional: three short authored lines, and a panel
+/// that grew with the pane would be three quarters blank on a wide window.
 const PANEL_ROWS: u16 = 5;
 const PANEL_COLS: u16 = 30;
 
@@ -70,13 +47,10 @@ const PANEL_COLS: u16 = 30;
 ///
 /// Two borders, the bar, the headings, the rooms' lines, a blank, the details
 /// panel and the words. Below it the answer is to say so rather than draw
-/// something misleading, exactly as the editor does. §4's declared floor is
-/// 80×22, so this fits with room to spare.
+/// something misleading. §4's declared floor is 80×22.
 ///
-/// **Eighteen was exactly right at seven rooms and is one spare at six** (§19).
-/// Left where it is: a floor that tightened every time a room left would be a
-/// screen that appeared and vanished as content moved, and the spare row is the
-/// blank the details panel already sits under.
+/// Exact at seven rooms, one spare at six (§19), and left there: a floor that
+/// tightened as rooms left would make the screen appear and vanish.
 const MIN_ROWS: u16 = 18;
 const MIN_COLS: u16 = 24;
 
@@ -88,14 +62,10 @@ pub fn paint(frame: &mut Frame, screen: &Tapestry, pane: Rect, prose: &Prose) {
     let mut painter = frame.painter(pane);
     let area = painter.area();
 
-    // **Too small says so.** Returning silently left a wholly blank pane while
-    // this screen still owned the keyboard — and `Tapestry::escape` deliberately
-    // does not close, so the only way out was typing `quit` at nothing.
-    //
-    // **The width the Ley Line needs is content, not a constant.** Sixteen
-    // stations cannot be drawn in a narrow pane however tightly they are packed,
-    // and the honest answer there is this message rather than a line with its
-    // tail clipped off — see `pack`.
+    // Too small says so: returning silently left a blank pane that still owned
+    // the keyboard. The width needed is content rather than a constant —
+    // sixteen stations cannot be drawn in a narrow pane however tightly packed,
+    // and the honest answer is this message rather than a clipped tail.
     let narrow =
         track_width(screen, area.cols.saturating_sub(2)) < track_needs(screen.ley_line().len());
     if area.rows < MIN_ROWS || area.cols < MIN_COLS || narrow {
@@ -125,9 +95,8 @@ pub fn paint(frame: &mut Frame, screen: &Tapestry, pane: Rect, prose: &Prose) {
 
 /// The experience bar, filling rightward against the line's scale.
 ///
-/// Returns the next free row. The Ley Line beneath it places its stations
-/// against the same cells — a node's position *is* its cost, which is only true
-/// if the two rows share a scale.
+/// Returns the next free row. A node's position *is* its cost only if the bar
+/// and the line beneath share a scale.
 fn bar(
     painter: &mut Painter<'_>,
     screen: &Tapestry,
@@ -142,8 +111,8 @@ fn bar(
     let label_width = u16::try_from(label.chars().count()).unwrap_or(9);
     let width = inner.saturating_sub(label_width.saturating_add(1));
 
-    // Spoken as a sentence rather than as a row of blocks — §14 names progress
-    // bars specifically, and `progress` takes the sentence for exactly this.
+    // Spoken as a sentence rather than a row of blocks — §14 names progress
+    // bars specifically.
     let spoken = prose.line(
         "weave_bar",
         &[
@@ -151,11 +120,8 @@ fn bar(
             ("detail", &scale.to_string()),
         ],
     );
-    // **Filled to the cell the total stands at on the line below**, so the
-    // fill's edge and the stations read against one scale — the logarithmic one
-    // `along` draws, since the line's first stations are all inside its first
-    // hundredth however long the game is; see there. The label carries the
-    // numbers, rounded only where six figures will not fit.
+    // Filled to the cell the total stands at on the line below, on `along`'s
+    // logarithmic scale. The label carries the numbers.
     let filled = if earned >= scale {
         width
     } else {
@@ -209,14 +175,9 @@ fn headings(
         &Span::new(&mastery).with_style(style(Track::Mastery)),
     );
 
-    // **Renown shares the headings row rather than taking one of its own.** The
-    // pane is eighteen rows at its floor and all but one are spoken for — bar,
-    // headings, the rooms' lines, the panel and the words. The two track names take
-    // under twenty cells, so the tower's other number sits at the right edge of
-    // the same row, where the bar's own total sits one row up.
-    //
-    // Drawn only when there is room for it whole: a truncated number is worse
-    // than none, because a reader cannot tell 1,240 cut short from 12.
+    // Renown shares the headings row: at the eighteen-row floor all but one row
+    // is spoken for, and the two track names leave the right edge free. Drawn
+    // only when it fits whole — a reader cannot tell 1,240 cut short from 12.
     let renown = prose.line("weave_renown", &[("count", &screen.renown().to_string())]);
     let width = u16::try_from(renown.chars().count()).unwrap_or(0);
     let taken = after
@@ -234,22 +195,13 @@ fn headings(
 /// The Ley Line: one unbroken line with its stations standing on it, and a
 /// fork's siblings hanging below their station.
 ///
-/// **A line, because that is what a ley line is.** Drawing it as a row of
-/// separate glyphs said "here are some things"; drawing it as a line with
-/// stations on it says "here is a road, and these are the places along it".
+/// A line rather than separate glyphs: that says "here is a road". Stations sit
+/// at their cost on [`along`]'s logarithmic scale; where cost and cells
+/// disagree the cells win and [`pack`] says how.
 ///
-/// **Stations sit at their cost**, as near as the cells allow. The run spans the
-/// same cells the bar above does, so a station stands where the fill will reach
-/// it — on the logarithmic scale [`along`] draws, since the line runs to ten
-/// thousand and its first five stations are all inside the first hundred. Where
-/// cost and cells disagree the cells win and [`pack`] says how, because a
-/// station drawn slightly wrong is a picture and a station not drawn is a lie.
-///
-/// **The totals alternate between two rows**, because a five-figure label is
-/// wider than the three cells a station keeps between itself and the next, and
-/// one row of them ran together into a number nobody authored. Two rows buy six
-/// cells, which is five figures and no more — so a six-figure total is
-/// abbreviated rather than staggered a third time. See [`figures`].
+/// The totals alternate between two rows, because a five-figure label is wider
+/// than the three cells between stations and one row ran them together. Two
+/// rows buy six cells — so six figures are abbreviated (see [`figures`]).
 fn line_track(painter: &mut Painter<'_>, screen: &Tapestry, left: u16, y: u16, inner: u16) {
     let width = track_width(screen, inner);
     stations::run(painter, Pos::new(left, y), width);
@@ -263,9 +215,8 @@ fn line_track(painter: &mut Painter<'_>, screen: &Tapestry, left: u16, y: u16, i
         .max()
         .unwrap_or(1);
 
-    // **Every line first, then every node**, so a frame can overwrite the cell
-    // of a run beside it rather than being overwritten by one drawn later. A
-    // fork's siblings stack under its station; the first sits on the run.
+    // Every line first, then every node, so a frame overwrites the run cell
+    // beside it rather than the other way round.
     for (index, (station, x)) in track.iter().zip(&packed.at).enumerate() {
         for (row, node) in station.nodes.iter().enumerate() {
             let row = y.saturating_add(u16::try_from(row).unwrap_or(0));
@@ -285,23 +236,12 @@ fn line_track(painter: &mut Painter<'_>, screen: &Tapestry, left: u16, y: u16, i
 
 /// A threshold as the line draws it: exact below six figures, `250k` above.
 ///
-/// **Six figures is where the label stops fitting**, and that is the whole rule.
-/// The totals alternate between two rows, so a label has `2 * GAP` = 6 cells
-/// before it reaches its same-row neighbour — which five figures fit and six do
-/// not. At a long game the last two ran together into `121766250000`, a number
-/// nobody authored, which is the exact failure the stagger was added to prevent
-/// one scale earlier.
+/// Six figures is where a label stops fitting its `2 * GAP` = 6 cells; at a
+/// long game the last two ran together into `121766250000`. Nothing below six
+/// figures moves, so the dump captures do not shift.
 ///
-/// **Nothing below six figures moves.** Baseline tops out at 10,000 and the
-/// longest tier a player is offered short of *long* reads 60,000, so every line
-/// but one draws precisely what it drew before and the dump captures do not
-/// shift.
-///
-/// **It rounds up, never down.** A station's total is a threshold, and a label
-/// reading lower than the real one would say a station is nearer than it is —
-/// the one direction a rounded picture must not err in. The exact number is
-/// never lost either way: `weave_bar`'s spoken form, the details pane and
-/// `weave_locked` all take it unrounded.
+/// Rounds up, never down — a lower label would say a station is nearer than it
+/// is. The spoken form, the details pane and `weave_locked` take it unrounded.
 fn figures(at: u64) -> String {
     if at < 100_000 {
         return at.to_string();
@@ -311,19 +251,16 @@ fn figures(at: u64) -> String {
 
 /// The bar's label: what is earned, of the line's scale.
 ///
-/// **One function because two rows read it.** [`bar`] draws it and
-/// [`track_width`] subtracts its width, and the bar and the Ley Line share a
-/// scale only if both take the same answer — two `format!`s left to drift apart
-/// would desync the fill from the stations by however many cells they disagreed.
+/// One function because [`bar`] draws it and [`track_width`] subtracts its
+/// width; two `format!`s left to drift would desync the fill from the stations.
 fn gauge(earned: u64, scale: u64) -> String {
     format!("{} of {}", figures(earned), figures(scale))
 }
 
 /// How wide the Ley Line's run is: exactly the cells the bar above fills.
 ///
-/// **One number, read by both rows.** The bar and the line are the same scale
-/// drawn two ways, and they only are if they measure the same span — so the
-/// label's width is subtracted here rather than in each of them.
+/// One number, read by both rows, so the label's width is subtracted here
+/// rather than in each of them.
 fn track_width(screen: &Tapestry, inner: u16) -> u16 {
     let label = gauge(screen.experience(), screen.scale().max(1));
     inner.saturating_sub(u16::try_from(label.chars().count()).unwrap_or(9) + 1)
@@ -348,34 +285,21 @@ struct Packed {
 /// Where a run of stations stands: never closer than they can be drawn, and
 /// never past the end of the track.
 ///
-/// **Cost decides the position; the pane decides the rest.** Two totals a few
-/// experience apart land on the same cell of a 36-wide track, and a framed node
-/// writes at `x-1` and `x+1` *around* its glyph — so the second one's `[` landed
-/// on the first one's mark and erased it. `Progression::check` cannot prevent
-/// that: how many cells a hundred experience spans is a fact about a pane, and
-/// `boundaries.rs` keeps panes out of the sim entirely.
+/// Cost decides the position; the pane decides the rest. Two close totals land
+/// on the same cell of a narrow track and a framed node writes at `x-1` and
+/// `x+1`, so the second one's `[` erased the first one's mark — which
+/// `Progression::check` cannot prevent, since cells are a fact about a pane and
+/// `boundaries.rs` keeps panes out of the sim. Three moves:
 ///
-/// So the painter guarantees what the content cannot, in three moves:
+/// - Frames come off before positions go wrong. Sixteen framed stations want
+///   48 cells; bare marks need two each, and a road of `·` still reads as one.
+/// - A forward pass pushes right, so consecutive stations never share a cell.
+/// - A backward pass pulls left, so the tail cannot march off the end — pushing
+///   alone clipped the last stations silently while `announce` still spoke them.
 ///
-/// - **Frames come off before positions go wrong.** Sixteen stations at three
-///   cells each want 48. The bare mark needs two, and a road of `·` marks still
-///   reads as a road.
-/// - **A forward pass pushes right**, so consecutive stations never share a
-///   cell.
-/// - **A backward pass pulls left**, so the tail cannot march off the end. It is
-///   the move that was missing: the pushing pass alone put the last stations
-///   outside the painter's area, where they were clipped away silently while
-///   `announce` still spoke them and the cursor still walked onto them. Being
-///   slightly wrong about position is a picture; a missing node is a lie.
-///
-/// **The narrow pane is Phase 11a's, not today's.** `PANES` is 1, and every grid
-/// the game accepts leaves the one pane at least sixty columns, where the framed
-/// chain fits. A second pane halves the main window to 52 and leaves this 39,
-/// which is where the frames come off — and where, before the backward pass, the
-/// last stations went missing.
-///
-/// `paint` refuses a pane too narrow for even the tight packing ([`track_needs`]),
-/// so the two passes never have to overlap two stations to satisfy each other.
+/// A split pane leaves 39 cells, which is where the frames come off. `paint`
+/// refuses anything too narrow for even the tight packing ([`track_needs`]), so
+/// the two passes never have to overlap stations to satisfy each other.
 fn pack(left: u16, width: u16, scale: u64, totals: &[u64]) -> Packed {
     // A station may write a frame at `x-1` and `x+1`, so the cells it can stand
     // on are one inside each end of the run.
@@ -403,13 +327,9 @@ fn pack(left: u16, width: u16, scale: u64, totals: &[u64]) -> Packed {
 
 /// The cells the Ley Line needs before it can be drawn honestly at all.
 ///
-/// A station at each end of the run and the tightest gap between them. Below
-/// this the screen says the window is too small rather than drawing a line with
-/// stations missing from it — the answer it already gives for a pane too short,
-/// and the same reason.
-///
-/// **Derived from the content**, so a line that grows past what a pane can hold
-/// is caught by the picture refusing rather than by nobody noticing.
+/// A station at each end and the tightest gap between. Below this the screen
+/// says the window is too small rather than dropping stations. Derived from the
+/// content, so a line that outgrows the pane is caught by the picture refusing.
 fn track_needs(count: usize) -> u16 {
     u16::try_from(count.saturating_sub(1))
         .unwrap_or(u16::MAX)
@@ -420,35 +340,23 @@ fn track_needs(count: usize) -> u16 {
 /// How many cells along a line `width` cells wide a total of `at` stands, on
 /// a **logarithmic** scale to `scale`.
 ///
-/// **Position is still cost, read the way the curve grows.** The line's
-/// stations grow by about half each — 16, 24, 40, 56, 96 … — so on a linear
-/// scale the first five stand inside the first cell and the picture is a knot at
-/// the left and a road with nothing on it. Equal cells for equal *ratios*
-/// spreads them as the curve spreads them: a station is still further right than
-/// a cheaper one, and the bar above fills to exactly the cell the total has
-/// reached. §19 said the fixed hundred would become derived once the curve
-/// reached it; what it became is this.
+/// Position is still cost, read the way the curve grows. The stations grow by
+/// about half each — 16, 24, 40, 56, 96 … — so linearly the first five stand
+/// inside the first cell. Equal cells for equal *ratios* spreads them as the
+/// curve does (§19).
 ///
-/// # A longer game moves every station, and it moves them *left*
+/// A longer game moves every station *left*, `scale` being the denominator: the
+/// first sits at `ln(17)/ln(10001)` = 0.31 of the run at baseline and
+/// `ln(17)/ln(250001)` = 0.23 at long.
 ///
-/// `scale` is the denominator, so raising it shrinks every fraction: the first
-/// station sits at `ln(17)/ln(10001)` = 0.31 of the run at baseline and
-/// `ln(17)/ln(250001)` = 0.23 at long. **The head compresses; it does not spread
-/// out.** A plan for the length feature guessed the opposite — 0.31 → 0.42 — and
-/// the picture settles it, which is what a See-it line is for.
-///
-/// Nothing here needs a length of its own: [`pack`]'s forward pass keeps
-/// consecutive stations a gap apart however tightly `along` wants to stack them,
-/// and its backward pass keeps the tail on the run. What did need one is the
-/// *label* — see [`figures`].
-///
-/// A float, in a painter — the sim is integer throughout and this crate is not
-/// the sim. The last three cells are kept for the far end's frame.
+/// [`pack`] handles crowding, so nothing here needs a length of its own; the
+/// *label* did — see [`figures`]. A float, in a painter, which is not the sim.
+/// The last three cells are kept for the far end's frame.
 fn along(width: u16, scale: u64, at: u64) -> u16 {
     let span = f64::from(width.saturating_sub(3));
     let scale = scale.max(2);
-    // `ln(1 + x)` rather than `ln(x)`, so nought is nought rather than
-    // negative infinity and the first station is still visibly along the line.
+    // `ln(1 + x)` rather than `ln(x)`, so nought is nought rather than negative
+    // infinity and the first station is still visibly along the line.
     #[allow(clippy::cast_precision_loss)]
     let fraction = ((at.min(scale) + 1) as f64).ln() / ((scale + 1) as f64).ln();
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
@@ -459,10 +367,8 @@ fn along(width: u16, scale: u64, at: u64) -> u16 {
 /// The rooms' lines, one row each: the name, then a run with its
 /// stations standing on it.
 ///
-/// **Evenly spaced, not at cost.** A mastery station has no total — its deed is
-/// a count of a different thing on every line — so position cannot mean cost
-/// here, and pretending it did would put "five potions" and "five walks" at the
-/// same place for no reason. What position says on this track is *order*.
+/// Evenly spaced, not at cost: a mastery station's deed counts a different
+/// thing on every line, so position says *order* instead.
 ///
 /// A room that is not open draws as the rail draws it: a dim dotted run and no
 /// name, so the row says *there is more* without saying what.
@@ -506,11 +412,9 @@ fn room_lines(painter: &mut Painter<'_>, screen: &Tapestry, left: u16, y: u16, i
 
 /// One node of the Ley Line, and the cursor if it is on this one.
 ///
-/// `framed` is off when the line is packed too tightly to give every station a
-/// frame of its own — see [`pack`], and the pane that does it is a phase away.
-/// The aimed one keeps its frame either way, because that frame is the only
-/// thing carrying "aimed" without colour (§14), and at the tight gap it lands on
-/// run cells rather than on a neighbour.
+/// `framed` is off when the line is packed too tightly to frame every station
+/// (see [`pack`]). The aimed one keeps its frame either way — that frame is the
+/// only thing carrying "aimed" without colour (§14).
 fn glyph(painter: &mut Painter<'_>, screen: &Tapestry, x: u16, y: u16, node: &Node, framed: bool) {
     let (mark, style) = stations::standing_mark(node.standing);
     let here = screen.cursor().is_some_and(|aimed| aimed == node.mark());
@@ -519,10 +423,8 @@ fn glyph(painter: &mut Painter<'_>, screen: &Tapestry, x: u16, y: u16, node: &No
     } else {
         stations::bare(painter, x, y, mark, style, here);
     }
-    // **Drawn silently, then said properly.** `Painter::span` would push the
-    // glyph's own text into the speech stream, so a reader would hear "`○`" and
-    // be told nothing — §14 forbids meaning carried by a mark. The `announce` is
-    // the row a listener actually needs: the total and the state, as words.
+    // Drawn silently, then said properly: `Painter::span` would push "`○`" into
+    // the speech stream, and §14 forbids meaning carried by a mark.
     painter.announce(
         UtteranceKind::TableRow,
         Role::Normal,
@@ -551,25 +453,14 @@ fn station(painter: &mut Painter<'_>, screen: &Tapestry, x: u16, y: u16, line: &
 
 /// The details panel: what the cursor is on, and the facts about it.
 ///
-/// **The whole reason the nodes are bare glyphs.** At 48 columns a sentence
-/// cannot sit beside every node, and abbreviating them all would make the screen
-/// a puzzle. One panel, for the one thing you are pointed at.
+/// One panel for the one thing you are pointed at, since at 48 columns a
+/// sentence cannot sit beside every node. Under the tracks rather than beside
+/// them, because a track runs the full width.
 ///
-/// **Bottom right, and boxed.** It sits under the tracks rather than beside
-/// them, because a track runs the full width of the pane and anything alongside
-/// one would be sharing cells with the road.
-///
-/// # A node says two things, and they are not the same thing
-///
-/// **Unlocked** is whether the tower has earned enough to reach it. **Active** is
-/// whether what it grants is in effect. A step is both together — passing one
-/// *is* taking it — but a fork node can be unlocked and idle (nobody has chosen
-/// it) or unlocked and idle for ever (a sibling took the fork's one choice).
-///
-/// # A station says how far, and what it opens
-///
-/// Its deed as a sentence, `3 of 5` toward it, and the room, recipe or charm on
-/// the far side of it — which is what makes a line worth walking.
+/// A node says two things: *unlocked* is whether the tower has earned enough to
+/// reach it, *active* whether what it grants is in effect. A step is both at
+/// once; a fork node can be unlocked and idle, or idle for ever once a sibling
+/// took the choice. A station says how far and what it opens.
 fn details(painter: &mut Painter<'_>, screen: &Tapestry, area: Rect, prose: &Prose) {
     let width = area.cols.saturating_sub(2).min(PANEL_COLS);
     let col = area
@@ -600,8 +491,8 @@ fn details(painter: &mut Painter<'_>, screen: &Tapestry, area: Rect, prose: &Pro
 
     match screen.aimed() {
         None => {
-            // Not blank: §6 forbids a dead end, and a panel that is sometimes
-            // full and sometimes empty reads as a screen that has broken.
+            // Not blank: §6 forbids a dead end, and a sometimes-empty panel
+            // reads as a screen that has broken.
             painter.span(
                 Pos::new(text_col, row.saturating_add(1)),
                 &Span::new(orbs_render::arriving(
@@ -620,8 +511,8 @@ fn details(painter: &mut Painter<'_>, screen: &Tapestry, area: Rect, prose: &Pro
                 ))
                 .with_style(Style::default().with_intensity(Intensity::Bright)),
             );
-            // What it costs, so a locked node says how much more rather than
-            // only that it is shut — and which lane it is, for a fork.
+            // What it costs, so a locked node says how much more — and which
+            // lane it is, for a fork.
             painter.span(
                 Pos::new(text_col, row.saturating_add(2)),
                 &Span::new(orbs_render::arriving(
@@ -663,8 +554,8 @@ fn details(painter: &mut Painter<'_>, screen: &Tapestry, area: Rect, prose: &Pro
                     Style::DIM
                 }),
             );
-            // Pinned right inside the box, so the two facts read as a pair of
-            // columns rather than as one run-on phrase.
+            // Pinned right, so the two facts read as columns rather than one
+            // run-on phrase.
             painter.span(
                 Pos::new(right(&live), states),
                 &Span::new(&live).with_style(if node.standing.active() {
@@ -721,15 +612,13 @@ fn details(painter: &mut Painter<'_>, screen: &Tapestry, area: Rect, prose: &Pro
 
 /// The bottom row: the words, or what the last one was refused for.
 ///
-/// **It always says something.** §6 forbids a dead end, and at the command line
-/// this row is the whole interface — a player who does not know the words has
-/// nowhere else to look.
+/// Always says something (§6 forbids a dead end): at the command line this row
+/// is the whole interface.
 fn status(painter: &mut Painter<'_>, screen: &Tapestry, area: Rect, prose: &Prose) {
     let y = area.row.saturating_add(area.rows).saturating_sub(2);
     let width = u32::from(area.cols.saturating_sub(2));
 
-    // A half-typed word outranks everything — you should always be able to see
-    // what you are typing — then a complaint the player just caused, then help.
+    // A half-typed word outranks everything, then a complaint, then help.
     let (text, style) = match (screen.mode(), screen.complaint()) {
         (Mode::Command, _) if !screen.command().is_empty() => {
             (format!("> {}", screen.command()), Style::default())
@@ -777,20 +666,18 @@ mod tests {
 
     /// The shipped curve, to the soft ending.
     ///
-    /// Written out rather than read from `Progression`, because what these
-    /// properties are about is *sixteen of anything* in a pane that narrow —
-    /// and a test that moved with the content would stop testing the geometry
-    /// the day someone shortened the line.
+    /// Written out rather than read from `Progression`: these properties are
+    /// about *sixteen of anything* in a narrow pane, and a test that moved with
+    /// the content would stop testing the geometry.
     const CURVE: [u64; 16] = [
         16, 24, 40, 56, 96, 160, 256, 400, 640, 1000, 1600, 2500, 4000, 6400, 8000, 10_000,
     ];
 
     /// The same line at a long game, which is where six figures arrive.
     ///
-    /// **Hand-copied like [`CURVE`], and deliberately a stale mirror.** What it
-    /// pins is the geometry of *sixteen six-figure numbers in a narrow pane*,
-    /// which is a fact about the pane rather than about the tier — so if `Long`
-    /// is retuned this does not follow it, and should not.
+    /// Hand-copied like [`CURVE`] and deliberately a stale mirror: it pins the
+    /// geometry, a fact about the pane rather than the tier, so retuning `Long`
+    /// does not move it.
     const LONG: [u64; 16] = [
         16, 26, 57, 109, 259, 586, 1_239, 2_490, 5_008, 9_640, 18_665, 34_765, 65_440, 121_766,
         175_248, 250_000,
@@ -801,11 +688,8 @@ mod tests {
 
     #[test]
     fn every_station_is_drawn_inside_the_run_it_stands_on() {
-        // **The defect this replaces.** The pass that pushed stations apart had
-        // nothing pulling them back, so at a split pane's width the tail of the
-        // line was painted outside the painter's area and clipped away in
-        // silence — while `announce` still spoke it and the cursor still walked
-        // onto it.
+        // Pushing with nothing pulling back painted the tail outside the
+        // painter's area, clipped in silence while `announce` still spoke it.
         for width in track_needs(CURVE.len())..=120 {
             let packed = pack(LEFT, width, 10_000, &CURVE);
             assert_eq!(packed.at.len(), CURVE.len(), "a station went missing");
@@ -838,8 +722,8 @@ mod tests {
 
     #[test]
     fn the_frames_come_off_before_a_station_goes_missing() {
-        // A whole pane frames every station; a split pane in the Bevy build
-        // leaves 39 cells, where sixteen framed stations want 48.
+        // A whole pane frames every station; a split pane leaves 39 cells,
+        // where sixteen framed stations want 48.
         assert!(
             pack(LEFT, 87, 10_000, &CURVE).framed,
             "a whole pane dropped the frames it had room for",
@@ -852,14 +736,13 @@ mod tests {
 
     #[test]
     fn a_six_figure_total_is_abbreviated_and_a_five_figure_one_is_not() {
-        // **Nothing baseline draws may move**, or 138 dump captures move with
-        // it — which is why the rule is six figures rather than "large".
+        // Nothing baseline draws may move, or 138 dump captures move with it.
         assert_eq!(figures(0), "0");
         assert_eq!(figures(10_000), "10000");
         assert_eq!(figures(60_000), "60000");
         assert_eq!(figures(99_999), "99999");
 
-        // Rounded **up**, so a label never says a station is nearer than it is.
+        // Rounded up, so a label never says a station is nearer than it is.
         assert_eq!(figures(100_000), "100k");
         assert_eq!(figures(100_001), "101k");
         assert_eq!(figures(121_766), "122k");
@@ -869,15 +752,10 @@ mod tests {
 
     #[test]
     fn no_total_runs_into_the_one_beside_it_on_its_row() {
-        // **The defect, exactly as the pane drew it.** At long the last two odd
-        // stations printed `121766250000` — a number nobody authored, which is
-        // the same failure the stagger was added to fix one scale earlier.
-        //
-        // A total is drawn at `x - 1` and the totals alternate rows, so the one
-        // it can touch is two stations along. Asserted where the line is framed:
-        // that is `2 * GAP` = 6 cells between neighbours on a row, and below it
-        // the frames have already come off for a pane narrower than the game
-        // hands out.
+        // At long the last two odd stations printed `121766250000`. A total is
+        // drawn at `x - 1` and the rows alternate, so the one it can touch is
+        // two stations along. Asserted only where the line is framed: below
+        // that the pane is narrower than the game hands out.
         for curve in [&CURVE, &LONG] {
             let scale = curve[curve.len() - 1];
             for width in track_needs(curve.len())..=120 {
@@ -902,9 +780,8 @@ mod tests {
 
     #[test]
     fn the_bar_and_the_track_measure_the_same_label() {
-        // They are two `format!`s one refactor apart from disagreeing, and if
-        // they did the fill's edge would sit some cells away from the station it
-        // is meant to reach. `gauge` is the single answer both take.
+        // Two `format!`s one refactor apart from disagreeing would put the
+        // fill's edge cells away from the station it is meant to reach.
         assert_eq!(gauge(0, 10_000), "0 of 10000");
         assert_eq!(gauge(250_000, 250_000), "250k of 250k");
         assert_eq!(gauge(123_456, 250_000), "124k of 250k");
@@ -912,8 +789,8 @@ mod tests {
 
     #[test]
     fn the_run_stays_in_the_order_the_line_is_authored_in() {
-        // Both passes move stations, and a picture whose second station stood
-        // left of its first would say the line runs the other way.
+        // Both passes move stations, and one standing left of its predecessor
+        // would say the line runs the other way.
         for width in [track_needs(CURVE.len()), 39, 51, 87, 120] {
             let packed = pack(LEFT, width, 10_000, &CURVE);
             assert!(

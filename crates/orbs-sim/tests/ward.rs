@@ -4,11 +4,10 @@
 //! words resolve, the readings publish, a press costs the tower nothing, and a
 //! seal that opens pays what `progression.toml` says it does.
 //!
-//! **The sweep here is the one `debug_spell breaking` writes**, in Rust: one
-//! socket at a time, turning it until `aligned` moves, reading nothing but which
-//! way it went — because §8's language has no variables and a codemaker says
-//! nothing else. If this cannot solve a ward through `dial` and `probe`, no
-//! spell can either.
+//! The sweep here is the one `debug_spell breaking` writes, in Rust: one socket
+//! at a time, turning it until `aligned` moves, reading nothing but which way it
+//! went — because §8's language has no variables and a codemaker says nothing
+//! else. If this cannot solve a ward through `dial` and `probe`, no spell can.
 
 use orbs_render::{FieldName, Value};
 use orbs_sim::Sim;
@@ -21,10 +20,9 @@ const SOCKETS: [&str; 4] = ["first", "second", "third", "fourth"];
 
 /// Ticks to let a press settle.
 ///
-/// **A press is instant now**, so this buys nothing a press needs — it is kept
-/// because these tests also let *other* work land between presses, and a helper
-/// that stepped nought would make a future duration invisible here rather than
-/// failing loudly.
+/// A press is instant now, so this buys nothing a press needs. Kept because
+/// these tests also let *other* work land between presses, and a helper that
+/// stepped nought would make a future duration invisible rather than loud.
 const PRESS: u64 = 1;
 
 fn run(sim: &mut Sim, line: &str) {
@@ -86,9 +84,9 @@ fn a_ward_opens_on_the_first_probe_and_publishes_what_it_answered() {
 
 /// The opening aperture, which `Ward::new` fixes so a spell can name it.
 ///
-/// **The restore rung depends on this being a literal.** A spell has no
-/// variables, so the only way it can put a socket back is to name what was there
-/// — and the only figure it can know is the one every reading opens on.
+/// The restore rung depends on this being a literal: a spell has no variables,
+/// so the only way it can put a socket back is to name what was there, and the
+/// only figure it can know is the one every reading opens on.
 const OPENING: [&str; 4] = ["nitre", "alum", "borax", "quartz"];
 
 /// Break the ward in front of the player, the way `breaking` does.
@@ -122,8 +120,8 @@ fn solve(sim: &mut Sim) -> String {
 
 #[test]
 fn the_writable_sweep_breaks_a_ward_through_the_real_verbs() {
-    // **The domain's whole automation claim, end to end.** No deduction and no
-    // memory beyond the last press's delta — and it must still finish, because a
+    // The domain's whole automation claim, end to end: no deduction and no
+    // memory beyond the last press's delta, and it must still finish, because a
     // socket's walk is cyclic and only its arrival can raise `aligned`.
     for seed in [1u64, 3, 7, 11, 17] {
         let mut sim = Sim::new(seed);
@@ -141,10 +139,9 @@ fn the_writable_sweep_breaks_a_ward_through_the_real_verbs() {
     }
 }
 
-/// **Gated.** `debug_ward` makes the answer whatever the aperture holds, and
-/// `debug_spell` writes the solver ladder — both `cfg(debug_assertions)`, and
+/// Gated: `debug_ward` and `debug_spell` are both `cfg(debug_assertions)` and
 /// both unresolvable lines in a release build rather than errors. Without this
-/// the test ran against a ward nobody had broken and a spell that was never
+/// the test ran against a ward nobody had broken and a spell nobody had
 /// written, and failed saying the seed could not bind anything.
 ///
 /// The honest alternative is brute-forcing a 360-code ward per seed, which
@@ -154,28 +151,25 @@ fn the_writable_sweep_breaks_a_ward_through_the_real_verbs() {
 #[cfg(debug_assertions)]
 #[test]
 fn the_solver_spell_keeps_solving_and_never_goes_quiet() {
-    // **The test above is a *reference* ladder, written in Rust, and it does not
-    // run the spell.** It has a `tried.clear()` the shipped spell had no way to
-    // express, so it was proving a Rust loop terminates while the thing a player
-    // actually casts went unmeasured. `debug_spell breaking` is what this runs.
+    // The test above is a *reference* ladder written in Rust and does not run
+    // the spell: it has a `tried.clear()` the shipped spell cannot express, so
+    // it proved a Rust loop terminates while the thing a player casts went
+    // unmeasured. `debug_spell breaking` is what this runs.
     //
-    // **A faucet that stops is the failure mode**, not a crash: a ward solver that
-    // runs out of moves presses an unchanged aperture for ever, holds the tower's
-    // one production slot and earns nothing. So the assertion is on the *second*
-    // half of a long run earning as much as the first — a plateau is what a stall
-    // looks like from outside.
+    // A faucet that stops is the failure mode rather than a crash — a solver out
+    // of moves presses an unchanged aperture for ever, holding the production
+    // slot and earning nothing. So the assertion is that the second half of a
+    // long run earns as much as the first; a plateau is what a stall looks like.
     //
     // `MAX_MEDITATE` is 3600, so a longer wait must be several commands. One
     // `meditate 9600` silently becomes 3600, which is how a first pass at this
     // "found" a plateau that was the cap.
     //
-    // **Bound, not invoked, and the difference is new.** `repeat until the prism
-    // is idle` solves the ward in front of it and exits — with a press in flight
-    // for twelve ticks the guard never saw the solve, so an invocation lapped by
-    // accident. An instant press lands the solve before the guard is asked, so an
-    // invocation is now one ward and the faucet is the *binding*, which re-casts a
-    // spell that has run off the end. That is the honest shape: an invocation is an
-    // act, a binding is standing automation.
+    // Bound, not invoked, and the difference is new: `repeat until the prism is
+    // idle` solves the ward and exits, and with a press in flight for twelve
+    // ticks the guard never saw the solve, so an invocation lapped by accident.
+    // An instant press lands the solve before the guard is asked, so the faucet
+    // is the *binding* — an invocation is an act, a binding is automation.
     for seed in [1u64, 3, 11] {
         let mut sim = Sim::new(seed);
         run(&mut sim, "attend lens");
@@ -212,13 +206,11 @@ fn the_solver_spell_keeps_solving_and_never_goes_quiet() {
 
 #[test]
 fn a_bare_dial_walks_the_six_and_says_which_it_took() {
-    // **The affordance the whole sweep rests on.** A spell has no variables, so
-    // it cannot name the sigil a socket has not tried — `dial <socket>` steps the
-    // ward round instead, and the transcript names what it landed on, because a
-    // player watching a spell work needs to see what it tried.
-    //
-    // It was a candidate list the ward kept per socket, which is the player's own
-    // bookkeeping; it is a cycle now (§19).
+    // The affordance the whole sweep rests on: a spell has no variables, so it
+    // cannot name the sigil a socket has not tried — `dial <socket>` steps the
+    // ward round instead and the transcript names what it landed on. It was a
+    // per-socket candidate list, which is the player's own bookkeeping; it is a
+    // cycle now (§19).
     let mut sim = Sim::new(3);
     run(&mut sim, "attend lens");
     run(&mut sim, "probe");
@@ -255,11 +247,10 @@ fn a_bare_dial_walks_the_six_and_says_which_it_took() {
 
 #[test]
 fn a_broken_seal_spills_a_log_that_only_says_true_things() {
-    // **The yield, and the one way it could be quietly wrong.** Every line names
-    // a real instrument doing something it can actually do — a template filled
-    // from a free-for-all of names would print `digest sage`, which is plausible
-    // and false, and a player who tried it would learn the wrong thing about
-    // their own tower.
+    // The yield, and the one way it could be quietly wrong: every line names a
+    // real instrument doing something it can do. A template filled from a
+    // free-for-all of names would print `digest sage`, which is plausible and
+    // false, and a player who tried it would learn the wrong thing.
     let mut sim = Sim::new(3);
     run(&mut sim, "attend lens");
     let answer = solve(&mut sim);
@@ -278,12 +269,11 @@ fn a_broken_seal_spills_a_log_that_only_says_true_things() {
         .collect();
     assert!(!spilled.is_empty(), "a broken seal spilled nothing");
 
-    // **The pairs the tower could actually produce**, asked of `Recipes` rather
-    // than listed here. The first version of this test checked the verb was in the
-    // array above and that there were exactly two words — which is the *shape* of
-    // the claim in the comment and not the claim. A generator changed to draw a
-    // material at random would have printed `digest sage` and passed: plausible,
-    // false, and the exact failure the comment warns about.
+    // The pairs the tower could produce, asked of `Recipes` rather than listed
+    // here. The first version checked the verb was in the array above and that
+    // there were two words, which is the *shape* of the claim and not the claim:
+    // a generator drawing a material at random would print `digest sage` and
+    // pass.
     let real: Vec<String> = {
         let recipes = sim.world().resource::<Recipes>();
         recipes
@@ -321,14 +311,11 @@ fn a_broken_seal_spills_a_log_that_only_says_true_things() {
 
 #[test]
 fn a_press_is_instant_and_takes_no_slot() {
-    // **ROADMAP's *"a read is not a brew"* is withdrawn**, and this is the
-    // assertion that says so rather than leaving the old one to rot: a press used
-    // to schedule twelve ticks through the production machinery and now answers on
-    // the tick it is typed, taking nothing.
-    //
-    // Both halves matter. The *answer* landing at once is what a player feels; the
-    // *slot* staying free is what lets a bound solver run beside a full brewing
-    // loop with no contention at all, which is a balance fact and is in §19.
+    // ROADMAP's *"a read is not a brew"* is withdrawn, and this says so rather
+    // than leaving the old assertion to rot: a press used to schedule twelve
+    // ticks and now answers on the tick it is typed. Both halves matter — the
+    // answer landing at once is what a player feels, and the slot staying free
+    // is what lets a bound solver run beside a full brewing loop (§19).
     let mut sim = Sim::new(3);
     run(&mut sim, "attend lens");
 
@@ -351,10 +338,9 @@ fn a_press_is_instant_and_takes_no_slot() {
     );
 }
 
-/// **Gated.** `debug_ward` makes the answer whatever the aperture holds, and
-/// `debug_spell` writes the solver ladder — both `cfg(debug_assertions)`, and
+/// Gated: `debug_ward` and `debug_spell` are both `cfg(debug_assertions)` and
 /// both unresolvable lines in a release build rather than errors. Without this
-/// the test ran against a ward nobody had broken and a spell that was never
+/// the test ran against a ward nobody had broken and a spell nobody had
 /// written, and failed saying the seed could not bind anything.
 ///
 /// The honest alternative is brute-forcing a 360-code ward per seed, which
@@ -364,23 +350,17 @@ fn a_press_is_instant_and_takes_no_slot() {
 #[cfg(debug_assertions)]
 #[test]
 fn a_solver_keeps_working_after_the_player_walks_out() {
-    // **The domain's own selling point, and nothing covered it.** `land` runs in
-    // the tick schedule, outside `spell::run`'s domain swap — so a `refresh` that
+    // The domain's own selling point, and nothing covered it: `land` runs in the
+    // tick schedule, outside `spell::run`'s domain swap, so a `refresh` that
     // resolved the prism from `Cwd` published nothing whenever the player was
-    // elsewhere. Every reading froze at the last `dial`: a socket that had just
-    // settled still read `loose`, the ladder dialled it, `seat` refused, and the
-    // rung fired for ever.
+    // elsewhere — every reading froze at the last `dial` and the rung fired for
+    // ever. Every other test here stands in the lens for its whole run, which is
+    // why it went unseen.
     //
-    // Every other test in this file stands in the lens for its whole run, which
-    // is exactly why this went unseen.
-    // **`bind`, not `invoke`, and the distinction is the whole test.** An
-    // invocation ends when the player walks out — *"first_light.spell needed you
-    // there. it stops"* — so only a binding is unattended, and only a binding
-    // reaches the `land`-outside-the-domain-swap path at all.
-    //
-    // `bind` costs 16 experience and nothing grants it, so the wards are broken
-    // by hand first: `debug_ward` hands the answer to the aperture, and a press
-    // beyond par pays 6.
+    // `bind`, not `invoke`, and that distinction is the whole test: an
+    // invocation ends when the player walks out, so only a binding is
+    // unattended. `bind` costs 16 experience and nothing grants it, so the wards
+    // are broken by hand first.
     let mut sim = Sim::new(3);
     run(&mut sim, "attend lens");
     while sim.experience() < 16 {
@@ -409,10 +389,9 @@ fn a_solver_keeps_working_after_the_player_walks_out() {
     );
 }
 
-/// **Gated.** `debug_ward` makes the answer whatever the aperture holds, and
-/// `debug_spell` writes the solver ladder — both `cfg(debug_assertions)`, and
+/// Gated: `debug_ward` and `debug_spell` are both `cfg(debug_assertions)` and
 /// both unresolvable lines in a release build rather than errors. Without this
-/// the test ran against a ward nobody had broken and a spell that was never
+/// the test ran against a ward nobody had broken and a spell nobody had
 /// written, and failed saying the seed could not bind anything.
 ///
 /// The honest alternative is brute-forcing a 360-code ward per seed, which
@@ -422,13 +401,11 @@ fn a_solver_keeps_working_after_the_player_walks_out() {
 #[cfg(debug_assertions)]
 #[test]
 fn a_bound_solver_leaves_the_tower_a_share_of_its_one_slot() {
-    // **It takes *none* of it now, and that is the assertion.** §19 refuses the
-    // production slot to a maze because *"a solver holding the tower's one slot
-    // would starve every other spell into `spell_gave_up`"*, and this measured a
-    // bound `breaking` pressing twelve ticks out of roughly every thirteen —
-    // contended but not starving. A press is instant and schedules nothing, so the
-    // share is now nought and the question the test was written to answer has been
-    // answered by removing the cost rather than by arithmetic.
+    // It takes *none* of it now, which is the assertion. §19 refuses the
+    // production slot to a maze because a solver holding the tower's one slot
+    // would starve every other spell, and this measured a bound `breaking`
+    // pressing twelve ticks in roughly thirteen — contended but not starving.
+    // A press schedules nothing now, so the share is nought.
     //
     // Kept rather than deleted: the *claim* it holds — the lens does not own the
     // slot — is the one that matters, and it is what a future decision to price a

@@ -4,15 +4,9 @@
 //! geometry and text: this crate may not depend on `orbs-sim`, so every word on
 //! the board — the title, the charm's name, the tally — is handed in.
 //!
-//! # Shape, not colour
-//!
-//! §14. A lit glyph and a dark one differ in **glyph**, so the board reads in a
-//! dump, in greyscale and to a screen reader. The tint is enrichment and carries
-//! nothing: the whole picture is one hue.
-//!
-//! That is the maze's rule and the pylon's, and this domain needs it more than
-//! either — the puzzle *is* which glyphs are lit, so a colour-only tell would
-//! make it unplayable rather than merely uglier.
+//! A lit glyph and a dark one differ in *glyph*, not colour (§14), so the board
+//! reads in a dump, in greyscale and to a screen reader. The puzzle is which
+//! glyphs are lit, so a colour-only tell would make it unplayable.
 
 use crate::Tint;
 
@@ -28,7 +22,7 @@ pub const GLOW: Tint = Tint::Gold;
 /// A lattice, ready to draw.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Lattice {
-    /// The column names, left to right. **Handed in**, because they are content.
+    /// The column names, left to right. Handed in, because they are content.
     pub columns: Vec<String>,
     /// Every glyph, row-major, `true` where lit.
     pub glyphs: Vec<bool>,
@@ -36,17 +30,16 @@ pub struct Lattice {
     pub width: usize,
     /// Which columns are snapped for the attempt being built.
     ///
-    /// Drawn nowhere — the grid already shows what a snap did. It is here
-    /// because *what has been pressed* and *what the board looks like* are
-    /// different questions, and anything reading the board to decide the next
-    /// press needs the first: `orbs-balance`'s driver walks the same eight-rung
-    /// table a spell does, and without this it could only count laps, which
-    /// stops being true the moment a fall springs back and clears the presses.
+    /// Drawn nowhere — the grid already shows what a snap did. What has been
+    /// pressed and what the board looks like are different questions, and
+    /// anything choosing the next press needs the first: `orbs-balance`'s
+    /// driver could otherwise only count laps, which a fall springing back
+    /// and clearing the presses invalidates.
     pub snapped: Vec<bool>,
     /// What the last fall left on the bottom row, `true` where lit.
     ///
-    /// **The signal the whole puzzle turns on**, so it gets its own strip under
-    /// a rule rather than being left for the player to find in the grid.
+    /// The signal the puzzle turns on, so it gets its own strip under a rule
+    /// rather than being left for the player to find in the grid.
     pub residue: Vec<bool>,
     /// The charm being bound, and what has been spent — already rendered.
     pub tally: String,
@@ -67,10 +60,9 @@ impl Lattice {
 
     /// How tall it is, border included.
     ///
-    /// **Fixed, never sized to what is standing.** A board that grew a row when
-    /// a residue appeared would move the transcript under the player's eye at
-    /// the exact moment they were reading it — the rampart's rule, and the
-    /// sheet's.
+    /// Fixed, never sized to what is standing — the rampart's rule and the
+    /// sheet's. A board that grew a row when a residue appeared would move the
+    /// transcript under the player's eye as they read it.
     #[must_use]
     pub fn rows(&self) -> u16 {
         let high = u16::try_from(self.glyphs.len() / self.width.max(1)).unwrap_or(3);
@@ -110,18 +102,16 @@ impl Lattice {
         self.columns.iter().map(|name| Self::label(name)).collect()
     }
 
-    /// The residue **as words**, for a reader.
+    /// The residue as words, for a reader.
     ///
-    /// **Not [`residue_row`](Self::residue_row), and that was a real §14
-    /// failure.** The spoken line interpolated the drawn strip, so a reader
-    /// heard `☼` and `·` and twenty-four spaces where a sighted player reads
-    /// three columns. This domain is the one place there is no falling back to
-    /// shape: *which glyphs are lit* is the puzzle, and the residue is the whole
-    /// of what a decision turns on — so it has to be sayable.
+    /// Not [`residue_row`](Self::residue_row): the spoken line once
+    /// interpolated the drawn strip, so a reader heard `☼`, `·` and
+    /// twenty-four spaces (§14). Which glyphs are lit is the puzzle, so the
+    /// residue has to be sayable.
     ///
-    /// Named, never positional: *"apex lit, belt dark, hem dark"* survives being
-    /// heard once, where *"lit, dark, dark"* asks the listener to hold an order
-    /// they were never told.
+    /// Named, never positional: *"apex lit, belt dark, hem dark"* survives
+    /// being heard once, where *"lit, dark, dark"* asks the listener to hold an
+    /// order they were never told.
     #[must_use]
     pub fn residue_spoken(&self) -> String {
         self.columns
@@ -167,8 +157,8 @@ mod tests {
         }
     }
 
-    /// **Every row is the same width**, or the columns stop lining up and a
-    /// player cannot read down one to see what a snap did.
+    /// Every row is the same width, or the columns stop lining up and a player
+    /// cannot read down one to see what a snap did.
     #[test]
     fn every_row_lines_up_under_its_column() {
         let board = lattice();
@@ -183,8 +173,8 @@ mod tests {
         assert_eq!(board.residue_row().chars().count(), heading);
     }
 
-    /// A lit glyph and a dark one differ in **shape** (§14), so the board
-    /// survives greyscale, a dump and a screen reader.
+    /// A lit glyph and a dark one differ in shape (§14), so the board survives
+    /// greyscale, a dump and a screen reader.
     #[test]
     fn lit_and_dark_are_different_glyphs() {
         assert_ne!(ALIGHT, DARK);

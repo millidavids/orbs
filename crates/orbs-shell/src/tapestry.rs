@@ -1,57 +1,36 @@
 //! The weave screen's state: what is being looked at, and where the cursor is.
 //!
 //! Knows nothing about Bevy and nothing about panes — the wiring is in
-//! `weaving.rs` and the drawing is in `loom.rs`, the same three-way split the
-//! editor makes for the same reason: what a key *means* here and how a pane is
-//! laid out are different concerns that change for different reasons.
+//! `weaving.rs` and the drawing in `loom.rs`, the editor's three-way split:
+//! what a key *means* and how a pane is laid out change for different reasons.
 //!
-//! # Two tracks, two shapes
+//! Two tracks, two shapes. The Ley Line is the tower's — stations on total
+//! experience, some of them forks with siblings stacked downward, so left/right
+//! walks stations and up/down picks a sibling. Mastery is one line per room, so
+//! up/down picks a *room*, and the status row says which. Nothing on a mastery
+//! line is ever taken.
 //!
-//! **The Ley Line** is the tower's: stations on total experience, some of them
-//! forks with siblings stacked downward. Left/right walks the stations,
-//! up/down picks a sibling, and `take` chooses one.
+//! It opens in command state, and the way in is a word (§19) — taking a fork
+//! node is irreversible. `ley` and `mastery` go into a track and hand the arrows
+//! over; `<esc>` comes back. An arrow at the command line does nothing on
+//! purpose: one that is sometimes navigation and sometimes nothing read as
+//! *"my first key press was being ignored"*.
 //!
-//! **Mastery** is one line per room, each read left to right. Up/down
-//! picks a *room* and left/right walks its stations — so down means a different
-//! thing on each track, and the status row says which. Nothing on a mastery
-//! line is ever taken: a station is reached by doing its deed, and `take` there
-//! is refused in voice.
+//! The cursor is an identity, never an index: the world ticks while the screen
+//! is open, so an index would come to point at a different node (§19,
+//! `Editor::reading`). It holds a *mark* and unplaces itself when that mark
+//! leaves the screen.
 //!
-//! # It opens in command state, and the way in is a word
-//!
-//! §19 records why the editor does: *"the first keystroke cannot damage
-//! anything."* Taking a fork node is irreversible — it closes its fork — so the
-//! same rule applies with more force.
-//!
-//! **`ley` and `mastery` go into a track**, place the aim on its first node and
-//! hand the arrows over; `<esc>` comes back. That is `edit` dropping into the
-//! editor's buffer. An arrow pressed at the command line does nothing at all, on
-//! purpose: a screen where the arrows are sometimes navigation and sometimes
-//! nothing, depending on what you last typed, answers differently to the same
-//! key — and *"my first key press was being ignored"* is how the version that
-//! let them work immediately was reported.
-//!
-//! # The cursor is an identity, never an index
-//!
-//! The world ticks while the screen is open. Crossing a threshold opens a fork
-//! and changes what is in the list, so an index would silently come to point at
-//! a different node — and a view that survives its subject lies, which is the
-//! rule §19 extracted from `Editor::reading`. The cursor holds a **mark** and
-//! unplaces itself when that mark is no longer on screen.
-//!
-//! **A mark, not an id.** A mastery station's id already names one thing, but a
-//! step's id is what it *grants* and eight stations grant concentration — so an
-//! id cursor pointed at all eight, drew all eight aimed, and could not walk past
-//! the fourth station. `Node::mark` carries the total with it and `Stop::mark`
-//! is the id; both are unique across both tracks, so one cursor serves both.
+//! A mark, not an id: eight stations grant concentration, so an id cursor
+//! pointed at all eight and could not walk past the fourth. `Node::mark` carries
+//! the total and `Stop::mark` is the id; both are unique across both tracks.
 
 use orbs_sim::{Line, Node, Standing, Station, Stop};
 
 /// Which track is being looked at.
 ///
-/// This decides where the cursor may go and which view is drawn below the
-/// bar; both headings are always drawn, so a player who has not asked for
-/// Mastery can still see that it is there.
+/// Decides where the cursor may go and which view is drawn below the bar. Both
+/// headings are always drawn, so Mastery is visible before it is asked for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Track {
     /// The tower's line: steps and forks.
@@ -73,9 +52,8 @@ pub enum Mode {
 
 /// A word the screen answers to.
 ///
-/// **Prefix-matched, and no two share a first letter** — the same rule the
-/// editor's vocabulary follows, so `l`, `m`, `t` and `q` all work and the
-/// property is a test rather than a convention.
+/// Prefix-matched, no two sharing a first letter — the editor's rule, so `l`,
+/// `m`, `t` and `q` all work and a test holds the property.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Word {
     /// Look at the Ley Line.
@@ -98,9 +76,8 @@ pub const WORDS: [(&str, Word); 4] = [
 
 /// Move `at` by `by` within `len`, stopping at the ends rather than wrapping.
 ///
-/// **A track is read left to right**, so wrapping would make its start and its
-/// finish the same place — which on a progression is the one thing the picture
-/// must not say.
+/// A track is read left to right, so wrapping would make its start and its
+/// finish one place.
 fn shift(at: usize, by: i8, len: usize) -> usize {
     if len == 0 {
         return 0;
@@ -128,9 +105,8 @@ pub enum Outcome {
     Close,
     /// Take this node — the shell hands the id to `Sim::take`.
     ///
-    /// **An id, not an index.** The screen's rows are a view over
-    /// `tower::ley_line` and could be reordered by content; the id is what the
-    /// world stores and what `progression.toml` calls *"a decision, not prose"*.
+    /// An id, not an index: the screen's rows are a view over `tower::ley_line`
+    /// and could be reordered by content, where the id is what the world stores.
     Take(String),
 }
 
@@ -189,11 +165,8 @@ pub struct Tapestry {
     experience: u64,
     /// What the tower is known for, pushed in beside it.
     ///
-    /// **On the weave rather than the rail**, because this is the progression
-    /// surface and renown is progression. The rail's foot is five readings about
-    /// the *orb* and its own doc says anything already in `status` belongs
-    /// there; experience is not on it for exactly that reason and renown has no
-    /// better claim.
+    /// On the weave rather than the rail: the rail's foot is five readings about
+    /// the *orb*, and experience is off it for the same reason.
     renown: u64,
     /// What the bar is measured against: the last station's total.
     scale: u64,
@@ -224,8 +197,8 @@ impl Tapestry {
 
     /// The mark the cursor is on, if it has been placed.
     ///
-    /// **What a painter compares against**, so a drawn station knows whether it
-    /// is the aimed one. `Node::mark` and `Stop::mark` are what produce it.
+    /// What a painter compares against, so a drawn station knows whether it is
+    /// the aimed one. `Node::mark` and `Stop::mark` produce it.
     #[must_use]
     pub fn cursor(&self) -> Option<&str> {
         self.cursor.as_deref()
@@ -292,11 +265,9 @@ impl Tapestry {
 
     /// Take a fresh reading of both tracks.
     ///
-    /// **Pushed in rather than pulled**, because the screen knows nothing about
-    /// the sim — the same direction `Editor::set_reading` runs in. Called every
-    /// frame the screen is open, because the world ticks behind it and a
-    /// threshold crossed while a player is looking should land while they are
-    /// looking.
+    /// Pushed in rather than pulled, the screen knowing nothing about the sim —
+    /// `Editor::set_reading`'s direction. Called every frame it is open, so a
+    /// threshold crossed while a player is looking lands while they look.
     pub fn refresh(
         &mut self,
         experience: u64,
@@ -310,9 +281,9 @@ impl Tapestry {
         self.scale = scale;
         self.ley_line = ley_line;
         self.mastery = mastery;
-        // **The cursor is checked against the new reading, not carried over.**
-        // A fork opening changes what is on screen, and an id that is no longer
-        // there would leave the highlight on a row that has moved.
+        // The cursor is checked against the new reading, not carried over: a
+        // fork opening changes what is on screen, and a mark no longer there
+        // would leave the highlight on a row that has moved.
         if self
             .cursor
             .as_ref()
@@ -322,8 +293,8 @@ impl Tapestry {
         }
     }
 
-    /// The Ley Line as **columns left to right**: a station's nodes are a
-    /// column, so a step is one node tall and a fork is as tall as its choice.
+    /// The Ley Line as columns left to right: a station's nodes are a column, so
+    /// a step is one node tall and a fork is as tall as its choice.
     #[must_use]
     pub fn columns(&self) -> Vec<Vec<Node>> {
         self.ley_line
@@ -332,15 +303,12 @@ impl Tapestry {
             .collect()
     }
 
-    /// The rooms whose lines can be walked: the **open** ones with a station on
+    /// The rooms whose lines can be walked: the open ones with a station on
     /// them.
     ///
-    /// **A shut room's line is not walkable, because it is not drawn.** The loom
-    /// paints a room the player cannot enter as an anonymous dotted run and
-    /// draws no stations on it — so a cursor there was invisible, and the
-    /// details panel then read out the deed, its count and the room it opens.
-    /// That is exactly the foreshadowing the boot report, `survey` and the scene
-    /// all withhold; the weave must not be the one surface that gives it away.
+    /// A shut room's line is not drawn — the loom paints an anonymous dotted
+    /// run — so a cursor there was invisible while the details panel read out
+    /// the deed and the room it opens, which everything else withholds.
     fn rows(&self) -> Vec<&Line> {
         self.mastery
             .iter()
@@ -399,15 +367,10 @@ impl Tapestry {
         if text.is_empty() {
             return;
         }
-        // **A letter always goes somewhere the player can see it.** Browsing
-        // swallowing text would be a dead end of exactly the kind §6 forbids —
-        // typing `take` while aiming would do nothing, with nothing saying why —
-        // so a printable character steps back to the command line and starts the
-        // word there. **The cursor is kept**, which is the point: aim with the
-        // arrows, then type `take`, and it acts on what you aimed at.
-        //
-        // Safe, because typing *leaves* browsing: only `Enter` in browsing
-        // commits, and a letter can no longer be the keystroke before it.
+        // A letter always goes somewhere the player can see it, browsing
+        // swallowing text being §6's dead end. The cursor is kept, which is the
+        // point — aim with the arrows, type `take`. Safe because typing *leaves*
+        // browsing, so a letter cannot precede a committing `Enter`.
         self.mode = Mode::Command;
         self.command.push_str(&text);
     }
@@ -424,10 +387,8 @@ impl Tapestry {
 
     /// `Esc` — step back toward the command line.
     ///
-    /// **One meaning in both states**, as it has in the editor: browsing steps
-    /// back to the command line, and the command line clears its half-word. It
-    /// never closes the screen, so a player who presses it out of habit always
-    /// lands somewhere the words are written down.
+    /// One meaning in both states, as in the editor: browsing steps back, the
+    /// command line clears its half-word. It never closes the screen.
     pub fn escape(&mut self) {
         self.mode = Mode::Command;
         self.command.clear();
@@ -444,20 +405,15 @@ impl Tapestry {
 
     /// Move the cursor by one column (`across`) and one row (`down`).
     ///
-    /// **Two axes, two meanings per track.** On the Ley Line, progression runs
-    /// rightward and a fork's choice runs downward, so left/right walks the
-    /// stations and up/down picks a sibling — which on a step, one node tall,
-    /// does nothing at all. On Mastery, down picks a *room* and left/right
-    /// walks its line.
+    /// Two axes, two meanings per track. On the Ley Line progression runs
+    /// rightward and a fork's choice downward, so up/down on a one-node step
+    /// does nothing; on Mastery, down picks a *room*.
     ///
-    /// **The first arrow places rather than moves.** Until one is pressed the
-    /// cursor is nowhere, which is what keeps `Enter` from committing anything
-    /// before the player has aimed — §19's *"the first keystroke cannot damage
-    /// anything"*, carried into a screen where the damage is irreversible.
+    /// The first arrow places rather than moves, which keeps `Enter` from
+    /// committing before the player has aimed (§19).
     pub fn step(&mut self, across: i8, down: i8) {
-        // **The command line has the keys until a word hands them over**, which
-        // is the editor's shape exactly. An arrow pressed at the command line
-        // does nothing, on purpose.
+        // The command line has the keys until a word hands them over, which is
+        // the editor's shape. An arrow there does nothing, on purpose.
         if self.mode != Mode::Browsing {
             return;
         }
@@ -467,13 +423,9 @@ impl Tapestry {
         }
         self.complaint = None;
 
-        // **An arrow with nothing aimed at places the aim**, rather than doing
-        // nothing. `look` normally places it, so this is unreachable by typing —
-        // but `refresh` unplaces the cursor when the node under it stops being
-        // drawn, and that can happen while browsing, on a tick the player did not
-        // ask for. Returning early there left every arrow inert while the status
-        // row still read `arrows move`: a dead end §6 forbids, arrived at without
-        // touching the keyboard.
+        // An arrow with nothing aimed at places the aim: `refresh` unplaces the
+        // cursor on a tick the player did not ask for, and returning early there
+        // left every arrow inert while the status row read `arrows move`.
         match self.track {
             Track::LeyLine => {
                 let columns = self.columns();
@@ -481,9 +433,8 @@ impl Tapestry {
                     self.cursor = walkable.into_iter().next();
                     return;
                 };
-                // **Stops at the ends rather than wrapping.** A track is read
-                // left to right, and wrapping would make its start and its
-                // finish the same place.
+                // Stops at the ends rather than wrapping: a track is read left
+                // to right, and wrapping makes its start and finish one place.
                 let column = shift(column, across, columns.len());
                 let rows = &columns[column];
                 if rows.is_empty() {
@@ -511,13 +462,9 @@ impl Tapestry {
 
     /// Go into a track: aim at its first node and hand the arrows over.
     ///
-    /// **This is `edit` dropping into the buffer.** A word is the way in, so
-    /// there is exactly one state in which an arrow key means anything and the
-    /// player got there by saying so. `<esc>` comes back, as it does everywhere.
-    ///
-    /// It places the cursor rather than leaving it nowhere, because a browse
-    /// mode with nothing aimed at would be a mode whose only visible difference
-    /// is that the words stopped working.
+    /// `edit` dropping into the buffer: a word is the way in. It places the
+    /// cursor, a browse mode aimed at nothing differing only in that the words
+    /// stopped working.
     fn look(&mut self, track: Track) {
         self.track = track;
         self.mode = Mode::Browsing;
@@ -553,18 +500,16 @@ impl Tapestry {
 
     /// Take what the cursor is on.
     ///
-    /// **Every branch is authored**: §6 forbids a bare error, and a screen whose
-    /// central verb answered with silence would be worse than one that had no
-    /// verb. An open fork node returns [`Outcome::Take`] and the shell hands the
-    /// id to the sim, which re-checks every rule before granting.
+    /// Every branch is authored, §6 forbidding a bare error. An open fork node
+    /// returns [`Outcome::Take`] and the sim re-checks before granting.
     fn take(&mut self) -> Option<Outcome> {
         let node = match self.aimed() {
             None => {
                 self.complaint = Some(Complaint::Nothing);
                 return None;
             }
-            // **Reached by doing, never taken.** The one refusal that is about
-            // the shape of the track rather than the state of the node.
+            // Reached by doing, never taken — the one refusal about the shape of
+            // the track rather than the state of the node.
             Some(Aimed::Stop { stop, .. }) => {
                 self.complaint = Some(Complaint::NotAChoice(stop.id));
                 return None;
@@ -575,9 +520,8 @@ impl Tapestry {
             Standing::Open => {
                 return Some(Outcome::Take(node.id));
             }
-            // **Held already, which is not the same as empty.** A step is taken
-            // by being passed, so this is the one branch that is about
-            // something the tower really has.
+            // Held already, which is not the same as empty: a step is taken by
+            // being passed, so this is about something the tower really has.
             Standing::Taken => Some(Complaint::Already(node.id)),
             // `unlocked` rather than a total comparison: only the field stays
             // right when a fork is shut because a sibling took its one choice.
@@ -715,9 +659,8 @@ mod tests {
 
     #[test]
     fn enter_before_any_arrow_takes_nothing() {
-        // **The property the unplaced cursor exists for.** Taking a fork node
-        // closes its fork and cannot be undone, so the first keystroke must not
-        // be able to reach it.
+        // The property the unplaced cursor exists for: taking a fork node closes
+        // its fork and cannot be undone.
         let mut screen = tapestry();
         assert_eq!(screen.enter(), None);
         assert_eq!(screen.cursor(), None);
@@ -849,7 +792,7 @@ mod tests {
 
     #[test]
     fn typing_while_aiming_keeps_the_aim_and_starts_a_word() {
-        // **The flow the arrows exist for**: point at a node, then type `take`.
+        // The flow the arrows exist for: point at a node, then type `take`.
         let mut screen = tapestry();
         say(&mut screen, "ley");
         screen.step(1, 0);
@@ -926,8 +869,8 @@ mod tests {
         say(&mut screen, "take");
         assert_eq!(screen.complaint(), Some(&Complaint::Nothing), "unaimed");
 
-        // **A mastery station is reached, never taken**, and the refusal says
-        // so rather than pretending it is locked.
+        // A mastery station is reached, never taken, and the refusal says so
+        // rather than pretending it is locked.
         say(&mut screen, "mastery");
         say(&mut screen, "take");
         assert_eq!(
@@ -935,7 +878,7 @@ mod tests {
             Some(&Complaint::NotAChoice("laboratory_1".to_owned())),
         );
 
-        // **A step the tower has already passed is not empty.**
+        // A step the tower has already passed is not empty.
         let mut screen = tapestry();
         say(&mut screen, "ley");
         say(&mut screen, "take");
@@ -1003,11 +946,8 @@ mod tests {
 
     #[test]
     fn two_steps_granting_one_thing_are_two_places_the_cursor_can_be() {
-        // Eight stations grant concentration. While the cursor held the *id*,
-        // all eight drew aimed at once, the panel read the first one's cost, and
-        // `→` from any of them jumped back to the second station — a player
-        // could not walk past the fourth. The mark carries the total; see the
-        // module header.
+        // Eight stations grant concentration, so an *id* cursor drew all eight
+        // aimed at once and could not walk past the fourth.
         let mut screen = Tapestry::default();
         screen.refresh(
             24,
@@ -1037,10 +977,9 @@ mod tests {
 
     #[test]
     fn a_room_the_player_cannot_enter_yet_is_not_walked() {
-        // The loom draws a shut room as an anonymous dotted run and puts no
-        // stations on it, so a cursor there is invisible — and the details panel
-        // would then read out the deed, its count and the room it opens, which
-        // is the one thing the boot report, `survey` and the scene all withhold.
+        // The loom draws a shut room as an anonymous dotted run, so a cursor
+        // there is invisible while the details panel reads out the deed and the
+        // room it opens.
         let mut screen = Tapestry::default();
         screen.refresh(
             0,

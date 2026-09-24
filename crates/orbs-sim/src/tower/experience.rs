@@ -1,29 +1,22 @@
 //! What the work is worth, and what it buys (DESIGN.md §11.5, §19).
 //!
-//! # It only ever rises
-//!
-//! Experience accumulates and is never spent: an upgrade opens when the total
-//! passes its number and stays open. That is what makes it a `u64` and a save a
-//! single value — there is no balance to keep, and nothing a player can spend
-//! and then wish they had not.
+//! It only ever rises: experience accumulates and is never spent, so an upgrade
+//! opens when the total passes its number and stays open. That is what makes it
+//! a `u64` and a save a single value — no balance to keep, and nothing a player
+//! can spend and then wish they had not.
 //!
 //! What it is *worth* and what it *buys* are both authored
 //! ([`Progression`]); this module knows only when
 //! to add and how to say so.
 //!
-//! # Under `tower/`, because it is world state that ticks
+//! Under `tower/` because it is world state that ticks — the test that put
+//! `spell/` here rather than in `execute/`, which holds no per-tick state. This
+//! is written by a run *completing*, in a system, on a tick boundary.
 //!
-//! The same test that put `spell/` here rather than in `execute/`: `execute/`
-//! holds no per-tick state at all. This is written by a run *completing*, which
-//! happens in a system, on a tick boundary, whether or not anybody typed
-//! anything.
-//!
-//! # Concentration is derived from it, never stored
-//!
-//! [`concentration`] is a function of the total against the authored table, so
-//! there is no second number to fall out of step with the first — the same shape
-//! as a spell's `Program` being derived from its text rather than kept beside
-//! it. A save that carried both could disagree with itself; this one cannot.
+//! Concentration is derived from it, never stored: [`concentration`] is a
+//! function of the total against the authored table, so there is no second
+//! number to fall out of step. A save that carried both could disagree with
+//! itself; this one cannot.
 
 use bevy_ecs::prelude::*;
 use orbs_render::{FieldName, RecordKind, Role};
@@ -33,18 +26,17 @@ use crate::session::Scrollback;
 
 /// Everything the player has earned by working.
 ///
-/// **Never decreases.** Nothing in the game removes experience, and no code path
-/// here can: the only mutator adds.
+/// Never decreases: nothing in the game removes experience, and the only mutator
+/// here adds.
 #[derive(Resource, Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct Experience(u64);
 
 impl Experience {
     /// Put a total back, for a save.
     ///
-    /// **Not `credit`**, which emits records and can announce an unlock. A
-    /// restore is not the player earning anything; it is the world being what it
-    /// already was, and a load that congratulated you on work you did yesterday
-    /// would be reporting a lie in voice.
+    /// Not `credit`, which emits records and can announce an unlock: a restore
+    /// is the world being what it already was, and a load that congratulated you
+    /// on yesterday's work would be reporting a lie in voice.
     pub(crate) const fn restore(&mut self, total: u64) {
         self.0 = total;
     }
@@ -65,11 +57,10 @@ pub fn concentration(world: &World) -> usize {
 
 /// How deep a siege's quintessence pool is, before the tower's repair scales it.
 ///
-/// **[`concentration`]'s twin**, and a function here rather than two resource
-/// lookups at the call site for the reason that one has: which table answers a
-/// progression question is this module's business, and a caller that reached for
-/// `Experience` and `Progression` itself would be a second place that has to
-/// agree about it.
+/// [`concentration`]'s twin, and a function here rather than two resource
+/// lookups at the call site for its reason: which table answers a progression
+/// question is this module's business, and a caller reaching for `Experience`
+/// and `Progression` itself would be a second place that has to agree.
 #[must_use]
 pub fn quintessence_steps(world: &World) -> usize {
     let earned = world.resource::<Experience>().get();
@@ -78,10 +69,10 @@ pub fn quintessence_steps(world: &World) -> usize {
 
 /// What one completed run at `named` is worth.
 ///
-/// **Read before the run reports itself, credited after** — see
-/// [`credit`]. Splitting the two is what puts the sentences in the order they
-/// happened: the alembic yields a clarity, *and then* the orb can hold a spell.
-/// Done in one call it announced the reward before the work.
+/// Read before the run reports itself, credited after (see [`credit`]): the
+/// split is what puts the sentences in the order they happened — the alembic
+/// yields a clarity, *and then* the orb can hold a spell. In one call it
+/// announced the reward before the work.
 #[must_use]
 pub fn worth(world: &World, named: &str) -> u64 {
     world.resource::<Progression>().earns(named)
@@ -89,16 +80,15 @@ pub fn worth(world: &World, named: &str) -> u64 {
 
 /// What a solve at `named` pays, given how many tries it took against `par`.
 ///
-/// **Full at or under par, three quarters beyond it, and never nothing.** The
-/// halving curve a first draft proposed for the lens is withdrawn: measured, a
-/// blind ladder needs ~23 presses against a player's ~4, and halving would land
-/// it on the floor of 1 — while the ladder *already* pays 5.5× the ticks, so a
-/// yield penalty double-counts and drives an automated puzzle below the maze. The
-/// tick cost does the real work; this only rewards playing well.
+/// Full at or under par, three quarters beyond it, and never nothing. The
+/// halving curve a first draft proposed is withdrawn: a blind ladder needs ~23
+/// presses against a player's ~4 and halving would land it on the floor of 1,
+/// while the ladder already pays 5.5× the ticks — so a yield penalty
+/// double-counts. The tick cost does the real work; this rewards playing well.
 ///
-/// **One rule for two rooms.** The lens priced a press this way and the
-/// menagerie prices a call the same way, for the same reason; two copies of a
-/// three-line rule are how one of them comes to be tuned and the other not.
+/// One rule for two rooms: the lens prices a press this way and the menagerie a
+/// call, and two copies of a three-line rule are how one gets tuned and the
+/// other does not.
 #[must_use]
 pub fn worth_within_par(world: &World, named: &str, spent: u32, par: u32) -> u64 {
     let full = worth(world, named);
@@ -111,10 +101,9 @@ pub fn worth_within_par(world: &World, named: &str, spent: u32, par: u32) -> u64
 
 /// Add what a completed run earned, and say so if it bought something.
 ///
-/// **Called where a run *succeeded*, never where one ended.** `finish` also runs
-/// for a scour and for a run that matched no recipe, and neither is work the
-/// tower has anything to show for — see `work::produce::transmute`, which is
-/// where the successful branch is.
+/// Called where a run *succeeded*, never where one ended: `finish` also runs for
+/// a scour and for a run that matched no recipe, and neither is work the tower
+/// has anything to show for. See `work::produce::transmute`.
 pub fn credit(world: &mut World, earned: u64) {
     if earned == 0 {
         return;
@@ -126,19 +115,16 @@ pub fn credit(world: &mut World, earned: u64) {
     let now = world.resource::<Experience>().get();
     let after = concentration(world);
 
-    // **Said once, at the tick that bought it.** A level is derived, so it would
-    // otherwise be true silently and for ever — the player would find out by
-    // trying `bind` and being refused, or not refused, with nothing having
-    // announced the difference. `Reloaded` in `scribe` is the same shape: the
-    // fact is continuous, the sentence is an edge.
+    // Said once, at the tick that bought it: a level is derived, so it would
+    // otherwise be true silently for ever and the player would find out by
+    // trying `bind`. The fact is continuous, the sentence is an edge.
     if after > before {
         say_gained(world, after);
     }
 
-    // **And then what the stations passed opened.** A level is derived from the
-    // total; a room is not, so crossing a step has to write it — see
-    // `ley::cross`. After the level, because the level is what this run bought
-    // and the room is what the line was waiting to give.
+    // And then what the stations passed opened: a level is derived from the
+    // total, a room is not, so crossing a step has to write it (`ley::cross`).
+    // After the level, because that is what this run bought.
     super::ley::cross(world, was, now);
 }
 

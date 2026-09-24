@@ -77,14 +77,19 @@ fn cycle(settings: Option<Single<&mut CrtSettings>>) {
     let (next, name) = after(**settings);
     **settings = next;
     info!("crt: {name}");
+    // `F3` and the tube page are one setting seen twice. Without this, turning
+    // the tube off with the key and then opening the settings page would show it
+    // on, and the next launch would bring it back. §4 asks for a sticky setting;
+    // the key is how a player reaches it fastest.
+    crate::shell::remember_setting(crate::shell::CRT, named(&next));
 }
 
 /// The tube state `current` steps to, and what to call it.
 ///
 /// Split from the system so the one property that matters can be asserted:
-/// **pressing F3 enough times reaches off.** §14 makes that an accessibility
-/// requirement rather than a convenience, and a `Single<&mut ...>` system is not
-/// something a unit test can drive.
+/// pressing F3 enough times reaches off. §14 makes that an accessibility
+/// requirement rather than a convenience, and a unit test cannot drive a
+/// `Single<&mut ...>` system.
 fn after(current: CrtSettings) -> (CrtSettings, &'static str) {
     if current == CrtSettings::DEFAULT {
         (CrtSettings::PEAK_THREAT, "peak threat")
@@ -98,21 +103,59 @@ fn after(current: CrtSettings) -> (CrtSettings, &'static str) {
 /// The three states `F3` reaches, by the names `ORBS_CRT` takes.
 ///
 /// One table, so a name and the state it selects cannot drift apart.
-const STATES: [(&str, CrtSettings); 3] = [
+pub(crate) const STATES: [(&str, CrtSettings); 3] = [
     ("default", CrtSettings::DEFAULT),
     ("peak", CrtSettings::PEAK_THREAT),
     ("off", CrtSettings::OFF),
 ];
 
+/// What this tube state is called.
+///
+/// The same table `ORBS_CRT` reads and `F3` cycles, so the settings page, the
+/// switch and the key cannot disagree about what `peak` means.
+///
+/// A state that is in none of them — which only a hand-built `CrtSettings`
+/// reaches — reports as the first, because a settings row has to say *something*
+/// and the one thing it must not say is a name that sets a different state.
+pub(crate) fn named(settings: &CrtSettings) -> &'static str {
+    STATES
+        .iter()
+        .find(|(_, state)| state == settings)
+        .map_or(STATES[0].0, |(name, _)| *name)
+}
+
+/// The tube state `word` names, whole.
+pub(crate) fn state_named(word: &str) -> Option<CrtSettings> {
+    STATES
+        .iter()
+        .find(|(name, _)| *name == word)
+        .map(|(_, state)| *state)
+}
+
 /// Which tube state to open with, from `ORBS_CRT`.
 ///
-/// **This exists for a See-it line rather than for players.** `ORBS_CAPTURE`
-/// presses no keys, so the state that matters most to §14 — the tube off — was
-/// reachable only by a person at a keyboard, and *"turning the tube off does not
-/// turn the accommodation off"* is exactly the property worth checking without
-/// one. Phase 13's settings screen makes this ordinary.
+/// This exists for a See-it line rather than for players: `ORBS_CAPTURE` presses
+/// no keys, so the state §14 cares most about — the tube off — was reachable
+/// only by a person at a keyboard, and *"turning the tube off does not turn the
+/// accommodation off"* is the property worth checking without one.
 pub(crate) fn seeded() -> CrtSettings {
-    chosen(std::env::var("ORBS_CRT").ok().as_deref())
+    // The switch, then what the player chose, then the default — `save::path`'s
+    // chain, in the same order. `ORBS_CRT` is the instrument and must outrank a
+    // preference, or a See-it line stops being reproducible on a machine where
+    // somebody turned the tube off. A shipped run sets neither.
+    //
+    // An exported-but-empty `ORBS_CRT=` is not the switch being set. `var`
+    // answers `Some("")`, so `.or_else` never ran and the player's saved choice
+    // was discarded by a variable carrying no value — which is what a shell
+    // script does forwarding an unset variable. `save::chosen` has had the
+    // `!value.is_empty()` guard since it was written.
+    chosen(
+        std::env::var("ORBS_CRT")
+            .ok()
+            .filter(|value| !value.trim().is_empty())
+            .or_else(|| orbs_shell::settings::get(crate::shell::CRT))
+            .as_deref(),
+    )
 }
 
 /// The rule [`seeded`] applies, without the environment.
@@ -158,8 +201,8 @@ fn extract(
 
 /// The tube's geometry in the window, published by the renderer for the CRT.
 ///
-/// Two facts, and the shader needs both for the same reason: **the tube is the
-/// 4:3 picture, not the window.** Everything periodic divides the cell size so
+/// Two facts, and the shader needs both for the same reason: the tube is the
+/// 4:3 picture, not the window. Everything periodic divides the cell size so
 /// the pattern lands identically inside every glyph (§9); everything *shaped* —
 /// the barrel curve, the vignette, the rounded bezel — is measured against
 /// [`fill`](Self::fill_x), so the curve belongs to the monitor rather than to

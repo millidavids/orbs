@@ -1,28 +1,22 @@
 //! Mastery: seven straight lines, one per room (DESIGN.md §11.5, §19).
 //!
-//! # Per domain, no choices
-//!
-//! Each room has a line of stations, and a station is a *deed* — brew a
-//! clarity, walk the stacks five times, close a figure. A line is walked in
-//! order: a station is reached when the one before it is reached and its deed's
-//! count in the [`Tally`] is met, and reaching it *is* the grant.
-//! Nothing here is ever `take`n, and the screen says so.
+//! Per domain, no choices. Each room has a line of stations and a station is a
+//! *deed* — brew a clarity, walk the stacks five times. A line is walked in
+//! order, a station is reached when the one before it is and its count in the
+//! [`Tally`] is met, and reaching it *is* the grant. Nothing here is ever
+//! `take`n.
 //!
 //! The choices live on the Ley Line (`tower::ley`), which is where the tree
 //! this module used to read has gone.
 //!
-//! # Reaching is said once, and what it opens is said once
+//! Reaching is said once and what it opens is said once. [`advance`] runs after
+//! every completion, on the tick the work landed: a station reached is a record,
+//! and what it opened is a second one said only if the thing was shut — a tower
+//! restored open that re-reaches the station opening the archive has one.
 //!
-//! [`advance`] runs after every completion, on the tick the work landed. A
-//! station reached is a record, so `sift` and the log see it; what it opened is
-//! a second record, said only if the thing was shut — a tower restored open
-//! that re-reaches the station opening the archive has an archive already.
-//!
-//! # No stream, no `Submission`
-//!
-//! A deed is done by work the submissions already record, and reaching is a
-//! function of the tally against the authored file. Nothing is drawn and nothing
-//! is chosen, so nothing here has to replay on its own.
+//! No stream and no `Submission`: a deed is done by work the submissions already
+//! record, and reaching is a function of the tally against the authored file.
+//! Nothing is drawn and nothing is chosen.
 
 use bevy_ecs::prelude::*;
 use orbs_render::{FieldName, RecordKind, Role};
@@ -35,10 +29,10 @@ use super::opened::{Opened, open, opening};
 
 /// Which mastery stations the tower has reached.
 ///
-/// **A list of ids**, as [`Taken`](super::Taken) is, and for the same reasons.
-/// Saved so a restore need not replay to know it, and never regenerated from
-/// the tally — the tally says a deed is done; this says its station was reached
-/// *and said*, which a migrated save must not do twice.
+/// A list of ids, as [`Taken`](super::Taken) is and for its reasons. Saved so a
+/// restore need not replay, and never regenerated from the tally — the tally
+/// says a deed is done, this says its station was reached *and said*, which a
+/// migrated save must not do twice.
 #[derive(Resource, Debug, Default, Clone, PartialEq, Eq)]
 pub struct Reached(Vec<String>);
 
@@ -69,10 +63,9 @@ impl Reached {
 
 /// Where a station on a line stands.
 ///
-/// **Three states, three words** (§14). Not [`Standing`](super::Standing),
-/// which is the fork's vocabulary — a fork node can be open and unchosen, and
-/// a station on a line cannot: it is done, it is the one being worked toward,
-/// or it is further along.
+/// Three states, three words (§14). Not [`Standing`](super::Standing), the
+/// fork's vocabulary: a fork node can be open and unchosen, and a station cannot
+/// — it is done, being worked toward, or further along.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Walk {
     /// Done.
@@ -198,9 +191,8 @@ pub fn mastery(world: &World) -> Vec<Line> {
 
 /// How far along one room is: `(reached, of, (done, needed))` toward the next.
 ///
-/// **The rail's reading**, in three numbers rather than a `Line`, because a
-/// rail box has one row to put it on. `None` for a line that is finished or a
-/// room that has no line.
+/// The rail's reading, in three numbers rather than a `Line`, because a rail box
+/// has one row to put it on. `None` for a finished line or a room with none.
 #[must_use]
 pub fn progress(world: &World, domain: &str) -> Option<Progress> {
     mastery(world)
@@ -281,32 +273,24 @@ pub fn advance(world: &mut World) {
 /// Reach every station the tally already meets, and open what every reached
 /// station opens — without saying so.
 ///
-/// **[`advance`] reaches a station once, ever** — it skips anything already in
-/// [`Reached`] — so what a station opens is applied on exactly one tick in the
+/// [`advance`] reaches a station once ever, skipping anything already in
+/// [`Reached`], so what a station opens is applied on exactly one tick in the
 /// life of a save. A document whose station gained an `opens` after it was
-/// written, or one written by a build that applied it wrongly, comes back with
-/// the thing still shut and no deed able to open it: the tally is long past what
-/// the station asks, so `advance` walks straight past it for ever.
+/// written comes back with the thing shut and no deed able to open it, because
+/// the tally is long past what the station asks.
 ///
-/// **And a station whose count came down.** `advance` runs after a completion
-/// and never on load, so a document written when a station asked more — a
-/// medium tower seven holds into `menagerie_2`'s ramped eleven, loaded where the
-/// station asks a fixed five — met the station and would not reach it until some
-/// unrelated completion walked the lines. It is reached here, in line order and
-/// stopping at the first unmet station on each line, which is `advance`'s walk.
+/// And a station whose count came down: `advance` runs after a completion and
+/// never on load, so a document written when a station asked more met it and
+/// would not reach it until some unrelated completion walked the lines. Reached
+/// here, in line order, stopping at the first unmet station on each line.
 ///
-/// [`ley::caught_up`](super::ley::caught_up)'s twin, and silent for its reason
-/// about the *station*: a load does not congratulate anybody on yesterday's work.
-///
-/// **What a station reached only now opens is said, though** — that is news,
-/// not congratulation. A document short of the station was saved with the thing
-/// shut, so the player has never been told it opened, and for the whole circle
-/// the sentence is the only thing in the game that says what a `~` wire is: a
-/// medium tower seven holds into the old ramped eleven loaded straight into
-/// turned wires with no word about them. A station the document had *already*
-/// reached opens silently, since it was said when it was reached. `opening`
-/// says only what changed, so a document that disagrees with nothing changes
-/// and says nothing, and a restored world is still the saved world.
+/// [`ley::caught_up`](super::ley::caught_up)'s twin, and silent about the
+/// *station* for its reason: a load does not congratulate anybody on yesterday's
+/// work. What a station reached only now opens *is* said, because that is news —
+/// the player was never told, and for the circle that sentence is the only thing
+/// in the game that says what a `~` wire is. A station the document had already
+/// reached opens silently. `opening` says only what changed, so a document that
+/// disagrees with nothing says nothing.
 pub(crate) fn caught_up(world: &mut World) {
     let (due, told, news): (Vec<String>, Vec<String>, Vec<String>) = {
         let curve = world.resource::<Progression>();
@@ -339,8 +323,8 @@ pub(crate) fn caught_up(world: &mut World) {
     for id in due {
         world.resource_mut::<Reached>().hold(&id);
     }
-    // **Silent first**, so a key both an old station and a new one open counts
-    // as told and `opening` finds it open already.
+    // Silent first, so a key that both an old and a new station open counts as
+    // told and `opening` finds it open already.
     for key in told {
         open(world, &key);
     }
@@ -349,14 +333,14 @@ pub(crate) fn caught_up(world: &mut World) {
 
 /// Mark `id` reached, say so, and open what it opens.
 ///
-/// **Two records, not one.** The station is one fact and what it opened is
-/// another, and only the second is conditional — see the module header.
+/// Two records, not one: the station is one fact and what it opened is another,
+/// and only the second is conditional. See the module header.
 pub(crate) fn reach(world: &mut World, domain: &str, id: &str, opens: &[String]) {
     world.resource_mut::<Reached>().hold(id);
-    // **The deed's count, from the curve this game is actually on.** The
-    // sentences carry `{count}` rather than spelling it — *"five potions
-    // brewed"* was true of one length and wrong at every other, and it is drawn
-    // beside a live tally that would have contradicted it.
+    // The deed's count, from the curve this game is on. The sentences carry
+    // `{count}` rather than spelling it — *"five potions brewed"* was true of
+    // one length and wrong at every other, beside a live tally that would have
+    // contradicted it.
     let needed = world
         .resource::<crate::content::Progression>()
         .mastery()

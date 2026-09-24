@@ -15,6 +15,99 @@
   at 1.0 (DESIGN.md §19).
 -->
 
+## [v0.16.13] - 2026-09-23
+
+### Description
+In development — a dev log, not patch notes. The orb has a front door: it wakes
+to its own menu instead of a tower you never asked for, it remembers what you
+set, it has a manual you can read before you play, and it makes a sound.
+
+### Added
+- **The threshold.** After the boot card the orb shows its menu rather than a
+  tower. Nothing is raised, nothing ticks and nothing is saved until you pick a
+  game — a new one at a length you choose, or one of the six the orb is keeping.
+  It is the same menu the `menu` verb has always opened, standing somewhere else.
+- **A menu you cannot fall out of.** There is no tower behind this one, so
+  `resume` is not a word it answers to and Escape does not close it. `quit` still
+  leaves the orb, which is the only way out that was ever supposed to be there.
+- **`abandon <slot>` clears a tower**, and asks once before it does — `quit`'s
+  handshake, one line rather than a box to dismiss. The file is renamed aside
+  rather than deleted, so a misread slot number costs you nothing.
+- **Settings, and they are remembered.** Four pages — sound, tube, access,
+  habits — reachable from the front door and from inside a tower. Every function
+  key that changed something is also a row there, and they are one setting seen
+  twice: press `F3` or type `crt off`, and it is still off next launch. That
+  includes the boot sequence, which you can now skip for good rather than every
+  time.
+- **A manual, in the game.** `manual` on the menu opens nineteen chapters: how to
+  play, what is behind every door, the ley line, spells and the whole scripting
+  language, sabotage, sieges, the screen, the settings, the keys, and what to do
+  when something goes wrong. Three of them are built from the game's own help
+  text, so they cannot come to disagree with it.
+- **The orb has a voice.** A click under each key, a chime when a brew finishes,
+  a low fall when something goes wrong, a slow beat when a surface you checked
+  turns out to have been tampered with, and the hum of the tube under all of it.
+  Every sound is generated rather than recorded, and every one says something the
+  screen says at the same moment — turn it off and you lose a channel, never a
+  fact. `settings`, then `sound`: the cues and the hum move separately.
+
+### Changed
+- **Your towers moved to where your machine keeps its things** —
+  `~/.local/share/orbs` on Linux, Application Support on macOS, AppData on
+  Windows — with your settings beside them. Towers you already had are **copied**
+  across the first time, never moved, so an older build still finds its own.
+- **A game with nowhere to save is still a game.** Starting a new tower with
+  saving turned off used to be refused outright; it now begins one and says it
+  will not be remembered.
+- **A new game in the terminal build keeps your name.** It came up as `orbs $ `
+  where the same game in the window came up as yours.
+- **A swap lands on the keystroke, not on the next tick**, in the terminal build
+  — up to a second sooner.
+
+### Fixed
+- **The menu could ask for a tower that nothing heard.** Choosing a length at the
+  threshold left the page on screen for ever, because the terminal build noticed
+  a swap only on a world tick and the threshold stops the clock.
+- **A save the orb cannot read says so** instead of quietly not appearing.
+  A slot that vanished looked like a tower you never had.
+- **The manual's contents page lost its last five chapters** on a small window,
+  silently. It pages now, and says when there is more.
+- **Editing the authored text while the game ran reloaded it once a second, for
+  ever.** Re-reading the file landed in the watch that had asked for the
+  re-read. Nothing was wrong on screen, which is why it survived this long.
+- **PgUp and PgDn did nothing in the manual**, in both builds, while the page
+  said `pgdn for more`.
+- **Typing at an open manual also drove the menu behind it** — `q` at a chapter
+  left the game, and one Escape closed both.
+- **`b` at the contents closed the manual** instead of opening the chapter about
+  starting a game, which is called `entering` now.
+- **The orb replayed its whole boot sequence after you picked a tower**, in the
+  terminal build.
+- **`theme m` could never reach monochrome**, the accessibility phosphor: it
+  quietly meant muted violet instead, and said nothing.
+- **The tube's curve setting was thrown away on the first frame** if you had
+  asked for the deep layout, and the layout with it.
+- **Loading a tower played its whole saved transcript at once** as sound.
+- **The hum was not a hum** — it swelled to silence and back twice a second.
+- **A tower whose first slot was empty was never brought across** from the old
+  save location; the rest of your games stayed where they were — and a copy that
+  failed for any reason was never retried.
+- **Escape out of the manual closed the menu behind it** as well, dropping you
+  at the prompt instead.
+- **`back` from the lengths went past the tower listing** you had just come
+  through.
+- **The lengths page never said a tower would not be remembered**, so a game
+  with saving off could be started and lost with nothing ever having been said.
+- **Editing the manual while the game ran changed the log and not the page.**
+  The reader kept the book it opened on.
+- **One unreadable line in your settings file discarded all the others** the
+  next time anything was changed — and the file was written in a way that could
+  be truncated by a crash. It is written safely now, and a file that will not
+  parse is left alone rather than replaced.
+- **In the terminal build**: the settings page reported the linear stream as off
+  while it was on, `focus` was never remembered, and F6/F7 acted at the menu
+  before there was a game to act on.
+
 ## [v0.15.7] - 2026-09-17
 
 ### Description

@@ -1,11 +1,11 @@
 //! Every Ley Line fork node moves the number it says it moves (DESIGN.md
 //! §11.5, Phase 10).
 //!
-//! **One test per grant, each reading the surface the grant changes** — a
-//! run's length, a charcoal's ticks, the pool's ceiling, a roll's bonus, what a
-//! siege pays, a troop's worth, a course's mending, the calm layer's interval,
-//! a charm's price. `debug_take` holds the node without the experience, which
-//! is the tool's one job; everything downstream is the real reader.
+//! One test per grant, each reading the surface the grant changes — a run's
+//! length, a charcoal's ticks, the pool's ceiling, a roll's bonus, what a siege
+//! pays, a troop's worth, a course's mending, the calm layer's interval, a
+//! charm's price. `debug_take` holds the node without the experience, which is
+//! the tool's one job; everything downstream is the real reader.
 
 #[cfg(debug_assertions)]
 use orbs_render::{FieldName, Value};
@@ -15,11 +15,10 @@ use orbs_sim::tower::grant;
 
 /// Type each line and give the world a tick.
 ///
-/// **Gated with the tests that use it.** `debug_take` is the tool this whole
-/// file is built on and it is `debug_assertions`-only, so in a release build
-/// every helper here has no callers — which a shipping profile reports as dead
-/// code rather than as the deliberate thing it is. Two tests below need neither
-/// the word nor these helpers and are ungated.
+/// Gated with the tests that use it. `debug_take` is what this file is built on
+/// and it is `debug_assertions`-only, so in a release build every helper here
+/// has no callers and reads as dead code. Two tests below need neither the word
+/// nor these helpers and are ungated.
 #[cfg(debug_assertions)]
 fn run(sim: &mut Sim, lines: &[&str]) {
     for line in lines {
@@ -150,13 +149,12 @@ fn pool_and_floor_raise_the_ceiling() {
 #[cfg(debug_assertions)]
 #[test]
 fn a_document_with_no_pool_row_fills_to_the_ceiling_the_grants_bought() {
-    // **An ordering trap, because the reader is forgiving.** `ceiling` reads
+    // An ordering trap, because the reader is forgiving: `ceiling` reads
     // `pool_<n>` and `floor_<n>` off `Taken`, and `grant::tiers` answers nought
-    // for a resource that is not there yet rather than panicking — so a restore
-    // that read the ceiling before putting `Taken` back filled the pool as if
-    // the orb had taken nothing, and the tower came back four short per tier.
-    // A document with no `quintessence` row is what §15's hand-edited saves and
-    // every future migration look like.
+    // for a resource that is not there yet rather than panicking. So a restore
+    // reading the ceiling before putting `Taken` back filled the pool as if the
+    // orb had taken nothing, and the tower came back four short per tier. A
+    // document with no `quintessence` row is what a hand-edited save looks like.
     let mut sim = Sim::new(1);
     run(&mut sim, &["debug_take pool_1", "debug_take pool_2"]);
     let bought = orbs_sim::tower::ceiling(sim.world());

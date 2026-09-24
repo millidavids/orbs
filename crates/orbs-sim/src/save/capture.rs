@@ -1,17 +1,15 @@
 //! Reading a world out into a document.
 //!
-//! Everything here takes `&World` and nothing takes `&mut`. That is not tidiness
-//! — it is the guarantee that **saving cannot perturb the world**. A capture that
-//! could take a `&mut` could build a `QueryState`, which registers components,
-//! which changes archetypes; and a save that quietly changed the thing it was
-//! describing would make the lockstep test in `tests/persistence.rs` measure
-//! itself.
+//! Everything here takes `&World` and nothing takes `&mut`, which is the
+//! guarantee that saving cannot perturb the world: a `&mut` could build a
+//! `QueryState`, which registers components and changes archetypes, and a save
+//! that quietly changed what it described would make the lockstep test in
+//! `tests/persistence.rs` measure itself.
 //!
 //! So the walk uses `world.get::<T>(entity)` and [`crate::tower::children_of`], which is also
-//! the *ordering* rule `tower::node` insists on: **`Children` order, never a
-//! global query.** Archetype order is not insertion order, and a document whose
-//! rows moved when a component was added would fail its own byte-for-byte test
-//! for a reason that has nothing to do with the save.
+//! `tower::node`'s ordering rule: `Children` order, never a global query.
+//! Archetype order is not insertion order, and a document whose rows moved when
+//! a component was added would fail its own byte-for-byte test.
 
 use bevy_ecs::prelude::*;
 use orbs_render::{Presentation, Role, Value};
@@ -29,12 +27,10 @@ use crate::tower::{Cwd, Marks};
 
 /// How many records a save carries.
 ///
-/// **A tail, not the stream.** The stream grows without bound — §5's Phase 11a
-/// catch-up alone is ~29k steps — and a save that carried all of it would grow
-/// with the session until the file was mostly transcript. Five hundred is a few
-/// screens of `peruse` and comfortably more than the eight command blocks a
-/// 120×45 pane holds, so a returning player finds their logs where they left
-/// them.
+/// A tail, not the stream. The stream grows without bound — §5's catch-up alone
+/// is ~29k steps — and a save carrying all of it would be mostly transcript.
+/// Five hundred is a few screens of `peruse`, so a returning player finds their
+/// logs where they left them.
 ///
 /// What is *not* bounded is `Records::sequence`, which rides in `[world]`. A
 /// running spell's cursor is a position in that sequence, so the count has to
@@ -43,13 +39,10 @@ pub(super) const RECORD_TAIL: usize = 500;
 
 /// Read the whole world out.
 pub(crate) fn capture(world: &World) -> Save {
-    // `Pending` and `Skip` are deliberately absent from the document, and this
-    // is where that claim is checked rather than trusted. Both are drained
-    // inside `Sim::step` — `run_pending` opens every tick and `Skip` is spun out
-    // in `step`'s own `while` loop — so at a tick boundary, which §8 says is the
-    // only moment a save is permitted, both are empty. If that ever stops being
-    // true, a queued command is being dropped on save and this is the line that
-    // says so.
+    // `Pending` and `Skip` are deliberately absent from the document, checked
+    // here rather than trusted. Both are drained inside `Sim::step`, so at a
+    // tick boundary — §8's only permitted moment for a save — both are empty. If
+    // that stops being true, a queued command is being dropped on save.
     debug_assert!(
         world.resource::<crate::session::Pending>().is_empty(),
         "a save was taken with commands still queued — §8 permits saves at tick boundaries only",
@@ -97,8 +90,8 @@ fn progress(world: &World) -> ProgressSave {
         petitioned: world.resource::<tower::siege::Petitioned>().get(),
         integrity: Some(world.resource::<tower::Integrity>().get()),
         quintessence: Some(world.resource::<tower::Quintessence>().get()),
-        // **The clock, so an expired cooldown is not written at all.** Without
-        // it a played-through save carried a dead row per surface for ever.
+        // The clock, so an expired cooldown is not written at all — without it a
+        // played-through save carried a dead row per surface for ever.
         cooling: world
             .resource::<tower::Cooling>()
             .to_save(*world.resource::<crate::tick::Tick>()),
@@ -110,8 +103,8 @@ fn progress(world: &World) -> ProgressSave {
             .entries()
             .map(|(key, count)| (key.to_owned(), count))
             .collect(),
-        // **Always `Some`**, so a document this build writes never reads as one
-        // from before stores existed — which is what the restore stamp keys on.
+        // Always `Some`, so a document this build writes never reads as one from
+        // before stores existed, which is what the restore stamp keys on.
         stores: Some(
             world
                 .resource::<tower::Stores>()
@@ -150,9 +143,8 @@ fn progress(world: &World) -> ProgressSave {
 
 /// Every named node, in the order a walk from the root meets it.
 ///
-/// The root itself is skipped: it is nameless, so it has no path to be addressed
-/// by, and a restore never needs to create it because `tower::raise` already
-/// has. Parents therefore always precede their children here, which is what lets
+/// The root is skipped: it is nameless, so it has no path, and `tower::raise`
+/// has already made it. Parents always precede their children here, which lets
 /// a restore create a missing node without looking ahead.
 fn nodes(world: &World) -> Vec<NodeSave> {
     let root = tower::filesystem_root(world, world.resource::<Cwd>().0);
@@ -171,9 +163,9 @@ fn nodes(world: &World) -> Vec<NodeSave> {
 /// Every line a reader made something else of, beside the text it read.
 ///
 /// The spell's own reading and the one a rewritten spell keeps for its repair,
-/// in one list: both say *what this text compiles as*, and `adopt` looks both
-/// up by text. `None` when no reader changed a line, which is every spell in a
-/// build without one — so the file says nothing a load could work out alone.
+/// in one list: both say *what this text compiles as*, and `adopt` looks both up
+/// by text. `None` when no reader changed a line, so the file says nothing a
+/// load could work out alone.
 fn readings(at: bevy_ecs::world::EntityRef<'_>) -> Option<Vec<ReadSave>> {
     let mut found: Vec<ReadSave> = Vec::new();
     let mut note = |held: &[String], read: &tower::Read| {
@@ -253,12 +245,9 @@ fn node(world: &World, entity: Entity) -> NodeSave {
             started: fire.lit_at.get(),
             ends: fire.lit_at.get().saturating_add(fire.ticks),
         }),
-        // **Only a window that is still open**, which is `Cooling`'s rule one
-        // resource over and the one place it had never been applied. Nothing
-        // ever removes `Quickened` — that is the point of an interval, and
-        // `quickened` simply reads false once it has run out — so a bare `map`
-        // wrote a dead span into *every* autosave from the first scroll a player
-        // ever spent, for the rest of the session and every session after it.
+        // Only a window that is still open — `Cooling`'s rule, one resource
+        // over. Nothing ever removes `Quickened`, so a bare `map` wrote a dead
+        // span into every autosave from the first scroll a player spent onward.
         // `Burning` needs no such filter because `heat::spend` removes it.
         quickened: at
             .get::<tower::Quickened>()
@@ -267,11 +256,10 @@ fn node(world: &World, entity: Entity) -> NodeSave {
                 started: quick.from.get(),
                 ends: quick.from.get().saturating_add(quick.ticks),
             }),
-        // **Only the charms still in force**, which is the rule `Quickened`
-        // spent a whole phase without: nothing removes a lapsed charm, because
-        // an interval has no expiry system, so a bare walk would write a dead
-        // row per charm per node for the rest of the save's life. `Charmed::live`
-        // is the same clock the read sites use.
+        // Only the charms still in force, for `Quickened`'s reason: nothing
+        // removes a lapsed charm, so a bare walk would write a dead row per
+        // charm per node for the rest of the save's life. `Charmed::live` is the
+        // same clock the read sites use.
         charms: at
             .get::<tower::Charmed>()
             .map(|held| {
@@ -301,9 +289,8 @@ fn node(world: &World, entity: Entity) -> NodeSave {
             .get::<tower::Rewritten>()
             .map(|rewritten| rewritten.was.clone()),
         retimed: at.get::<tower::Retimed>().map(|retimed| retimed.drag),
-        // **`None` for an empty one**, so a tower nobody has queued into writes
-        // no rows at all — six satchels each spending a line on `[]` is six
-        // lines of noise in a file §15 wants hand-readable.
+        // `None` for an empty one: six satchels each spending a line on `[]` is
+        // six lines of noise in a file §15 wants hand-readable.
         satchel: at
             .get::<tower::Satchel>()
             .filter(|satchel| !satchel.is_empty())
@@ -316,12 +303,11 @@ fn node(world: &World, entity: Entity) -> NodeSave {
 
 /// A spell part-way through.
 ///
-/// **The flat cursor fields are written from `strands[0]`, never from
-/// `Running`'s own.** Those hold whichever cursor `step_one` put back last,
-/// which for one strand is the same thing and for two is arbitrary — so reading
-/// them here would make a forked spell's save depend on where the tick happened
-/// to stop. `strands` is the authority; the flat fields are its first element,
-/// spelled out so an unforked save keeps exactly the shape it has always had.
+/// The flat cursor fields come from `strands[0]`, never from `Running`'s own:
+/// those hold whichever cursor `step_one` put back last, which for two strands
+/// is arbitrary, so a forked spell's save would depend on where the tick
+/// stopped. `strands` is the authority; the flat fields are its first element,
+/// spelled out so an unforked save keeps the shape it has always had.
 fn running(world: &World, run: &tower::spell::Running) -> RunningSave {
     let first = run.strands.first().cloned().unwrap_or_default();
     RunningSave {
@@ -338,9 +324,8 @@ fn running(world: &World, run: &tower::spell::Running) -> RunningSave {
         vars: first.vars.clone(),
         part: first.part.clone(),
         stack: descents(&first.stack),
-        // **Only the forked case writes a table.** One strand is every spell
-        // anybody has ever run, and its whole state is already in the fields
-        // above.
+        // Only the forked case writes a table. One strand is every spell anybody
+        // has ever run, and its whole state is already in the fields above.
         strands: if run.strands.len() > 1 {
             run.strands.iter().map(strand).collect()
         } else {
@@ -351,11 +336,10 @@ fn running(world: &World, run: &tower::spell::Running) -> RunningSave {
         fingerprint: tower::path_of_id(world, run.spell)
             .and_then(|path| tower::find_by_path(world, &path))
             .and_then(|entity| world.get::<tower::Held>(entity))
-            // **The empty fingerprint, not nought.** A spell node with no
-            // `Held` is what this falls back to, and `adopt` recomputes it as
+            // The empty fingerprint, not nought. `adopt` recomputes it as
             // `fingerprint(&[])` — the FNV offset basis, never zero — so a
             // sentinel of `0` guaranteed a mismatch on the one path that
-            // produces it, stopping the run and naming the empty string.
+            // produces it.
             .map_or_else(
                 || super::adopt::fingerprint(&[]),
                 |held| super::adopt::fingerprint(&held.0),
@@ -398,10 +382,9 @@ fn tail(records: &orbs_render::Records) -> Vec<RecordSave> {
         .skip(skip)
         .map(|record| RecordSave {
             kind: naming::record_kind_word(record.kind()).to_owned(),
-            // Written only when it is not the default. Half the stream is an
-            // ordinary line spoken plainly, and two rows saying so on every one
-            // of five hundred records is four hundred lines of a save file
-            // telling a reader nothing.
+            // Written only when it is not the default: two rows saying so on
+            // each of five hundred records is four hundred lines telling a
+            // reader nothing.
             role: (record.role() != Role::default())
                 .then(|| naming::role_word(record.role()).to_owned()),
             register: (record.presentation() != Presentation::default())

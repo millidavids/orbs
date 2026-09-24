@@ -3,43 +3,35 @@
 //! `orbs-render` decides *what appears and where*. Frontends decide only *how a
 //! cell is drawn* — and how big, which is why the grid is a constant here and
 //! the letterbox is the frontend's. They may add enrichment the others cannot
-//! reproduce (CRT effects, audio) provided that enrichment carries no
-//! information absent from the Frame. See CLAUDE.md, architectural rule 2.
-//!
-//! # The pipeline
+//! reproduce (CRT, audio) provided it carries no information absent from the
+//! Frame. See CLAUDE.md, architectural rule 2.
 //!
 //! ```text
 //! orbs-sim ──records──▶ orbs-render ──Frame──▶ orbs      (GPU cell grid + CRT)
 //!                                          └─▶ orbs-tui  (alternate screen buffer)
 //! ```
 //!
-//! # Four things this crate exists to guarantee
+//! Four things this crate exists to guarantee:
 //!
-//! 1. **Commands emit records; presentation is a view over the record.** The
-//!    [`Records`] stream is the source, and the screen, the screen reader,
-//!    `sift`, and the balance harness are four views of it that can see exactly
-//!    the same things. That is what lets the tube corrupt the first without the
-//!    other three noticing. See [`record`] for why the model
-//!    lives here rather than in `orbs-sim`.
-//! 2. **No colour.** A [`Cell`] carries a [`Style`] — a [`Role`], an
-//!    [`Intensity`], a [`Presentation`], a [`Depiction`] — and never a hue. Each
-//!    frontend resolves those against its own palette: curated phosphor themes
-//!    under Bevy, the user's terminal theme under `orbs-tui`.
+//! 1. Commands emit records; presentation is a view over the record. Screen,
+//!    screen reader, `sift` and the balance harness are four views of the
+//!    [`Records`] stream, which is what lets the tube corrupt the first without
+//!    the other three noticing. See [`record`] for why the model lives here
+//!    rather than in `orbs-sim`.
+//! 2. No colour. A [`Cell`] carries a [`Style`] — a [`Role`], an
+//!    [`Intensity`], a [`Presentation`], a [`Depiction`] — and never a hue;
+//!    each frontend resolves those against its own palette. [`Depiction`] is
+//!    the exception, selecting a ramp and saying nothing, so the athanor's
+//!    meter can be a *picture* of a fire rather than a reading of one;
+//!    [`Style::depicted`] keeps it off anything that means something.
+//! 3. A linear stream, always. Every frame carries a [`Speech`] beside its
+//!    cells, because a cell grid read back row by row is box-drawing and column
+//!    fragments, not sentences (§14). It is the piece that genuinely cannot be
+//!    retrofitted.
+//! 4. A bounded alphabet — the CP437 repertoire, expressed as Unicode, being
+//!    what both frontends can draw. See [`cp437`].
 //!
-//!    [`Depiction`] is the odd one and the exception that proves the rule: it
-//!    selects a colour ramp and says nothing, where every other channel says
-//!    something and lets the frontend pick the colour. It exists so the
-//!    athanor's meter can be a *picture* of a fire rather than a reading of one.
-//!    See [`Style::depicted`] for the rule that keeps it from painting over
-//!    anything that means something.
-//! 3. **A linear stream, always.** Every frame carries a [`Speech`] alongside
-//!    its cells, because a cell grid read back row by row is box-drawing
-//!    characters and column fragments, not sentences. DESIGN.md §14 makes this
-//!    architectural; it is the piece that genuinely cannot be retrofitted.
-//! 4. **A bounded alphabet.** Glyphs are restricted to what both frontends can
-//!    draw — the CP437 repertoire, expressed as Unicode. See [`cp437`].
-//!
-//! # Painting a screen
+//! Painting a screen:
 //!
 //! ```
 //! use orbs_render::{
@@ -81,9 +73,9 @@
 //! assert_eq!(spoken[1], "east wall breached");
 //! ```
 
-// Public for their module docs: `cp437` documents the repertoire/encoding split,
-// `record` documents the model the whole pipeline is built on. Both re-export
-// their types at the crate root, which is where callers should reach for them.
+// Public for their module docs: the repertoire/encoding split, and the model
+// the whole pipeline is built on. Both re-export their types at the crate root,
+// which is where callers should reach for them.
 pub mod cp437;
 pub mod record;
 
@@ -103,9 +95,8 @@ pub mod liquid;
 mod maze;
 mod mix;
 mod paint;
-// Public for its module docs: it is the one place that decides what a screen
-// *leaving* looks like, and the safety argument for a crossing is written there
-// rather than in `pulse`, whose exemption it deliberately does not lean on.
+// Public for its module docs: it decides what a screen *leaving* looks like,
+// and the safety argument for a crossing is written there, not in `pulse`.
 pub mod passage;
 mod pulse;
 mod pylon;
@@ -122,9 +113,8 @@ mod wrap;
 pub use wrap::Wrap;
 
 pub use bath::Steep;
-// `SIGILS` and `TINTS` alongside the types: the glyph table and the name table
-// have to be indexed together, and a caller that can reach one and not the other
-// cannot check that they correspond.
+// `SIGILS` and `TINTS` alongside the types: they are indexed together, and a
+// caller that can reach one and not the other cannot check they correspond.
 pub use board::{Attempt, Board, SIGILS, TINTS};
 pub use cell::Cell;
 pub use cp437::{REPLACEMENT, cp437_glyph, cp437_index, is_renderable};
@@ -143,19 +133,15 @@ pub use mix::{Band, Stir};
 pub use paint::Painter;
 pub use passage::{Crossing, Kept, Passage, Toward};
 pub use pulse::{CYCLE_SECS, FLIP_HZ};
-// `TALLEST` alongside the type for the reason `SIGILS` travels with `Board`: the
-// board reserves that many rows and the sim raises that many wards, and a caller
-// that can reach one and not the other cannot check they agree.
-// `tower::pylon::MOST` is that caller, and `GROUND`/`WARD` had no equivalent —
-// they were exported beside it out of symmetry and reached by nothing, where a
-// glyph is `row`'s business and a frontend is handed cells rather than chars.
-// `Line` as `CircleLine`: a board's line of wiring, and `line` already means a
-// row of text everywhere else in this crate.
+// `TALLEST` alongside the type for the reason `SIGILS` travels with `Board`:
+// `tower::pylon::MOST` checks the rows reserved against the wards raised.
+// `GROUND`/`WARD` are not exported — a glyph is `row`'s business, and a
+// frontend is handed cells rather than chars.
+// `Line` as `CircleLine`: `line` already means a row of text in this crate.
 pub use circle::{Circle, Given as CircleGiven, Line as CircleLine};
 pub use pylon::{Pylon, TALLEST};
-// `Side`, not `Band` — `mix::Band` already has that name and means a stripe of
-// one reagent in the flask. Two `Band`s in one crate's namespace is a rename
-// waiting to happen.
+// `Side`, not `Band` — `mix::Band` already means a stripe of one reagent in the
+// flask, and two `Band`s in one namespace is a rename waiting to happen.
 pub use lattice::Lattice as LatticeBoard;
 pub use rampart::{Allocation, Rampart, Side as SiegeSide};
 pub use record::{
@@ -172,14 +158,10 @@ pub use viewport::{
 
 /// The first `cells` characters of `text` — what has arrived, if it is arriving.
 ///
-/// The one place text is cut mid-reveal, so the cut is made the same way
-/// everywhere: **on a character boundary**. Frame text is bounded to the CP437
-/// repertoire but is still UTF-8, and slicing by byte could split a multi-byte
-/// glyph into something that is not a `str` and panic.
-///
-/// [`RecordView::revealing`] uses it for command output; the Bevy frontend's boot
-/// sequence uses it for the POST card. Nothing here knows what a second is — a
-/// caller owns the clock and passes a count.
+/// The one place text is cut mid-reveal, so the cut is always on a character
+/// boundary: Frame text is bounded to CP437 but is still UTF-8, and slicing by
+/// byte could split a multi-byte glyph and panic. Nothing here knows what a
+/// second is — a caller owns the clock and passes a count.
 #[must_use]
 pub fn arriving(text: &str, cells: u32) -> &str {
     let taken = usize::try_from(cells).unwrap_or(usize::MAX);
@@ -188,18 +170,13 @@ pub fn arriving(text: &str, cells: u32) -> &str {
 
 /// The byte index of character `count`, or the end of `text`.
 ///
-/// The counterpart to [`arriving`], and here for the same reason: **count
-/// characters, never bytes.** Frame text is bounded to the CP437 repertoire but
-/// is still UTF-8, so a byte offset can split `░` or `é` into something that is
-/// not a `str` and panic on the slice.
+/// The counterpart to [`arriving`], and here for the same reason: count
+/// characters, never bytes, or a byte offset splits `░` and panics.
 ///
-/// It lives in this crate because the two callers have to *agree*: the Bevy
-/// shell uses it to place the caret and slice the viewport, and `orbs-sim`'s
-/// completer uses it to compute the range a Tab replaces — then the shell splices
-/// one into the other. They were two private copies, identical today, in
-/// different crates; the first time either grew a nuance the caret and the
-/// replaced range would have desynchronised and Tab would have overwritten the
-/// wrong bytes.
+/// It lives in this crate because the two callers have to *agree* — the shell
+/// places the caret with it, `orbs-sim`'s completer computes the range a Tab
+/// replaces, and the shell splices one into the other. As two private copies,
+/// the first nuance either grew would have had Tab overwrite the wrong bytes.
 #[must_use]
 pub fn char_index(text: &str, count: usize) -> usize {
     text.char_indices()

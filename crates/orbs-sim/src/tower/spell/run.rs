@@ -16,46 +16,25 @@ use super::block::{Blocked, would_block};
 
 /// Steps one spell may execute in one tick.
 ///
-/// §8's *"execution budget — the orb's attention"*, and at **one** it stops being
-/// only a runaway guard and becomes a mechanic: a spell costs one tick per step,
-/// so **a shorter spell is a faster spell**. Two lines that do what three did is
-/// a real advantage, and a `repeat` whose body could have been tightened is paid
-/// for every turn.
+/// §8's *"execution budget — the orb's attention"*. At one, a spell costs a
+/// tick per step, so a shorter spell is a faster spell — the lever §11.5 wants;
+/// at four, a tight spell and a sloppy one were the same. Everything counts as a
+/// step, or block-heavy spells would be free.
 ///
-/// That is the lever §11.5 wants and four did not give: at four, the difference
-/// between a tight spell and a sloppy one disappeared inside a single tick, and
-/// the only thing the budget bounded was catastrophe.
-///
-/// Everything counts as a step — a command, checking a `wait`, entering a
-/// `repeat`, asking an `if`. Counting only *commands* would make block-heavy
-/// spells free, which is the opposite of the incentive.
-///
-/// **The floor, not the number.** It is what the orb can do untrained, and
-/// [`budget`] is what it can do now — the weave raises it. This stays a `const`
-/// because a default has to exist before any world does: `Taken` is a resource,
-/// and half the tests here build a program without one.
+/// The floor, not the number: [`budget`] is what the orb can do now. A `const`
+/// because a default has to exist before any world does.
 pub const SCRIPT_BUDGET: usize = 1;
 
 /// How many steps a spell may take this tick.
 ///
-/// # Why this stopped being a constant
+/// Not a constant, because a step costs a tick: the budget *is* the speed of
+/// every piece of automation, and §11.5 wants the weave to sell it.
 ///
-/// A step costs a tick, so the budget *is* the speed of every piece of
-/// automation in the game — and §11.5 wants the weave to sell something, while
-/// §8's own note says at one step the budget is *"a mechanic"* rather than a
-/// guard. A number that is both the mechanic and the reward has to be readable
-/// from the tree, and a `const` cannot be.
+/// It reads `Taken`, which stays empty in this version — every Mastery node
+/// ships as a marker, so this answers [`SCRIPT_BUDGET`] today.
 ///
-/// **It reads `Taken`, which is empty and stays empty in this version.** Every
-/// Mastery node ships as a marker, so this answers [`SCRIPT_BUDGET`] today and
-/// the wiring is what is being built — making the tree takeable is the weave
-/// phase's item, not this one. The nodes are authored in `progression.toml` and
-/// on screen, so a player at 24 experience can see what the choice will be.
-///
-/// **Additive, and deliberately not a maximum.** Two nodes granting a step each
-/// give three, because a tier is *one of* its siblings — a player who takes the
-/// step node in two tiers has spent both choices on speed, and reading it as
-/// `max` would silently refund the second.
+/// Additive, not a maximum: two nodes granting a step each give three, because
+/// a tier is *one of* its siblings and `max` would refund the second choice.
 #[must_use]
 pub fn budget(world: &World) -> usize {
     let extra: usize = world.get_resource::<tower::Taken>().map_or(0, |taken| {
@@ -68,12 +47,8 @@ use tower::steps_granted;
 
 /// How long a blocked instruction waits before it is called a failure.
 ///
-/// **Waiting is normal; waiting for ever is not.** A spell that grinds and then
-/// siphons blocks for the whole grind, which is right. A spell waiting on an
-/// instrument nothing will ever free has stopped — and §8's taxonomy is titled
-/// *"scripts always log and never halt"*, so an unbounded silent yield would be
-/// the one thing it forbids, arriving through the mechanism that makes waiting
-/// quiet.
+/// Waiting is normal; waiting for ever is not — §8's taxonomy is titled
+/// *"scripts always log and never halt"*.
 ///
 /// Generous on purpose: longer than any single §10.1 stage, so a legitimate wait
 /// never trips it.
@@ -81,79 +56,59 @@ pub const PATIENCE: u64 = 120;
 
 /// The longest a single `bide` will hold, however long it was told to.
 ///
-/// **A clamp rather than a refusal.** It was load-bearing when the number could
-/// be read off the world — `bide until` resolved a reading, and `watch::many_at`
-/// answers an *endless* pile with `u32::MAX`, so `bide sage` in the laboratory
-/// bought four billion ticks of silence on a step that never reaches
-/// [`PATIENCE`]. That form is a complaint now, so the only way here is an author
-/// writing a very large number; the clamp stays because the failure it produces
-/// is the same one either way — a spell stopped dead and looking finished.
+/// A clamp rather than a refusal. `bide until` once bought four billion ticks of
+/// silence on a step that never reaches [`PATIENCE`]; that form is a complaint
+/// now, but a very large literal produces the same failure — a spell stopped
+/// dead and looking finished.
 ///
-/// An hour, matching `MAX_MEDITATE`: the longest wait anything else in the game
-/// will sit through, so a bide that hits this is visibly a mistake rather than
-/// mysteriously slow. It is deliberately **not** `PATIENCE` — a bide is not
-/// blocked on anything and a long one is legal, so the clamp is a ceiling on
-/// nonsense rather than a limit on patience.
+/// An hour, matching `MAX_MEDITATE`, so a bide that hits it is visibly a mistake
+/// rather than mysteriously slow. Not [`PATIENCE`] — a bide is blocked on
+/// nothing and a long one is legal.
 pub const LONGEST_BIDE: u32 = 3600;
 
 /// How deep a part may call a part.
 ///
-/// **Separate from [`MAX_DEPTH`], because the two guard different things.** That
-/// one bounds `invoke`, where each level is a whole second spell with its own
-/// budget and its own record attribution; this bounds a stack of descents inside
-/// one spell, which costs a [`Descent`] each and nothing else.
+/// Separate from [`MAX_DEPTH`], which bounds `invoke` — each level there is a
+/// whole second spell with its own budget, where this bounds descents inside one
+/// spell.
 ///
-/// The budget is not the guard here either, and for §8's stated reason: at one
-/// step a tick a runaway recursion does not hang the game, it grows the save by
-/// a descent a second until nothing can read it. So it is bounded, and loudly —
-/// the same argument `MAX_DEPTH` makes, arrived at from the other side.
-///
-/// Eight rather than three: a part cannot take an argument, so recursion here is
-/// a shape nobody has a use for yet, and the number only has to be past what a
-/// person would write on purpose.
+/// The budget is not the guard (§8): at one step a tick a runaway recursion does
+/// not hang the game, it grows the save by a [`Descent`] a second until nothing
+/// can read it. Eight rather than three, because the number only has to be past
+/// what a person would write on purpose.
 pub const MAX_PARTS: usize = 8;
 
 /// How many cursors one spell may have running at once.
 ///
-/// **[`MAX_PARTS`]'s argument, and a strand is the more expensive thing.**
-/// `alongside` inside a `repeat` forks one a lap, unbounded, and each carries
-/// its own `pc`, `loops`, `vars` and stack of descents — so a runaway does not
-/// hang the game at one step a tick, it grows the *save* until nothing can read
-/// it. Same guard, same reason, one level out.
+/// [`MAX_PARTS`]'s argument one level out, and a strand is the more expensive
+/// thing: `alongside` inside a `repeat` forks one a lap, each carrying its own
+/// `pc`, `loops`, `vars` and stack of descents.
 ///
-/// **Four rather than eight.** A strand also multiplies what the spell *does*
-/// per tick, because each spends its own budget — so where a runaway recursion
-/// only bloats a file, a runaway fork issues commands. Two is the shape the
-/// language was built for (a producer and a consumer); four leaves room for a
-/// pipeline of three and stops well short of anything a person writes on
-/// purpose.
+/// Four rather than eight, because a strand also multiplies what the spell
+/// *does* per tick — each spends its own budget. Two is the shape the language
+/// was built for; four leaves room for a pipeline of three.
 pub const MAX_STRANDS: usize = 4;
 
 /// How deep `invoke` may nest.
 ///
-/// §8 fixes this at 3 and argues why the budget alone is not a sufficient
-/// recursion guard: exhausting it makes every subsequent instruction *Budget
-/// starved*, which logs at high verbosity only, so all automation would stop
-/// **silently**. Depth-limiting makes runaway recursion loud and diagnosable.
+/// §8 fixes this at 3: exhausting the budget makes every subsequent instruction
+/// *Budget starved*, which logs at high verbosity only, so all automation would
+/// stop silently. A depth limit makes runaway recursion loud.
 pub const MAX_DEPTH: u8 = 3;
 
 /// The spell whose instruction is running, for anything that instruction casts.
 ///
-/// Set around one instruction and cleared after, exactly as the script's
-/// position is. `invoke` reads it to know whether *it* is being called by a
-/// spell or typed by a player, which the intent alone cannot say: both arrive
-/// through the same dispatch, which is the point (§13).
-///
-/// **`None` means a player typed the line themselves.**
+/// Set around one instruction and cleared after. `invoke` reads it to tell a
+/// spell's call from a player's, which the intent cannot say: both arrive
+/// through the same dispatch (§13). `None` means a player typed the line.
 #[derive(Resource, Debug, Default, Clone, Copy)]
 pub struct Caller(pub Option<Casting>);
 
 /// What a nested cast inherits from the run that asked for it.
 ///
-/// A struct rather than the bare depth it started as, because a second fact
-/// turned out to travel the same road and a second resource set beside the
-/// first is two things that must be cleared together — the drift this module
-/// already refuses for `Cwd`.
+/// A struct rather than the bare depth it started as: a second fact travels the
+/// same road, and two resources set beside each other are two things that must
+/// be cleared together.
 #[derive(Debug, Clone, Copy)]
 pub struct Casting {
     /// How many `invoke`s deep the caller already is.
@@ -165,159 +120,119 @@ pub struct Casting {
 /// A spell the orb is working through.
 #[derive(Component, Debug, Clone)]
 pub struct Running {
-    /// Which spell. **A [`NodeId`], not an `Entity`** — `tower::node` is
-    /// explicit that an `Entity` is *"meaningless across a save or a rebuilt
-    /// world"*, and a half-executed spell is state a save has to carry.
+    /// Which spell. A [`NodeId`], not an `Entity` — `tower::node` is explicit
+    /// that an `Entity` is *"meaningless across a save or a rebuilt world"*, and
+    /// a half-executed spell is state a save has to carry.
     pub spell: NodeId,
     /// The program, derived from the spell's text when it was cast.
     ///
-    /// **A view, never the truth.** `Held` stays canonical because §8's
-    /// hot-reload is line-anchored and §8.1's sabotage surface is *"a line
-    /// reordered"* — an enemy mutates the text, and the program is whatever the
-    /// text then means. Re-derived on every cast.
+    /// A view, never the truth: `Held` stays canonical because §8's hot-reload
+    /// is line-anchored and §8.1's sabotage surface is *"a line reordered"*.
     pub program: super::Program,
     /// Where in the program execution has reached.
     ///
-    /// A **path** rather than a line number: `[0]` is the first step, `[2, 1]`
-    /// is the second step inside the third. Blocks made a single `pc`
-    /// insufficient the moment they arrived.
+    /// A *path* rather than a line number: `[0]` is the first step, `[2, 1]` the
+    /// second step inside the third. Blocks made a single `pc` insufficient.
     pub pc: Vec<usize>,
     /// Each open block, outermost first — what it is and what it has left.
     ///
-    /// §8 requires in-flight state be serialisable, and a spell suspended inside
-    /// a loop is exactly that: a save with a `pc` and no counts would resume
-    /// every enclosing loop from its first turn. It records the block's *kind*
-    /// as well, because walking out of an `if` pops one more path element than
-    /// walking out of a `repeat` — see [`Loop`](super::Loop).
+    /// §8 requires in-flight state be serialisable, and a save with a `pc` and
+    /// no counts would resume every enclosing loop from its first turn. The
+    /// block's *kind* too, because walking out of an `if` pops one more path
+    /// element than walking out of a `repeat` — see [`Loop`](super::Loop).
     pub loops: Vec<super::Loop>,
     /// How far through the record stream this spell has read.
     ///
-    /// A **sequence number**, not an index — see `Records::sequence`. A `wait`
-    /// looks only at what arrived after this, which is what lets a spell blocked
-    /// for thirty ticks still see everything that happened in them.
+    /// A *sequence number*, not an index — see `Records::sequence`. A `wait`
+    /// looks only at what arrived after this, which lets a spell blocked for
+    /// thirty ticks still see everything that happened in them.
     pub seen: u64,
     /// How many `invoke`s deep this is.
     pub depth: u8,
     /// Whether this run survives the player leaving the domain it runs in.
     ///
-    /// **Not the same question as `Bound`**, and conflating them was a bug: a
-    /// bound spell that `invoke`s another gives its child a `Running` and no
-    /// `Bound` — the child is not held, it is a step of something that is — so
-    /// asking about the component ended the child the moment the player walked
-    /// out, in exactly the walk-away case `bind` exists to sell.
+    /// Not the same question as `Bound`: a bound spell that `invoke`s another
+    /// gives the child a `Running` and no `Bound`, so asking about the component
+    /// ended the child the moment the player walked out.
     ///
     /// Set at cast from the caller ([`Casting`]): a binding is unattended, a
-    /// standing recast is, and anything either of them casts inherits it. What
-    /// a *player* invokes is attended, and so is everything it invokes — or the
-    /// child would outlive the parent the player's own departure just ended.
+    /// standing recast is, and anything either casts inherits it. What a
+    /// *player* invokes is attended, and so is everything it invokes.
     pub unattended: bool,
     /// The domain this spell runs in.
     ///
-    /// **Fixed, not walked.** A spell is written for a domain and works there;
-    /// `attend` inside one is refused. What remains necessary is the *swap* —
-    /// verb bodies read `Cwd` directly (`siphon` puts what it collects where you
-    /// stand), so the domain is installed around each instruction and the
-    /// player's own position put back. Removing the walk did not remove that.
+    /// Fixed, not walked: a spell is written for a domain and `attend` inside
+    /// one is refused. The *swap* is still necessary — verb bodies read `Cwd`
+    /// directly, so the domain is installed around each instruction.
     pub at: NodeId,
     /// When the current instruction first found itself blocked.
     pub waiting_since: Option<Tick>,
     /// How many ticks the running `bide` was told to spend.
     ///
-    /// **`Some` is what says the bide has started**, which is the whole of what
-    /// it carries now. It was also *"held rather than re-read"*, because `bide
-    /// until` resolved a reading that was itself counting down; the count is a
-    /// literal again, so re-reading would be harmless and the flag is the point.
-    /// Cleared with `waiting_since`, which is the other half of the same
-    /// instruction's state — and saved with it, for the same reason.
+    /// `Some` says the bide has started, which is the whole of what it carries
+    /// now that the count is a literal again. Cleared and saved with
+    /// `waiting_since`, the other half of the same instruction.
     pub biding: Option<u32>,
     /// Lines this casting has already complained about a missing name on.
     ///
-    /// **Once per line per cast.** A question inside a `repeat` is asked every
-    /// turn, and a name the tower cannot place is wrong on the first turn in
-    /// exactly the way it is wrong on the four hundredth — so saying it once is
-    /// the report, and saying it every time is a fault of its own. Cleared when
-    /// the spell is cast and when its text changes under it, so a name that goes
-    /// missing *later* is still heard about.
+    /// Once per line per cast: a question inside a `repeat` is asked every turn,
+    /// and a name the tower cannot place is wrong on the four hundredth turn
+    /// exactly as on the first. Cleared at cast and when the text changes under
+    /// it, so a name that goes missing later is still heard about.
     ///
-    /// A `Vec` rather than a set because it holds one entry per broken line of
-    /// one spell, and its order is part of a deterministic session.
+    /// A `Vec` rather than a set because its order is part of a deterministic
+    /// session.
     pub said: Vec<usize>,
     /// What each name the spell has bound stands for.
     ///
     /// `set best to north` puts one here; `for each way` rebinds `way` at the
-    /// top of every pass. A value is a **name**, already resolved against the
+    /// top of every pass. A value is a *name*, already resolved against the
     /// room — see [`Kind::Let`](super::Kind::Let).
     ///
-    /// # Ordered, and that is not decoration
-    ///
-    /// A `BTreeMap` rather than a `HashMap`: this travels to a save, and a
-    /// document whose rows moved between two runs of one seed would fail the
-    /// lockstep test that pins the snapshot as a complete description.
-    ///
-    /// # Cleared at cast, kept across a mid-flight edit
-    ///
-    /// The same answer `pc` and `loops` get, and for the reason `scribe` gives
-    /// for them: *"a diff that guesses wrong moves a running spell to a line the
-    /// player did not point it at."* A store rebuilt on every save would empty
-    /// an accumulator half way through the loop that was filling it.
+    /// A `BTreeMap` because this travels to a save, and rows that moved between
+    /// two runs of one seed would fail the lockstep test. Kept across a
+    /// mid-flight edit: a store rebuilt on every save would empty an accumulator
+    /// half way through the loop filling it.
     pub vars: std::collections::BTreeMap<String, String>,
     /// Which part's body the current frame is walking, or `None` for the
     /// spell's own.
     ///
-    /// A **name**, resolved through `program::tree` at every step, so a
-    /// definition that moves while the spell runs is still the same part (§8's
-    /// hot-reload is line-anchored and this is the same argument one level up).
+    /// A *name*, resolved through `program::tree` at every step, so a definition
+    /// that moves while the spell runs is still the same part (§8).
     pub part: Option<String>,
     /// The callers waiting for the current frame to return, outermost first.
     ///
-    /// **A stack of frames, not a second `pc`.** A path addresses one tree, and
-    /// a part is a different tree — so `gathering()` inside a `repeat` inside
-    /// `gathering` needs the caller's path *and* its open blocks kept whole
-    /// while the callee walks its own.
+    /// A stack of frames, not a second `pc`: a path addresses one tree and a
+    /// part is a different tree, so `gathering()` inside a `repeat` inside
+    /// `gathering` needs the caller's path *and* its open blocks kept whole.
     pub stack: Vec<Descent>,
     /// Every cursor this spell has, including the one currently swapped into the
     /// fields above.
     ///
-    /// **Never empty while the spell runs.** A cast builds one; `alongside`
-    /// appends; a cursor that runs off the end is removed, and the spell ends
-    /// when the last one goes. `step_one` is where the order they step in is
-    /// decided, and `swap_in` is why the active one lives in `Running`'s own
-    /// fields rather than being indexed at every site.
+    /// Never empty while the spell runs. A cast builds one, `alongside` appends,
+    /// a cursor that runs off the end is removed, and the spell ends when the
+    /// last goes.
     pub strands: Vec<Strand>,
     /// Whether the cursor now swapped in has run off the end of its outermost
     /// frame.
     ///
-    /// **A flag rather than `finish` being called from inside the step loop**,
-    /// because running out is now a fact about a *cursor* and ending is a fact
-    /// about the *spell*. The loop reads this, drops the strand, and finishes
-    /// only when none is left — so a producer that returns while its consumer is
-    /// still pulling no longer takes the consumer down with it.
+    /// A flag rather than `finish` called from inside the step loop, because
+    /// running out is a fact about a *cursor* and ending one about the *spell*:
+    /// a producer that returns no longer takes its consumer down with it.
     pub spent: bool,
 }
 
 /// One cursor: where a spell is, and everything private to being there.
 ///
-/// # What is here and what is not
+/// The split is *per-position* against *per-spell*. `seen` is here: two cursors
+/// sharing one would have cursor A satisfying a wait move cursor B past events
+/// B never saw. What stays on [`Running`] is what a spell has one of however
+/// many places it is in at once — which spell, its `program`, its `invoke`
+/// depth, whether it survives the player leaving, the room, and `said`.
 ///
-/// The split is *per-position* against *per-spell*, and one field moved after a
-/// review put it on the wrong side. `seen` is here — it is the record-stream
-/// mark a `wait` reads and `wait_for` writes, so two cursors sharing one would
-/// have cursor A satisfying a wait move cursor B past events B never saw,
-/// silently, and only for spells that use `wait`.
-///
-/// What stays on [`Running`] is what a spell has one of however many places it
-/// is in at once: which spell it is, its compiled `program`, how deep an
-/// `invoke` chain it sits in, whether it survives the player leaving, the room
-/// it runs in, and `said` — the once-per-line-per-cast rationing, which is about
-/// not repeating a complaint to a *reader* and so belongs to the cast.
-///
-/// # `Strand`, not `Cursor`
-///
-/// `bind_cursors` in this file already means the counters a `for each` walks
-/// with, and one word for two things in one module is how the next reader merges
-/// them. [`Descent`] is a third neighbour and is genuinely different again: a
-/// descent is a suspended frame *inside* a strand, and a strand has a stack of
-/// them.
+/// `Strand` rather than `Cursor` because `bind_cursors` already means the
+/// counters a `for each` walks with. [`Descent`] is different again: a suspended
+/// frame *inside* a strand.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Strand {
     /// Where this cursor is — see [`Running::pc`].
@@ -369,45 +284,17 @@ impl Running {
 
 /// One caller, waiting for the part it called to finish.
 ///
-/// # Not the obvious word, and the same reason `Nesting` is not
+/// Not the obvious word: the usual one is among the four layout names
+/// `tests/boundaries.rs` forbids under `orbs-sim/src`. A call stack really is a
+/// stack of descents.
 ///
-/// The word for this everywhere else in computing is one of the four layout
-/// names `tests/boundaries.rs` forbids anywhere under `orbs-sim/src` — rule 2,
-/// matched by *substring* so the guard is unarguable rather than clever. The
-/// parser's stack entry already pays this toll; this is the second, and a call
-/// stack really is a stack of descents.
+/// `vars` is here, reversing the decision to share them (§19): a part takes
+/// arguments now, so `for each way` inside a part no longer rebinds the caller's
+/// `way` and a part cannot reach a name it was not given.
 ///
-/// # `vars` is here, and that is the decision — reversed once
-///
-/// The roadmap's shape for this was `(spell, pc, loops, vars)`, and it was built
-/// **without** the `vars`: variables were shared, on the argument that *"a part
-/// takes no arguments, so a private store would leave it with no way to be told
-/// anything at all"* (§19). A part takes arguments now, which removes that
-/// premise rather than overruling it — so the store is per-frame, and the
-/// parameters are what fills it.
-///
-/// What this bought, in the order it matters:
-///
-/// - **A call says what it hands over, at the call.** `between(wellspring,
-///   near)` reads as a sentence. The three `let` pairs it replaced were four
-///   lines of ceremony per call and named nothing at the point of use.
-/// - **`for each way` inside a part no longer rebinds the caller's `way`.**
-///   That was the stated cost of sharing and it is simply gone.
-/// - **A part cannot reach a name it was not given**, so reading one is a local
-///   act: its parameters and its own `let`s are all there is.
-///
-/// The cost, stated as plainly as the old one was: a part has **no** access to
-/// the caller's bindings, so anything it needs must be passed. For a language
-/// whose programs fit on a screen that is the cheaper rule to teach — *what
-/// goes in the brackets is what it can see* — and it is the one a reader can
-/// check by looking at one line.
-///
-/// `spell` is not here, and that one is **settled**: a spell is contained to a
-/// single `.spell` file, so every descent belongs to the spell that opened it
-/// and there is nothing for the field to say (§19). A spell reaching into
-/// another spell's text is what `invoke` is for, and an `invoke` is a second
-/// [`Running`] with its own budget rather than a descent — which is the
-/// distinction that keeps this struct one spell wide.
+/// `spell` is not here: a spell is contained to one `.spell` file, so every
+/// descent belongs to the spell that opened it (§19). Reaching into another
+/// spell's text is `invoke`, a second [`Running`] with its own budget.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Descent {
     /// The body this frame was walking — `None` for the spell's own.
@@ -430,11 +317,9 @@ pub struct Descent {
 /// the previous tick left it rather than racing the completion of the run it is
 /// waiting on.
 pub fn advance(world: &mut World) {
-    // **Ordered by `NodeId`, never by a query's iteration order.** `tower::node`
-    // records archetype order as a bug that changes what a phrase resolves to
-    // with no test catching it, and adding or removing `Running` moves an entity
-    // between tables. Two spells' instructions must interleave the same way on
-    // every run from a seed.
+    // Ordered by `NodeId`, never by a query's iteration order: adding or
+    // removing `Running` moves an entity between tables, and two spells'
+    // instructions must interleave the same way on every run from a seed.
     let mut running: Vec<(Entity, NodeId)> = world
         .query::<(Entity, &Running)>()
         .iter(world)
@@ -443,18 +328,13 @@ pub fn advance(world: &mut World) {
     running.sort_unstable_by_key(|(_, spell)| *spell);
 
     for (entity, _) in running {
-        // **An invocation needs you standing there, and this is what makes that
-        // true.** §19 has always said an invoked spell *"needs you standing
-        // there"*, and nothing enforced it: the domain is fixed at cast and the
-        // player's position was never read again, so walking out and leaving one
-        // running was free. That left `bind` with nothing to sell — the one
-        // thing §8 says it adds was already there for nothing.
+        // An invocation needs you standing there: the domain is fixed at cast
+        // and the player's position was never read again, so walking out and
+        // leaving one running was free (§19).
         //
-        // A **bound** spell is exactly the one that survives this, which is the
-        // whole of what concentration buys — and so is anything a bound spell
-        // casts. See [`Running::unattended`]: asking about the `Bound`
-        // *component* here killed a held spell's nested `invoke` on the tick the
-        // player walked out, because only the parent wears the component.
+        // A bound spell survives it, and so does anything it casts — see
+        // [`Running::unattended`]. Asking about the `Bound` *component* killed a
+        // held spell's nested `invoke`, since only the parent wears it.
         if !world
             .get::<Running>(entity)
             .is_some_and(|state| state.unattended)
@@ -462,15 +342,13 @@ pub fn advance(world: &mut World) {
         {
             continue;
         }
-        // **Everything this spell emits is marked as its doing**, set once here
-        // rather than at the emit sites — a spell's output *is* what the ordinary
-        // commands emit, so there is nothing at those sites to change and every
-        // future one would have had to remember.
+        // Everything this spell emits is marked as its doing, set once here
+        // rather than at the emit sites — a spell's output *is* what the
+        // ordinary commands emit, so every future one would have to remember.
         //
         // The transcript then draws what the player did and the log keeps
-        // everything (`FieldName::Spell`). A `repeat` loop pushes several records
-        // every few ticks for as long as it runs, and the player's own last line
-        // was scrolling off in seconds.
+        // everything (`FieldName::Spell`); a `repeat` pushing records every few
+        // ticks scrolled the player's own last line off in seconds.
         let named = world
             .get::<Running>(entity)
             .map(|state| spell_name(world, state));
@@ -485,10 +363,9 @@ pub fn advance(world: &mut World) {
 
 /// Whether the player has walked out on this invocation, ending it if so.
 ///
-/// **Compared by domain, not by node.** `attend alembic` stands the player at a
-/// fixture *inside* the laboratory, and a spell running there is one they are
-/// watching — asking whether the two entities are equal would stop an invocation
-/// every time its owner leaned over an instrument.
+/// Compared by domain, not by node: `attend alembic` stands the player at a
+/// fixture *inside* the laboratory, so comparing entities would stop an
+/// invocation every time its owner leaned over an instrument.
 fn left_it(world: &mut World, entity: Entity) -> bool {
     let Some(state) = world.get::<Running>(entity) else {
         return false;
@@ -532,32 +409,21 @@ fn set_attribution(world: &mut World, spell: Option<&str>) {
 
 /// Step every cursor this spell has, each with its own budget.
 ///
-/// # One spell, several places in it
+/// `alongside` forks a second cursor (§8, [`Strand`]). They step in `strands`
+/// order, each spending its whole budget before the next begins — batch rather
+/// than round-robin, which is a determinism rule rather than a preference: it is
+/// the rule [`advance`] uses one level up, and the two are identical at budget 1,
+/// so nothing written today would pin them. The pin is
+/// `two_cursors_interleave_the_same_way_at_two_steps_a_tick`.
 ///
-/// `alongside` forks a second cursor (§8, [`Strand`]). They are stepped in
-/// **`strands` order, each spending its whole budget before the next begins** —
-/// batch rather than round-robin, and the choice is a determinism rule rather
-/// than a preference:
-///
-/// - It is the rule [`advance`] already uses one level up, where every `Running`
-///   spends its whole budget in `NodeId` order. Two spells and two cursors of
-///   one spell then interleave by the same law, and there is one thing to know.
-/// - The two are **identical at budget 1** and diverge the moment `steps_1` is
-///   taken, so a test written today would pass against either and pin neither.
-///   §19 records that shape going wrong; the pin is
-///   `two_cursors_interleave_the_same_way_at_two_steps_a_tick`.
-///
-/// A cursor that runs off the end is removed and the rest carry on; the spell
-/// ends when the last one does. A cursor that blocks yields **only itself** —
-/// see [`step_strand`], which is the whole of what made a producer and a
-/// consumer in one file possible.
+/// A cursor that runs off the end is removed and the rest carry on. One that
+/// blocks yields only itself — see [`step_strand`].
 fn step_one(world: &mut World, entity: Entity) {
     let mut index = 0;
     loop {
-        // **Re-read every lap, because stepping can change the count.** A strand
-        // that ran off the end is removed here and `alongside` appends one, so a
-        // length taken before the loop would step a strand that had gone or miss
-        // one that had arrived.
+        // Re-read every lap, because stepping changes the count: a spent strand
+        // is removed here and `alongside` appends one, so a length taken before
+        // the loop would step a strand that had gone or miss one that arrived.
         let Some(count) = world
             .get::<Running>(entity)
             .map(|state| state.strands.len())
@@ -576,10 +442,9 @@ fn step_one(world: &mut World, entity: Entity) {
             return;
         }
         if swap_out(world, entity, index) {
-            // **The strand went, so the next one is at this index.** Removed
-            // with `remove`, never `swap_remove`: reordering live cursors would
-            // change how they interleave and break replay for any spell that
-            // outlives a fork.
+            // The strand went, so the next is at this index. `remove`, never
+            // `swap_remove`: reordering live cursors would change how they
+            // interleave and break replay for a spell that outlives a fork.
             continue;
         }
         index += 1;
@@ -588,24 +453,15 @@ fn step_one(world: &mut World, entity: Entity) {
 
 /// Move `strands[index]` into the fields the runner walks.
 ///
-/// # Why a swap rather than an index everywhere
+/// A swap rather than an index everywhere, because the ~110 places that touch
+/// `pc`, `loops`, `vars`, `part`, `stack`, `seen`, `waiting_since` and `biding`
+/// would each have to name a cursor — one silent failure mode per site. So the
+/// active cursor lives in `Running`'s own fields and the others are parked
+/// beside it, which is `Cwd`'s idiom one level down.
 ///
-/// Every one of the ~110 places that touch `pc`, `loops`, `vars`, `part`,
-/// `stack`, `seen`, `waiting_since` and `biding` would otherwise have to name a
-/// cursor — in the runner, in `capture`, in `adopt` and in `invoke`. That is a
-/// mechanical change with no player-visible effect and one silent failure mode
-/// per site, and §19 has enough of those.
-///
-/// So the active cursor lives in `Running`'s own fields exactly as it always
-/// has, and the others are parked beside it. This is `Cwd`'s idiom one level
-/// down — `asked_where_the_spell_is` installs the spell's room around a read for
-/// the same reason — and the swap is confined to these two functions.
-///
-/// **The cost, stated plainly:** `Running`'s cursor fields mean *the cursor
-/// currently stepping*, which is only unambiguous inside [`step_one`]. Anything
-/// reading them from outside — `Sim::running_line`, the editor's gutter marker —
-/// gets whichever strand was put back last. That is honest for one cursor and
-/// arbitrary for two, and it is [`line_of`]'s problem rather than this one's.
+/// The cost: `Running`'s cursor fields mean *the cursor currently stepping*,
+/// unambiguous only inside [`step_one`]. Anything reading them from outside gets
+/// whichever strand was put back last — [`line_of`]'s problem, not this one's.
 fn swap_in(world: &mut World, entity: Entity, index: usize) {
     let Some(mut running) = world.get_mut::<Running>(entity) else {
         return;
@@ -640,38 +496,20 @@ fn swap_out(world: &mut World, entity: Entity, index: usize) -> bool {
 
 /// What a retimed spell's budget is worth after the enemy has had it.
 ///
-/// §8.1's **trigger-clock** surface, and this is the whole of what it does: a
-/// spell whose schedule has been dragged gets fewer instructions a tick, so it
-/// falls behind the world it was written against without a single line of it
-/// being wrong.
+/// §8.1's *trigger-clock* surface: a spell whose schedule has been dragged gets
+/// fewer instructions a tick, so it falls behind the world it was written
+/// against without a single line of it being wrong — the subtlest of the four,
+/// since it reads perfectly and only `verify` finds it.
 ///
-/// **That is what makes it the subtlest of the four.** A rewritten spell shows
-/// its lie to `peruse`; a retimed one reads perfectly and simply stops keeping
-/// up, which is exactly the failure a player will blame on their own logic
-/// first. `verify` is the only thing that finds it.
-///
-/// **It skips whole ticks; it does not shave the budget.** The shipped
-/// `SCRIPT_BUDGET` is 1 until the weave grants more, so `allowance - drag`
-/// floored at one returned *one* for every drag value — the surface announced
-/// itself, marked the spell `Poisoned`, cost an audit and a purge, and changed
-/// nothing at all.
-///
-/// So a dragged spell runs on one tick in every `drag + 1` and gets **nought**
-/// on the others. §8's *"scripts always log and never halt"* is kept by the
-/// **periodicity**, not by a floor: the cycle always contains a tick that runs,
-/// so the spell is slowed and never stopped.
-///
-/// **The doc for all of that used to sit on `dragged_for_test`** — a
-/// `#[cfg(test)]` pass-through — so a release build had no explanation of a
-/// non-obvious global-tick gate at all, and what it did say described the
-/// subtract-and-floor design that had already been replaced.
+/// It skips whole ticks rather than shaving the budget, because the shipped
+/// `SCRIPT_BUDGET` is 1: `allowance - drag` floored at one returned *one* for
+/// every drag value. So a dragged spell runs on one tick in every `drag + 1`,
+/// keeping §8's *"scripts always log and never halt"* by periodicity.
 fn dragged(world: &World, entity: Entity, allowance: usize) -> usize {
-    // **`entity` is the spell's own node**, because `invoke` inserts `Running`
-    // onto it — so `Retimed` is already here and there is nothing to look up.
-    // It rides the node rather than the `Running`, which is where `Bound` sits
-    // and for the same reason: a `Running` is torn down and rebuilt every lap,
-    // so sabotage hung on one would be repaired for free by the spell simply
-    // running off the end.
+    // `entity` is the spell's own node, because `invoke` inserts `Running` onto
+    // it. `Retimed` rides the node rather than the `Running`, where `Bound`
+    // sits: a `Running` is rebuilt every lap, so sabotage hung on one would be
+    // repaired by the spell running off the end.
     let Some(drag) = world
         .get::<super::super::Retimed>(entity)
         .map(|retimed| retimed.drag)
@@ -697,35 +535,30 @@ pub(crate) fn dragged_for_test(world: &World, entity: Entity, allowance: usize) 
 
 /// Run up to [`budget`] instructions of the cursor that is currently swapped in.
 ///
-/// **Read once, before the first step.** A node cannot be taken mid-tick, so
-/// re-reading it per step would be a resource lookup for an answer that cannot
-/// change — and if it ever could, a budget that grew while it was being spent is
-/// the shape a loop guard must never have.
+/// Read once, before the first step. A node cannot be taken mid-tick, and if it
+/// ever could, a budget that grew while it was being spent is the shape a loop
+/// guard must never have.
 fn step_strand(world: &mut World, entity: Entity) {
     let allowance = dragged(world, entity, budget(world));
     for _ in 0..allowance {
-        // **Before the state is read, so every step sees its cursors.** Entry
-        // and lap both arrive here, which is what makes this the one writer —
-        // see [`bind_cursors`].
+        // Before the state is read, so every step sees its cursors. Entry and
+        // lap both arrive here, which makes this the one writer — see
+        // [`bind_cursors`].
         bind_cursors(world, entity);
         let Some(state) = world.get::<Running>(entity).cloned() else {
             return;
         };
 
         let Some(step) = super::program::at(walking(&state), &state.pc).cloned() else {
-            // **Off the end of a *frame*, which is not the end of the spell.**
-            // A part that has run out returns to whoever called it; only the
-            // outermost frame running out finishes anything. This is the one
-            // place a frame is popped, exactly as `finish` is the one place a
-            // spell ends.
+            // Off the end of a *frame*, which is not the end of the spell: a
+            // part that has run out returns to its caller, and only the
+            // outermost frame finishes anything.
             if returned(world, entity) {
                 continue;
             }
-            // **This *cursor* is done, which is not the same as the spell.** It
-            // used to finish here, and with `alongside` that would have a
-            // producer running out and taking its consumer down mid-pull. The
-            // flag is read by `swap_out`, which drops the strand; `finish` is
-            // called by [`ended`] when the last one has gone.
+            // This *cursor* is done, which is not the spell. Finishing here
+            // would have a producer running out and taking its consumer down
+            // mid-pull; [`ended`] calls `finish` when the last has gone.
             if let Some(mut running) = world.get_mut::<Running>(entity) {
                 running.spent = true;
             }
@@ -733,48 +566,39 @@ fn step_strand(world: &mut World, entity: Entity) {
             return;
         };
 
-        // A **definition** is stepped past where it stands. Reaching one is
-        // ordinary — a spell is read top to bottom and its parts are written
-        // among its lines — and running it here would do the work twice for
-        // anyone who also called it.
+        // A definition is stepped past where it stands. Reaching one is
+        // ordinary — a spell is read top to bottom — and running it here would
+        // do the work twice for anyone who also called it.
         if matches!(step.kind, super::Kind::Part { .. }) {
             advance_pc(world, entity);
             continue;
         }
 
-        // A **call** suspends this frame and opens one on the part.
+        // A call suspends this frame and opens one on the part.
         if let super::Kind::Call { name, args } = &step.kind {
             called(world, entity, &state, step.line, name, args);
             continue;
         }
 
-        // A **fork** starts the part as a cursor of its own and steps past.
+        // A fork starts the part as a cursor of its own and steps past.
         if let super::Kind::Alongside { name, args } = &step.kind {
             forked(world, entity, &state, step.line, name, args);
             continue;
         }
 
-        // Entering a block **spends a budget step**, which looks wasteful and is
-        // the guard: a `repeat` whose body never spends any — an empty one, or
-        // one whose every step is a `wait` that is already satisfied — would
-        // otherwise be an unbounded loop inside a single tick, and the game
-        // would stop. The budget is the only thing standing between a player's
-        // typo and a hang.
+        // Entering a block spends a budget step, which looks wasteful and is the
+        // guard: a `repeat` whose body never spends any — empty, or every step
+        // an already-satisfied `wait` — would be an unbounded loop inside one
+        // tick. The budget is all that stands between a typo and a hang.
         if let super::Kind::Repeat { times, until, body } = &step.kind {
-            // **The guard is asked on the way in as well as the way out**, which
-            // is Autonauts' rule and the difference between a guard and a
-            // do-while: `repeat until the stacks is idle` with the stacks already
-            // shut must run zero times, because the first pass is where a spell
-            // does damage. An unanswerable question stops it too — see
-            // `guard_answers` for why that is the opposite of `if`'s rule.
+            // The guard is asked on the way in as well as the way out, which is
+            // the difference between a guard and a do-while: `repeat until the
+            // stacks is idle` with the stacks already shut must run zero times.
+            // An unanswerable question stops it too — see `guard_answers`.
             //
-            // **Asked in the spell's own room, exactly as an `if` is.** `holds`
-            // finds a place through `Cwd`, so answering a guard against wherever
-            // the *player* happens to be standing made a **bound** spell — which
-            // by design runs while they are elsewhere — see nothing, answer
-            // `None`, and stop. `dev_spells.toml`'s `threading` is bound and its
-            // bound is `repeat until the stacks is idle`, so the flagship case
-            // was the broken one.
+            // Asked in the spell's own room, as an `if` is: `holds` finds a
+            // place through `Cwd`, so answering against wherever the *player*
+            // stands made a bound spell see nothing and stop.
             if let Some(condition) = until {
                 let at = node_of(world, state.at);
                 let (answer, missing) = asked_where_the_spell_is(world, at, condition);
@@ -786,15 +610,11 @@ fn step_strand(world: &mut World, entity: Entity) {
                     continue;
                 }
             }
-            // An empty body is stepped **past**, not into. Descending into one
-            // puts the path somewhere `at` cannot resolve, which the runner
-            // reads as the end of the spell — so `repeat 2 / end / survey` ended
-            // before the survey rather than after it.
-            // **`repeat 0` is stepped past too.** The turn counter was only
-            // consulted on the way *out* (`left > 1`), so a block was always
-            // entered once before anything asked whether it should run at all —
-            // `repeat 0` did its body exactly once. That is also §8.1's sabotage
-            // shape: an enemy zeroing a count still bought one execution.
+            // An empty body is stepped past, not into: descending puts the path
+            // somewhere `at` cannot resolve, which the runner reads as the end
+            // of the spell. `repeat 0` too — the turn counter was consulted only
+            // on the way *out*, so the body ran once, which is also §8.1's shape
+            // where an enemy zeroing a count bought one execution.
             if body.is_empty() || *times == Some(0) {
                 advance_pc(world, entity);
                 continue;
@@ -806,11 +626,10 @@ fn step_strand(world: &mut World, entity: Entity) {
             continue;
         }
 
-        // An `if` asks the world a question and takes one half or the other.
-        // **A branch is always entered**, even when the answer is no and the
-        // `else` is empty — walking into an empty block and straight out of it
-        // is what `step_past` already does correctly, and special-casing the
-        // empty half here would be a second exit to keep in step with the first.
+        // An `if` asks the world a question and takes one half or the other. A
+        // branch is always entered, even an empty `else` — `step_past` already
+        // walks in and straight out correctly, and special-casing it here would
+        // be a second exit to keep in step with the first.
         if let super::Kind::If {
             condition,
             body,
@@ -831,16 +650,13 @@ fn step_strand(world: &mut World, entity: Entity) {
             });
             let (answer, missing) = asked.unwrap_or((None, Vec::new()));
 
-            // **`None` is a third answer, and it has to be said out loud.** The
-            // question named a place the tower does not have — §8's *Referent
-            // missing*, not the answer being no.
+            // `None` is a third answer and has to be said out loud: the question
+            // named a place the tower does not have — §8's *Referent missing*,
+            // not the answer being no.
             //
-            // **Once per line per cast.** It was once per *evaluation*, which is
-            // right for a spell that asks a question and stops and wrong for one
-            // that asks it inside a `repeat`: a single bad name emitted a Danger
-            // record every tick for as long as the spell ran. What a player needs
-            // is to be told, not to be told again. `said` is cleared when the
-            // spell is cast and when its text changes, so a fix is heard about.
+            // Once per line per cast, not per evaluation: inside a `repeat` a
+            // single bad name emitted a Danger record every tick. `said` is
+            // cleared at cast and when the text changes, so a fix is heard about.
             if !missing.is_empty() && !already_said(world, entity, step.line) {
                 say_failure(
                     world,
@@ -851,11 +667,10 @@ fn step_strand(world: &mut World, entity: Entity) {
                 );
             }
 
-            // **Neither half, when nobody can answer.** It used to fall through
-            // to `else`, which is worse than useless: a spell with one bad name
-            // took the same branch for ever and looked exactly like a condition
-            // someone had inverted — §19's own words for the last bug here. A
-            // question the orb cannot answer decides nothing.
+            // Neither half, when nobody can answer. Falling through to `else`
+            // had a spell with one bad name take the same branch for ever,
+            // looking exactly like an inverted condition. A question the orb
+            // cannot answer decides nothing.
             let Some(holds) = answer else {
                 advance_pc(world, entity);
                 continue;
@@ -870,19 +685,16 @@ fn step_strand(world: &mut World, entity: Entity) {
             continue;
         }
 
-        // **A set is walked, and its cursor is bound before the body runs.**
-        // Entering is one budget step, exactly as a `repeat` is and for the same
-        // reason: a `for each` over an empty set that cost nothing would be a
-        // free lap, and the budget is what stands between a spell and a hang.
+        // A set is walked, and its cursor bound before the body runs. Entering
+        // costs a budget step, as a `repeat` does: a `for each` over an empty
+        // set that cost nothing would be a free lap.
         if let super::Kind::Each { group, body } = &step.kind {
             let members = node_of(world, state.at)
                 .map(|room| tower::group_at(world, room, group).len())
                 .unwrap_or_default();
-            // Nothing to walk, or nothing to do with it. Both are stepped
-            // **past** rather than into, which is the answer `repeat 0` and an
-            // empty body already get — descending would put the path somewhere
-            // `at` cannot resolve, which the runner reads as the end of the
-            // spell.
+            // Nothing to walk, or nothing to do with it. Stepped past rather
+            // than into, as `repeat 0` and an empty body are: descending puts
+            // the path somewhere `at` cannot resolve.
             if members == 0 || body.is_empty() {
                 advance_pc(world, entity);
                 continue;
@@ -894,10 +706,9 @@ fn step_strand(world: &mut World, entity: Entity) {
             continue;
         }
 
-        // **A binding costs a step, like everything else** (§8: *"everything
-        // counts as a step"*). It reads no world and takes no slot, but a line
-        // that were free would make a spell of nothing but `set` an unbounded
-        // loop inside one tick.
+        // A binding costs a step, like everything else (§8). It reads no world
+        // and takes no slot, but a free line would make a spell of nothing but
+        // `set` an unbounded loop inside one tick.
         if let super::Kind::Let { name, value } = &step.kind {
             let stood_for = substituted(&state.vars, value);
             if let Some(mut running) = world.get_mut::<Running>(entity) {
@@ -928,16 +739,13 @@ fn step_strand(world: &mut World, entity: Entity) {
             continue;
         }
 
-        // **A `bide` spends the rest of the tick and nothing else.** It reads no
-        // world and issues no command, so it cannot fail and cannot be refused —
-        // and it deliberately does *not* consult `PATIENCE`, because a bide is
-        // not blocked on anything. A spell waiting for ever is a fault; a spell
-        // counting to three is doing what it was written to do.
+        // A `bide` spends the rest of the tick and nothing else. It reads no
+        // world and issues no command, so it cannot fail — and it deliberately
+        // does not consult `PATIENCE`, because a bide is blocked on nothing.
         //
-        // The step's own count is left alone and the *runner* holds how far
-        // through it is, exactly as a `repeat`'s laps are held: a program is
-        // compiled once and cast many times, so a countdown written into the
-        // step would leave the second cast biding zero.
+        // The *runner* holds how far through it is, as a `repeat`'s laps are
+        // held: a program is compiled once and cast many times, so a countdown
+        // written into the step would leave the second cast biding zero.
         if let super::Kind::Bide(delay) = &step.kind {
             if bide(world, entity, &state, *delay) == Progress::Blocked {
                 return;
@@ -948,21 +756,18 @@ fn step_strand(world: &mut World, entity: Entity) {
         let super::Kind::Command(line) = step.kind else {
             continue;
         };
-        // **Bound names stand for what they hold, before the parser sees the
-        // line.** `follow way` has to reach the dispatch as `follow north`, and
-        // the substitution is word-wise rather than textual so a variable called
-        // `n` cannot rewrite the middle of `north`.
+        // Bound names stand for what they hold before the parser sees the line:
+        // `follow way` has to reach the dispatch as `follow north`, word-wise
+        // so a variable called `n` cannot rewrite the middle of `north`.
         let line = substituted(&state.vars, &line);
 
-        // The spell's own position, swapped in for exactly the length of one
-        // instruction and swapped back before anything else can see it.
+        // The spell's own position, swapped in for the length of one instruction
+        // and swapped back before anything else can see it.
         //
-        // **A save/restore rather than a position threaded through every verb
-        // body.** The alternative touches `move`, `wield`, `empty`, `siphon`,
-        // `stop`, `purge`, `divine` and all five per-instrument verbs, and every
-        // one of them would grow a parameter it uses once. This is strictly
-        // nested, and `scene::rebuild` runs in a later pass than this one, so
-        // nothing outside observes the swap.
+        // A save/restore rather than a position threaded through every verb
+        // body, which would grow a once-used parameter on a dozen verbs. This is
+        // strictly nested and `scene::rebuild` runs in a later pass, so nothing
+        // outside observes the swap.
         let player = world.resource::<Cwd>().0;
         let Some(at) = node_of(world, state.at) else {
             finish(world, entity, &state);
@@ -976,7 +781,7 @@ fn step_strand(world: &mut World, entity: Entity) {
 
         let outcome = run_line(world, entity, &state, &line);
 
-        // The player's position, back. **Nothing is read out of the swap** — the
+        // The player's position, back. Nothing is read out of the swap: the
         // spell's domain is fixed, so where the instruction left `Cwd` is not a
         // fact worth keeping. It was, while `attend` walked.
         world.insert_resource(Cwd(player));
@@ -990,18 +795,13 @@ fn step_strand(world: &mut World, entity: Entity) {
 
 /// `text` with every bound name replaced by what it stands for.
 ///
-/// **Word by word, never as a substring.** A variable called `n` substituted
-/// textually would rewrite `north` into `<value>orth`, and a spell whose names
-/// silently changed shape is the class of defect this language refuses
-/// everywhere else. Splitting on whitespace also means a bound name can only
-/// ever replace a whole word, which is what a player writing `follow way` means.
+/// Word by word, never as a substring: a variable called `n` substituted
+/// textually would rewrite `north` into `<value>orth`.
 ///
-/// Case-folded on the way in, because `set` lowercases the name it binds and a
-/// player who writes `Way` in the body meant the same cursor.
-///
-/// Not recursive: a value is a name, and a name that stood for another name
-/// would be a chain nobody wrote. `set best to way` resolves `way` **once**,
-/// where the line runs — see [`Kind::Let`](super::Kind::Let).
+/// Case-folded on the way in, because `set` lowercases the name it binds. Not
+/// recursive: a name standing for another name would be a chain nobody wrote, so
+/// `set best to way` resolves `way` once, where the line runs — see
+/// [`Kind::Let`](super::Kind::Let).
 fn substituted(vars: &std::collections::BTreeMap<String, String>, text: &str) -> String {
     if vars.is_empty() {
         return text.to_owned();
@@ -1035,24 +835,18 @@ fn standing_for(
 
 /// Point every open `for each`'s cursor at the member it is on.
 ///
-/// # Refreshed here rather than written once on entry
+/// Refreshed here rather than written once on entry, because a cursor moves on
+/// every lap and the lap happens inside
+/// [`step_past`](super::program::step_past), which knows nothing about sets.
+/// Binding on entry alone would leave `way` holding the first member for the
+/// whole loop.
 ///
-/// A cursor moves on every lap, and the lap happens inside
-/// [`step_past`](super::program::step_past) — which is pure, has no world, and
-/// deliberately knows nothing about sets. Binding on entry alone would leave
-/// `way` holding the first member for the whole loop.
+/// One place, at the top of every step, from the loop stack: idempotent and
+/// correct for entry and lap alike. Two writers for one binding is how the two
+/// exits from a block came to disagree — see [`Loop`](super::Loop).
 ///
-/// So it is done in **one** place, at the top of every step, from the loop stack
-/// itself: idempotent, cheap, and correct for entry and lap alike. Two writers
-/// for one binding is how the two exits from a block came to disagree, which
-/// [`Loop`](super::Loop) already records.
-///
-/// # Walking the stack against the path
-///
-/// `loops` records one entry per descent, and the path elements each costs are
-/// not the same: a `repeat` and a `for each` cost one, a branch of an `if` costs
-/// two (`enter_branch` pushes the half *and* the step). Walking them together is
-/// what turns a stack position into the step that opened it.
+/// The stack is walked against the path because the elements each descent costs
+/// differ: a `repeat` and a `for each` one, a branch of an `if` two.
 fn bind_cursors(world: &mut World, entity: Entity) {
     let Some(state) = world.get::<Running>(entity).cloned() else {
         return;
@@ -1101,12 +895,10 @@ enum Progress {
 
 /// Hold until something the spell named happens.
 ///
-/// # Only what arrived since the cursor
-///
-/// The spell reads records after its own `seen` mark, which is what lets one
-/// blocked for thirty ticks still see everything that happened in them — and
-/// what stops the **second** iteration of a loop returning instantly on the
-/// first iteration's event. A `wait` waits for something *new*.
+/// Only what arrived since the cursor: reading records after the `seen` mark
+/// lets a spell blocked for thirty ticks still see everything that happened in
+/// them, and stops the second turn of a loop returning instantly on the first
+/// turn's event. A `wait` waits for something *new*.
 fn wait_for(world: &mut World, entity: Entity, state: &Running, wanted: &str) -> Progress {
     let stream = world.resource::<Scrollback>().records();
     let dropped = stream.dropped();
@@ -1142,9 +934,8 @@ fn wait_for(world: &mut World, entity: Entity, state: &Running, wanted: &str) ->
         }
     };
 
-    // Waiting is normal; waiting for ever is not. §8's taxonomy is titled
-    // *"scripts always log and never halt"*, so an unbounded silent wait would
-    // be the one thing it forbids.
+    // Waiting is normal; waiting for ever is not — §8's *"scripts always log
+    // and never halt"*.
     if tick.get().saturating_sub(since.get()) >= PATIENCE {
         say_failure(world, state, "spell_gave_up", wanted, Role::Danger);
         if let Some(mut running) = world.get_mut::<Running>(entity) {
@@ -1193,7 +984,7 @@ fn run_line(world: &mut World, entity: Entity, state: &Running, line: &str) -> P
             advance_pc(world, entity);
             return Progress::Done;
         }
-        // §8's **Referent missing**: the line named something that is not there
+        // §8's *Referent missing*: the line named something that is not there
         // any more, or is not there from here. Skips, logs, continues.
         _ => {
             say_failure(world, state, "spell_missing", line, Role::Danger);
@@ -1212,7 +1003,7 @@ fn run_line(world: &mut World, entity: Entity, state: &Running, line: &str) -> P
         return wait(world, entity, state, &blocked);
     }
 
-    // Through the **same** dispatch a typed line takes. A script must not get a
+    // Through the *same* dispatch a typed line takes. A script must not get a
     // second implementation of any verb, or the live game and the balance
     // harness stop being the same game (§13).
     crate::execute::execute_one(&intent, world);
@@ -1225,24 +1016,17 @@ fn run_line(world: &mut World, entity: Entity, state: &Running, line: &str) -> P
 
 /// Spend `ticks` doing nothing, then move on.
 ///
-/// **`waiting_since` carries the countdown, and it is reused rather than
-/// duplicated.** A bide is exactly *"this instruction started waiting at tick
-/// T"*, which is the field's own definition; a second counter beside it would be
-/// a second answer to when-did-this-step-begin, and §19 records that shape going
-/// wrong more often than any other. It also means a bide survives a save for
-/// free, which §8 requires of in-flight state.
+/// `waiting_since` carries the countdown rather than a second counter beside it:
+/// a second answer to when-did-this-step-begin is the shape §19 records going
+/// wrong most. It also makes a bide survive a save for free, which §8 requires.
 ///
-/// **It never reaches `PATIENCE`, deliberately.** A spell that waits for ever is
-/// a fault; a spell counting to three is doing what it was written to do, so
-/// this does not route through [`wait`] and says nothing on the transcript.
-/// `bide 4000` is therefore legal and slow, which is the honest reading — the
-/// player wrote a number and the orb is counting it.
+/// It never reaches `PATIENCE`, deliberately: a spell counting to three is doing
+/// what it was written to do, so this says nothing on the transcript.
 fn bide(world: &mut World, entity: Entity, state: &Running, delay: u32) -> Progress {
     let now = *world.resource::<Tick>();
-    // **Stamped once, on the tick the bide begins, and then held.** The count is
-    // a literal now, so this no longer resolves anything — but the pair still
-    // has to be latched together, because `waiting_since` alone cannot say
-    // whether the bide has started.
+    // Stamped once, on the tick the bide begins, and held. The pair has to be
+    // latched together even now the count is a literal, because
+    // `waiting_since` alone cannot say whether the bide has started.
     let (since, ticks) = match (state.waiting_since, state.biding) {
         (Some(since), Some(ticks)) => (since, ticks),
         _ => {
@@ -1254,25 +1038,14 @@ fn bide(world: &mut World, entity: Entity, state: &Running, delay: u32) -> Progr
             (now, ticks)
         }
     };
-    // `>=`, so `bide 1` spends one whole tick and `bide 0` spends none — the
-    // count is ticks *elapsed*, which is what a player writing a delay means.
-    // **`ticks - 1`, because completing spends a tick of its own.** `step_one`
-    // runs `allowance` steps and every `continue` costs one, so a bide that
-    // finished on the tick its count ran out put the *next* instruction a tick
-    // later than the author asked for. `bide n` means "the next line runs n ticks
-    // from here", which is what somebody timing a delay is counting.
+    // `>=`, so `bide 1` spends one whole tick and `bide 0` none — the count is
+    // ticks *elapsed*. `ticks - 1` because completing spends a tick of its own,
+    // so a bide that finished on the tick its count ran out put the next
+    // instruction a tick late. `bide n` means "the next line runs n ticks from
+    // here", which makes `bide 0` and `bide 1` the same line at one step a tick.
     //
-    // A consequence worth stating: `bide 0` and `bide 1` are the same line. The
-    // next instruction can never run in the same tick at one step a tick, so
-    // nought is not reachable and saying so is more honest than refusing it.
-    //
-    // **And a bide is still bounded, though the reason has shrunk.** It was
-    // load-bearing while `bide <reading>` compiled: `bide sage` answered
-    // `Endless` through `watch::many_at` and bided `u32::MAX`, four billion
-    // ticks of silence on a step that deliberately never reaches `PATIENCE`.
-    // That form is a complaint now, so the only way here is an author typing a
-    // very large number — which `LONGEST` still clamps, because the failure it
-    // produces is indistinguishable from a spell that finished either way.
+    // Still clamped: only a very large literal reaches here now that `bide
+    // <reading>` no longer compiles, and the failure looks the same either way.
     if now.get().saturating_sub(since.get()) >= u64::from(ticks.saturating_sub(1)) {
         if let Some(mut running) = world.get_mut::<Running>(entity) {
             running.waiting_since = None;
@@ -1284,15 +1057,14 @@ fn bide(world: &mut World, entity: Entity, state: &Running, delay: u32) -> Progr
     Progress::Blocked
 }
 
-/// Hold the spell where it is, saying so **once**.
+/// Hold the spell where it is, saying so once.
 fn wait(world: &mut World, entity: Entity, state: &Running, blocked: &Blocked) -> Progress {
     let now = *world.resource::<Tick>();
     let since = match state.waiting_since {
         Some(since) => since,
         None => {
-            // The first tick of a wait is the one worth a line. After that the
-            // spell is simply doing what a recipe does, and a record per tick
-            // would bury the log under a spell behaving correctly.
+            // The first tick of a wait is the one worth a line; a record per
+            // tick would bury the log under a spell behaving correctly.
             say_blocked(world, state, blocked);
             if let Some(mut running) = world.get_mut::<Running>(entity) {
                 running.waiting_since = Some(now);
@@ -1302,8 +1074,8 @@ fn wait(world: &mut World, entity: Entity, state: &Running, blocked: &Blocked) -
     };
 
     if now.get().saturating_sub(since.get()) >= PATIENCE {
-        // Waiting has become halting. §8's taxonomy is titled *scripts always
-        // log and never halt*, so this is where a wait stops being quiet.
+        // Waiting has become halting, which §8 forbids — so this is where a
+        // wait stops being quiet.
         say_failure(world, state, "spell_gave_up", blocked.name(), Role::Danger);
         if let Some(mut running) = world.get_mut::<Running>(entity) {
             running.waiting_since = None;
@@ -1316,84 +1088,64 @@ fn wait(world: &mut World, entity: Entity, state: &Running, blocked: &Blocked) -
 
 /// Whether a script may issue this verb at all.
 ///
-/// # Three of these are hazards rather than nonsense
+/// Three of these are hazards rather than nonsense:
 ///
-/// - **`meditate`** writes `Skip`, which `Sim::step` drains in a while-loop. A
-///   scripted `meditate 3600` runs an hour of world time inside a single
-///   `step()`, with this runner executing on every one of those ticks.
-/// - **`scribe`** opens the editor. From inside a script that means the
-///   *player's* next keystrokes land in a spell they did not open.
-/// - **`undo`** is command-anchored (§6) and has no meaning from a script.
+/// - `meditate` writes `Skip`, which `Sim::step` drains in a while-loop, so a
+///   scripted `meditate 3600` runs an hour of world time inside one `step()`.
+/// - `scribe` opens the editor, so the *player's* next keystrokes land in a
+///   spell they did not open.
+/// - `undo` is command-anchored (§6) and has no meaning from a script.
 ///
-/// `execute::is_live` is the wrong instrument for this: it answers *"does this
-/// verb work"*, which is a different question that happens to overlap today.
+/// `execute::is_live` is the wrong instrument: it answers *"does this verb
+/// work"*, a different question that happens to overlap today.
 #[must_use]
 pub const fn may_issue(verb: Verb) -> bool {
     !matches!(
         verb,
-        // A spell does not walk. It is written **for** a domain and works
-        // there, so `attend` is not something it can want — and allowing it
-        // would put back the walking position that makes canonicalising an
-        // `if` undecidable.
+        // A spell does not walk: it is written *for* a domain, and allowing
+        // `attend` would put back the walking position that makes
+        // canonicalising an `if` undecidable.
         Verb::Attend
             | Verb::Meditate
             | Verb::Scribe
             | Verb::Undo
             | Verb::Bind
-            // **`unfurl` takes the keyboard exactly as `scribe` does.** It hands
-            // the transcript the keys and pages the view back, so a spell
-            // holding one seizes the prompt on the orb's clock — and inside a
+            // `unfurl` takes the keyboard as `scribe` does — it hands the
+            // transcript the keys and pages the view back, and inside a
             // `repeat` it re-seizes faster than Escape can give it back.
             | Verb::Unfurl
-            // And `weave` opens a whole screen, which is the same objection with
-            // more of the window behind it. `repeat 100 / weave` is a soft-lock.
+            // `weave` opens a whole screen, the same objection with more of the
+            // window behind it: `repeat 100 / weave` is a soft-lock.
             | Verb::Weave
-            // `wander` draws no screen at all, and is refused for the same
-            // reason all the same: it makes the prompt dead, so Escape is the
-            // only way out — and a spell re-taking the arrows every lap would
-            // be racing the player for the one key that ends it.
+            // `wander` draws no screen but makes the prompt dead, so Escape is
+            // the only way out — and a spell re-taking the arrows every lap
+            // would race the player for the one key that ends it.
             //
-            // **`follow` is deliberately *not* here.** Walking the maze is the
-            // whole point of automating the archive; what a spell may not do is
-            // decide who is holding the keyboard.
-            //
-            // **`summon` and `limn` are not here either, and for the same
-            // reason.** `summon` is `research`'s shape: it opens the puzzle and
-            // draws a board, and it takes no keys. `limn` is `follow`'s: it is
-            // the act, and automating it is the entire point of the domain.
+            // `follow` is deliberately not here: walking the maze is the point
+            // of automating the archive. Nor are `summon` and `limn` — one opens
+            // a puzzle and takes no keys, the other is the act itself.
             | Verb::Wander
-            // **And it may not end the session.** `quit` was added to the
-            // vocabulary, to `Verb::ALL`, to `dispatch::execute` and to the
-            // tower's own count, and this list was the one place it was not —
-            // so a spell could raise `Quitting`, which is `AppExit::Success`
-            // under Bevy and a raw-mode teardown in the terminal. The three
-            // above are barred for *seizing the keyboard*; this one closes the
-            // game, and a **bound** spell re-casts every time it runs off the
-            // end, so it would do so on the orb's clock with nothing the player
-            // pressed able to intervene.
+            // And it may not end the session. `quit` reached the vocabulary,
+            // `Verb::ALL` and `dispatch::execute` with this list the one place
+            // it was missed, so a spell could raise `Quitting` — and a bound
+            // spell re-casts off the end, closing the game on the orb's clock.
             | Verb::Quit
-            // **And it may not open the menu**, which is the same argument as
-            // the three keyboard-seizing verbs above rather than as `quit`: the
-            // menu takes the pane and the keys, and a bound spell re-casting off
-            // the end would put it back up every lap.
+            // And it may not open the menu, which takes the pane and the keys:
+            // the keyboard-seizing argument again, and a bound spell re-casting
+            // would put it back up every lap.
             | Verb::Menu
     )
 }
 
 /// Which line of the file execution is on, or `None` once it has run off the end.
 ///
-/// **The step's own line**, carried from parsing. Deriving it from the path
-/// cannot work: the program is a tree and the file is a list, blank lines and
-/// comments are not steps, and a step two blocks deep is three path elements
-/// with no arithmetic relating that to a line number. §8.1 wants the culprit
-/// named, and a spell that says *"line 3"* about the wrong line is worse than
-/// one that says nothing.
+/// The step's own line, carried from parsing. Deriving it from the path cannot
+/// work: the program is a tree and the file a list, comments are not steps, and
+/// a step two blocks deep is three path elements. §8.1 wants the culprit named,
+/// and *"line 3"* about the wrong line is worse than nothing.
 ///
-/// **`Option`, not `0`.** It returned `0` for "nowhere", which the two log sites
-/// below never see — they report a failure on the step they are executing. The
-/// editor's marker does: a spell whose last line has run keeps `Running` until
-/// the tick tidies it up, and a sentinel line number put the marker on a line
-/// numbered zero, which no file has.
+/// `Option`, not `0`: a spell whose last line has run keeps `Running` until the
+/// tick tidies it, and a sentinel put the marker on line zero, which no file has.
 #[must_use]
 pub fn line_of(state: &Running) -> Option<u64> {
     super::program::at(walking(state), &state.pc).map(|step| u64::try_from(step.line).unwrap_or(0))
@@ -1404,14 +1156,13 @@ pub fn line_of(state: &Running) -> Option<u64> {
 /// Returns whether there was one. `false` means the outermost frame has run out,
 /// which is the only thing that ends a spell.
 ///
-/// The caller resumes **pointing at its own call**, and is stepped past it here
-/// rather than on the way in — a `pc` left pointing past the call would be a
-/// position the save could not explain, and §8 requires in-flight state to be
-/// serialisable at every tick boundary rather than at most of them.
+/// The caller resumes pointing at its own call and is stepped past it here
+/// rather than on the way in: §8 requires in-flight state to be serialisable at
+/// *every* tick boundary, and a `pc` past the call is a position the save could
+/// not explain.
 fn returned(world: &mut World, entity: Entity) -> bool {
-    // **Scoped, not `drop`ped.** The borrow has to end before `advance_pc` takes
-    // the world again, and a `drop` of a `Mut<'_, _>` is a no-op clippy rightly
-    // objects to — the block is what actually releases it.
+    // Scoped, not `drop`ped: the borrow has to end before `advance_pc` takes
+    // the world again, and dropping a `Mut<'_, _>` is a no-op clippy objects to.
     let resumed = {
         let Some(mut running) = world.get_mut::<Running>(entity) else {
             return false;
@@ -1436,25 +1187,15 @@ fn returned(world: &mut World, entity: Entity) -> bool {
 
 /// Suspend this frame and open one on `name`, with `args` as its whole store.
 ///
-/// **Three refusals, all loud.** A part the spell does not define is a name the
-/// orb cannot place, and it is said once per line per cast like every other
-/// missing name (`Running::said`). A call that hands over the wrong number of
-/// names cannot be made at all. A stack past [`MAX_PARTS`] is runaway recursion,
-/// and §8 will not have that stop silently.
+/// Three refusals, all loud: a part the spell does not define is a missing name,
+/// said once per line per cast (`Running::said`); a call handing over the wrong
+/// number of names cannot be made; a stack past [`MAX_PARTS`] is runaway
+/// recursion. Each steps past rather than halting (§8).
 ///
-/// Any of the three **steps past**, never halts: §8's taxonomy is titled
-/// *"scripts always log and never halt"*, so a call that cannot be made is a
-/// line that did nothing and a spell that carries on.
-///
-/// # The arity check is here as well as in `compile`, and that is not belt and
-/// braces
-///
-/// §8 hot-reloads a spell's text under it. A player who adds a parameter to a
-/// definition while the spell runs leaves every call in the file one short, and
-/// the compiled tree the runner is walking is the *old* one until the reload
-/// lands. Binding what arrived and leaving the rest empty would let the body ask
-/// about a name standing for itself, which resolves against the room and does
-/// something — quietly, and not what anyone wrote.
+/// The arity check is here as well as in `compile` because §8 hot-reloads a
+/// spell's text under it: a player who adds a parameter while the spell runs
+/// leaves every call one short, and binding what arrived would let the body ask
+/// about a name standing for itself.
 fn called(
     world: &mut World,
     entity: Entity,
@@ -1481,13 +1222,10 @@ fn called(
         advance_pc(world, entity);
         return;
     }
-    // **Resolved in the caller's store, before that store is put away.** An
-    // argument is a name; if the caller has bound it, what travels is what it
-    // stands for. One level, which is `substituted`'s rule — a value that stood
-    // for another value would be a chain nobody wrote.
-    // `program::arguments` lowercases every slot as it parses, so an argument is
-    // already normalised and a `to_lowercase` here would allocate for nothing —
-    // and, worse, tell the next reader that a `Kind::Call` might hold mixed case.
+    // Resolved in the caller's store, before that store is put away: an
+    // argument is a name, so what travels is what the caller has it standing
+    // for. One level, `substituted`'s rule. `program::arguments` already
+    // lowercases every slot as it parses.
     let handed: Vec<String> = args
         .iter()
         .map(|arg| {
@@ -1503,9 +1241,9 @@ fn called(
             part: running.part.clone(),
             pc: running.pc.clone(),
             loops: std::mem::take(&mut running.loops),
-            // **Taken, not cloned.** The callee opens with a store of its own,
-            // so leaving the caller's behind would be the old shared shape with
-            // a copy on the stack that nothing reads.
+            // Taken, not cloned: the callee opens with a store of its own, so
+            // leaving the caller's behind would be the old shared shape with a
+            // copy on the stack that nothing reads.
             vars: std::mem::take(&mut running.vars),
         };
         running.stack.push(descent);
@@ -1517,28 +1255,18 @@ fn called(
 
 /// Start `name` as a second cursor and step past — `alongside gathering()`.
 ///
-/// # A fork against a call, in the three places they differ
+/// [`called`] is the sibling and most of this is its body. Three differences:
 ///
-/// [`called`] is the sibling and most of this is its body. What is different:
+/// - The caller is not suspended: no [`Descent`] is pushed, so the line after
+///   the fork runs on the caller's next step.
+/// - The new cursor has an empty stack, because nothing waits for it. Running
+///   off the end ends the strand and no more — see [`ended`].
+/// - It is bounded by [`MAX_STRANDS`] rather than [`MAX_PARTS`]: how many
+///   cursors there are against one cursor's depth.
 ///
-/// - **The caller is not suspended.** No [`Descent`] is pushed and its `pc`,
-///   `loops` and `vars` stay exactly where they are; the line after the fork
-///   runs on the caller's next step.
-/// - **The new cursor has an empty stack**, because nothing is waiting for it.
-///   Running off the end ends the strand and no more — [`ended`] finishes the
-///   spell only when the last one goes.
-/// - **It is bounded by [`MAX_STRANDS`] rather than [`MAX_PARTS`]**, and those
-///   count different things: depth of one cursor's descents against how many
-///   cursors there are.
-///
-/// # It runs next tick, not this one
-///
-/// The strand is appended, and [`step_one`] re-reads the count each lap — so a
-/// fork made part-way through this tick *is* stepped on this tick, once, before
-/// the loop moves on. That matches `invoke`'s door: `advance` snapshots the
-/// running list, so a spell cast this tick starts on the next. Both are *"the
-/// new thing gets its budget from the point it exists"*, and pinning it is
-/// `a_forked_cursor_starts_where_the_fork_left_it`.
+/// The strand is appended and [`step_one`] re-reads the count each lap, so a
+/// fork made part-way through this tick *is* stepped once more — `invoke`'s
+/// door, where the new thing gets its budget from the point it exists.
 fn forked(
     world: &mut World,
     entity: Entity,
@@ -1568,10 +1296,9 @@ fn forked(
         advance_pc(world, entity);
         return;
     }
-    // **Resolved in the forking cursor's store, at the moment of the fork.**
-    // `called`'s rule and it has to be: a part's brackets are the whole of what
-    // it can see (§19), and the caller goes on running — so a name resolved
-    // later would be read against a store that had moved underneath it.
+    // Resolved in the forking cursor's store, at the moment of the fork.
+    // `called`'s rule, and it has to be: the caller goes on running, so a name
+    // resolved later would be read against a store that had moved (§19).
     let handed: Vec<String> = args
         .iter()
         .map(|arg| {
@@ -1583,10 +1310,9 @@ fn forked(
         })
         .collect();
     if let Some(mut running) = world.get_mut::<Running>(entity) {
-        // **`seen` is carried over, not started at nought.** It is how far the
-        // cursor has read the record stream, and a strand opening at zero would
-        // have its first `wait` satisfied by something that happened before it
-        // existed — every event of the run so far, all at once.
+        // `seen` is carried over, not started at nought: a strand opening at
+        // zero would have its first `wait` satisfied by every event of the run
+        // so far, all at once.
         let seen = running.seen;
         running.strands.push(super::Strand {
             pc: vec![0],
@@ -1601,11 +1327,9 @@ fn forked(
 
 /// The block the current frame is walking.
 ///
-/// **Empty when the part it names has gone**, which is a real state rather than
-/// a defect: §8 hot-reloads a spell's text under it, so a player may delete a
-/// definition while a frame is inside it. An empty block reads as *off the end*
-/// at the next step, which pops the frame and carries on after the call — the
-/// gentlest true answer available, and the same one an empty part gives.
+/// Empty when the part it names has gone, which is a real state: §8 hot-reloads
+/// a spell's text, so a player may delete a definition while a frame is inside
+/// it. An empty block reads as *off the end* at the next step.
 fn walking(state: &Running) -> &super::Block {
     static NOTHING: super::Block = Vec::new();
     super::program::tree(state.program.body(), state.part.as_deref()).unwrap_or(&NOTHING)
@@ -1613,9 +1337,8 @@ fn walking(state: &Running) -> &super::Block {
 
 /// Whether this casting has already complained about `line`, marking it said.
 ///
-/// See [`Running::said`]. Marking on the way past rather than at the call site
-/// keeps the two halves — "have we said it" and "we have now" — from drifting
-/// apart, which is what a separate setter invites.
+/// See [`Running::said`]. Marking here rather than at the call site keeps "have
+/// we said it" and "we have now" from drifting apart.
 fn already_said(world: &mut World, entity: Entity, line: usize) -> bool {
     let Some(mut running) = world.get_mut::<Running>(entity) else {
         return false;
@@ -1643,9 +1366,8 @@ fn node_of(world: &World, id: NodeId) -> Option<Entity> {
 /// Move past the step just run, closing and repeating blocks as needed.
 ///
 /// The program is cloned out first because `step_past` needs it while `Running`
-/// is borrowed mutably, and both live on the same entity. One clone per
-/// instruction of a structure that is tens of steps at most, against threading a
-/// borrow through the whole runner.
+/// is borrowed mutably and both live on the same entity — one clone per
+/// instruction, against threading a borrow through the whole runner.
 fn advance_pc(world: &mut World, entity: Entity) {
     let Some((program, part)) = world
         .get::<Running>(entity)
@@ -1659,12 +1381,10 @@ fn advance_pc(world: &mut World, entity: Entity) {
     let body = super::program::tree(program.body(), part.as_deref())
         .cloned()
         .unwrap_or_default();
-    // **Every guard answered before `Running` is borrowed mutably.** `holds`
-    // wants the world and `step_past` wants `&mut Running`, and both live on this
-    // entity — so the questions are asked first and the answers carried in.
-    //
-    // Only the loops the path is *inside* are asked, and all of them in the
-    // spell's own room; `guard_answers` explains both.
+    // Every guard answered before `Running` is borrowed mutably: `holds` wants
+    // the world and `step_past` wants `&mut Running`, both on this entity. Only
+    // the loops the path is *inside*, and all in the spell's own room — see
+    // `guard_answers`.
     let (at, pc) = world
         .get::<Running>(entity)
         .map_or((None, Vec::new()), |state| {
@@ -1677,9 +1397,9 @@ fn advance_pc(world: &mut World, entity: Entity) {
             let answer = guards.iter().find(|(path, _)| path.as_slice() == at);
             match (popped, answer) {
                 // A `for each` goes round while the set has a member after the
-                // one just finished. **No entry means no set**, which is where a
-                // group the room does not have ends up — the loop stops rather
-                // than walking nothing for ever.
+                // one just finished. No entry means no set — where a group the
+                // room does not have ends up — so the loop stops rather than
+                // walking nothing for ever.
                 (super::Loop::Each(index), Some((_, Continues::Members(many)))) => {
                     index + 1 < *many
                 }
@@ -1698,18 +1418,14 @@ fn advance_pc(world: &mut World, entity: Entity) {
     }
 }
 
-/// Answer `condition` in the **spell's own room**, not the player's.
+/// Answer `condition` in the *spell's own room*, not the player's.
 ///
-/// `watch::holds` finds a place through `Cwd`, so a question answered against
-/// wherever the player happens to be standing is a question about the wrong
-/// room. `Kind::If` has always swapped; `until` did not, and that made a **bound**
-/// spell — which runs while the player is elsewhere by design — see nothing,
-/// answer `None`, and stop. `dev_spells.toml`'s `threading` is bound and its
-/// bound is `repeat until the stacks is idle`, so the flagship case was the
-/// broken one.
+/// `watch::holds` finds a place through `Cwd`, so a question answered wherever
+/// the player happens to stand is about the wrong room. `Kind::If` always
+/// swapped; `until` did not, which made a bound spell see nothing and stop.
 ///
 /// One function rather than the swap written twice, because two expressions of
-/// one rule is how they came to disagree in the first place.
+/// one rule is how they came to disagree.
 fn asked_where_the_spell_is(
     world: &mut World,
     at: Option<Entity>,
@@ -1728,44 +1444,25 @@ fn asked_where_the_spell_is(
 /// Take the oldest name out of a satchel and bind it, or yield until there is
 /// one.
 ///
-/// # Where it looks, and why that is the whole of the care here
+/// It looks in the room the *spell* stands in, never the player's: a satchel
+/// exists in every domain under one name, so a lookup against `Cwd` would have a
+/// bound producer fill one queue while its consumer drained another, in silence.
+/// §19 records this confusion three times; `state.at` is the answer every time.
 ///
-/// **In the room the *spell* stands in, never the player's.** A satchel is the
-/// one fixture that exists in every domain under one name, so a lookup against
-/// `Cwd` would find whichever room the player happens to be in — and a bound
-/// producer in the menagerie feeding a consumer while the player brews would be
-/// filling one queue and draining another, in silence, with both spells looking
-/// healthy. §19 records this exact confusion three times now (`erode`,
-/// `bide until`, `wear_by`); `state.at` is the answer every time.
+/// Yielding is not waiting: an empty satchel returns [`Progress::Blocked`]
+/// without touching `waiting_since`, so it never reaches [`PATIENCE`] and never
+/// latches `‼` on the rail. A consumer caught up with its producer is the
+/// ordinary state of a working pipeline. What bounds it is the work running out.
 ///
-/// # Yielding is not waiting
-///
-/// An empty satchel returns [`Progress::Blocked`] **without touching
-/// `waiting_since`**, so it never reaches [`PATIENCE`] and never latches `‼` on
-/// the rail. A consumer that has caught up with its producer is the ordinary
-/// state of a working pipeline, and marking the domain broken for it would make
-/// the fault light useless in the one room most likely to show it. `bide`'s
-/// rule: *"a spell waiting for ever is a fault; a spell counting to three is
-/// doing what it was written to do."*
-///
-/// What bounds it is the work running out. The producer stops, the consumer's
-/// loop guard goes true, and the spell ends — and if the author wrote a loop
-/// with no guard, that is a spell that idles rather than one that hangs.
-///
-/// # A satchel that is not there is a fault, and is said once
-///
-/// The other half: `pull note from mortar_and_pestle` names something real that
-/// holds no queue, and `pull note from satchel` in the arsenal names nothing at
-/// all. Both are §8's *Referent missing* rather than a wait, so they say so and
-/// step past — [`say_missing`]'s once-per-line-per-cast rule, because this line
-/// is inside a loop by construction.
+/// A satchel that is not there *is* a fault, said once: `pull note from
+/// mortar_and_pestle` names something real that holds no queue, which is §8's
+/// *Referent missing* rather than a wait, so it goes through [`say_missing`]
+/// and steps past.
 fn pull(world: &mut World, entity: Entity, state: &Running, name: &str, from: &str) -> Progress {
     let line = super::program::at(walking(state), &state.pc).map_or(0, |step| step.line);
-    // **Asked here as well as at cast**, which is `may_issue`'s rule and its
-    // reason: *"a boundary with one guard is a boundary that a future caster can
-    // walk around."* `compile::check_learned` is what a player *reads*; this is
-    // what stops the line. Silent, because the complaint has already said it —
-    // and once per cast, where this would be once per lap.
+    // Asked here as well as at cast, which is `may_issue`'s rule: a boundary
+    // with one guard is one a future caster can walk around. Silent, because
+    // `compile::check_learned` has said it once per cast already.
     if !tower::holds(world, tower::Grant::Satchel) {
         advance_pc(world, entity);
         return Progress::Done;
@@ -1806,8 +1503,7 @@ fn pull(world: &mut World, entity: Entity, state: &Running, name: &str, from: &s
 ///
 /// §8.1's *"the culprit is never anonymous"*. A guard that stops on an
 /// unanswerable question is the one failure mode with nothing on screen
-/// explaining it — the spell simply does not run — so it is worth more than the
-/// `if` path's version of the same sentence, not less.
+/// explaining it: the spell simply does not run.
 fn say_missing(
     world: &mut World,
     entity: Entity,
@@ -1829,12 +1525,10 @@ fn say_missing(
 
 /// What a block that has run off the end needs to know to go round again.
 ///
-/// **Two shapes because the two loops end for different reasons**, and folding
-/// them into one `bool` would put the arithmetic in the wrong place: a
-/// `repeat until` ends when the world says so and a `for each` ends when it runs
-/// out of members, so the walker owes the first an answer and the second a
-/// count. The runner does the comparison, because only it knows which member the
-/// loop is on.
+/// Two shapes, because the two loops end for different reasons: a `repeat until`
+/// ends when the world says so and a `for each` when it runs out of members, so
+/// the walker owes the first an answer and the second a count. The runner
+/// compares, because only it knows which member the loop is on.
 #[derive(Debug, Clone, Copy)]
 enum Continues {
     /// A `repeat until`: whether the loop may take another turn.
@@ -1845,16 +1539,14 @@ enum Continues {
 
 /// Whether each guarded loop may take another turn, by path.
 ///
-/// **Three answers folded into two, and the fold is a decision.** `until X`
+/// Three answers folded into two, and the fold is a decision. `until X`
 /// continues while X is *not* satisfied, so `Some(false)` goes round again and
-/// `Some(true)` stops. An **unanswerable** question — §8's *Referent missing*,
-/// a place the tower no longer has — also stops.
+/// `Some(true)` stops; an unanswerable question — §8's *Referent missing* —
+/// stops too.
 ///
-/// That is the opposite of what an `if` does with the same answer, where an
-/// unreadable question declines to act. The asymmetry is deliberate: declining
-/// to act is safe, while a `repeat` that declined to *stop* would run for ever
-/// on a question nobody can answer, which is §19's *"a spell that has stopped
-/// describing the world it runs in"* left running instead of caught.
+/// That is the opposite of `if`, where an unreadable question declines to act.
+/// Declining to act is safe; a `repeat` that declined to *stop* would run for
+/// ever on a question nobody can answer.
 ///
 /// A loop with no `until` is absent from this list and [`advance_pc`] reads that
 /// as yes, so an unguarded `repeat` costs no world read at all.
@@ -1875,12 +1567,10 @@ fn guard_answers(
             path.push(index);
             match &step.kind {
                 super::Kind::Repeat { until, body, .. } => {
-                    // **Only a loop the path is inside can be unwound**, and a
-                    // loop being unwound is always an ancestor of the current
-                    // `pc`. Asking the rest would put questions to the world
-                    // about loops that are not running — the *"a read nobody
-                    // asked for"* this whole function's short-circuit exists to
-                    // avoid, arrived at from the other direction.
+                    // Only a loop the path is inside can be unwound, and such a
+                    // loop is always an ancestor of the current `pc`. Asking
+                    // the rest would put questions to the world about loops
+                    // that are not running.
                     if let Some(condition) = until
                         && pc.starts_with(path)
                     {
@@ -1889,12 +1579,9 @@ fn guard_answers(
                     }
                     walk(world, body, pc, path, out);
                 }
-                // **The set is measured, not the guard asked.** A `for each` has
-                // no question of its own: it goes round while the set has a
-                // member left, so what the walker owes the runner is a count.
-                // Same short-circuit as above — only a loop the path is inside
-                // can be unwound, and measuring the rest would be a read nobody
-                // asked for.
+                // The set is measured, not the guard asked: a `for each` goes
+                // round while the set has a member left, so what the walker
+                // owes the runner is a count. Same short-circuit as above.
                 super::Kind::Each { group, body } => {
                     if pc.starts_with(path) {
                         let room = world.resource::<Cwd>().0;
@@ -1909,21 +1596,20 @@ fn guard_answers(
                 super::Kind::If {
                     body, otherwise, ..
                 } => {
-                    // **Both halves, and the path elements a branch costs.**
+                    // Both halves, and the path elements a branch costs:
                     // `enter_branch` pushes the half *and* the step, so a loop
                     // nested in an `if` is two elements deeper than its index
-                    // suggests — matching what `step_past` pops on the way out.
+                    // suggests — matching what `step_past` pops.
                     for (half, block) in [body, otherwise].into_iter().enumerate() {
                         path.push(half);
                         walk(world, block, pc, path, out);
                         path.pop();
                     }
                 }
-                // **A definition is not walked into**, and this is the same
-                // reason `at` refuses to descend: its loops belong to a frame
-                // that is not this one. Walking in would ask the world about a
-                // `repeat` inside a part nobody has called — a read nobody
-                // asked for, and against a path this frame's `pc` can never hold.
+                // A definition is not walked into, the reason `at` refuses to
+                // descend: its loops belong to another frame, so walking in
+                // would ask about a `repeat` inside a part nobody has called,
+                // against a path this frame's `pc` can never hold.
                 super::Kind::Part { .. }
                 | super::Kind::Call { .. }
                 | super::Kind::Command(_)
@@ -1937,10 +1623,9 @@ fn guard_answers(
         }
     }
 
-    // **The room swapped once around the whole walk**, not per guard: every
-    // question below is answered where the *spell* is standing, for the same
-    // reason `Kind::If` swaps — `holds` finds a place through `Cwd`, and a bound
-    // spell runs while the player is in another room by design.
+    // The room swapped once around the whole walk, not per guard: every question
+    // below is answered where the *spell* stands, for `Kind::If`'s reason — a
+    // bound spell runs while the player is in another room by design.
     let player = world.resource::<Cwd>().0;
     let Some(room) = at else {
         return Vec::new();
@@ -1954,19 +1639,13 @@ fn guard_answers(
 
 /// The spell has run out of lines.
 ///
-/// **Silent for a held spell, because it has not finished.** `bind::stand` casts
-/// it again on the next tick, so *"tending.spell is finished"* would be a
-/// sentence contradicted a tick later, once per lap, for as long as it is held —
-/// and with the recast itself already silent, a finish with no beginning reads
-/// like the orb letting go. A binding ends when the player says `stop`, which
-/// says so in those words.
-/// One cursor has run out; end the spell if it was the last.
+/// Silent for a held spell, because it has not finished: `bind::stand` casts it
+/// again next tick, so *"tending.spell is finished"* would be contradicted a
+/// tick later. A binding ends when the player says `stop`.
 ///
-/// **The spell ends when every cursor has**, which is the termination rule
-/// `alongside` needs and the one thing about forking that a player has to hold
-/// in their head. A `repeat` with no guard in a forked part therefore keeps the
-/// whole spell alive — the same bargain an unbounded `repeat` already makes, one
-/// cursor over.
+/// One cursor has run out; end the spell if it was the last. That is
+/// `alongside`'s termination rule — a `repeat` with no guard in a forked part
+/// keeps the whole spell alive.
 fn ended(world: &mut World, entity: Entity, state: &Running) {
     let last = world
         .get::<Running>(entity)
@@ -1979,9 +1658,9 @@ fn ended(world: &mut World, entity: Entity, state: &Running) {
 fn finish(world: &mut World, entity: Entity, state: &Running) {
     let name = spell_name(world, state);
     if let Some(mut bound) = world.get_mut::<super::Bound>(entity) {
-        // What this lap has already complained about, kept for the next one —
-        // see [`Bound::said`]. The component outlives the run; the rationing has
-        // to outlive it with the component or it is no rationing at all.
+        // What this lap has complained about, kept for the next — see
+        // [`Bound::said`]. The component outlives the run, so the rationing has
+        // to outlive it too or it is no rationing at all.
         bound.said = state.said.clone();
         world.entity_mut(entity).remove::<Running>();
         return;
@@ -1999,21 +1678,16 @@ fn finish(world: &mut World, entity: Entity, state: &Running) {
         .role(Role::Success)
         .finish();
 
-    // **Remove the component, never despawn the entity.** `Running` is worn *by
-    // the spell node itself*, so despawning would delete the spell from the
-    // grimoire the moment it finished — the file gone, and the next `invoke` of
-    // it fuzzy-matching to some other spell entirely. Which is exactly what
-    // `invoking_a_running_spell_twice_does_not_start_it_twice` caught: the
-    // second `invoke slow` reached `first_light`, because `slow.spell` no longer
-    // existed to be named.
+    // Remove the component, never despawn the entity: `Running` is worn by the
+    // spell node itself, so despawning would delete the spell from the grimoire
+    // and the next `invoke` would fuzzy-match to some other spell.
     world.entity_mut(entity).remove::<Running>();
 }
 
 /// What the spell is called, for a record.
 ///
-/// §8.1: *"sabotage log lines name the affected script and its bind time, so
-/// when something does break the culprit is never anonymous."* Every line this
-/// module emits carries the spell and the line number for that reason.
+/// §8.1: *"the culprit is never anonymous."* Every line this module emits
+/// carries the spell and the line number.
 fn spell_name(world: &World, state: &Running) -> String {
     node_of(world, state.spell)
         .and_then(|node| world.get::<Name>(node))
@@ -2044,14 +1718,13 @@ fn say_blocked(world: &mut World, state: &Running, blocked: &Blocked) {
 }
 
 fn say_failure(world: &mut World, state: &Running, key: &str, detail: &str, role: Role) {
-    // **The rail's fault mark is raised here and nowhere else**, because this is
-    // the one place that knows a spell failed *and* which room it was working
-    // in. §8 makes a broken spell log rather than halt, so without a mark the
-    // only way to find one is to go and read its log — and §9's whole argument
-    // for the minimised half is noticing without going.
+    // The rail's fault mark is raised here and nowhere else, because this is the
+    // one place that knows a spell failed *and* which room it was working in.
+    // §8 makes a broken spell log rather than halt, and §9's minimised half is
+    // for noticing without going to read that log.
     //
-    // `Role::Danger` only: a `Cost` here is a spell politely waiting its turn
-    // for the production slot, which happens constantly and is not a fault.
+    // `Role::Danger` only: a `Cost` here is a spell waiting its turn for the
+    // production slot, which happens constantly and is not a fault.
     if role == Role::Danger {
         crate::tower::mark_fault_at(world, state.at);
     }

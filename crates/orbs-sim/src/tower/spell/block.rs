@@ -1,31 +1,18 @@
-//! Whether an instruction can proceed, asked **without** refusing it.
-//!
-//! # The distinction this file exists for
+//! Whether an instruction can proceed, asked without refusing it.
 //!
 //! A player who types `grind sage` at a busy mortar should be told so — that is
-//! `tower::work::refuse_busy`, and §5.0's *"repairing the rats occupies the
-//! laboratory pane for its duration"* only bites if the refusal says so.
+//! `tower::work::refuse_busy`. A script reaching the same instruction should
+//! *wait*: it is the next line of a recipe arriving before the previous one
+//! finished, and the refusal path would emit one record per tick for the whole
+//! run it is waiting on. So the predicate and the refusal are separated, and
+//! this is the predicate.
 //!
-//! A **script** reaching the same instruction should *wait*. It is not a
-//! mistake; it is the next line of a recipe arriving before the previous one
-//! finished. Running it through the refusal path would emit one record per tick
-//! for the whole duration of the run it is waiting on — and a spell that grinds
-//! then siphons would fill the log with dozens of identical complaints while
-//! doing exactly the right thing.
-//!
-//! So the predicate and the refusal are separated, and this is the predicate.
-//!
-//! # Both tiers, because the second is the one that fires
-//!
-//! `tower::work::begin` refuses on two grounds: the instrument being busy, and
-//! the **tower-wide** production slot being taken
-//! (`in_flight().len() >= CAPACITY`, and `CAPACITY` is 1). Only the first had a
-//! separable predicate; the second emitted its `work_busy` record inline.
-//!
-//! At capacity 1 the second is the one a script hits, for every multi-instrument
-//! spell — which is every §10.1 brew, and therefore the whole point. Checking
-//! only the instrument would let those instructions through to `begin`, which
-//! logs at the player once per tick: exactly the noise this exists to prevent.
+//! Both tiers, because the second is the one that fires. `tower::work::begin`
+//! refuses on the instrument being busy and on the tower-wide production slot
+//! being taken (`CAPACITY` is 1); only the first had a separable predicate. At
+//! capacity 1 the second is what a script hits for every multi-instrument spell
+//! — every §10.1 brew — so checking only the instrument lets those through to
+//! `begin`, which logs at the player once per tick.
 
 use bevy_ecs::prelude::*;
 
@@ -74,18 +61,17 @@ impl Blocked {
 
 /// Whether `intent` would have to wait, asked from where the script is standing.
 ///
-/// **Only duration-actions can block.** `attend`, `survey`, `peruse` and the
-/// rest neither start work nor need the slot, so asking about them would make a
+/// Only duration-actions can block. `attend`, `survey`, `peruse` and the rest
+/// neither start work nor need the slot, so asking about them would make a
 /// script that reads a log wait behind a brew for no reason.
 #[must_use]
 pub fn would_block(world: &mut World, intent: &Intent) -> Option<Blocked> {
-    // Every instrument this instruction touches has to be free. **The question
-    // is "would this be refused", not "does this start work"** — the first
-    // version of this asked the narrower one and `siphon` fell through it, so a
-    // spell that ground and then siphoned was told *"the mortar_and_pestle is
-    // still at work"* as though it had typed the line itself. `move`, `empty`,
-    // `purge` and `siphon` all refuse on a busy instrument without beginning
-    // anything, and each was a way for a correct spell to be shouted at.
+    // Every instrument this instruction touches has to be free. The question is
+    // "would this be refused", not "does this start work" — the first version
+    // asked the narrower one and `siphon` fell through, so a spell that ground
+    // and then siphoned was told *"the mortar_and_pestle is still at work"* as
+    // though it had typed the line itself. `move`, `empty`, `purge` and `siphon`
+    // all refuse on a busy instrument without beginning anything.
     for at in touches(world, intent) {
         if let Some(why) = tower::busy(world, at) {
             return Some(Blocked::Instrument {
@@ -95,10 +81,9 @@ pub fn would_block(world: &mut World, intent: &Intent) -> Option<Blocked> {
         }
     }
 
-    // The tower-wide slot, for the verbs that actually begin a run. **This is
-    // the tier that fires** for a multi-instrument spell, and it has no
-    // separable predicate of its own in `work::slot` — `begin` tests it inline
-    // and emits its refusal at the same time.
+    // The tower-wide slot, for the verbs that actually begin a run — the tier
+    // that fires for a multi-instrument spell. It has no separable predicate in
+    // `work::slot`; `begin` tests it inline and refuses at the same time.
     if begins_work(intent)
         && tower::in_flight(world).len() >= tower::CAPACITY
         && let Some((doing, at)) = tower::occupied(world)
@@ -119,13 +104,12 @@ pub fn would_block(world: &mut World, intent: &Intent) -> Option<Blocked> {
 /// slot and finish within the tick — §9's triage band exists so short work still
 /// runs during a brew.
 ///
-/// **It reads the argument, and it has to.** This was `const fn(Verb)`, which
-/// meant `wield` was one answer for two acts: charging an instrument *is* a run,
-/// and spending a scroll is not. `pipeline::wield` returns before `work::begin`
-/// for a scroll, so a typed spend was never charged a slot — but a spell reaches
-/// this tier first, so `wield quickening-scroll` in a script waited out the very
-/// brew it was written to hurry. **Quicken then brew** is the obvious play and
-/// automating it is the point; it was the one thing a spell could not do.
+/// It reads the argument, and it has to. This was `const fn(Verb)`, which made
+/// `wield` one answer for two acts: charging an instrument is a run, spending a
+/// scroll is not. `pipeline::wield` returns before `work::begin` for a scroll,
+/// so a typed spend was never charged a slot — but a spell reaches this tier
+/// first, so `wield quickening-scroll` in a script waited out the very brew it
+/// was written to hurry. Quicken then brew is the obvious play.
 ///
 /// Asks [`execute::spending`](crate::execute::spending), which `pipeline::wield`
 /// asks too, rather than testing the kind here — two expressions of one rule
@@ -134,34 +118,24 @@ fn begins_work(intent: &Intent) -> bool {
     if crate::execute::spending(intent).is_some() {
         return false;
     }
-    // **`dial` is an operation that takes no slot**, and it is the first verb
-    // for which those are different questions. `is_operation` answers *"is this
-    // word scoped to one instrument"* — which is how the lens keeps both its
-    // verbs out of the tower-wide vocabulary — and this asks *"will it hold the
-    // tower's one production slot"*. Turning a dial is free by design, because
-    // the domain's cost is the press.
+    // `dial` is an operation that takes no slot, and the first verb for which
+    // those are different questions: `is_operation` asks "is this word scoped to
+    // one instrument", this asks "will it hold the tower's one production slot".
+    // Left alone, `dial first nitre` queued behind a brew and burned `PATIENCE`
+    // doing nothing.
     //
-    // Left alone, a spell's `dial first nitre` would have queued behind a brew
-    // in the laboratory and burned `PATIENCE` doing nothing, which is exactly
-    // the defect the scroll case above records one paragraph up.
-    // **The sanctum's two are the same case, and shipping without them here is
-    // the defect that paragraph predicted.** `muster` and `haul` went into
-    // `is_operation` to keep them out of the tower-wide vocabulary — the ceiling
-    // `the_tolerated_collision_set_is_pinned` defends — and neither schedules
-    // anything: `muster` inserts a `Course` and `haul` moves one ward, both
-    // instantly, and neither ever inserts `Working`.
+    // The sanctum's two are the same case. `muster` and `haul` went into
+    // `is_operation` to stay out of the tower-wide vocabulary and neither
+    // schedules anything — both act instantly and never insert `Working`. Left
+    // alone, a bound `holding` beside a brewing loop answered *"holding.spell
+    // waits: the alembic is distilling"*, never mustered, gave up at `PATIENCE`
+    // and latched a fault on the sanctum's rail box, contradicting
+    // `execute::muster`'s doc, ROADMAP and §19 alike.
     //
-    // Left alone, a bound `holding` beside a brewing loop answered
-    // *"holding.spell waits: the alembic is distilling"* and never mustered at
-    // all — then gave up at `PATIENCE` and latched a fault on the sanctum's rail
-    // box. That contradicts `execute::muster`'s own module doc, ROADMAP's Phase 4
-    // note and §19, all three of which say this domain runs *beside* a brew.
-    // **The menagerie's two join them, and here rather than later.** A call and
-    // a limn are instant and schedule nothing, so a bound search queued behind a
-    // brew would wait on a slot it never takes — and the circle's search is
-    // hundreds of calls, so it would starve rather than wait. §19 records this
-    // exemption being *forgotten* for the sanctum and what it cost; adding a
-    // domain to the list is the whole of the fix, so it goes in with the verb.
+    // The menagerie's two join them, and here rather than later: a call and a
+    // limn are instant, so a bound search would wait on a slot it never takes —
+    // and the circle's search is hundreds of calls, so it would starve. §19
+    // records the exemption being forgotten for the sanctum and what it cost.
     if matches!(
         intent.verb,
         Verb::Dial | Verb::Muster | Verb::Haul | Verb::Summon | Verb::Limn
@@ -175,13 +149,13 @@ fn begins_work(intent: &Intent) -> bool {
 ///
 /// §10.1's per-instrument verbs name the *material*, not the tool — the tool is
 /// what the verb means — so that instrument is found from its
-/// [`Operation`](crate::tower::Operation) component. **The same derivation
-/// `execute::pipeline::operate` uses**, extracted rather than copied: the first
-/// copy exists specifically to end the name-string dispatch six sites were
-/// doing, and a second copy would restart it.
+/// [`Operation`](crate::tower::Operation) component. The same derivation
+/// `execute::pipeline::operate` uses, extracted rather than copied: that one
+/// exists to end the name-string dispatch six sites were doing, and a second
+/// copy would restart it.
 ///
-/// A `move` names two places and needs **both** free — §10.1's lock covers
-/// taking as much as putting, and `pipeline::carry` refuses on either.
+/// A `move` names two places and needs both free — §10.1's lock covers taking as
+/// much as putting, and `pipeline::carry` refuses on either.
 fn touches(world: &World, intent: &Intent) -> Vec<Entity> {
     let cwd = world.resource::<Cwd>().0;
     let here = tower::children_of(world, cwd);
@@ -196,12 +170,11 @@ fn touches(world: &World, intent: &Intent) -> Vec<Entity> {
             })
             .collect();
     }
-    // **`stop` is not here, and must not be.** The list is "verbs a busy
-    // instrument would refuse", and `stop` is the one verb whose whole purpose
-    // is the busy case — `pipeline::stop` never refuses on `Working`. Listing it
-    // made a scripted `stop` wait out the very run it was cancelling, burn
-    // PATIENCE, report `spell_gave_up`, and then fire on an idle tool as a
-    // no-op. A spell could not call anything off.
+    // `stop` is not here and must not be. The list is "verbs a busy instrument
+    // would refuse", and `stop` is the one verb whose purpose is the busy case.
+    // Listing it made a scripted `stop` wait out the run it was cancelling, burn
+    // PATIENCE, report `spell_gave_up`, then fire on an idle tool as a no-op —
+    // so a spell could not call anything off.
     if !matches!(
         intent.verb,
         Verb::Wield | Verb::Empty | Verb::Purge | Verb::Move

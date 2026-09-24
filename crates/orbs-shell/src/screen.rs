@@ -1,30 +1,19 @@
 //! The window, and how big a cell of the fixed grid is on it.
 //!
-//! DESIGN.md §4 and §19: the picture is **4:3** and the grid is a constant
-//! ([`orbs_render::GRID`]), so a window decides the *size* of a cell and never
-//! the number of them. This module holds the answer; feeding it a window and
-//! drawing the letterbox are the Bevy frontend's, in its `shell::window`.
+//! The picture is 4:3 and the grid is a constant ([`orbs_render::GRID`]), so a
+//! window decides the *size* of a cell and never the number of them (§4, §19).
+//! Feeding it a window and drawing the letterbox are the Bevy frontend's job.
 //!
-//! This used to resolve a fidelity tier — an integer scale picked so the grid
-//! landed near 80×22 whatever the window — which meant every resize moved every
-//! rectangle on screen. §19 records why that went.
+//! A frontend with no window still answers `grid`, `mode` and `scale`: hand it
+//! [`orbs_render::PICTURE`] and the scale is `1.00`, as [`mod@super::dump`]
+//! does.
 //!
-//! # Nothing here is Bevy's, and nothing here is pixels-only
-//!
-//! Every painter that takes a `&Screen` reads `grid`, `mode` and — at the rail's
-//! foot and in the session title — `scale`. A frontend with no window still has
-//! to answer all three, and [`mod@super::dump`] has always shown how: hand it
-//! [`orbs_render::PICTURE`] and the scale is `1.00`, which for a surface drawing
-//! one cell per cell is as true as it is for a 1280×720 window.
-//!
-//! **`window` stays pixels rather than a resolved `f32`** so this keeps `Eq`,
-//! which `shell::window::track_window` leans on twice: once to skip a repaint
-//! when nothing moved, and once as the "has the player chosen a mode yet?"
-//! sentinel.
+//! `window` stays pixels rather than a resolved `f32` to keep `Eq`, which
+//! `shell::window::track_window` uses to skip a repaint and as its "has the
+//! player chosen a mode yet?" sentinel.
 
-// The one engine item this file uses, and `bevy_ecs::Resource` is the same trait
-// `bevy::prelude::Resource` is — `bevy` re-exports this crate, and the lockfile
-// holds exactly one copy of it.
+// `bevy_ecs::Resource` is the same trait `bevy::prelude::Resource` is — `bevy`
+// re-exports this crate.
 use bevy_ecs::prelude::Resource;
 use orbs_render::{DisplayMode, GRID, GridSize, MIN_GRID, MIN_SCALE};
 
@@ -38,9 +27,8 @@ pub struct Screen {
     pub grid: GridSize,
     /// How the main window divides among its panes.
     ///
-    /// §9 makes this a **setting, not a heuristic**: both modes grant identical
-    /// capacity, panes, information and synergies, and the player may override
-    /// the default at any time including mid-siege.
+    /// A setting, not a heuristic: both modes grant identical capacity and the
+    /// player may override the default at any time, mid-siege included (§9).
     pub mode: DisplayMode,
     /// The window in physical pixels — everything [`Screen::scale`] needs.
     ///
@@ -52,13 +40,17 @@ pub struct Screen {
 impl Default for Screen {
     /// Before any window has been seen.
     ///
-    /// **Spelled out rather than derived**, because [`DisplayMode`]'s own
-    /// derived default is `Deep` and this frontend opens Wide (§9). A derive
-    /// here would silently disagree with [`Screen::for_window`].
+    /// Spelled out rather than derived: [`DisplayMode`]'s derived default is
+    /// `Deep` and this frontend opens Wide (§9), so a derive would silently
+    /// disagree with [`Screen::for_window`].
     fn default() -> Self {
         Self {
             grid: GRID,
-            mode: DisplayMode::Wide,
+            // What the player last chose. A setting that did not survive a
+            // relaunch is a heuristic with extra steps; `F4` writes it back.
+            mode: crate::settings::get(crate::settings::FOCUS)
+                .and_then(|word| DisplayMode::named(&word))
+                .unwrap_or(DisplayMode::Wide),
             window: (0, 0),
         }
     }
@@ -79,12 +71,10 @@ impl Screen {
     /// `false` is a real state to render — a "window too small" screen — not a
     /// reason to panic. See `ScreenLayout::compute`.
     ///
-    /// **Two ways to fail, one screen**, and both are reachable. The grid can be
-    /// below the authoring floor, which `ORBS_GRID` and a shrunk terminal both
-    /// produce; or the window can be too small for the glyphs to be letters,
-    /// which is the case a player reaches by dragging. Before the grid was fixed
-    /// the first test was the only one there was, because a small window *was* a
-    /// small grid.
+    /// Two ways to fail, both reachable: a grid below the authoring floor
+    /// (`ORBS_GRID`, a shrunk terminal), or a window too small for the glyphs
+    /// to be letters (dragging). Before the grid was fixed a small window *was*
+    /// a small grid, so the first test was the only one.
     #[must_use]
     pub fn is_hostable(self) -> bool {
         self.grid.fits(MIN_GRID) && self.scale() >= MIN_SCALE
@@ -92,10 +82,8 @@ impl Screen {
 
     /// Resolve a window, keeping `mode` if the player has already chosen one.
     ///
-    /// The grid does not enter into it. **Wide by default, always** — §9's two
-    /// panes are hostable from the first frame, so `F4` works immediately rather
-    /// than needing a bigger window, and there is nothing left for a heuristic
-    /// to decide.
+    /// The grid does not enter into it. Wide by default: §9's two panes are
+    /// hostable from the first frame, so `F4` works without a bigger window.
     #[must_use]
     pub fn for_window(pixels: (u32, u32), mode: Option<DisplayMode>) -> Self {
         Self {
@@ -107,19 +95,10 @@ impl Screen {
 
     /// A screen with no window behind it — a terminal, or a dump.
     ///
-    /// **The constructor three callers were open-coding.** `for_window` is the
-    /// only other one and it hard-codes `grid: GRID`, so everything without a
-    /// window had to know two separate things to work around it: that
-    /// [`orbs_render::PICTURE`] is the honest stand-in — it makes [`scale`]
-    /// come out at exactly `MIN_SCALE`, so hostability turns entirely on the
-    /// *grid* — and that `grid` must then be struct-update-overridden on top.
-    ///
-    /// That knowledge was transcribed in `dump.rs`, in `orbs-tui`'s loop, and in
-    /// `orbs-tui`'s boundary test, and the three had already drifted apart on
-    /// the third field: one derived the mode from the grid, one passed the
-    /// player's, one passed `None`. The fake window is an implementation detail
-    /// and belongs here, where the module header already explains the rule and
-    /// stopped short of providing it.
+    /// The constructor three callers were open-coding, and had drifted apart
+    /// on the mode. [`orbs_render::PICTURE`] is the honest stand-in: [`scale`]
+    /// comes out at exactly `MIN_SCALE`, so hostability turns on the *grid*,
+    /// which `for_window` hard-codes and this overrides.
     ///
     /// [`scale`]: Self::scale
     #[must_use]
@@ -138,10 +117,9 @@ impl Screen {
 
     /// The mode the player has settled on.
     ///
-    /// §9: *"the player be able to override it at any time, including
-    /// mid-siege."* Window size and font scale are proxies for visual acuity,
-    /// not measurements of it, so the automatic choice is only ever a default —
-    /// and once overridden it survives every resize.
+    /// Window size and font scale are proxies for visual acuity, not
+    /// measurements, so the automatic choice is only a default — and once
+    /// overridden it survives every resize (§9).
     #[must_use]
     pub const fn flipped(self) -> DisplayMode {
         // The rule is `DisplayMode`'s — a frontend holding only a mode should
@@ -158,9 +136,8 @@ mod tests {
 
     #[test]
     fn every_window_gets_the_same_grid() {
-        // The request, stated as an assertion: the window buys a bigger glyph
-        // and never more cells. This replaces the tier table §9 used to carry,
-        // which said the opposite in four rows.
+        // The window buys a bigger glyph and never more cells, replacing the
+        // tier table §9 used to carry.
         for window in [
             (1280u32, 720u32),
             (1920, 1080),
@@ -177,10 +154,9 @@ mod tests {
 
     #[test]
     fn a_resize_moves_no_rectangle() {
-        // **This is the whole point of the change.** Panes, borders and the
-        // prompt are laid out once and never again: at three very different
-        // windows the layout is identical, so nothing reflows and no sentence
-        // that fitted stops fitting.
+        // Panes, borders and the prompt are laid out once: at three very
+        // different windows the layout is identical, so no sentence that
+        // fitted stops fitting.
         let layout = |window| {
             let screen = Screen::for_window(window, Some(DisplayMode::Wide));
             ScreenLayout::compute(&ScreenRequest {
@@ -196,9 +172,8 @@ mod tests {
 
     #[test]
     fn the_glyph_grows_with_the_window_even_though_the_grid_does_not() {
-        // The other half of the same bargain, and the reason 720 was chosen for
-        // the picture's height: the common display heights are whole multiples
-        // of it, so three of these four are pixel-exact.
+        // Why 720 is the picture's height: common display heights are whole
+        // multiples of it, so three of these four are pixel-exact.
         for (window, scale) in [
             ((1280u32, 720u32), 1.0),
             ((1920, 1080), 1.5),
@@ -213,9 +188,8 @@ mod tests {
 
     #[test]
     fn a_frontend_with_no_window_is_still_hostable() {
-        // What `ORBS_DUMP` passes, and what `orbs-tui` does: the picture itself,
-        // which is scale 1.00 — the floor, exactly. A terminal has no pixels to
-        // report and must not therefore be told its screen is too small.
+        // The picture itself is scale 1.00, exactly the floor. A terminal has
+        // no pixels to report and must not be told its screen is too small.
         let picture = orbs_render::PICTURE;
         let windowless = Screen::for_window((u32::from(picture.0), u32::from(picture.1)), None);
         assert_eq!(windowless.scale(), MIN_SCALE);
@@ -227,8 +201,8 @@ mod tests {
 
     #[test]
     fn focus_changes_the_split_and_not_the_grid() {
-        // What `F4` cost. It used to drop a fidelity tier as well, so the two
-        // modes had different grids; now only the tiling differs.
+        // `F4` used to drop a fidelity tier too, so the modes had different
+        // grids; now only the tiling differs.
         let window = (1920u32, 1080);
         let wide = Screen::for_window(window, Some(DisplayMode::Wide));
         let deep = Screen::for_window(window, Some(DisplayMode::Deep));
@@ -240,8 +214,7 @@ mod tests {
 
     #[test]
     fn both_halves_of_the_hostable_test_are_reachable() {
-        // A window too small for letters, which is what a player reaches by
-        // dragging...
+        // A window too small for letters, reached by dragging...
         let squinting = Screen::for_window((640, 480), None);
         assert!(squinting.grid.fits(MIN_GRID), "the grid is fixed and fits");
         assert!(
@@ -250,9 +223,8 @@ mod tests {
             squinting.scale()
         );
 
-        // ...and a grid below the authoring floor, which `ORBS_GRID` and a
-        // shrunk terminal both produce. Before the grid was fixed these were the
-        // same test.
+        // ...and a grid below the authoring floor. Before the grid was fixed
+        // these were the same test.
         let cramped = Screen {
             grid: GridSize::new(40, 10),
             ..Screen::for_window((1280, 720), None)
@@ -263,8 +235,8 @@ mod tests {
 
     #[test]
     fn the_default_opens_wide_rather_than_deep() {
-        // `DisplayMode`'s own derived default is `Deep`, so `Screen`'s `Default`
-        // is written out. This is that trap, as a test.
+        // `DisplayMode`'s derived default is `Deep`, so `Screen`'s `Default` is
+        // written out. That trap, as a test.
         assert_eq!(Screen::default().mode, DisplayMode::Wide);
         assert_eq!(Screen::default().grid, GRID);
     }

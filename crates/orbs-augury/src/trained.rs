@@ -1,18 +1,12 @@
 //! The trained reader, answering as an [`Augur`].
 //!
-//! # Where the boundary sits
-//!
 //! `orbs-sim` owns *which* lines a reader may see and what happens to its
-//! answer; this owns only the answering. The sim never depends on this crate —
-//! CLAUDE.md rule 1 — so a tower with no reader compiled in is the game exactly
-//! as it was.
+//! answer; this owns only the answering. The sim never depends on this crate
+//! (rule 1), so a tower with no reader compiled in is the game as it was.
 //!
-//! # It still never sees the world
-//!
-//! The reader answers `grind sage` with the player's own word in the slot, and
-//! `parser::resolve` binds it to whatever is actually on the shelf. That is the
-//! same division of labour the grammar works under, and it is why a reader
-//! needs no `Scene` and cannot go stale between ticks.
+//! It still never sees the world: the reader answers `grind sage` with the
+//! player's own word in the slot and `parser::resolve` binds it to whatever is
+//! on the shelf, so a reader needs no `Scene` and never goes stale.
 
 use burn::prelude::*;
 use burn::record::{BinFileRecorder, FullPrecisionSettings, Recorder as _};
@@ -30,14 +24,12 @@ pub const SCRIBE_WEIGHTS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/weights/s
 
 /// The reader as a frontend should hold it.
 ///
-/// **The CPU backend, and that is a measurement rather than a preference.** One
-/// 32-token sentence takes **348µs** on `ndarray` against **2.71ms** on `wgpu`:
-/// a batch of one is almost entirely kernel-launch overhead, so the GPU's place
-/// is the training run and not the prompt.
+/// The CPU backend, measured rather than preferred: one 32-token sentence takes
+/// 348µs on `ndarray` against 2.71ms on `wgpu`, because a batch of one is
+/// almost all kernel-launch overhead. The GPU's place is the training run.
 ///
-/// 348µs is also what retires the worker thread, the deadline and the *"the orb
-/// ponders"* indicator the plan budgeted for. §6 asks for sub-millisecond; this
-/// is a third of one, so a reader can simply answer.
+/// 348µs also retires the worker thread, the deadline and the *"the orb
+/// ponders"* indicator the plan budgeted for — §6 asks for sub-millisecond.
 pub type Reading = Trained<burn::backend::NdArray<f32>>;
 
 impl Reading {
@@ -47,8 +39,7 @@ impl Reading {
     ///
     /// If this checkout has no trained weights — they are a build artefact of
     /// `cargo run -p orbs-augury --example train --features train`, not source,
-    /// so a fresh clone
-    /// has none and a caller should carry on without a reader.
+    /// so a fresh clone has none and a caller carries on without a reader.
     pub fn cpu() -> Result<Self, burn::record::RecorderError> {
         Self::load(burn::backend::ndarray::NdArrayDevice::default())
     }
@@ -68,9 +59,8 @@ impl<B: Backend> Trained<B> {
     /// # Errors
     ///
     /// If no weights have been trained yet, or they were written for a
-    /// different vocabulary — which is a hard error rather than a degradation,
-    /// because a table that has shifted under trained weights produces confident
-    /// nonsense rather than an obvious failure.
+    /// different vocabulary — a hard error rather than a degradation, because a
+    /// shifted table produces confident nonsense rather than a visible failure.
     pub fn load(device: B::Device) -> Result<Self, burn::record::RecorderError> {
         Self::load_from(WEIGHTS, device)
     }
@@ -78,8 +68,8 @@ impl<B: Backend> Trained<B> {
     /// Load weights from `path`, without its `.bin`, rather than the ones the
     /// game ships.
     ///
-    /// **For a run nobody has shipped yet**: `scripts/seeds.sh` trains several
-    /// and has to read each one back to learn which, if any, is worth keeping.
+    /// For a run nobody has shipped yet: `scripts/seeds.sh` trains several and
+    /// reads each one back to learn which, if any, is worth keeping.
     ///
     /// # Errors
     ///
@@ -100,17 +90,13 @@ impl<B: Backend> Trained<B> {
     /// which is its own head's decision rather than a threshold applied to the
     /// verb scores afterwards.
     ///
-    /// # Several, because the room knows things the reader does not
+    /// Several, because the room knows things the reader does not: the tagger
+    /// reads 97% and the verb head far less, so the usual failure is a
+    /// correctly-found argument under the wrong verb — which a scene settles,
+    /// since only one of `move lectern` and `attend lectern` is a thing you can
+    /// do to a lectern. `Sim::submit_reading` takes the first that resolves.
     ///
-    /// The tagger reads 97% and the verb head far less, so the usual failure is
-    /// a correctly-found argument under the wrong verb. **That is exactly the
-    /// error a scene can settle**: `move lectern` and `attend lectern` are the
-    /// same words under two verbs, and only one of them is a thing you can do to
-    /// a lectern. `Sim::submit_reading` walks this list and takes the first that
-    /// resolves, so a second choice costs one sort here and nothing at all when
-    /// the first was right.
-    ///
-    /// **Each candidate is trimmed to its own verb's arity.** A three-slot
+    /// Each candidate is trimmed to its own verb's arity, or a three-slot
     /// tagging offered to a one-slot verb would be refused for having too many
     /// arguments rather than judged on the argument that matters.
     #[must_use]
@@ -127,18 +113,13 @@ impl<B: Backend> Trained<B> {
             .into_iter()
             .filter_map(|at| {
                 let verb = Verb::ALL.get(at)?;
-                // **A verb that cannot hold what the tagger found is not a
-                // reading of this sentence.** The trim below is what makes each
-                // candidate well-formed, and for a verb that takes *nothing* it
-                // trims away every span — so `digest husks` offered a bare
-                // `undo`, which takes no argument and therefore always resolves.
-                // `Sim::submit_reading` takes the first reading that resolves,
-                // so that sink beat the correctly-ranked `digest husks` sitting
-                // above it and the orb reverted the player's last command.
-                //
-                // The same shape as the free-text sink in `parser::resolve`, one
-                // level up: **something that can never fail to resolve wins by
-                // never failing**, not by being right.
+                // A verb that cannot hold what the tagger found is not a
+                // reading of this sentence. The trim below removes every span
+                // for a verb taking nothing, so `digest husks` offered `undo`,
+                // which always resolves — and beat the correctly-ranked reading
+                // above it. The free-text sink in `parser::resolve` is the same
+                // shape: something that can never fail to resolve wins by never
+                // failing, not by being right.
                 if verb.signature().len() < filled.len() {
                     return None;
                 }
@@ -149,7 +130,7 @@ impl<B: Backend> Trained<B> {
                 }
                 Some(command)
             })
-            // **After the filter, not before.** Taking four and then discarding
+            // After the filter, not before: taking four and then discarding
             // some would offer fewer than four readings for no reason.
             .take(MAX_READINGS)
             .collect()
@@ -170,12 +151,11 @@ impl<B: Backend> Augur for Trained<B> {
 
 /// Load one register's weights, checked against what this build holds.
 ///
-/// **The two shapes are checked before the record is applied**, because
-/// `load_record` answers a table that has changed shape underneath it with a
-/// panic from inside `burn` rather than an error — which reaches a player as a
-/// crash on a line they typed. Growing the corpus grows the vocabulary and
-/// adding a template grows the head, so both are the ordinary consequence of
-/// authoring rather than a corrupt file.
+/// Both shapes are checked before the record is applied, because `load_record`
+/// answers a table that changed shape underneath it with a panic from inside
+/// `burn` — which reaches a player as a crash on a line they typed. Growing the
+/// corpus or adding a template does it, so this is ordinary authoring rather
+/// than a corrupt file.
 ///
 /// # Errors
 ///
@@ -190,11 +170,10 @@ pub(crate) fn weights<B: Backend>(
     let record: <Reader<B> as Module<B>>::Record = BinFileRecorder::<FullPrecisionSettings>::new()
         .load(std::path::PathBuf::from(path), device)?;
 
-    // **The command that retrains *this* register**, and the register is told
-    // rather than guessed. The path cannot say it, now that `load_from` takes
-    // any path a run wrote — and the head's width says it only until the spell
-    // corpus has as many shapes as there are verbs, which would send somebody to
-    // retrain the wrong model and meet the same error.
+    // The command that retrains *this* register, told rather than guessed: the
+    // path cannot say it now `load_from` takes any path a run wrote, and the
+    // head's width says it only until the spell corpus has as many shapes as
+    // there are verbs.
     let classes = register.classes();
     let retrain = match register {
         Register::Verbs => "cargo run --release -p orbs-augury --example train --features train",
@@ -228,9 +207,8 @@ pub(crate) fn weights<B: Backend>(
 /// Which weights these are, as `Scrivener::identity` asks: FNV-1a over the
 /// bytes of each `.bin` file, in the order given.
 ///
-/// **The bytes, not the path and not a timestamp.** A retrain writes the same
-/// path, so a path would call two readers one; a timestamp would call one
-/// reader two across a copy. Read once more at load, which is once a session.
+/// The bytes, not the path or a timestamp: a retrain writes the same path, and
+/// a copy changes a timestamp. Read at load, which is once a session.
 pub(crate) fn identity(paths: &[&str]) -> u64 {
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
     for path in paths {
@@ -249,9 +227,8 @@ mod tests {
 
     /// The trained weights, if this checkout has any.
     ///
-    /// **Skipped rather than failed when absent.** Weights are a build artefact
-    /// of a GPU run, and `cargo test --workspace` must pass on a machine that
-    /// has never trained anything.
+    /// Skipped rather than failed when absent: `cargo test --workspace` must
+    /// pass on a machine that has never trained anything.
     fn trained() -> Option<Trained<NdArray<f32>>> {
         Trained::load(burn::backend::ndarray::NdArrayDevice::default()).ok()
     }
@@ -279,9 +256,9 @@ mod tests {
 
     #[test]
     fn a_stale_file_names_the_trainer_for_the_head_it_was_asked_for() {
-        // **By the head, not the path**, since a path can be anything `--out`
-        // wrote: the prompt's weights asked for as the spell register are the
-        // spell trainer's to replace.
+        // By the head, not the path, since a path is whatever `--out` wrote:
+        // the prompt's weights asked for as the spell register are the spell
+        // trainer's to replace.
         if trained().is_none() {
             return;
         }

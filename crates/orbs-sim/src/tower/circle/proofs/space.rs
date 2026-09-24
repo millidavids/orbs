@@ -8,9 +8,8 @@ use super::super::temper::{OPENING, SENSES, Temper};
 use super::super::{Glyph, Humour};
 use super::oracle::{puzzles, solutions};
 
-/// **The space, as measured outside this code.** 6 wirings × 9 masks × 216
-/// limnings; the valid ones; the distinct puzzles they make; the distinct boards
-/// a player can meet (wiring and temper, whatever the turn); the distinct tempers.
+/// The space, measured outside this code: 6 wirings × 9 masks × 216 limnings,
+/// then the valid ones, the distinct puzzles, the boards and the tempers.
 #[test]
 fn the_circuits_make_the_beasts_that_were_measured() {
     assert_eq!(Circuit::all().count(), 11_664);
@@ -48,9 +47,8 @@ fn no_puzzle_is_one_with_a_question_missing() {
     }
 }
 
-/// **Never one solution**, and De Morgan is why: negate both outer glyphs and
-/// swap the keystone for its dual, and every row answers as it did — turned
-/// wires or not, because the twin is about what the glyphs do with their inputs.
+/// Never one solution, by De Morgan: negate both outer glyphs, swap the
+/// keystone for its dual, and every row answers as it did.
 #[test]
 fn every_puzzle_can_be_held_at_least_two_ways_and_every_hold_has_its_twin() {
     for puzzle in puzzles() {
@@ -67,8 +65,7 @@ fn every_puzzle_can_be_held_at_least_two_ways_and_every_hold_has_its_twin() {
     }
 }
 
-/// **The draw's list is every valid circuit, in order, one entry each** — which
-/// is what makes the distribution by circuit.
+/// Every valid circuit in order, one entry each — the distribution by circuit.
 #[test]
 fn the_drawable_list_is_every_valid_circuit_in_order() {
     let expected: Vec<_> = Circuit::all().filter_map(Circuit::puzzle).collect();
@@ -83,9 +80,8 @@ fn the_drawable_list_is_every_valid_circuit_in_order() {
     }
 }
 
-/// **`is_puzzle` is the rules, checked against the oracle over every temper** —
-/// all 256 bit patterns under every wiring and every mask: exactly the drawn
-/// puzzles are accepted, whatever a hand-edited save claims.
+/// `is_puzzle` against the oracle over every temper, wiring and mask: exactly
+/// the drawn puzzles are accepted, whatever a hand-edited save claims.
 #[test]
 fn a_restore_accepts_exactly_the_puzzles_a_circuit_makes() {
     let table = puzzles();
@@ -106,8 +102,7 @@ fn a_restore_accepts_exactly_the_puzzles_a_circuit_makes() {
     assert_eq!(accepted, 2_994);
 }
 
-/// **A glyph with both wires turned is an unturned glyph wearing another
-/// humour** — the reason no mask turns both: `h(~a, ~b)` is `dual(h)(a, b)`.
+/// Why no mask turns both wires of a glyph: `h(~a, ~b)` is `dual(h)(a, b)`.
 #[test]
 fn both_wires_turned_is_the_dual_humour_so_no_mask_draws_it() {
     for humour in Humour::ALL {
@@ -152,9 +147,8 @@ fn a_mask_reads_back_as_itself_and_nothing_else_reads() {
     }
 }
 
-/// **A turned wire is the sense turned over, and only on its own glyph** — every
-/// single-wire mask, against the answer with that one sense's value negated by
-/// hand.
+/// A turned wire negates the sense on its own glyph only: every single-wire
+/// mask, against the answer negated by hand.
 #[test]
 fn a_turned_wire_hands_its_glyph_the_sense_turned_over() {
     for wiring in Wiring::all() {

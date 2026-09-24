@@ -1,31 +1,20 @@
 //! The session pane, as a screen reader receives it.
 //!
-//! DESIGN.md §14 makes the linear stream a first-class view of the frame rather
-//! than a debugging aid, and `orbs-render` captures one on **every** frame
-//! whether or not a reader is attached — deliberately, so the path is exercised
-//! by everyone rather than only by the players least able to report it broke.
+//! DESIGN.md §14 makes the linear stream a first-class view of the frame, and
+//! `orbs-render` captures one every frame whether or not a reader is attached,
+//! so the path is exercised by everyone rather than only by the players least
+//! able to report it broke.
 //!
-//! Nothing had ever displayed it. It was asserted by tests and printed by an
-//! example, which is how a stream that is subtly wrong stays subtly wrong: the
-//! failure mode is not a crash, it is a frame that describes itself *almost*
-//! correctly, and only a person reading both can tell.
+//! Nothing had ever displayed it: a stream that is subtly wrong does not crash,
+//! it describes the frame *almost* correctly, and only a person reading both
+//! can tell. `F5` swaps the session pane for what that pane says, in the same
+//! rectangle and at every window size.
 //!
-//! `F5` swaps the session pane for what that pane says. The same rectangle, so
-//! the comparison is one keypress rather than a squint, and it works at every
-//! window size instead of only above the Deep-focus floor.
-//!
-//! # The pane is painted twice
-//!
-//! Reading the live frame's stream does not work, and the reason is worth
-//! keeping: the mirror *replaces* the session pane, so by the time it is drawn
-//! the frame no longer contains what it is supposed to be describing. The first
-//! attempt showed a single empty `in` utterance and nothing else.
-//!
-//! So the session is painted into a scratch [`Frame`] that is never rasterised,
-//! purely to capture its [`Speech`], and the utterances go on screen instead.
-//! It costs one extra paint of one pane, only while the view is open, and it
-//! buys the thing that matters: what appears is the stream of the pane it
-//! replaced, not of the frame it is part of.
+//! The pane is painted twice. The mirror *replaces* the session pane, so
+//! reading the live frame's stream describes a frame that no longer holds what
+//! it is describing — the first attempt showed one empty `in` utterance. So the
+//! session is painted into a scratch [`Frame`] that is never rasterised, purely
+//! to capture its [`Speech`], and those utterances go on screen.
 
 use bevy_ecs::prelude::*;
 use orbs_render::{Frame, Pos, Rect, Speech, Style, UtteranceKind};
@@ -34,12 +23,23 @@ use orbs_sim::Sim;
 use super::screen::Screen;
 
 /// Whether the linear view is showing, and the frame it measures with.
-#[derive(Resource, Debug, Default)]
+#[derive(Resource, Debug)]
 pub struct Linear {
     showing: bool,
     /// Painted into and never drawn. Kept between frames so opening the view
     /// does not allocate a grid every time it is up.
     scratch: Frame,
+}
+
+impl Default for Linear {
+    /// Showing if the player left it showing: §14's accessibility route is a
+    /// worse one if it has to be found again every launch.
+    fn default() -> Self {
+        Self {
+            showing: crate::settings::get(LINEAR).is_some_and(|word| crate::settings::is_on(&word)),
+            scratch: Frame::default(),
+        }
+    }
 }
 
 impl Linear {
@@ -51,23 +51,39 @@ impl Linear {
 
     /// Show the linear stream, or stop showing it.
     ///
-    /// **A method, not a system**, for the same reason [`Panel::refresh`] and
-    /// [`Bench::advance`] are: §14's stream is the accessibility route, and the
-    /// terminal build is the one DESIGN.md §14 calls *"the cheapest route to
-    /// screen-reader support"* — so it is the last build that should be unable
-    /// to reach it.
+    /// A method, not a system, for the same reason [`Panel::refresh`] and
+    /// [`Bench::advance`] are: the terminal build is §14's *"cheapest route to
+    /// screen-reader support"* and must be able to reach it.
     ///
     /// [`Panel::refresh`]: crate::Panel::refresh
     /// [`Bench::advance`]: crate::Bench::advance
     pub fn toggle(&mut self) {
-        self.showing = !self.showing;
+        self.show(!self.showing);
+    }
+
+    /// Show the linear stream, or not, whichever `showing` says.
+    ///
+    /// The half a settings page needs: `F5` flips, the page names the state it
+    /// wants. Flipping until it agreed does the wrong thing when something else
+    /// changed the state in between.
+    pub fn show(&mut self, showing: bool) {
+        self.showing = showing;
         if !self.showing {
             // Return the grid rather than hold one for a pane nobody has open.
             self.scratch = Frame::default();
         }
         tracing::info!("linear view: {}", self.showing);
+        // One setting seen twice, and the shell's to remember because `F5` is
+        // bound in both builds. §14 makes this the accessibility route.
+        crate::settings::set(LINEAR, crate::settings::switched(self.showing));
     }
 }
+
+/// What the linear stream is called in the settings file.
+///
+/// Here rather than in a frontend because both builds bind `F5` and must write
+/// the same key — a second spelling is a setting that half persists.
+pub const LINEAR: &str = "linear";
 
 /// Show or hide the linear view.
 pub fn toggle(mut linear: ResMut<Linear>) {
@@ -92,10 +108,8 @@ pub fn paint(
 
     // Paint the pane it is replacing, off screen, purely for its speech.
     //
-    // With nothing revealing: this mirror exists so a sighted player and a
-    // reader can be compared, and a half-arrived line has no speech at all by
-    // design. Mirroring mid-reveal would show a stream with holes in it and
-    // invite the conclusion that the stream is broken.
+    // With nothing revealing: a half-arrived line has no speech by design, so
+    // mirroring mid-reveal would show a stream with holes in it.
     linear.scratch.reset(frame.size());
     super::prompt::session(
         &mut linear.scratch,
@@ -106,19 +120,15 @@ pub fn paint(
         &super::reveal::Reveal::default(),
         panel,
         scroll,
-        // The real one, threaded rather than defaulted: `Bench::default()` reads
-        // the environment, and this runs every frame F5 is up. It changes
-        // nothing either way — an animated instrument has no speech, which is
-        // the whole of what this mirror is for — so the cheap correct thing is
-        // to draw the screen that is actually on screen.
+        // The real one, not a default: `Bench::default()` reads the
+        // environment, and this runs every frame F5 is up.
         bench,
     );
 
     let mut painter = frame.painter(pane);
-    // Untitled, then labelled with `glyphs`. `Painter::border` *announces* a
-    // title as a heading — correct for every other pane and wrong for this one:
-    // a mirror that spoke would put "linear" into the very stream it displays.
-    // Caught by a test rather than by reading the code.
+    // Untitled, then labelled with `glyphs`. `Painter::border` announces a
+    // title as a heading, and a mirror that spoke would put "linear" into the
+    // stream it displays.
     painter.border(pane, None, Style::DIM);
     painter.glyphs(
         Pos::new(pane.col.saturating_add(1), pane.row),
@@ -128,8 +138,7 @@ pub fn paint(
 
     let body = pane.inset(1);
     let stream: &Speech = linear.scratch.speech();
-    // The tail, matching what the session pane does with records — a reader
-    // hears the end of a session, not the start of it.
+    // The tail, as the session pane does: a reader hears the end of a session.
     let skipped = stream.len().saturating_sub(usize::from(body.rows));
 
     for (row, utterance) in stream
@@ -187,8 +196,7 @@ mod tests {
 
     #[test]
     fn every_tag_is_the_same_width() {
-        // The text column must not jitter row to row, or the pane reads as
-        // ragged noise rather than as a transcript.
+        // The text column must not jitter row to row.
         let widths: Vec<usize> = [
             UtteranceKind::Heading,
             UtteranceKind::Text,
@@ -209,9 +217,8 @@ mod tests {
 
     #[test]
     fn it_shows_what_the_pane_it_replaced_says() {
-        // The defect this shape exists for: reading the live frame's stream
-        // showed one empty `in` utterance, because the mirror had already
-        // replaced the pane it was supposed to be describing.
+        // Reading the live frame's stream showed one empty `in` utterance: the
+        // mirror had already replaced the pane it was describing.
         let (sim, screen, mut frame, pane) = session_with(&["look around", "xyzzy"]);
         let mut linear = Linear::default();
 
@@ -267,8 +274,7 @@ mod tests {
         };
         linear.scratch.reset(GridSize::new(160, 45));
 
-        // A bare `World` rather than an `App`: this crate depends on `bevy_ecs`
-        // and not on the engine, and running one system needs nothing more.
+        // A bare `World`, not an `App`: this crate depends on `bevy_ecs` only.
         let mut world = World::new();
         world.insert_resource(linear);
         world.run_system_cached(toggle).expect("toggle");

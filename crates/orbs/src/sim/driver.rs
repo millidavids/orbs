@@ -1,13 +1,12 @@
 //! Driving the simulation from the frontend.
 //!
-//! Architectural rule 3: **the frontend is a caller, not a host.** Bevy's
-//! scheduler never runs sim systems. It runs exactly one system, [`advance`],
-//! which calls [`Sim::step`] once. Everything inside the sim runs on the sim's
-//! own single-threaded schedule, in its own deterministic order.
+//! Architectural rule 3: the frontend is a caller, not a host. Bevy's scheduler
+//! runs one system, [`advance`], which calls [`Sim::step`] once; the sim's own
+//! single-threaded schedule does the rest, in its own deterministic order.
 //!
 //! One tick is one real second (DESIGN.md §5.0), so the driver lives in
-//! `FixedUpdate` at 1 Hz rather than in `Update`. Frame rate must never change
-//! how fast the world moves.
+//! `FixedUpdate` at 1 Hz — frame rate must never change how fast the world
+//! moves.
 
 use bevy::prelude::*;
 use orbs_render::Presentation;
@@ -19,23 +18,19 @@ pub(crate) struct Tower(Sim);
 
 /// The readers that answer lines the orb cannot read itself (§6), if any.
 ///
-/// **Both registers, under one setting.** The prompt's reader and the spell's
-/// are two models over two answer spaces, and a player who has said *"read what
-/// I mean"* has said it about their whole session — a second toggle for spells
-/// would be one nobody finds and one that can disagree with the first.
+/// Both registers under one setting: a player who asked to be read that way
+/// meant their whole session, and a second toggle for spells would be one
+/// nobody finds and one that can disagree with the first.
 ///
 /// `orbs_shell::augury` and `orbs_shell::scrivener` are the single readers of
-/// the two switches, so this build and the terminal one cannot disagree about
-/// what either means.
+/// the two switches, so this build and the terminal one cannot disagree.
 #[derive(Resource, Default)]
 pub(crate) struct Readers {
     /// The prompt's reader, if the player wants one.
     ///
-    /// **Loaded once and kept even while `plain` is chosen.** Switching drivers
-    /// is a menu choice and must take effect on the next line typed; rebuilding
-    /// a reader on the way out of a settings page would put a file read on a
-    /// keystroke, and dropping it would make turning the setting back on cost
-    /// one.
+    /// Loaded once and kept even under `plain`: switching drivers is a menu
+    /// choice that must take effect on the next line typed, and rebuilding or
+    /// dropping the reader would put a file read on a keystroke.
     reader: Option<Box<dyn orbs_sim::Augur>>,
     /// The spell reader, on the same terms.
     scribe: Option<Box<dyn orbs_sim::Scrivener>>,
@@ -46,20 +41,15 @@ pub(crate) struct Readers {
 impl Readers {
     /// Whatever `ORBS_AUGURY` asked for.
     ///
-    /// **Every reader is chosen in `orbs_shell::augury`, including the trained
-    /// one.** Answering `model` here instead put it somewhere `ORBS_DUMP` could
-    /// never reach — a dump builds no `App`, so a reader living in a Bevy
-    /// resource is invisible to `scripts/dumps.sh`, which is exactly the
-    /// blindness the fixture augur exists to prevent. The shell takes an
-    /// optional `orbs-augury` behind a feature instead, and `orbs-tui` leaves it
-    /// off.
+    /// Every reader is chosen in `orbs_shell::augury`, including the trained
+    /// one: a dump builds no `App`, so a reader living in a Bevy resource is
+    /// invisible to `scripts/dumps.sh`. The shell takes an optional
+    /// `orbs-augury` behind a feature instead, and `orbs-tui` leaves it off.
     pub(crate) fn from_environment() -> Self {
-        // **Never under `cargo test`, now that a reader is the default.** Weights
-        // are a gitignored build artefact, so a reader installed here would make
-        // every test that adds `SimPlugin` behave one way on a machine that has
-        // trained and another on a fresh clone — a suite that passes or fails on
-        // whether someone ran the trainer is worse than no suite. A test that
-        // wants one installs it with [`Readers::holding`].
+        // Never under `cargo test`: weights are a gitignored build artefact, so
+        // a reader installed here would make every test that adds `SimPlugin`
+        // pass or fail on whether someone ran the trainer. A test that wants one
+        // installs it with [`Readers::holding`].
         if cfg!(test) {
             return Self::default();
         }
@@ -72,10 +62,9 @@ impl Readers {
 
     /// The reader, for handing to the sim — or nothing, if `plain` is chosen.
     ///
-    /// **Two switches, and they answer different questions.** `ORBS_AUGURY` says
-    /// what this *build* has to offer and is a developer's override; the driver
-    /// is the player's, and it decides whether what is on offer gets consulted.
-    /// `off` leaves nothing to gate, so the setting is simply moot there.
+    /// Two switches: `ORBS_AUGURY` says what this build offers (a developer's
+    /// override), the driver says whether the player wants it consulted. `off`
+    /// leaves nothing to gate.
     pub(crate) fn reader(&self) -> Option<&dyn orbs_sim::Augur> {
         match self.driver {
             orbs_shell::Driver::Plain => None,
@@ -106,10 +95,9 @@ impl Readers {
 
     /// A reader chosen directly rather than from the environment.
     ///
-    /// **For the one seam a dump cannot reach.** `ORBS_DUMP` builds no `App`, so
-    /// everything `scripts/dumps.sh` proves about a reader it proves about
-    /// `Sim::submit_reading` — never about the Bevy message that carries a typed
-    /// line to it.
+    /// For the one seam a dump cannot reach: `ORBS_DUMP` builds no `App`, so
+    /// `scripts/dumps.sh` never exercises the Bevy message that carries a typed
+    /// line to `Sim::submit_reading`.
     #[cfg(test)]
     pub(crate) fn holding(reader: Box<dyn orbs_sim::Augur>) -> Self {
         Self {
@@ -140,9 +128,9 @@ impl Tower {
 
     /// The tower a fresh game builds.
     ///
-    /// **Sealed, unless `ORBS_SEALED=0`**: a fresh game is a laboratory and
-    /// nothing else (§11.5), and `orbs_shell::fresh` is the one reader of the
-    /// switch so this build and the terminal one cannot disagree about it.
+    /// Sealed unless `ORBS_SEALED=0` — a fresh game is a laboratory and nothing
+    /// else (§11.5). `orbs_shell::fresh` is the one reader of the switch, so the
+    /// two builds cannot disagree.
     pub(crate) fn fresh(seed: u64) -> Self {
         Self(orbs_shell::fresh(
             seed,
@@ -153,15 +141,12 @@ impl Tower {
 
     /// The tower a *chosen* length builds, for a new game begun at the menu.
     ///
-    /// **Not [`fresh`](Self::fresh) with an argument**, because the two differ in
-    /// where the length comes from and that difference is the point: `fresh` is
-    /// the game the binary starts with and lets `ORBS_LENGTH` speak, while this
-    /// is a game the player has just been asked about and answered. An
-    /// environment variable outranking an answer typed a second ago would be the
-    /// wrong way round.
+    /// Not [`fresh`](Self::fresh) with an argument: `fresh` lets `ORBS_LENGTH`
+    /// speak, while this is an answer the player just typed, and an environment
+    /// variable must not outrank it.
     ///
-    /// Renamed here, unlike a restored tower: this **is** a new world, which is
-    /// exactly the case `session::Wizard` says the environment may seed.
+    /// Renamed here, unlike a restored tower — this is a new world, the case
+    /// `session::Wizard` says the environment may seed.
     pub(crate) fn begun(
         seed: u64,
         length: orbs_sim::content::Length,
@@ -176,10 +161,9 @@ impl Tower {
 
     /// The tower a save describes.
     ///
-    /// **Not renamed afterwards.** `session::Wizard` is explicit that this is
-    /// world state and *"a save outranks the environment"* — a frontend seeds
-    /// the name from `USER` only when it is building a new world, or a player
-    /// who renamed their wizard would be renamed back on every load.
+    /// Not renamed afterwards: `session::Wizard` says a save outranks the
+    /// environment, and a frontend seeds the name from `USER` only for a new
+    /// world — or a player who renamed their wizard is renamed back on load.
     pub(crate) fn restored(save: &orbs_sim::Save) -> Self {
         Self(Sim::restored(save))
     }
@@ -201,20 +185,18 @@ impl Tower {
 
     /// Hand a finished line to the sim.
     ///
-    /// The **only** other way the frontend touches the world, and it does not
-    /// advance it: `submit` echoes immediately and queues any resolved command
-    /// for the next `step()`. See `orbs_sim::session`.
+    /// The only other way the frontend touches the world, and it does not
+    /// advance it: echoes immediately, queues any resolved command for the next
+    /// `step()`. See `orbs_sim::session`.
     pub(crate) fn submit(&mut self, line: &str) {
         self.0.submit(line);
     }
 
     /// Hand a finished line to the sim, letting `augur` read it if the orb cannot.
     ///
-    /// **A separate method rather than a field on `Tower`**, and a separate
-    /// resource rather than a constructor argument, because a reader is not
-    /// part of what a tower *is*: all four constructors build the same world
-    /// whether or not one is installed, and threading an `Option` through each
-    /// of them would say otherwise.
+    /// A separate method, and a separate resource rather than a constructor
+    /// argument: a reader is not part of what a tower is, and all four
+    /// constructors build the same world whether or not one is installed.
     ///
     /// `None` is [`submit`](Self::submit) exactly — see
     /// [`Sim::submit_reading`](orbs_sim::Sim::submit_reading) for the tiers.
@@ -229,10 +211,9 @@ impl Tower {
 
     /// Take a mastery node the weave screen chose.
     ///
-    /// **A third verb-shaped method, and not `sim_mut`** — the comment below
-    /// says why, and a screen wanting to change the world is exactly the caller
-    /// it is guarding against. Like `submit`, this queues: the choice lands on
-    /// the next tick, so nothing reaches the world off a tick boundary.
+    /// A third verb-shaped method rather than `sim_mut` — see
+    /// [`Tower::opening`] for why. Like `submit` it queues, so the choice lands
+    /// on the next tick rather than off a tick boundary.
     pub(crate) fn take(&mut self, id: &str) {
         self.0.take(id);
     }
@@ -244,19 +225,17 @@ impl Tower {
 
     /// Take the spell `scribe` asked the editor to open, if any.
     ///
-    /// Narrow on purpose. The frontend gets `&Sim` for painting and two
-    /// verb-shaped methods for input; a general `sim_mut` would let any system
-    /// reach the world outside a tick boundary, which is the thing rule 3 and
-    /// `Sim::world_mut`'s contract both exist to stop.
+    /// Narrow on purpose: a general `sim_mut` would let any system reach the
+    /// world outside a tick boundary, which rule 3 and `Sim::world_mut`'s
+    /// contract both exist to stop.
     pub(crate) fn opening(&mut self) -> Option<orbs_sim::Request> {
         self.0.opening()
     }
 
     /// Whether `unfurl` has asked for the transcript to take the keyboard.
     ///
-    /// The third of the narrow verb-shaped methods, and the same shape as
-    /// [`Tower::opening`]: the sim owns the decision, the frontend owns the
-    /// scroll position, and this takes rather than reads so the mode is entered
+    /// Shaped like [`Tower::opening`]: the sim owns the decision, the frontend
+    /// the scroll position. It takes rather than reads, so the mode is entered
     /// once per word rather than every frame.
     pub(crate) fn unfurling(&mut self) -> bool {
         self.0.unfurling()
@@ -265,19 +244,18 @@ impl Tower {
     /// Whether `quit` has asked for the session to end.
     ///
     /// The fifth, and the only one whose answer is not a surface: leaving is an
-    /// `AppExit` here and raw mode being put back in the terminal build, which
-    /// is exactly why the sim only records that it was asked for.
+    /// `AppExit` here and raw mode restored in the terminal build, so the sim
+    /// only records that it was asked for.
     pub(crate) fn quitting(&mut self) -> bool {
         self.0.quitting()
     }
 
-    /// Whether either request is waiting, **without** mutating.
+    /// Whether either request is waiting, without mutating.
     ///
     /// `opening`/`unfurling` take `&mut self`, so asking through `ResMut<Tower>`
-    /// stamps the change tick — which left `resource_changed::<Tower>` true for
-    /// ever and returned `refresh_panel` and `suggest` to running every frame,
-    /// the exact thing their doc comments exist to prevent. Systems peek with
-    /// this and only reach for `&mut` once there is something to take.
+    /// stamps the change tick, leaving `resource_changed::<Tower>` true for ever
+    /// — which put `refresh_panel` and `suggest` back to running every frame.
+    /// Peek with this; reach for `&mut` only once there is something to take.
     pub(crate) fn has_opening(&self) -> bool {
         self.0.has_opening()
     }
@@ -287,19 +265,17 @@ impl Tower {
         self.0.is_unfurling()
     }
 
-    /// Whether `quit` is waiting, **without** mutating.
+    /// Whether `quit` is waiting, without mutating.
     ///
-    /// The fifth handshake was the one that shipped without its peek: `Sim` grew
-    /// this and nothing called it, while `quit_requested` reached for `ResMut`
-    /// unconditionally — so it stamped `Tower` on every frame it ran, and since
-    /// its own run condition is `resource_changed::<Tower>` it never stopped
-    /// running. See [`Tower::has_opening`] for the same regression the first
-    /// time.
+    /// The fifth handshake shipped without its peek: `quit_requested` reached
+    /// for `ResMut` unconditionally, stamping `Tower` every frame, and its own
+    /// run condition is `resource_changed::<Tower>`. See [`Tower::has_opening`]
+    /// for the same regression the first time.
     pub(crate) fn is_quitting(&self) -> bool {
         self.0.is_quitting()
     }
 
-    /// Whether `menu` is waiting, **without** mutating. See
+    /// Whether `menu` is waiting, without mutating. See
     /// [`Tower::has_opening`] for the regression the peek exists to prevent.
     pub(crate) fn has_menuing(&self) -> bool {
         self.0.has_menuing()
@@ -310,8 +286,8 @@ impl Tower {
         self.0.menuing()
     }
 
-    /// Whether `weave` has asked for the progression screen, **without**
-    /// mutating. See [`Tower::has_opening`].
+    /// Whether `weave` has asked for the progression screen, without mutating.
+    /// See [`Tower::has_opening`].
     pub(crate) fn has_weaving(&self) -> bool {
         self.0.has_weaving()
     }
@@ -321,8 +297,8 @@ impl Tower {
         self.0.weaving()
     }
 
-    /// Whether `wander` has asked for the arrow keys, **without** mutating.
-    /// See [`Tower::has_opening`].
+    /// Whether `wander` has asked for the arrow keys, without mutating. See
+    /// [`Tower::has_opening`].
     pub(crate) fn has_wandering(&self) -> bool {
         self.0.has_wandering()
     }
@@ -339,9 +315,8 @@ impl Tower {
 
     /// Save a spell out of the editor.
     ///
-    /// The editor's whole contribution to the world. Keystrokes never reach the
-    /// sim — see `shell::editor` — so this is the one call that makes an edit
-    /// real, and it is a submission like any typed line.
+    /// Keystrokes never reach the sim (see `shell::editor`), so this is the one
+    /// call that makes an edit real — a submission like any typed line.
     #[cfg(test)]
     pub(crate) fn write_spell(&mut self, name: &str, lines: &[String]) {
         self.write_spell_with(name, lines, None);
@@ -349,11 +324,9 @@ impl Tower {
 
     /// ...with the reader that answers the lines the orb cannot read itself.
     ///
-    /// **The reading is derived here and stored beside the text, never over
-    /// it.** `Held` is byte-exact whatever a reader says; `Read` is what
-    /// `spell::compile` compiles. A `None` reader is the identity — the two are
-    /// then the same lines — so a build with no weights is the game exactly as
-    /// it was.
+    /// The reading is stored beside the text, never over it: `Held` is
+    /// byte-exact, `Read` is what `spell::compile` compiles. A `None` reader is
+    /// the identity, so a build with no weights is the game as it was.
     pub(crate) fn write_spell_with(
         &mut self,
         name: &str,
@@ -389,6 +362,15 @@ impl Tower {
         self.0.set_prose(prose);
     }
 
+    /// Replace the manual (CLAUDE.md rule 6).
+    ///
+    /// [`set_prose`](Self::set_prose)'s pair, on the same tick boundary. A
+    /// reader already open keeps its chapter until the next keystroke
+    /// re-assembles the book: the edit lands, the scroll position does not jump.
+    pub(crate) fn set_manual(&mut self, manual: orbs_sim::content::Manual) {
+        self.0.set_manual(manual);
+    }
+
     /// Name the wizard at the orb.
     pub(crate) fn rename(&mut self, name: &str) {
         self.0.rename(name);
@@ -396,10 +378,9 @@ impl Tower {
 
     /// Advance one tick, for a test that needs the world to have moved.
     ///
-    /// **Test-only, and it stays that way.** In the game the sim is advanced
-    /// from exactly one place — [`advance`], in `FixedUpdate` at 1 Hz — and rule
-    /// 3 turns on that being true. A shipping caller of this would be a second
-    /// driver, which is the thing the narrow surface above exists to prevent.
+    /// Test-only, and it stays that way: rule 3 turns on the sim being advanced
+    /// from exactly one place, [`advance`] in `FixedUpdate` at 1 Hz. A shipping
+    /// caller would be a second driver.
     #[cfg(test)]
     pub(crate) fn step(&mut self) {
         self.0.step();
@@ -408,13 +389,11 @@ impl Tower {
     /// Step the tonal register through its three treatments.
     ///
     /// A preview of §3's eldritch register, which Phase 8 drives from threat.
-    /// It is here now because the three typefaces and §3's corruption exemption
-    /// had no player-facing surface at all — they were proven by a `println!` in
-    /// an example, which is not the same as having been looked at.
+    /// Here now because the three typefaces and §3's corruption exemption had no
+    /// player-facing surface — they were proven by a `println!` in an example.
     pub(crate) fn cycle_register(&mut self) -> Presentation {
-        // The order the key walks is `orbs_shell::cycle_register`'s, because
-        // both frontends bind a key to it and two copies would eventually
-        // disagree about where `Tampered` sits in the cycle.
+        // Order lives in `orbs_shell::cycle_register`: both frontends bind a key
+        // to it, and two copies would disagree about where `Tampered` sits.
         orbs_shell::cycle_register(&mut self.0)
     }
 }

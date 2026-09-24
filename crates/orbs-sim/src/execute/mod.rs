@@ -5,11 +5,9 @@
 //! verb whose domain does not exist has nothing to do, and §6 already guarantees
 //! the player was told what the orb understood.
 //!
-//! Split by concern rather than kept whole. `execute.rs` reached 987 lines
-//! holding three unrelated things — the pipeline, navigation, and the log — with
-//! only the sixteen-arm `match` touching all of them, so every phase's work
-//! landed in the same file and a brewing change conflicted with a log change for
-//! no semantic reason.
+//! Split by concern rather than kept whole: `execute.rs` reached 987 lines
+//! holding the pipeline, navigation and the log, with only the `match` touching
+//! all three.
 //!
 //! | Module | Verbs |
 //! |---|---|
@@ -19,8 +17,8 @@
 //! | `navigate` | `attend`, `survey` — §7's places |
 //! | `files` | `peruse`, `sift`, `verify` — §3's log |
 //!
-//! **No prose in any of them.** Rule 6 and §12 put authored text in content
-//! files; these emit facts and let a later layer wrap sentences around them.
+//! No prose in any of them: rule 6 and §12 put authored text in content files,
+//! and these emit facts for a later layer to wrap sentences around.
 
 mod audit;
 #[cfg(debug_assertions)]
@@ -73,19 +71,15 @@ pub use navigate::find_domain;
 // `debug_course`'s; `publish_pylon` takes the node and is `tower::erode`'s,
 // which runs on a tick when the player may be standing anywhere.
 pub(crate) use muster::publish as publish_pylon;
-// **These two aliases are debug-only, and say so rather than warn.**
-// `debug_course` and `debug_siege` are the only things that reach a republish by
-// `Cwd` from outside its own domain, so with `debug_assertions` off a release
-// build found both re-exports unused. The gate is the one their callers already
-// carry. `muster::refresh` itself stays ungated — `stop` abandoning a course
-// calls it — while `defend`'s has no other caller and is gated at its
-// definition.
+// Debug-only, and say so rather than warn: `debug_course` and `debug_siege` are
+// the only things that reach a republish by `Cwd` from outside its own domain,
+// so a release build found both re-exports unused. `muster::refresh` itself
+// stays ungated — `stop` abandoning a course calls it.
 #[cfg(debug_assertions)]
 pub(crate) use muster::refresh as refresh_pylon;
 // The bailey's republish. Only the `Cwd` form is re-exported — `defend`'s own
-// callers take the node directly, and the sanctum's split exists because
-// `tower::erode` republishes on a *tick*, which the siege has no equivalent of
-// while `hold` is the only thing that moves it.
+// callers take the node directly, and the siege has no tick-driven republish
+// the way the sanctum does.
 #[cfg(debug_assertions)]
 pub(crate) use defend::refresh as refresh_rampart;
 // ...and the die prices, which are raised once at construction rather than on a

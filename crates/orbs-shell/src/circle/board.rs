@@ -1,15 +1,13 @@
 //! The circle's board: where it sits and how it is drawn.
 //!
-//! The sanctum's board, one room over, and it follows the same three rules.
-//! **It is not gated on a word**: it draws whenever a beast waits, which is what
-//! makes a bound solver watchable. There is no full-pane mode, because there is
-//! nothing to walk: a circle is limned from the prompt with `limn` and `summon`.
+//! The sanctum's board, one room over, and it follows the same three rules. Not
+//! gated on a word: it draws whenever a beast waits, which is what makes a bound
+//! solver watchable. No full-pane mode, because there is nothing to walk — a
+//! circle is limned from the prompt with `limn` and `summon`.
 //!
-//! **Columns, never rows**, and it splits *after* the instrument panel.
-//!
-//! It **refuses rather than truncating** — a truth table missing a row is a
-//! question with part of it torn off, and a player would answer it believing it
-//! whole. See [`beside`](crate::beside).
+//! Columns, never rows, splitting *after* the instrument panel, and it refuses
+//! rather than truncating — a truth table missing a row is a question with part
+//! of it torn off. See [`beside`](crate::beside).
 
 use orbs_render::{Circle, Painter, Pos, Rect, Style, Wash};
 use orbs_sim::content::Prose;
@@ -45,9 +43,9 @@ pub(crate) fn paint(painter: &mut Painter<'_>, at: Rect, circle: &Circle, prose:
                 break;
             }
             let at = Pos::new(inside.col + col, inside.row + row);
-            // **`glyphs`, so the picture is silent**, and the summary says what
-            // it means. A reader hearing forty-four cells a row of suns and dots
-            // gets noise, which is the pylon's rule and the lattice's.
+            // `glyphs`, so the picture is silent and the summary says what it
+            // means — the pylon's rule and the lattice's. A reader hearing
+            // forty-four cells a row of suns and dots gets noise.
             painter.glyphs(at, &glyph.to_string(), style);
             if let Some(tint) = tint {
                 painter.tint(Rect::new(at.col, at.row, 1, 1), Wash::plain(tint));
@@ -81,8 +79,8 @@ mod tests {
         assert_eq!(split.rest, area);
     }
 
-    /// **It fits the 80×22 authoring floor**, as the pylon's board does and the
-    /// maze and the sheet do not. The domain is played by reading the table, so a
+    /// It fits the 80×22 authoring floor, as the pylon's board does and the maze
+    /// and the sheet do not. The domain is played by reading the table, so a
     /// board that yielded at the floor would make the floor unplayable.
     #[test]
     fn the_board_still_fits_the_authoring_floor() {

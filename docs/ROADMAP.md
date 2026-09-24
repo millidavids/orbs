@@ -568,10 +568,12 @@ defects — DESIGN.md §19.
 
 **Phase 0.5 is closed.** Its one open item — sticky skip, persisted CRT-off,
 reduce-motion — was never Phase 0.5 work: it needs somewhere to persist a
-setting, and nothing in the workspace serialises anything. It has **moved to
-Phase 15** beside §15's settings screen, which is where the thing it depends on
-is built. A deferred item parked in a finished phase is a phase that never
-finishes.
+setting, and at the time nothing in the workspace serialised anything. It
+**moved to *Ship*** beside the settings screen, which is where the thing it
+depends on is built. A deferred item parked in a finished phase is a phase that
+never finishes. *(The first two shipped with the threshold at `0.16.5`;
+reduce-motion is split out and still open, for a reason that is not scheduling —
+see the item.)*
 
 ---
 
@@ -821,8 +823,11 @@ they cannot prove it is the code worth writing"*, and no test can prove this.
         §19 names, any of which being removed brings the rate back down. Motion
         rides `CrtSettings::on`, so the F3 that kills the tube for motion
         sickness kills the shimmer too; the persistent per-effect toggle stays
-        with Phase 15's settings item above, which now has a real dependency
-        rather than a nominal one.
+        with a settings item still open, which now has a real dependency rather
+        than a nominal one. *(The threshold's `access` page shipped at `0.16.5`
+        and deliberately did **not** add it: a motion row a player could turn on
+        while the tube said off is the one state §14 must not reach, so it needs
+        the crossings separated from the phosphor first. `setting.rs` names it.)*
         **A hearth has three states a gauge does not**, all §19: a **cold** one
         smokes at the bottom and draws no track — it reports no meter at all, so
         it is the one bar in the game with no quantity behind it, and without
@@ -2601,8 +2606,11 @@ rather than smuggled: the save format serves no part of the exit criterion above
 It goes here because Phase 3 is next and because **every phase from here adds
 state to it** — Spellcraft's own spell-parts item adds the first. Building the
 format after five domains have shipped means retrofitting six phases of state,
-and it leaves Phase 15's settings item and Phase 13a's offline progression blocked
-until then. §19 records the placement argument in full.
+and it leaves the settings screen and Phase 13a's offline progression blocked
+until then. §19 records the placement argument in full. *(The settings half was
+right: the threshold's pages at `0.16.4`–`0.16.5` and `0.16.10` rest on the file
+format this item built, and `orbs-settings.toml` is the same `serde`/`toml` pair
+beside the same directory.)*
 
 - [x] ✅ **The save document, headless.** `Sim::snapshot` reads a world out as
       plain TOML and `Sim::restored` puts one back, and neither touches a file —
@@ -5612,6 +5620,393 @@ incapable** of regressing a phrasing that works today.
 
 ---
 
+## The threshold — **closed at `0.16.13`**
+
+Eleven boxes for the feature, and three more for what two `/code-review max`
+passes found in it. The second pass's findings include **three defects the first
+round's fixes introduced**, which is the honest reason there is more than one
+review box — and the third covers the findings that pass listed below its own
+cap, which are the ones easiest to leave and include the only per-frame
+allocation in the feature.
+
+**Exit:** the orb wakes to a menu rather than a tower, and every tower a player
+plays is one they chose — a new game at a length they picked, or one of the six
+on disk. Settings and the manual are reachable before any of it. **Met.**
+
+Three things went differently from the plan and are recorded in §19 rather than
+buried here: the manual's depth is a **third generated chapter** rather than the
+~10k authored words estimated, because the room primers already existed and a
+second copy would drift; the new surfaces went to `scripts/dumps.sh` rather than
+`orbs-render`'s `screens` example, because that example can only hand-build
+replicas and a replica of a painter is a second opinion about it; and auditing
+`dirs` found the dependency-licence table's *"the only copyleft entry"* claim to
+have been wrong for some time — two MPL-2.0 crates, both GPL-compatible, neither
+noticed.
+
+Four things were found by looking rather than by testing, which is §15's whole
+argument: the content watcher had been reloading once a *tick* since it shipped,
+the manual's contents page silently lost five chapters at the floor the moment
+the book grew, a settings row one cell short put a bracket out of line down the
+page, and a `dumps.sh` capture kept passing while its script had stopped
+reaching the screen its name claimed.
+
+**The game had no front door.** Launching read `orbs-save.toml` and put a world
+in front of the player before they had asked for one, at a length they had not
+chosen, with no way to see what else was on disk. The menu that answers all
+three shipped at `0.12` and is reachable only from **inside** a game — so
+starting a second tower meant first standing in the first one.
+
+Three open items were waiting on the same screen and are named in *Ship*: the
+sticky boot skip (owed since Phase 0.5), *"Options, remapping, all toggles"*, and
+the accommodation that DESIGN.md says has **no in-game control** at all.
+
+> **One menu, two stances — not two menus.** `Stance::{Threshold, InTower}` is a
+> field on the screen that already exists. A front-of-house screen of its own
+> would have duplicated the vocabulary, the prefix invariant, the complaint
+> sentences, the floor and the swap in order to change four words, and §19 is
+> largely a record of what two expressions of one rule cost.
+
+> **The stance gates the way *out*, and that is the half that is not cosmetic.**
+> `Outcome::Close` hands the keyboard back to the prompt — of a scratch world
+> that never ticks and is never kept. At the threshold the menu therefore cannot
+> be closed: `resume` is not a word it answers to, and Escape on the top page
+> does nothing.
+
+- [x] **The threshold exists, and it is a closed room** (`0.16.0`) —
+      `Threshold::{Waiting, Playing}` shared by both frontends, `ORBS_THRESHOLD`
+      with `0` for the harnesses and `1` for a dump, and a `playing` gate over
+      the clock, the autosave, the way out, `F6`, `F7` and the scrollback keys.
+      **No save is read and `Kept` is `None`**, so a tower nobody played cannot
+      be written by an autosave, by the way out or by a swap — `keep_now` and
+      `keep` both return early without a path, in both builds.
+
+      **Two things that would have shipped, and only one of them had a test.**
+      `new` refused with `Complaint::Unkept` when there was nowhere to save,
+      which is the truth for the *listing* and a dead end for a new game — and
+      `ORBS_SAVE=off` is what `dumps.sh` exports for all 147 captures and the
+      played suite for every scenario, so the threshold would have been
+      unreachable-past from the project's own instruments. `Outcome::Begin` now
+      carries `Option<PathBuf>` and `None` begins a playable tower that is not
+      remembered.
+
+      The other was found by **playing it**: the terminal build notices a swap
+      inside `Session::tick`, the threshold stops the clock, and so the menu
+      could ask for a tower that nothing ever heard — `new`, a length, and the
+      page stays up for ever. Every unit test passed, the shell's passed, and the
+      dump drew a correct menu throughout, because a dump hosts no loop.
+      `Session::answered` runs once per pass now, which also lands a swap on the
+      frame the key arrived rather than up to a second later.
+
+      **`ORBS_DUMP` is structurally blind to this feature** — it is answered
+      before the `App` is built and makes its own `Sim`, so `Threshold`, the
+      clock gate, the routing and the swap do not exist in a capture. All 147
+      stay byte-identical whatever this does. The gate is
+      `routing::the_threshold_reaches_a_tower`, the only thing in the project
+      that opens the game the way a player does
+      **See it:** ✅ `ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_THRESHOLD=1 ORBS_DUMP=1 cargo run -p orbs`
+      — and `ORBS_MENU="resume"` for the refusal, `ORBS_MENU="new"` for the
+      lengths reached with saving off; then `scripts/play.sh routing::the_threshold`
+      for the half a picture cannot show
+- [x] **One menu, two stances** (`0.16.1`) — `resume` · `play` · `settings` ·
+      `quit`, with `resume` off the threshold's copy. `saves` and `new` were both
+      on the top page and are now one level down together: `Page::Play` numbers
+      the towers and puts `new` under them, because separating them asked a
+      player to tell *open one you have* from *raise one* before anything had
+      said there was a difference. `options` became `settings`, the word people
+      look for.
+
+      **The split came before the page, as both earlier ones did**, so *"nothing
+      moved"* was a `diff -r`: `state.rs` was back to 757 lines against
+      CLAUDE.md's ~300, so what a word *means* moved to `pages.rs` and the menu's
+      shape stayed. `back` is one expression now rather than four lines pasted at
+      the top of each handler — which is the shape §19 keeps recording as the one
+      that drifts.
+
+      **`manual` is deliberately not on the top page yet.** It arrives with the
+      thing it opens; a word that says *not yet* is the dead control §15 weighs
+      heaviest
+      **See it:** ✅ `ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_THRESHOLD=1 ORBS_DUMP=1 ORBS_MENU="play" cargo run -p orbs`
+      — with `ORBS_SAVE` pointing at a directory of towers they are numbered with
+      `new` beneath, so a returning player types `play`, `1`
+- [x] **A tower can be abandoned, and a broken one says so** (`0.16.2`) —
+      `abandon <slot>` in `quit`'s ask-once shape: the question lasts exactly one
+      line, a second `abandon 2` answers it, and **any other line answers no**,
+      including `abandon` on a different slot. It is the **only word in the menu
+      that is not prefix-matched** — everything else runs from its first letter
+      because a mistyped one costs a page you step back from, and this one sets a
+      tower aside. The file is **renamed, never unlinked** (`keep_aside`'s
+      precedent), so even a mistyped slot number is recoverable.
+
+      **An unreadable slot said two false things at once.** It was dropped from
+      the listing, so the slot looked empty — and typing its number answered
+      *"there is no tower in 3"* about a file sitting right there with somebody's
+      game in it. Worse, opening one would have reached `read_from`, which *sets
+      an unreadable save aside* — a destructive act from a keystroke meaning
+      *open this*. `Slot::held` is an `Option` now: `None` is listed as what it
+      is, refused by name, and never offered to `new`
+      **See it:** ✅ `ORBS_SAVE=<dir>/orbs-save.toml ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_THRESHOLD=1 ORBS_DUMP=1 ORBS_MENU='play\nabandon 2' cargo run -p orbs`
+      asks; `'play\nabandon 2\nabandon 2'` does it and the file is
+      `orbs-save-2.toml.abandoned`; with a corrupt file in a slot, `'play\n3'`
+      says the orb cannot read it and leaves the file alone
+- [x] **Saves and settings move to the OS app-data directory** (`0.16.3`) —
+      `<app-data>/orbs/`, resolved `ORBS_SAVE` → app-data → working directory.
+      DESIGN.md §13 and PRIVACY_POLICY.md both promised this *"with the settings
+      screen"*, and the cost of leaving it was written down the whole time: a
+      Steam install directory can be read-only, which is a game nobody can save
+      in, found by a player rather than by us.
+
+      **Three things that are not obvious and each would have bitten.**
+      `create_dir_all` before the first write, because `~/.local/share/orbs`
+      does not exist on a fresh machine and without it the first autosave fails,
+      says so once, and then quietly keeps nothing all session — which looks
+      exactly like saving until you come back. A **marker file** rather than a
+      per-slot copy-if-absent, because otherwise a player who abandons their
+      second tower gets the stale one resurrected next launch, into a slot
+      `free_slot` had already offered; verified by abandoning one and
+      relaunching. And `chosen` takes the data directory as a **parameter**, so
+      no test in the workspace can reach a developer's real towers — which it
+      would have, from `menu/pages.rs` and `settings.rs`, the moment this landed.
+
+      **Copied, never moved**, per `abandon`'s and `keep_aside`'s rule: an older
+      build still finds its own towers, and nobody loses a game to a migration
+      that half happened
+      **See it:** ✅ with a sandboxed `HOME` and towers in the working directory,
+      one launch puts them in `~/.local/share/orbs/` with `.migrated` beside
+      them, leaves the originals untouched, and a second launch resurrects
+      nothing
+- [x] **The settings store** (`0.16.4`) — `settings/` split into `values` (what a
+      page is made of), `store` (the file) and the typed readers. Three pages —
+      `tube`, `access`, `habits` — each row saying **what it is set to**, because
+      a page that lists what you could pick without saying what is picked is
+      §15's dead end in miniature. A word steps a setting and a word with a value
+      names one (`crt`, `crt off`), which is what `F3` already does plus a way a
+      See-it line can name a screen — and is why there is no third page under
+      `settings`.
+
+      **A frontend builds the rows and the menu draws them**, generalising
+      `show_driver`: the menu does not know what a phosphor is, how many there
+      are, or whether this build has a tube. That is also how *unsupported* is
+      said — there is no mask and no dimmed row, `orbs-tui` simply builds no tube
+      rows and is offered no `tube` page.
+
+      **The file became a map**, because one of the things a player sets is a
+      theme whose names come from the frontend's palette. Three things fall out
+      and all three are wanted: the words are the format (so the old
+      `driver = "augury"` file needs no migration), a key this build does not
+      know survives a write, and a frontend may keep a setting the shell has
+      never heard of. `Row::key` keeps the old `Driver`/`Kept` distinction where
+      it still earns its place — a player types `reading`, the file says `driver`
+
+      **See it:** ✅ `ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_THRESHOLD=1 ORBS_DUMP=1 ORBS_MENU='settings\ntube\ncrt off' cargo run -p orbs`
+      — and the same in `orbs-tui`, which offers two pages rather than three
+- [x] **The frontends obey** (`0.16.5`) — the tube, the phosphor, the
+      accommodation, the focus mode, the linear stream and §4's **sticky boot
+      skip** all seed from the store and write back through their function keys,
+      so `F3` and the tube page are one setting seen twice. The chain is
+      `env → stored → default` per setting: `ORBS_CRT` and `ORBS_SIGHT` keep
+      outranking a preference, because they are the instruments ~200 See-it lines
+      depend on. Closes *Ship*'s **Sticky skip, persisted CRT-off** and the
+      settings-screen clause inside its colour-filters item.
+
+      ⚠ **Reduce-motion is not among them, and that is a decision rather than a
+      gap.** §14 asks that a player who wants no motion gets none and they
+      already do — `motion::advance` turns the crossings, the fire and the flare
+      off when the *tube* is off, and says so in as many words. A second switch
+      would be one a player could turn on while the tube said off, which is the
+      one state §14 must not be able to reach. Reducing motion *without* the
+      tube is a real thing to want and is not a checkbox: it needs the crossings
+      separated from the phosphor. Left open in *Ship*.
+
+      **A settings file that a `cargo test` reads is one it writes.** `path` was
+      `save::path()` with the name swapped, so the tests that press `F5` left
+      values in a real `~/.local/share/orbs/orbs-settings.toml` — found by a test
+      failing *for a reason on one machine*, which is the worst way to find it.
+      Nothing is kept now until a frontend opts in, and every test binary is a
+      process that does not
+      **See it:** ✅ set `skip on` in `settings`, `habits`; relaunch **without**
+      `ORBS_BOOT=0` and the boot sequence does not play — with a fresh profile it
+      still does
+- [x] **The manual reader** (`0.16.6`) — a sixth `Focus`, a contents page, a
+      chapter wrapped to the pane and scrolled within it, `Key::PageUp`/
+      `PageDown`, and `ORBS_MANUAL`. `manual` is on the menu's top page in both
+      stances, so the question *how do I play this* has an answer **before** the
+      first tower — which is the one `recall` structurally cannot give, because
+      all eight of its branches need a player standing in a room.
+
+      **It is the first surface that wants a key another surface already owns.**
+      `PgUp`/`PgDn` scroll the transcript from behind everything else —
+      deliberately, and a scenario holds it — so without a guard one press pages
+      the chapter *and* the transcript under it. **Neither build had the guard**:
+      this one answered the keys above its surface dispatch, and the Bevy build
+      had them on `booted` alone, which its own comment already recorded as
+      *"the transcript pages behind the editor there"*. Both have it now, and
+      `routing::the_manual_pages_and_the_transcript_behind_it_does_not` fails
+      without either.
+
+      **`content/manual.toml` is a second content file rather than a prefix in
+      `prose.toml`**, for a reason that is not the obvious one: the parser-noun
+      trap is real but a prefix would dodge it — what decides it is the 70-cell
+      width lint, which every line in `prose.toml` is held to *because it is
+      drawn as written*. A manual is paragraphs the reader wraps.
+
+      ⚠ **`screens.rs` is not where this is covered**, and that is deliberate:
+      that example hand-builds replicas from `orbs-render` primitives because
+      that crate has no dependencies, so a manual there would be a second opinion
+      about a layout `dumps.sh` can draw with the real painter
+      **See it:** ✅ `ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_THRESHOLD=1 ORBS_DUMP=1 ORBS_MENU="manual" ORBS_MANUAL="orbs" cargo run -p orbs`
+      — and at `ORBS_GRID=80x22` a chapter says *pgdn for more*; then
+      `scripts/play.sh routing::the_manual_pages` for the paging a capture
+      cannot take a measurement for
+- [x] **The generated chapters** (`0.16.7`) — *every command there is* and *every
+      word a spell is written with*, assembled from the `man_`, `recall_` and
+      `using_` keys `recall` has accumulated since Phase 1. **No new prose**, and
+      that is the point twice over: §12 rates the writing track the top risk and
+      the cheapest words are the ones already written, and a second copy of a
+      verb's page is one that comes to disagree with `help`.
+
+      What these add that `help` cannot is the question they exist for. `help`
+      lists what works **where you are standing** — the right answer to *what can
+      I do now*, and no answer at all to *what is there*. A sealed tower's `help`
+      cannot mention a room it has not opened.
+
+      ⚠ **Indentation does not survive wrapping**, and it is written down in
+      `assemble.rs` because it shapes how every chapter is authored: `Wrap` trims
+      leading spaces — it must, or a wrapped line would inherit the indent of the
+      one it broke from — so hierarchy is made of columns, blank lines and words.
+      The column widths are **measured from the prose**, after a hard-coded one
+      ran `mix <reagent> with <reagent>` straight into its gloss
+      **See it:** ✅ `ORBS_BOOT=0 ORBS_GRID=120x45 ORBS_THRESHOLD=1 ORBS_DUMP=1 ORBS_MENU="manual" ORBS_MANUAL="commands" cargo run -p orbs`
+      — every verb in the game, in `help`'s own groups, columns aligned; and
+      `ORBS_MANUAL="language"` for the twelve words and their worked examples
+- [x] **The authored chapters** (`0.16.8`) — `manual.toml`, its own `ORBS_CONTENT` leg
+      (rule 6 is not satisfied by `include_str!`), wrap-aware lints, and the
+      licences chapter `assets/README.md` has been owed since Phase 5.
+      **Sixteen chapters and 4,773 authored words, against the ~10k the plan
+      estimated** — the gap is a third generated chapter rather than unwritten
+      prose. `inside` builds every room's primer out of the 30 `man_here/start/
+      solve` keys `recall` already holds, which is the depth an authored
+      walkthrough would have been a second, drifting copy of; the book a player
+      reads is **7,345 words across nineteen chapters**. Coverage is what was
+      promised, and it grew: `entering` (starting, continuing, abandoning, where
+      saves live), `yours` (the three settings pages) and `upkeep` (the arsenal,
+      quintessence, and the three numbers that are not the same number) were not
+      on the plan's list and are what a manual reached from the front door has
+      to answer
+      **See it:** `ORBS_BOOT=0 ORBS_GRID=80x22 ORBS_THRESHOLD=1 ORBS_DUMP=1 ORBS_MENU="manual" cargo run -p orbs`
+      — the contents page at the floor; `ORBS_MANUAL="entering"`, `"yours"`,
+      `"upkeep"`, `"inside"` for the new ones. The reload leg:
+      `ORBS_CONTENT=crates/orbs-sim/content cargo run -p orbs`, then edit a line
+      of `manual.toml` while it runs and watch the log say `reloaded manual.toml`
+      **once** — see §19 on the watcher that used to say it every tick
+- [x] **A voice for the orb** (`0.16.9`) — a synthesised cue library fired from records and
+      utterances, the hum, and the register moving it. Synthesised rather than
+      sampled: every asset in the tree carries a `PROVENANCE.md`, and a cue
+      generated in code has no licence question. Six cues (`key`, `enter`,
+      `done`, `good`, `ill`, `baulk`), each a few sine tones under a raised
+      cosine, chosen from a record's `kind`/`role`/`outcome` — **rule 2 as a
+      signature**, since those are the same three things the transcript's own
+      styling is chosen from. The API was compiled against the pin at
+      `.claude/skills/bevy-idioms/verify/src/audio.rs` before a line of it was
+      written, per CLAUDE.md
+      **See it:** `ORBS_SOUND=1 cargo run -p orbs 2>&1 | grep '^sound:'` — every
+      cue named as it plays, which is the half that works with no speakers; then
+      type, brew, and hear the difference between a completion and a refusal
+      with the screen off
+- [x] **The sound page, and audio as accommodation** (`0.16.10`) — volumes persisted, and
+      §14's distinct completion / warning / sabotage tones. **Two volumes, not
+      one**: the hum is atmosphere some people find tiring within a minute and
+      the cues are §14's ambient channel, so *hum off, voice full* has to be
+      reachable. Four words each (`off`/`quiet`/`half`/`full`) rather than a
+      number, because the menu is typed and has no slider — a `voice 0.35` is a
+      value nobody can guess or cycle to. §14's third tone is `wrong`, the beat
+      of two notes a semitone apart, fired by a `Status` record with
+      `Role::Danger` — which is what both of `verify`'s tampered tells push and
+      nothing else does. **The page was deliberately absent from `0.16.4`**: a
+      page of volumes for a game that makes no sound is §15's dead affordance,
+      so it arrived with the thing it controls
+      **See it:** `ORBS_BOOT=0 ORBS_DUMP=1 ORBS_THRESHOLD=1 ORBS_SAVE=off ORBS_MENU='settings\nsound' cargo run -p orbs`
+      — the page; add `\nvoice quiet\nhum off` to see both forms (cycle, and name
+      a value). Then put `hum = "off"` in `orbs-settings.toml` beside your saves
+      and `ORBS_SOUND=1 cargo run -p orbs 2>&1 | grep '^sound:'` — it comes back
+      `hum (plain, off)`. By ear: `verify` a tampered surface and hear the beat
+      against a completion's rise
+- [x] **The review, and fifteen corrections** (`0.16.11`) — a `/code-review max`
+      over the whole feature, with the gate entirely green throughout. **Four
+      were reproduced in a running build**, and two could lose a player's work:
+      a dump could list and then **rename a real save** (`ORBS_MENU` drives the
+      menu, the menu's play page reaches `save::path()` itself, and `dumps.sh`
+      exporting `ORBS_SAVE=off` was the only thing preventing it), and
+      `migrate()` tested slot 1 alone, so anybody who had abandoned their first
+      tower lost the whole migration permanently and retried it every launch.
+      Also: the manual's paging was dead in **both** frontends because neither
+      key mapper built the new variants; a keystroke reached the manual *and*
+      the menu underneath, so `q` at a chapter quit the game; `b` at the
+      contents closed the manual rather than opening `begin`, which is
+      `entering` now; the terminal build replayed the whole boot sequence after
+      every swap, dropped `MenuOutcome::Set`, and never re-applied
+      `ORBS_CONTENT`; the persisted `focus` was discarded on frame one; a swap
+      replayed a restored tower's entire transcript as audio; `theme m` could
+      never reach monochrome; and the bed was a 2 Hz tremolo rather than a hum.
+      **Two tests could not fail** and were counted as coverage. **The pattern
+      behind the worst four is one shape** — an enum grew and a `_ =>` arm
+      silently absorbed it; §19 has the table
+      **See it:** the two that matter, as reproductions —
+      `XDG_DATA_HOME=/tmp/p ORBS_BOOT=0 ORBS_DUMP=1 ORBS_THRESHOLD=1 ORBS_MENU=play cargo run -p orbs`
+      says *no towers yet* rather than listing a real profile's games, and
+      `ORBS_MENU=$'play\nabandon 1\nabandon 1'` leaves every file where it was;
+      then a working directory holding `orbs-save-2.toml` and no slot 1 migrates
+      on the next launch
+- [x] **The second review, and fifteen more** (`0.16.12`) — the same pass again
+      over the corrected tree. **Three of its findings were defects the first
+      round's fixes introduced**, which is the reason this box exists rather
+      than being folded into the one above: `save::seal` was skipped by an
+      exported-but-empty `ORBS_SAVE=` and the dump overwrote a real tower again;
+      the manual guard checked `is_open` *after* the manual had closed, so the
+      Escape that left it also closed the menu; and the audio burst cap kept one
+      cue instead of four, making a busy tick quieter than a calm one. The rest:
+      the manual's `ORBS_CONTENT` reload never reached an open reader while the
+      log said it had; `migrate()` wrote its one-shot marker even when copies
+      failed; the settings file was written non-atomically and one unparseable
+      value made the next write discard every other setting; `skip` was read from
+      the file, so the menu did a blocking read and a TOML parse **per frame** at
+      the threshold and the row snapped back wherever the write did not land;
+      `back` from the lengths stepped two levels; the lengths page said nothing
+      about a tower that would not be remembered; the terminal build reported
+      `linear` from a hard-coded `false`, never persisted `focus`, and let F6/F7
+      act at the threshold; and the `commands` chapter's group headings rendered
+      flush with their verbs because `Wrap` strips the indent the module's own
+      doc says it strips. Three CLAUDE.md conventions went with them
+      **See it:** `ORBS_SAVE= XDG_DATA_HOME=/tmp/p ORBS_BOOT=0 ORBS_DUMP="attend archive" cargo run -p orbs`
+      leaves the profile's save byte-identical; `cargo test -p orbs manual`
+      holds the two-surface keyboard; and
+      `ORBS_BOOT=0 ORBS_DUMP=1 ORBS_THRESHOLD=1 ORBS_SAVE=off ORBS_MENU=$'play\nnew\nback' cargo run -p orbs`
+      lands on the play page rather than the top one
+- [x] **The review's remainder** (`0.16.13`) — the findings the second pass
+      listed below its own cap, which are the ones easiest to leave. The manual
+      painter cloned the whole `Chapter` and **re-wrapped every line on every
+      paint** — sixty times a second over a two-thousand-word chapter while the
+      reader sat still — so the wrap is cached on `(chapter, width)` and thrown
+      away by a `restock`. The key click fired for bare modifiers (Shift to
+      reach a capital clicked twice) and **through the boot card**, which takes
+      no keys at all. `orbs-tui` had neither `follow_the_keys` nor
+      `open_at_the_threshold`, so its settings rows went stale under `F4`/`F5`
+      and the threshold's one guarantee was true in one frontend and hopeful in
+      the other. `authored_lines_do_not_shout` never saw `manual.toml`, so an
+      ALL-CAPS line could ship; the manual has its own lint now, and it records
+      **why the two registers differ** rather than flattening them. The content
+      watcher's tests leaked a scratch directory per run. `Menu::escape` left the
+      `abandon` question armed with its text rubbed off the screen.
+      **And the changelog block was headed `[v0.16.0]` against a `0.16.12`
+      manifest**, so a push to `main` would have published nothing — the
+      `game-release` skill's opt-in, silently not taken
+      **See it:** `cargo test -p orbs sound::keys` and
+      `cargo test -p orbs-shell manual::state` hold the click and the cache;
+      `ORBS_BOOT=0 ORBS_DUMP=1 ORBS_THRESHOLD=1 ORBS_SAVE=off ORBS_GRID=80x22 ORBS_MENU=manual ORBS_MANUAL=language cargo run -p orbs`
+      draws the longest chapter at the floor, which is what used to be re-wrapped
+      every frame
+
+---
+
 ## The orb's menu
 
 **Exit:** a player can leave a game, start another at a different length, and
@@ -6259,10 +6654,12 @@ decision under known risk.
       F3 could switch off is §19's own anti-pattern.
 
       Still owed: the material tints are allowed to collapse under greyscale —
-      they are a convenience over `survey`, never the only carrier — but a
-      settings screen to reach any of this without an environment variable is
+      they are a convenience over `survey`, never the only carrier.
+      ~~A settings screen to reach any of this without an environment variable is
       Phase 15's, and until it lands there is **no in-game control** for the
-      accommodation.
+      accommodation.~~ **Discharged at `0.16.5`:** `settings` → `access` → `sight`
+      sets it from inside the game and remembers it, and `ORBS_SIGHT` still
+      outranks it so a See-it line stays reproducible.
 
       **See it:** set each filter in turn with the laboratory on screen and a
       breach in the transcript; the athanor still reads as fire, the accent
@@ -6271,18 +6668,31 @@ decision under known risk.
       **See it:** play a full session with the CRT off, at every toggle
 - [ ] Screen-reader siege mode (ticks advance on player input)
       **See it:** survive a siege with the screen off, by ear
-- [ ] **Sticky skip, persisted CRT-off, reduce-motion** — **moved here from
-      Phase 0.5**, where it was the one open item and never belonged: §4 asks for
-      skip to be *"a sticky setting, not a per-launch keypress"*, and the
-      keypress is the honest half-measure until there is anywhere to persist a
-      setting. No `serde`, no `toml`, nothing in the workspace serialises
-      anything yet — so it lands with the settings screen below rather than
-      before it.
-
-      §14's health warning goes with them, and is no longer urgent: with the
-      strike cut, nothing in the game flashes at all
-      **See it:** turn the tube off, relaunch, and it is still off
-- [ ] Options, remapping, all toggles
+- [x] **Sticky skip and persisted CRT-off** — **moved here from Phase 0.5**,
+      where it was the one open item and never belonged: §4 asks for skip to be
+      *"a sticky setting, not a per-launch keypress"*, and the keypress was the
+      honest half-measure until there was anywhere to persist a setting.
+      ~~No `serde`, no `toml`, nothing in the workspace serialises anything yet~~
+      — that reasoning stopped being true when the save landed, and both shipped
+      at `0.16.5` with the threshold's `habits` and `tube` pages. Every function
+      key that changes something now writes it down, so `F3` and the `crt` row
+      are one setting seen twice
+      **See it:** turn the tube off, relaunch, and it is still off; or
+      `settings` → `habits` → `skip on`, relaunch, and the boot sequence is gone
+- [ ] **Reduce-motion as a setting of its own** — split out of the item above,
+      which shipped without it **deliberately**. Motion is gated on the tube
+      today (`motion::advance` stops the crossings, the fire and the flare when
+      any tube state is off) and §14 is served by that. A separate row would be
+      a switch a player could turn *on* while the tube said off, which is the one
+      state §14 must not reach — so it needs the crossings separated from
+      `Passing::enabled`'s one input first. §14's health warning goes here too,
+      and is no longer urgent: with the strike cut, nothing in the game flashes
+      **See it:** ask for no motion with the tube *on*, and get none
+- [ ] **Remapping** — the rest of *"Options, remapping, all toggles"*; the
+      options and the toggles shipped at `0.16.4`–`0.16.5` and `0.16.10`. This
+      half needs a binding table, a conflict rule and a capture surface, none of
+      which the menu needed to be good, and was scoped out of the threshold on
+      those grounds
       **See it:** rebind every key and play with the result
 - [ ] Steam integration and depot
       **See it:** install from Steam on a clean machine and launch it

@@ -1,31 +1,24 @@
 //! One training example, as numbers.
 //!
-//! # What the reader is asked to predict
+//! The reader is asked for two things in one pass: which verb, read off the
+//! leading `<cls>` row as a classification over [`Verb::ALL`] plus a reject
+//! class for *"this is not a command"*, and which words fill which slot, tagged
+//! per word.
 //!
-//! Two things, from one pass over the sentence:
+//! Everything else — binding `sage` to the sage on the shelf, deciding whether
+//! `grind` means anything in this room — stays with `parser::resolve`, which is
+//! deterministic and can explain itself. A reader says what the sentence
+//! *meant*; the matcher says what it *refers to*.
 //!
-//! - **which verb**, read off the leading `<cls>` row — a classification over
-//!   [`Verb::ALL`] plus a reject class for *"this is not a command"*;
-//! - **which words fill which slot**, tagged per word.
+//! Tagged by slot position, not by noun kind: `move {reagent} {place}` has to
+//! know which span is the destination and `mix {reagent} {reagent}` has two
+//! spans of one kind, neither of which kind can separate. Position is also what
+//! `Intent` is made of, so a prediction reconstructs a command by
+//! concatenation.
 //!
-//! Everything else — binding `sage` to the sage that is actually on the shelf,
-//! deciding whether `grind` means anything in this room — stays with
-//! `parser::resolve`, which is deterministic and can explain itself. A reader
-//! says what the sentence *meant*; the matcher says what it *refers to*.
-//!
-//! # Tagged by slot position, not by noun kind
-//!
-//! `move {reagent} {place}` needs to know which of two spans is the thing and
-//! which is the destination, and `mix {reagent} {reagent}` has two spans of the
-//! same kind. Kind cannot separate either. **Position can**, and it is also what
-//! `Intent` is made of — an ordered list of arguments — so a prediction
-//! reconstructs a command by concatenation and nothing has to be inferred back.
-//!
-//! # Why `<cls>` rather than pooling
-//!
-//! A mean over the sentence would let a long argument outvote the verb. The
-//! leading row attends to everything and belongs to nothing, which is what makes
-//! it free to carry *"what kind of sentence is this"*.
+//! `<cls>` rather than pooling, because a mean over the sentence lets a long
+//! argument outvote the verb. The leading row attends to everything and belongs
+//! to nothing, so it is free to carry *"what kind of sentence is this"*.
 
 use orbs_sim::content::Example;
 use orbs_sim::parser::{NounKind, Verb};
@@ -34,10 +27,9 @@ use crate::Vocabulary;
 
 /// The longest sentence the reader will look at, `<cls>` included.
 ///
-/// Matched to the parser's own `MAX_WORDS` of 32 rather than chosen: a line the
-/// matcher refuses to score is not one a reader should be trained on, and a
-/// reader that read further than the matcher would answer for input the game
-/// never accepts.
+/// Matched to the parser's own `MAX_WORDS` of 32 rather than chosen: a reader
+/// that read further than the matcher would answer for input the game never
+/// accepts.
 pub const MAX_LEN: usize = 32;
 
 /// The most arguments any verb takes.
@@ -97,13 +89,11 @@ impl Tag {
 
 /// The label meaning *"this is not a command I know"*.
 ///
-/// **A sentinel in a [`Sample`], and no longer a class the verb head predicts.**
-/// It used to be the forty-seventh output of one softmax, which put *"is there a
-/// command here"* in direct competition with *"which command is it"* for a
-/// single distribution's mass — and the two visibly traded against each other,
-/// 38.6% refusal in one epoch and 93.2% in the next (§19). *Whether* is its own
-/// question now with its own head, and this value only marks a training example
-/// as belonging to it.
+/// A sentinel in a [`Sample`], not a class the verb head predicts. As the
+/// forty-seventh output of one softmax it put *"is there a command here"* in
+/// competition with *"which command is it"*, and the two traded against each
+/// other — 38.6% refusal in one epoch, 93.2% in the next (§19). *Whether* has
+/// its own head now; this value only marks an example as belonging to it.
 #[expect(
     clippy::cast_possible_truncation,
     reason = "`Verb::ALL` is a const array of 45; the cast is evaluated at compile time"
@@ -159,12 +149,11 @@ impl Sample {
 
     /// The tokens, tags and spans of an example, with no class decided.
     ///
-    /// **Shared by both registers**, because the encoding of a sentence has
-    /// nothing to do with what the answer space is: `smash the sage` and `when
-    /// the mortar is idle` become rows and BIO tags by the identical route. What
-    /// differs is the class, which each caller sets, and how a span is numbered,
-    /// which each caller passes as `slot_of` — from the span's position among
-    /// the example's spans and its kind.
+    /// Shared by both registers: encoding a sentence has nothing to do with the
+    /// answer space, so `smash the sage` and `when the mortar is idle` become
+    /// rows and BIO tags by the identical route. What differs is the class,
+    /// which each caller sets, and how a span is numbered, which each caller
+    /// passes as `slot_of`.
     fn encode_words(
         example: &Example,
         vocabulary: &Vocabulary,
@@ -214,20 +203,18 @@ impl Sample {
 
     /// Encode a generated example as a **spell** line, in the class `class`.
     ///
-    /// [`encode`](Self::encode)'s sibling, and the only difference is where the
-    /// class comes from: there it is read off the canonical's head, because a
-    /// command names its own verb; here it is the *template* the example was
-    /// expanded from, because `if {place} is idle` and `if {place} is empty` are
-    /// one word between them and nothing in the string separates them. See
-    /// [`crate::spelling`].
+    /// [`encode`](Self::encode)'s sibling; only the class differs. There it is
+    /// read off the canonical's head, because a command names its own verb;
+    /// here it is the *template* the example was expanded from, because `if
+    /// {place} is idle` and `if {place} is empty` are one word apart and
+    /// nothing in the string separates them. See [`crate::spelling`].
     ///
     /// `class` is [`spelling::command`](crate::spelling::command) for a line that
     /// is an ordinary command and belongs to the prompt's reader.
     ///
-    /// The tokens and the spans are derived identically, which is why the two
-    /// registers share an encoder and a trainer rather than each having their
-    /// own. **The tags are numbered by kind rather than by position** — a place
-    /// is slot 0 in every spell line, whatever shape it is in; see
+    /// Tokens and spans derive identically, which is why the two registers
+    /// share an encoder and a trainer. Tags are numbered by kind rather than by
+    /// position — a place is slot 0 in every spell line; see
     /// [`spelling::slot_for`](crate::spelling::slot_for) for what numbering by
     /// position cost `let`.
     #[must_use]
@@ -241,10 +228,9 @@ impl Sample {
 
     /// An example of a sentence that is not a command at all.
     ///
-    /// **Negatives are half the job.** A reader trained only on commands has
-    /// never been shown a sentence it should refuse, and answers one anyway —
-    /// which is the dead end §15 weighs heaviest. `<cls>` predicts [`REJECT`]
-    /// and every word is [`Tag::Outside`].
+    /// Negatives are half the job: a reader trained only on commands has never
+    /// been shown a sentence it should refuse, and answers one anyway (§15).
+    /// `<cls>` predicts [`REJECT`] and every word is [`Tag::Outside`].
     #[must_use]
     pub fn reject(said: &str, vocabulary: &Vocabulary) -> Option<Self> {
         let rows = vocabulary.encode(said);
@@ -363,9 +349,8 @@ mod tests {
 
     #[test]
     fn a_spell_line_numbers_its_slots_by_kind() {
-        // The prompt would tag `let`'s name 0 and its place 1, by where they sit
-        // in the canonical. The spell register tags a place 0 and a name 2
-        // wherever they sit, so a place means one thing to its tagger.
+        // The prompt tags by position in the canonical: `let`'s name 0, place 1.
+        // The spell register tags a place 0 and a name 2 wherever they sit.
         let scene = corpus_scene();
         let (class, example) = Phrasings::spellings()
             .corpus_by_entry(&scene, 0)
@@ -392,12 +377,12 @@ mod tests {
 
     #[test]
     fn every_sample_opens_on_the_same_cls() {
-        // **The leak that let a reader score 98.6% and refuse everything.** A
-        // command was encoded through `token("<cls>")` and a refusal through
-        // `Vocabulary::encode`, and when folding took the brackets off the first
-        // those were two different rows — so the opening row alone told the
-        // reader which kind of sentence it was reading. Every constructor, and
-        // the inference path, must open on the one reserved row.
+        // The leak that let a reader score 98.6% and refuse everything: a
+        // command went through `token("<cls>")` and a refusal through
+        // `Vocabulary::encode`, and once folding took the brackets off those
+        // were two rows — so the opening row alone said which kind of sentence
+        // it was. Every constructor and the inference path open on the one
+        // reserved row.
         let vocabulary = Vocabulary::builtin();
         let cls = vocabulary.token("<cls>");
         assert_eq!(
@@ -451,8 +436,8 @@ mod tests {
 
     #[test]
     fn the_whole_corpus_encodes() {
-        // **The number that says whether the reader can be trained at all**, and
-        // a silent drop here would shrink the corpus without saying so.
+        // Whether the reader can be trained at all — a silent drop here shrinks
+        // the corpus without saying so.
         let vocabulary = Vocabulary::builtin();
         let scene = corpus_scene();
         let corpus = Phrasings::builtin().corpus(&scene);

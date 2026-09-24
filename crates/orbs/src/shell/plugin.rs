@@ -29,43 +29,32 @@ pub(crate) enum ShellSystems {
     Input,
     /// Animations advance: the typewriter reveal and the pane transition.
     ///
-    /// A set of its own so `repaint` can order **after** it. Both write state
-    /// `repaint` then reads, with no edge between them, so on the frame a burst
-    /// of output lands the executor could run `repaint` first — drawing the whole
-    /// burst complete — and `drive_reveal` second, setting `shown` back to zero.
-    /// The next frame the same text vanishes and types itself in: output that
-    /// flashes whole and then rewinds. Same class of defect [`Self::Input`]
-    /// exists for.
+    /// A set of its own so `repaint` can order after it. Both write state
+    /// `repaint` then reads, so without the edge the executor could draw a
+    /// burst of output whole and then set `shown` back to zero — text that
+    /// flashes and rewinds. Same class of defect [`Self::Input`] exists for.
     ///
-    /// **And it runs after [`Self::Input`]**, which was missing and cost a
-    /// visible defect. The input chain is what opens and shuts every surface —
-    /// `wander`, `edit`, `weave`, `unfurl` — and the animations here have to
-    /// observe the result, not the state in front of it. Without the edge the
-    /// executor was free to drive the crossing first, so a `wander` drew the
-    /// **whole maze for one frame** and only then started a transition, which
-    /// then departed from the maze it had just arrived at.
+    /// And it runs after [`Self::Input`]: the input chain opens and shuts every
+    /// surface — `wander`, `edit`, `weave`, `unfurl` — and these animations
+    /// have to observe the result. Without the edge a `wander` drew the whole
+    /// maze for one frame and only then started a crossing that departed from
+    /// the maze it had just arrived at.
     ///
     /// The two sets were ordered against `repaint` and never against each other
-    /// — the same shape as the defect recorded one level down for
-    /// `motion::advance` and `refresh_panel`, and the third time this project has
-    /// paid for a set that orders against its reader but not against its writer.
+    /// — the third time this project has paid for a set that orders against its
+    /// reader but not against its writer.
     Drive,
 }
 
 /// Every resource this plugin owns, handed to `$mac` as a list of types.
 ///
-/// # Why the list exists rather than eighteen `init_resource` calls
+/// A list rather than eighteen `init_resource` calls, because it is read twice:
+/// `build` registers them and `reset_for_swap` puts them back when the menu
+/// loads a different tower. A second hand-written copy drifts, and invisibly —
+/// a resource holding the *old* game's state does not crash, it lies: `Reveal`
+/// holds indices into a record stream that no longer exists.
 ///
-/// **Because the list is read twice.** `build` registers them; `reset_for_swap`
-/// puts them back to their defaults when the menu loads a different tower. A
-/// hand-written second copy of eighteen types is a copy that drifts, and the
-/// failure it drifts into is invisible: a resource left holding the *old* game's
-/// state after a swap does not crash, it just quietly lies — `Reveal` holds raw
-/// indices into a record stream that no longer exists, `Passing` holds a cell
-/// snapshot of a screen from another world.
-///
-/// So there is one list, in one place, and adding a resource to it registers and
-/// resets it in the same edit.
+/// One list, so adding a resource registers and resets it in the same edit.
 macro_rules! shell_resources {
     ($mac:ident) => {
         $mac!(
@@ -85,27 +74,42 @@ macro_rules! shell_resources {
             super::Editing,
             super::Loom,
             super::Standing,
+            super::Reading,
             super::Walk,
+            // Not a shell resource, and on the list anyway. `Heard` is the
+            // audio watermark, derived from *this tower's* transcript exactly
+            // as `Scroll` and `Panel` are. Left off, a swap kept the old mark:
+            // the threshold's scratch world pushes a handful of records, `play`
+            // → `2` restores a save whose sequence is in the thousands,
+            // `Records::since` skipped nothing, and the carried tail rang in
+            // one frame — five hundred `AudioPlayer`s, no cap. The only guard
+            // was `now <= last`, which catches a rewound count and not a
+            // jumped-forward one.
+            crate::sound::Heard,
         );
     };
 }
 
 /// Put every shell resource back to what it is at startup, for a new tower.
 ///
-/// # Two survive, and they are lifted out rather than left off the list
+/// Three survive, lifted out rather than left off the list:
 ///
-/// - **`Screen`** holds the grid the window actually is. Resetting it would tell
-///   the renderer the window had changed size, which it has not.
-/// - **`Standing`** is the menu, and the menu is what is asking for this. It
-///   closes itself afterwards, on its own terms.
+/// - `Screen` holds the grid the window actually is; resetting it would tell the
+///   renderer the window had changed size, which it has not.
+/// - `Standing` is the menu, and the menu is what is asking. It closes itself
+///   afterwards, on its own terms.
+/// - `Linear` is §14's accessibility route and a property of the *player*. Its
+///   `Default` reads `orbs-settings.toml`, and `settings::store` answers `None`
+///   outright for a process that never called `keep()` — so with `ORBS_SAVE=off`,
+///   a read-only install or a failed write, `F5` on and then loading another
+///   tower turned the linear stream off with nothing said.
 ///
-/// Taking them out and putting them back — rather than writing a list of
-/// sixteen — is what keeps [`shell_resources!`] the single list. A resource
-/// added there is reset here by construction, and the two exceptions are named
-/// once, here, with the reason.
+/// Taking them out and putting them back keeps [`shell_resources!`] the single
+/// list: a resource added there is reset here by construction.
 pub(crate) fn reset_for_swap(world: &mut World) {
     let screen = world.remove_resource::<Screen>();
     let standing = world.remove_resource::<super::Standing>();
+    let linear = world.remove_resource::<Linear>();
 
     macro_rules! blank {
         ($($resource:ty,)*) => {
@@ -120,6 +124,9 @@ pub(crate) fn reset_for_swap(world: &mut World) {
     if let Some(standing) = standing {
         world.insert_resource(standing);
     }
+    if let Some(linear) = linear {
+        world.insert_resource(linear);
+    }
 }
 
 /// The window, the camera, the grid, and the command line.
@@ -127,15 +134,13 @@ pub struct ShellPlugin;
 
 impl Plugin for ShellPlugin {
     fn build(&self, app: &mut App) {
-        // **The animations run after the input, and that edge was missing.** The
-        // input chain is what opens and shuts every surface — `wander`, `edit`,
-        // `weave`, `unfurl` — and the clocks in `Drive` have to observe the
-        // result rather than the state in front of it. Without it a `wander` drew
-        // the whole maze for one frame and only then began a crossing, which then
-        // departed from the maze it had just arrived at. See `ShellSystems`.
+        // The animations run after the input: the clocks in `Drive` have to
+        // observe the surface the input chain just opened or shut, or a
+        // `wander` draws the whole maze for a frame and then crosses away from
+        // it. See `ShellSystems`.
         app.configure_sets(Update, ShellSystems::Drive.after(ShellSystems::Input));
 
-        // **One list, read twice** — see `shell_resources!`. It is also what
+        // One list, read twice — see `shell_resources!`. It is also what
         // `reset_for_swap` puts back when the menu loads a different tower.
         macro_rules! register {
             ($($resource:ty,)*) => {
@@ -144,33 +149,78 @@ impl Plugin for ShellPlugin {
         }
         shell_resources!(register);
 
+        // Not on the reset list, for `Screen`'s and `Linear`'s reason: §4's
+        // sticky skip is the player's property, not the tower's. Read once at
+        // startup and the truth thereafter — see `setting::Skipping`.
+        app.init_resource::<super::setting::Skipping>();
+
         app.add_message::<SubmittedMessage>()
             .add_message::<super::menuing::SwapMessage>()
-            // **Ordered into `Input`, so `Drive` sees the world it arrives at.**
-            // `Panel` self-heals from the new tower, but only if it is refreshed
-            // *after* the swap — and `refresh_panel` is in `Drive`, which is
-            // configured `.after(Input)`. Without this edge the executor is free
-            // to refresh the panel from the outgoing world and leave it there
-            // until the next tick.
+            .add_message::<super::menuing::SettingMessage>()
+            .add_message::<super::manualling::OpenManualMessage>()
+            // Registered by the consumer, not the producer: `sim::content` only
+            // exists when `ORBS_CONTENT` is set, while the `run_if` below needs
+            // the message always — without this the shell panicked with
+            // *"Message not initialized"* in every ordinary session.
+            .add_message::<crate::sim::ManualChangedMessage>()
+            // Ordered into `Input`, so `Drive` sees the world it arrives at.
+            // `Panel` self-heals from the new tower only if refreshed *after*
+            // the swap, and `refresh_panel` is in `Drive`; without this the
+            // executor may refresh from the outgoing world and leave it a tick.
             .add_systems(
                 Update,
                 super::menuing::swap
                     .in_set(ShellSystems::Input)
                     .run_if(on_message::<super::menuing::SwapMessage>),
             )
+            // Gated on the message alone, like the swap above it, and not on
+            // `booted` or `playing`: the settings page is reachable at the
+            // threshold, which is the point of putting it on the first screen.
+            .add_systems(
+                Update,
+                super::menuing::apply_setting
+                    .in_set(ShellSystems::Input)
+                    .run_if(on_message::<super::menuing::SettingMessage>),
+            )
+            // After the input, so a function key pressed this frame is already
+            // in the thing it changed. Only while the menu is up, and it
+            // declines inside when nothing moved — see the system's own doc.
+            .add_systems(
+                Update,
+                super::setting::follow_the_keys
+                    .after(ShellSystems::Input)
+                    // A settings page, not merely an open menu: the threshold's
+                    // menu cannot be closed, so `is_open()` alone ran this
+                    // every frame from launch, rebuilding rows nobody looked
+                    // at.
+                    .run_if(|standing: Res<super::Standing>| {
+                        standing
+                            .get()
+                            .is_some_and(orbs_shell::Menu::showing_settings)
+                    }),
+            )
             .add_systems(Startup, (spawn_camera, track_window).chain())
-            // **Not** gated on `booted`, and not in the input set. A focus loss
-            // during the boot sequence strands held keys exactly as one during
-            // play does, and the guard has to outlive whatever stole the window.
+            // Not gated on `booted`, and not in the input set: a focus loss
+            // during boot strands held keys exactly as one during play does,
+            // and the guard has to outlive whatever stole the window.
             .add_systems(
                 Update,
                 super::input::forget_held_keys.run_if(on_message::<bevy::window::WindowFocused>),
             )
-            // The panel only moves when the world does — see `Panel`. **Not**
-            // gated on `booted`: `Tower` is marked changed when it is inserted,
-            // and that is the frame that fills the panel for the starting room.
-            // Behind the boot gate the flag has long expired by the time the
-            // sequence ends, leaving the panel blank until the next tick.
+            // Rule 6 reaching an already-open manual. The book is assembled at
+            // open, so without this a hot-reloaded `manual.toml` changed the
+            // log and nothing else. See `manualling::restock_requested`.
+            .add_systems(
+                Update,
+                super::manualling::restock_requested
+                    .in_set(ShellSystems::Drive)
+                    .run_if(super::manualling::reading_the_manual)
+                    .run_if(on_message::<crate::sim::ManualChangedMessage>),
+            )
+            // The panel only moves when the world does — see `Panel`. Not gated
+            // on `booted`: `Tower` is marked changed when inserted, and that
+            // frame fills the panel for the starting room; behind the gate the
+            // flag has expired by the time the sequence ends.
             .add_systems(
                 Update,
                 super::input::refresh_panel
@@ -180,26 +230,24 @@ impl Plugin for ShellPlugin {
             .add_systems(
                 Update,
                 (
-                    // **Exactly one surface takes a keystroke.** The prompt, the
-                    // editor and — since `unfurl` — the transcript are all on
-                    // screen at once, and the failure where two consume a key is
-                    // invisible until a player types `:wq` and finds it in their
-                    // command history.
+                    // Exactly one surface takes a keystroke. The prompt, the
+                    // editor and the transcript are on screen at once, and two
+                    // consuming a key is invisible until a player types `:wq`
+                    // and finds it in their command history.
                     //
-                    // The editor is gated here; the prompt decides *inside*
+                    // The editor is gated here; the prompt decides inside
                     // itself, because it also has to discard what it declines.
-                    // See `input::type_into_line`.
-                    // **First in the chain**, so both text fields read the gap
-                    // in front of this frame's keystroke rather than zero.
+                    // See `input::type_into_line`. First in the chain, so both
+                    // text fields read the gap in front of this frame's
+                    // keystroke.
                     super::input::watch_quiet,
                     super::editing::open_requested.run_if(resource_changed::<crate::sim::Tower>),
                     super::editing::type_into_editor
                         .run_if(on_message::<KeyboardInput>)
                         .run_if(super::editing::editing),
-                    // **After** the keys, so a keystroke restarts the settle
-                    // clock before it is advanced rather than after — otherwise
-                    // the frame a player types on counts toward the pause they
-                    // have not taken yet.
+                    // After the keys, so a keystroke restarts the settle clock
+                    // before it is advanced — otherwise the frame a player
+                    // types on counts toward a pause they have not taken.
                     super::editing::autosave.run_if(super::editing::editing),
                     // The weave screen, on the same terms: gated by a run
                     // condition because it *consumes* keys, while the prompt
@@ -208,17 +256,29 @@ impl Plugin for ShellPlugin {
                     super::weaving::type_into_loom
                         .run_if(on_message::<KeyboardInput>)
                         .run_if(super::weaving::weaving),
-                    // **The keys first, then the opening** — and this order is a
-                    // shipped defect, not a preference. `type_into_menu` is
-                    // ungated for the reason `type_into_line` is: a reader that
-                    // does not run keeps its cursor, so a gated one read the
-                    // word that opened the menu straight back into it, reached
-                    // the menu's own `quit`, and left the orb. Running it here,
-                    // before `open_requested`, means the opening frame is one it
-                    // has already emptied. See `menuing`'s module doc.
+                    // The keys first, then the opening — a shipped defect, not
+                    // a preference. `type_into_menu` is ungated for
+                    // `type_into_line`'s reason: a reader that does not run
+                    // keeps its cursor, so a gated one read the word that
+                    // opened the menu back into it, reached the menu's `quit`
+                    // and left the orb. See `menuing`'s module doc.
+                    //
+                    // The manual first, because it sits over the menu — the one
+                    // pair genuinely open at once, so the order is
+                    // `Focus::of`'s rather than a tie-break.
+                    super::manualling::type_into_manual.run_if(on_message::<KeyboardInput>),
+                    super::manualling::open_requested
+                        .run_if(on_message::<super::manualling::OpenManualMessage>),
                     super::menuing::type_into_menu.run_if(on_message::<KeyboardInput>),
                     super::menuing::open_requested.run_if(resource_changed::<crate::sim::Tower>),
-                    // **Unconditional while it is open**, like `autosave`: the
+                    // The threshold's menu, on the same terms. No word opens it
+                    // — there is no prompt to type one at — so it goes up the
+                    // first frame after the boot card leaves; with
+                    // `ORBS_BOOT=0` that is frame one, when a stray keystroke
+                    // is most likely still queued, so it sits after
+                    // `type_into_menu`.
+                    super::thresholding::open_at_the_threshold.run_if(super::thresholding::waiting),
+                    // Unconditional while it is open, like `autosave`: the
                     // world ticks behind the screen, so a threshold crossed
                     // while a player is looking should land while they look.
                     super::weaving::refresh.run_if(super::weaving::weaving),
@@ -235,19 +295,16 @@ impl Plugin for ShellPlugin {
                     // the player, and holding the keyboard over a pane with no
                     // map on it is the worst of the three ways that ends.
                     super::wandering::close_when_gone.run_if(super::wandering::walking),
-                    // **Ungated, and after every surface that can let go.** It
-                    // watches for the keyboard changing hands, which is an edge
-                    // `type_into_line` cannot see for itself — that system is
-                    // gated on a keystroke arriving, so the frames where a surface
-                    // held the keyboard in silence are invisible to it. See
-                    // `HeldOver`: this is what stops a held arrow putting `wander`
-                    // back in the prompt on the way out of the maze.
+                    // Ungated, and after every surface that can let go. It
+                    // watches the keyboard change hands, an edge
+                    // `type_into_line` cannot see: that system is gated on a
+                    // keystroke arriving. See `HeldOver` — this is what stops a
+                    // held arrow putting `wander` back in the prompt on the way
+                    // out of the maze.
                     super::input::watch_focus,
-                    // **No `not_editing` here.** It has to *run* to throw the
-                    // keystrokes away — a reader that never runs keeps its
-                    // cursor, and everything typed while another surface had the
-                    // keyboard arrived the instant this did. The check moved
-                    // inside; see `type_into_line`.
+                    // No `not_editing` here: it has to *run* to throw
+                    // keystrokes away, since a reader that never runs keeps its
+                    // cursor. The check moved inside; see `type_into_line`.
                     type_into_line.run_if(on_message::<KeyboardInput>),
                     // Before `submit`, so a keystroke completes the output that
                     // is already on screen rather than the output its own line
@@ -263,11 +320,11 @@ impl Plugin for ShellPlugin {
                 )
                     .chain()
                     .in_set(ShellSystems::Input)
-                    // Nothing typed reaches the line until the game is up: there
-                    // is no input line during the sequence, and §4 draws no
-                    // prompt there. (This used to be justified by the keypress
-                    // that skipped boot needing not to be the first letter of a
-                    // command. That skip is gone; the guard is not vestigial.)
+                    // Nothing typed reaches the line until the game is up:
+                    // there is no input line during the sequence and §4 draws
+                    // no prompt there. (The boot-skip keypress was the old
+                    // reason; that skip is gone and the guard is not
+                    // vestigial.)
                     .run_if(crate::boot::booted),
             )
             .add_systems(
@@ -279,141 +336,174 @@ impl Plugin for ShellPlugin {
                     // heuristic the player has to fight.
                     cycle_mode.run_if(input_just_pressed(KeyCode::F4)),
                     // §14 makes the linear stream a first-class view of the
-                    // frame. Nothing had ever shown it, which is how a stream
-                    // that is subtly wrong stays that way.
-                    // **In the input set, like every other surface switch.** It
-                    // was the one writer of `Showing`'s inputs left outside it,
-                    // so `Drive.after(Input)` did not reach it: on the wrong
-                    // interleaving the mirror painted whole for a frame and only
-                    // then crossed — the same defect that edge was added for,
-                    // one surface over.
+                    // frame, and nothing had ever shown it. In the input set
+                    // like every other surface switch: it was the one writer of
+                    // `Showing`'s inputs left outside, so on the wrong
+                    // interleaving the mirror painted whole for a frame and
+                    // only then crossed.
                     orbs_shell::toggle_linear
                         .in_set(ShellSystems::Input)
                         .run_if(input_just_pressed(KeyCode::F5)),
                     // §6 requires the parser explain itself, and the Phase 0
-                    // gate acts on failure *clustering*. Every reading is kept
-                    // as it happens; this is what gets it out to a spreadsheet.
-                    export_trace.run_if(input_just_pressed(KeyCode::F6)),
+                    // gate acts on failure *clustering*. Every reading is kept;
+                    // this gets it out to a spreadsheet. `playing`, not
+                    // `booted`: pressed at the menu it writes `orbs-parse.tsv`
+                    // for a session that has not happened.
+                    export_trace
+                        .run_if(input_just_pressed(KeyCode::F6))
+                        .run_if(crate::shell::playing),
                     // §3's tonal register, until Phase 8 drives it from threat.
-                    cycle_register.run_if(input_just_pressed(KeyCode::F7)),
-                    // **`F9` is unbound**, and was the menagerie's patient chant
-                    // until the menagerie stopped having a clock (§19). Left free
-                    // rather than reassigned: a key that did something a release
-                    // ago and something else now is a key a returning player
-                    // presses expecting the first.
+                    // `playing`, because it writes to the world — and at the
+                    // threshold the world is a scratch one the next swap throws
+                    // away.
+                    cycle_register
+                        .run_if(input_just_pressed(KeyCode::F7))
+                        .run_if(crate::shell::playing),
+                    // `F9` is unbound — the menagerie's patient chant until the
+                    // menagerie stopped having a clock (§19). Left free rather
+                    // than reassigned: a key that did something a release ago
+                    // is one a returning player presses expecting the first
+                    // thing.
                     //
-                    // F10, not Escape: the moment there is a text field, Escape
-                    // is "clear the line" muscle memory, and quitting the game
-                    // mid-sentence is not a recoverable surprise.
+                    // F10, not Escape: with a text field on screen, Escape is
+                    // "clear the line" muscle memory, and quitting mid-sentence
+                    // is not a recoverable surprise.
                     quit.run_if(input_just_pressed(KeyCode::F10)),
-                    // **Gated on the world having moved**, like the other
-                    // handshakes: `submit` resolves the verb and marks `Tower`
-                    // changed, so this runs on that frame and no other. The flag
-                    // it takes is only ever set by a *confirmed* `quit` — the
-                    // sim asks first, and `menu` is a different word now.
+                    // Gated on the world having moved, like the other
+                    // handshakes: `submit` marks `Tower` changed, so this runs
+                    // on that frame and no other. The flag is only set by a
+                    // *confirmed* `quit` — the sim asks first, and `menu` is a
+                    // different word now.
                     quit_requested.run_if(resource_changed::<crate::sim::Tower>),
-                    // **PageUp/PageDown, not the arrows.** Up and Down walk the
-                    // command history (§19) and must keep doing so — a shell
-                    // where Up sometimes scrolls and sometimes recalls is a shell
-                    // you cannot type in without looking.
-                    scroll_back.run_if(input_just_pressed(KeyCode::PageUp)),
-                    scroll_forward.run_if(input_just_pressed(KeyCode::PageDown)),
-                    // **The arrows scroll only while reading.** At the prompt
-                    // they walk the command history and must keep doing so — a
-                    // shell where Up sometimes scrolls and sometimes recalls is
-                    // a shell you cannot type in without looking. Inside the
-                    // mode there is no history to walk, so they are free.
+                    // PageUp/PageDown, not the arrows: Up and Down walk the
+                    // command history (§19), and a shell where Up sometimes
+                    // scrolls and sometimes recalls is one you cannot type in
+                    // without looking.
+                    //
+                    // All five of these are `playing`: paging the scratch
+                    // transcript behind the threshold's menu moves `Scroll`
+                    // under a screen a swap is about to replace. And not while
+                    // the manual is open, the one surface answering these same
+                    // keys — without `not_reading_the_manual` a single PgDn
+                    // pages the chapter *and* the transcript underneath it.
+                    scroll_back
+                        .run_if(input_just_pressed(KeyCode::PageUp))
+                        .run_if(crate::shell::playing)
+                        .run_if(super::manualling::not_reading_the_manual),
+                    scroll_forward
+                        .run_if(input_just_pressed(KeyCode::PageDown))
+                        .run_if(crate::shell::playing)
+                        .run_if(super::manualling::not_reading_the_manual),
+                    // The arrows scroll only while reading. At the prompt they
+                    // walk the command history; inside the mode there is no
+                    // history, so they are free.
+                    //
+                    // And they carry the manual's guard, which the first pass
+                    // gave only to PgUp/PgDn. `apply_to_manual` maps the arrows
+                    // to a one-row scroll and `editing::reading` is just
+                    // `scroll.is_reading()`, which nothing clears when the
+                    // manual opens — so after an `unfurl` one ArrowDown
+                    // scrolled the chapter *and* the transcript behind it.
                     scroll_back
                         .run_if(input_just_pressed(KeyCode::ArrowUp))
-                        .run_if(super::editing::reading),
+                        .run_if(super::editing::reading)
+                        .run_if(crate::shell::playing)
+                        .run_if(super::manualling::not_reading_the_manual),
                     scroll_forward
                         .run_if(input_just_pressed(KeyCode::ArrowDown))
-                        .run_if(super::editing::reading),
+                        .run_if(super::editing::reading)
+                        .run_if(crate::shell::playing)
+                        .run_if(super::manualling::not_reading_the_manual),
                     // Escape leaves, exactly as it leaves the editor's buffer.
+                    // `playing` matters most here: Escape at the threshold must
+                    // reach the menu, and a `stop_reading` on the same
+                    // keystroke would be a second reader of a key the menu
+                    // owns. The manual's guard is the same one surface further
+                    // in.
                     stop_reading
                         .run_if(input_just_pressed(KeyCode::Escape))
-                        .run_if(super::editing::reading),
-                    start_reading.run_if(resource_changed::<crate::sim::Tower>),
+                        .run_if(super::editing::reading)
+                        .run_if(crate::shell::playing)
+                        .run_if(super::manualling::not_reading_the_manual),
+                    start_reading
+                        .run_if(resource_changed::<crate::sim::Tower>)
+                        .run_if(crate::shell::playing),
                     // Unconditional: all three of these have to keep moving on
                     // the frames where nothing happened, which is most of them.
                     drive_panes.in_set(ShellSystems::Drive),
-                    // **After `refresh_panel`, explicitly**, for the reason
-                    // `motion::advance` below is: `Showing` reads `Panel::room`,
-                    // and a set orders both against `repaint` rather than
-                    // against each other. Left to the executor this would see
-                    // the previous frame's panel and start every crossing a
-                    // frame late.
+                    // After `refresh_panel`, explicitly, for
+                    // `motion::advance`'s reason: `Showing` reads
+                    // `Panel::room`, and the set orders both against `repaint`
+                    // rather than each other, so the executor could start every
+                    // crossing a frame late.
                     drive_passing
                         .in_set(ShellSystems::Drive)
                         .after(super::input::refresh_panel)
-                        // **After `motion::advance`, which is the other writer.**
-                        // Both hold `ResMut<Passing>`, so Bevy already serialises
-                        // them — but *which order* was left to the executor, and
-                        // they are not interchangeable: `motion` carries the
-                        // tube's switch and this carries the clock. Turning `F3`
-                        // back on, the unordered pair started a crossing a frame
+                        // After `motion::advance`, the other writer. Bevy
+                        // serialises them, but *which order* was the executor's
+                        // and they are not interchangeable: `motion` carries
+                        // the tube's switch, this the clock. Turning `F3` back
+                        // on, the unordered pair started a crossing a frame
                         // late; turning it off, one interleaving started a
-                        // crossing that the other immediately cleared.
-                        //
-                        // Both outcomes are invisible, and the edge is here
-                        // anyway — this file records three defects that were
-                        // exactly "a set ordered against its reader and not its
-                        // writer", and a fourth left in on the grounds that it
-                        // does not show yet is how the fifth arrives.
+                        // crossing the other cleared. Both invisible — and this
+                        // file records three defects that were exactly a set
+                        // ordered against its reader and not its writer.
                         .after(super::motion::advance),
                     drive_reveal.in_set(ShellSystems::Drive),
-                    // §10.1's instruments animate on wall-clock time, not on the
-                    // tick — the sim must not be able to observe it, or replay
-                    // would depend on how long a frame took. See `shell::bench`.
+                    // §10.1's instruments animate on wall-clock time, not the
+                    // tick — the sim must not observe it, or replay would
+                    // depend on how long a frame took. See `shell::bench`.
                     //
-                    // **After `refresh_panel`, explicitly.** It reads `Panel` to
-                    // catch the two edges it animates — a hearth lighting, a
-                    // bowl filling — and `refresh_panel` is what writes it. Both
-                    // were merely `in_set(Drive)`, which orders them against
-                    // `repaint` and not against each other, so the executor was
-                    // free to run this first and see the *previous* frame's
-                    // panel. That is the same class of defect `Drive` itself
-                    // exists for, one level down.
+                    // After `refresh_panel`, explicitly: it reads `Panel` to
+                    // catch the edges it animates — a hearth lighting, a bowl
+                    // filling — and `refresh_panel` writes it. `in_set(Drive)`
+                    // alone orders them against `repaint` and not each other.
                     //
-                    // **Gated on `booted` with the rest, deliberately.** The
-                    // panel is not on screen during the sequence, and the clock
-                    // starting at zero when the game appears is what anyone
-                    // would want. The edges cost nothing either: `Bench` seeds
-                    // `was_lit` and `was_charged` *true* precisely so a tower
-                    // that opens with a fire already going does not flare on the
-                    // first frame it is looked at.
+                    // Gated on `booted` with the rest: the panel is not on
+                    // screen during the sequence, and `Bench` seeds `was_lit`
+                    // and `was_charged` *true* so a tower opening with a fire
+                    // already going does not flare on the first frame it is
+                    // looked at.
                     super::motion::advance
                         .in_set(ShellSystems::Drive)
                         .after(super::input::refresh_panel),
                 )
-                    // Every key here is guarded: none of them means anything
-                    // before the world runs, and `F6` would write a trace of a
-                    // session that has not happened. (`F10` was singled out when
-                    // a keypress skipped boot — quitting and skipping in one
-                    // keystroke. That skip is gone; the guard still earns its
-                    // place.)
+                    // Every key here is guarded: none means anything before the
+                    // world runs, and `F6` would write a trace of a session
+                    // that has not happened.
+                    //
+                    // `booted` and not `playing` for the tuple, because it is
+                    // not only keys: `drive_passing` animates the boot card
+                    // *leaving*, and at the threshold it leaves onto the menu.
+                    // Gating on a chosen tower would freeze that crossing
+                    // half-drawn. The systems that must not run before a tower
+                    // exists carry `playing` individually, each next to the
+                    // reason.
+                    //
+                    // `F4` and `F5` stay on `booted` on purpose: the display
+                    // mode and the linear stream are about the *screen*, the
+                    // menu is on it, and `menu_too_small` tells the player to
+                    // press `F4`. So does `F10` — a way out that only works
+                    // once you are in is not one.
                     .run_if(crate::boot::booted),
             );
     }
 }
 
-// `page_rows` and `page_step` — how many *records* a screenful of transcript
-// holds — moved to `orbs_shell::page_step`. It is not a keyboard question: it is
-// what the transcript would fit, measured with the same `RecordView` the
-// transcript is drawn with, and a second measure of the same stream would page
-// by a different amount than it showed. This frontend's wrapper is in
-// `reading.rs` with the keys that use it.
+// `page_rows` and `page_step` moved to `orbs_shell::page_step`: how many
+// records a screenful holds is not a keyboard question but what the transcript
+// would fit, and a second measure of the same stream would page by a different
+// amount than it showed. This frontend's wrapper is in `reading.rs`.
 
 /// Typing, end to end, with no window and no GPU.
 ///
-/// These live beside the registration they exercise because that is what is
-/// being tested: whether the plugin wires a keystroke to the parser. DESIGN.md
-/// §19's whole lesson is that a sixteen-command parser went six roadmap items
-/// without ever receiving one, so a test that fires a real `KeyboardInput` at
-/// the real plugin stack is the one this surface most needs.
+/// Beside the registration they exercise, because that is what is under test:
+/// whether the plugin wires a keystroke to the parser. §19's lesson is that a
+/// sixteen-command parser went six roadmap items without ever receiving one.
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::shell::{Reading, Standing};
     use bevy::input::ButtonState;
     use bevy::input::keyboard::Key;
     use orbs_render::{FieldName, Outcome};
@@ -446,13 +536,10 @@ mod tests {
             repeat: false,
             window: Entity::PLACEHOLDER,
         });
-        // **And released, which is what `tap` next door already knew.** Its doc
-        // says it outright: a key left down means the *next* press of it is not a
-        // fresh one. Because `press` stamps every keystroke `KeyCode::KeyA`, one
-        // unreleased press left `A` held for the rest of the test — invisible while
-        // nothing read `key_code`, and a false failure the moment `watch_focus`
-        // did. A keystroke is a press and a release; modelling half of one is what
-        // made a correct fix look broken.
+        // And released, which `tap` next door already knew: a key left down
+        // means the *next* press is not a fresh one. Since `press` stamps every
+        // keystroke `KeyCode::KeyA`, one unreleased press left `A` held for the
+        // rest of the test — a false failure the moment `watch_focus` read it.
         app.world_mut().write_message(KeyboardInput {
             key_code: KeyCode::KeyA,
             logical_key,
@@ -490,12 +577,10 @@ mod tests {
     /// Hold a modifier down and let the keyboard fall silent long enough that
     /// the chord can only be a ghost.
     ///
-    /// **The silence is the evidence.** The first version of this fix read the
-    /// keystroke's `text` instead, on the belief that macOS hands back none
-    /// under a chord — winit 0.30.13 `platform_impl/macos/event.rs:154` sets
-    /// `text` from `logical_key.to_text()` with no modifier check at all, so
-    /// `Cmd+A` carries `Some("a")` and that fix typed a letter into the prompt
-    /// on every copy, paste and select-all.
+    /// The silence is the evidence. The first fix read the keystroke's `text`
+    /// instead, believing macOS hands back none under a chord — winit 0.30.13
+    /// sets `text` from `logical_key.to_text()` with no modifier check, so
+    /// `Cmd+A` carries `Some("a")` and that fix typed a letter on every paste.
     fn ghost(app: &mut App, key: KeyCode) {
         hold(app, key);
         app.world_mut()
@@ -512,15 +597,13 @@ mod tests {
 
     #[test]
     fn unfurl_hands_the_transcript_the_keyboard_and_escape_hands_it_back() {
-        // **The word exists because the key could not be discovered.** `PageUp`
-        // has scrolled the transcript since the transcript existed, and the
-        // border advertised `PgDn newest` only once you were *already* scrolled
-        // back — an affordance that announced itself exclusively to players who
-        // had found it. In a game with no mouse, that is no affordance.
+        // The word exists because the key could not be discovered: the border
+        // advertised `PgDn newest` only once you were *already* scrolled back,
+        // which in a game with no mouse is no affordance.
         //
         // The half that must not regress is the exit: Escape means the same
-        // thing here as in the editor, or the player is stuck in a mode with no
-        // way out and nothing on screen to type into.
+        // thing here as in the editor, or the player is stuck with nothing to
+        // type into.
         let mut app = app();
         assert!(
             !app.world().resource::<orbs_shell::Scroll>().is_reading(),
@@ -547,13 +630,12 @@ mod tests {
 
     #[test]
     fn the_prompt_is_deaf_while_the_transcript_is_being_read() {
-        // Three surfaces can own the keyboard now — the prompt, the editor and
-        // the transcript — and the failure where two consume a key is invisible
-        // until a player types `:wq` and finds it in their command history.
+        // Three surfaces can own the keyboard, and two consuming a key is
+        // invisible until a player types `:wq` and finds it in their history.
         //
-        // Asserted on the **line**, not on the run conditions: a predicate that
-        // is correct and not wired to anything reads exactly like one that
-        // works, and the run conditions were where this could go wrong.
+        // Asserted on the line, not the run conditions: a correct predicate
+        // wired to nothing reads exactly like one that works, and the run
+        // conditions were where this could go wrong.
         let mut app = app();
         app.world_mut().resource_mut::<Line>().clear();
         app.world_mut().resource_mut::<orbs_shell::Scroll>().read();
@@ -579,19 +661,14 @@ mod tests {
 
     #[test]
     fn a_modifier_stuck_with_no_focus_event_still_lets_you_type() {
-        // **The fix above was not enough, and this is the test that says why.**
-        // It asserts recovery *without* a `WindowFocused`, because the reported
-        // failure — `Cmd+Shift+Ctrl+4` — leaves no focus event to hang a fix on.
-        //
-        // Every recovery path in Bevy 0.19 hangs off exactly that event:
-        // `WindowFocused(false)` → `check_keyboard_focus_lost` →
-        // `KeyboardFocusLost` → `release_all`. And Bevy drops winit's
-        // `ModifiersChanged`, which is the OS saying what is *really* down. So
-        // when a key-up is swallowed silently there is no mechanism anywhere to
-        // notice, and the field is dead for the rest of the session.
+        // Recovery *without* a `WindowFocused`, because the reported failure —
+        // `Cmd+Shift+Ctrl+4` — leaves no focus event to hang a fix on. Every
+        // recovery path in Bevy 0.19 hangs off that event, and Bevy drops
+        // winit's `ModifiersChanged`, so a silently swallowed key-up leaves the
+        // field dead for the session.
         //
         // The evidence that breaks the deadlock is the keystroke itself: the OS
-        // gave us text, so the OS is not treating this as a command.
+        // gave us text, so it is not treating this as a command.
         let mut app = app();
         ghost(&mut app, KeyCode::SuperLeft);
         ghost(&mut app, KeyCode::ControlLeft);
@@ -612,10 +689,9 @@ mod tests {
 
     #[test]
     fn the_editor_recovers_from_a_ghost_modifier_too() {
-        // **The surface it was reported on.** The prompt and the editor share
-        // the guard, which is why they shared the freeze — and a fix tested only
-        // on the prompt would have been half a fix, exactly as the focus hook
-        // was.
+        // The surface it was reported on. The prompt and the editor share the
+        // guard, so they shared the freeze, and a fix tested only on the prompt
+        // would have been half a fix.
         let mut app = app();
         app.world_mut()
             .resource_mut::<crate::shell::Editing>()
@@ -640,15 +716,13 @@ mod tests {
 
     #[test]
     fn a_chord_in_use_is_still_a_chord() {
-        // **The counterweight, and the regression the first fix shipped.** That
-        // version treated "the key came with text" as proof no chord was held —
-        // but winit 0.30.13 sets `text` from `logical_key.to_text()` with no
-        // modifier check (`platform_impl/macos/event.rs:154`), so `Cmd+A` and
-        // `Cmd+V` carry `Some("a")`/`Some("v")` and every copy, paste and
-        // select-all typed a letter into the prompt.
+        // The counterweight, and the regression the first fix shipped: it
+        // treated "the key came with text" as proof no chord was held, but
+        // winit sets `text` from `logical_key.to_text()` with no modifier
+        // check, so `Cmd+A` typed a letter into the prompt.
         //
-        // A chord a person is holding is used within moments of being pressed,
-        // so no silence has elapsed and the guard stands.
+        // A held chord is used within moments of being pressed, so no silence
+        // has elapsed and the guard stands.
         let mut app = app();
         hold(&mut app, KeyCode::SuperLeft);
 
@@ -676,11 +750,10 @@ mod tests {
 
     #[test]
     fn losing_the_window_forgets_held_modifiers() {
-        // **The bug this test exists for.** `Cmd+Shift+Ctrl+4` on macOS hands
-        // the window to the screenshot overlay mid-chord, so the *release* for
-        // Cmd and Ctrl is delivered to that overlay and never to us. Held state
-        // then says they are down forever, every keystroke after it hits the
-        // chord guard, and the prompt is dead with nothing on screen to say why.
+        // `Cmd+Shift+Ctrl+4` on macOS hands the window to the screenshot
+        // overlay mid-chord, so Cmd and Ctrl's *release* goes there and never
+        // to us. Held state then says they are down for ever and the prompt is
+        // dead with nothing on screen to say why.
         let mut app = app();
         hold(&mut app, KeyCode::SuperLeft);
         hold(&mut app, KeyCode::ControlLeft);
@@ -783,13 +856,10 @@ mod tests {
     #[test]
     fn control_characters_never_enter_the_buffer() {
         // `text` carries them — winit documents Enter as `Some("\r")` — and one
-        // in the buffer occupies a cell and draws nothing, so the caret drifts
-        // away from the text with no visible cause.
-        // `Escape` is no longer among them — it clears the line now, which is
-        // the muscle memory `plugin.rs` moved quit off `Esc` to make room for.
-        // Tab now *completes* rather than doing nothing, so what it must not do
-        // is leave its own `\t` behind — asserting an exact line here would be
-        // asserting the completer's answer instead.
+        // in the buffer takes a cell and draws nothing, so the caret drifts
+        // with no visible cause. `Escape` clears the line now, and Tab
+        // *completes*, so what it must not do is leave its own `\t` behind; an
+        // exact line here would be asserting the completer's answer instead.
         let mut tabbed = app();
         press(&mut tabbed, Key::Tab, Some("\t"));
         tabbed.update();
@@ -1063,15 +1133,12 @@ mod tests {
 
     #[test]
     fn f4_switches_focus_without_moving_the_grid() {
-        // §9 requires the focus mode be overridable at any time, so it is a key
-        // rather than a heuristic, and this is the end-to-end proof the key
-        // reaches `cycle_mode`.
+        // §9 requires the focus mode be overridable at any time, and this is
+        // the end-to-end proof the key reaches `cycle_mode`.
         //
-        // **It used to assert that Deep focus bought cells**, because the grid
-        // was derived from the window and Deep dropped a fidelity tier to make
-        // room for a second pane. §19 fixed the grid; there is one grid now, and
-        // both modes have room for every pane §9 allows. What survives is the
-        // half that was always the point — the split changes — plus the new
+        // It used to assert that Deep focus bought cells, back when the grid
+        // was derived from the window. §19 fixed the grid, so what survives is
+        // the half that was always the point — the split changes — plus the
         // guarantee that nothing else does.
         let mut app = App::new();
         app.add_plugins((
@@ -1108,20 +1175,18 @@ mod tests {
             after.grid,
         );
         // ...and what actually changed: the split the two modes ask the tiler
-        // for. Without this the test would pass on a `cycle_mode` that only set
-        // a field nobody reads.
+        // for. Without this the test passes on a `cycle_mode` that only sets a
+        // field nobody reads.
         //
-        // **Two panes explicitly, not `PANES`.** `PANES` is 1 since the tower
-        // rail replaced the telemetry pane, and one pane tiles identically in
-        // both modes — so asking about the live count made this assert that `F4`
-        // does something it currently cannot. What it is really holding is that
-        // **the two modes ask the tiler for different shapes**, which is a
-        // property of `cycle_mode` and the tiler and is as true today as it will
-        // be when multiplexing puts the second pane back (Phase 11a).
+        // Two panes explicitly, not `PANES`, which is 1 since the tower rail
+        // replaced the telemetry pane — one pane tiles identically in both
+        // modes, so the live count made this assert something `F4` currently
+        // cannot do. What it holds is that the two modes ask the tiler for
+        // different shapes.
         //
-        // The half that is genuinely lost — that `F4` changes what is on screen
-        // *right now* — is recorded on `PANES` rather than asserted here,
-        // because a test cannot hold a claim the game has stopped making.
+        // The half genuinely lost — that `F4` changes what is on screen *right
+        // now* — is recorded on `PANES`, because a test cannot hold a claim the
+        // game has stopped making.
         let request = |screen: Screen| orbs_render::ScreenRequest {
             main_panes: 2,
             mode: screen.mode,
@@ -1147,11 +1212,10 @@ mod tests {
 
     /// Press or release a key carrying its **real** `key_code`.
     ///
-    /// `press` above stamps every keystroke `KeyCode::KeyA` on the stated grounds
-    /// that `type_into_line` does not read the field. `watch_focus` does — it has
-    /// to, because what it tracks is which *physical* key is still down — so a test
-    /// about it that used `press` would put every key in one bucket and pass
-    /// against a fix that swallowed the keyboard for ever.
+    /// `press` stamps every keystroke `KeyCode::KeyA`, since `type_into_line`
+    /// does not read the field. `watch_focus` does — it tracks which *physical*
+    /// key is still down — so a test using `press` would put every key in one
+    /// bucket and pass against a fix that swallowed the keyboard for ever.
     fn physical(app: &mut App, key_code: KeyCode, logical_key: Key, state: ButtonState) {
         app.world_mut().write_message(KeyboardInput {
             key_code,
@@ -1180,7 +1244,7 @@ mod tests {
             "the arrows never took the maze, so this asserts nothing",
         );
 
-        // Walking: the arrow goes down and **stays** down, which is the state the
+        // Walking: the arrow goes down and stays down, which is the state the
         // bug needs. Nothing releases it before the Escape.
         physical(
             &mut app,
@@ -1194,11 +1258,10 @@ mod tests {
         app.update();
         assert!(!app.world().resource::<crate::shell::Walk>().is_open());
 
-        // **The held arrow outliving the Escape is how the word came back.** Key
-        // repeat keeps delivering while a finger is on the key, and by this frame
-        // the maze has let go — so the arrow reaches the prompt, where an arrow
-        // means *recall history*, and the newest entry is the `wander` that opened
-        // the maze.
+        // The held arrow outliving the Escape is how the word came back: key
+        // repeat keeps delivering, the maze has let go by this frame, and at
+        // the prompt an arrow means *recall history* — newest entry, the
+        // `wander`.
         physical(
             &mut app,
             KeyCode::ArrowUp,
@@ -1221,10 +1284,10 @@ mod tests {
             "a Tab listing outlived the maze",
         );
 
-        // **And the other half, which is what makes the fix a fix.** Let go of the
-        // arrow and press it again: that is a real keystroke and history recall must
-        // still work. A version that swallowed the keyboard from the moment a
-        // surface closed would pass everything above and break `Up` for ever.
+        // And the other half. Let go and press again: that is a real keystroke
+        // and recall must still work. A version that swallowed the keyboard
+        // from the moment a surface closed would pass everything above and
+        // break `Up`.
         physical(
             &mut app,
             KeyCode::ArrowUp,
@@ -1248,31 +1311,27 @@ mod tests {
 
     /// Every surface swallows the keyboard, and the prompt gets nothing.
     ///
-    /// **The regression test for `orbs_shell::Focus` itself**, and for the defect
-    /// its module comment describes: a surface whose term was forgotten does not
-    /// fail loudly, it *"types into an invisible prompt while the player looks at
-    /// something else, and the characters arrive later."* Nothing asserted that
+    /// The regression test for `orbs_shell::Focus`, and for the defect its
+    /// module comment describes: a forgotten surface *"types into an invisible
+    /// prompt while the player looks at something else."* Nothing asserted that
     /// before — `leaving_the_maze_leaves_nothing_in_the_prompt` covers one
-    /// surface and only the handoff *out* of it.
+    /// surface.
     ///
-    /// It is written as a loop over the four on purpose: a fifth added without
-    /// its arm is then a missing row in a table rather than a test nobody
-    /// remembered to write.
+    /// A loop over the four on purpose: a fifth added without its arm is a
+    /// missing row in a table rather than a test nobody remembered to write.
     #[test]
     fn no_surface_lets_a_keystroke_reach_the_prompt() {
         for (surface, opening) in [
-            // **A spell is written *for* a domain**, so `scribe` from the tower
-            // landing opens nothing. Getting that wrong is what the "asserts
-            // nothing" guard below is for, and it caught it on the first run.
+            // A spell is written *for* a domain, so `scribe` from the tower
+            // landing opens nothing — which the "asserts nothing" guard below
+            // caught on the first run.
             ("editor", &["attend laboratory", "scribe drill"][..]),
             ("weave", &["weave"][..]),
             ("maze", &["attend archive", "research", "wander"][..]),
             ("reading", &["unfurl"][..]),
-            // **There was a fifth row, `chant`**, added late and for the reason
-            // this table's doc gives: a surface that arrives without its row goes
-            // unasserted. The menagerie is typed now (§19), so the row went with
-            // the surface rather than staying to assert something that cannot
-            // open.
+            // There was a fifth row, `chant`. The menagerie is typed now (§19),
+            // so the row went with the surface rather than staying to assert
+            // something that cannot open.
         ] {
             let mut app = app();
             for line in opening {
@@ -1295,27 +1354,20 @@ mod tests {
         }
     }
 
-    /// What the app's surfaces answer, as they stand.
-    ///
-    /// **Built from the resources rather than run through the `SystemParam`**,
     /// The word, through the real plugin stack, to the real menu.
     ///
-    /// # Why this test and not the dump
-    ///
-    /// **`ORBS_DUMP` proved the wrong thing.** It goes through
-    /// `orbs_shell::dump`, which builds no `App` and takes the handshake itself
-    /// — so it drew a menu while the live build's route to one was never
-    /// exercised. The whole point of `menuing::open_requested` is that it is a
-    /// *system*, with a run condition, in a schedule; none of that is reachable
-    /// from a still photograph.
+    /// Not the dump: `ORBS_DUMP` goes through `orbs_shell::dump`, which builds
+    /// no `App` and takes the handshake itself, so it drew a menu while the
+    /// live route to one was never exercised. `menuing::open_requested` is a
+    /// *system* with a run condition in a schedule; a still photograph reaches
+    /// none of it.
     #[test]
     fn the_word_menu_opens_the_menu() {
         let mut app = app();
         type_line(&mut app, "menu");
-        // **The effect lands on the tick, not at `submit`.** `submit` echoes and
-        // queues; every verb's effect runs at the next `step`, which is what
-        // keeps effects tick-aligned — so a check before this one finds the flag
-        // unset, which is the mistake `quit` shipped with once already.
+        // The effect lands on the tick, not at `submit`: `submit` echoes and
+        // queues, and every verb's effect runs at the next `step`, so a check
+        // before this finds the flag unset — the mistake `quit` shipped once.
         app.world_mut().resource_mut::<Tower>().step();
         app.update();
 
@@ -1334,13 +1386,9 @@ mod tests {
 
     /// `quit` asks once, and the second one goes.
     ///
-    /// # The behaviour this replaces
-    ///
-    /// For one iteration `quit` opened the menu and leaving was a choice made
-    /// there — so a player who wanted to stop had to learn that stopping was two
-    /// steps through a screen they had not asked for. **Superseded** (§19):
-    /// `quit` leaves, and the two steps are a *question* instead, which is what
-    /// every other refusal in the game already looks like.
+    /// Superseded (§19): for one iteration `quit` opened the menu, so stopping
+    /// was two steps through a screen nobody asked for. Now `quit` leaves and
+    /// the two steps are a *question*, like every other refusal in the game.
     #[test]
     fn quit_asks_once_and_the_second_one_leaves() {
         let mut app = app();
@@ -1376,7 +1424,7 @@ mod tests {
     /// ...and anything else answers *no*.
     #[test]
     fn any_other_word_calls_off_a_pending_quit() {
-        // **The surprise the question exists to prevent**: a `quit` typed and
+        // The surprise the question exists to prevent: a `quit` typed and
         // thought better of, ending a session three commands later.
         let mut app = app();
         type_line(&mut app, "quit");
@@ -1404,25 +1452,100 @@ mod tests {
 
     /// The menu must not eat the word that opened it.
     ///
-    /// # The timing the other two tests do not have
+    /// The timing the other two tests do not have. `type_line` updates per
+    /// keystroke, so the `KeyboardInput` messages are long dropped by the time
+    /// the menu opens — but when `quit` lands on a tick boundary they are the
+    /// same frame, and `type_into_menu`'s reader has never run, so its cursor
+    /// is at the start of whatever `Messages` retains.
     ///
-    /// `type_line` runs an `app.update()` per keystroke, so by the time the menu
-    /// opens the `KeyboardInput` messages are long dropped. In the real game
-    /// `advance` is `FixedUpdate` at 1 Hz, so usually sixty frames pass between
-    /// the Enter and `Quitting` — but **when `quit` lands on a tick boundary
-    /// they are the same frame**, and `type_into_menu`'s `MessageReader` has
-    /// never run, so its cursor is at the start of whatever `Messages` still
-    /// retains.
-    ///
-    /// That is `weaving.rs`'s recorded defect one surface over: *"a system that
-    /// does not run keeps its message cursor"*, and a menu that re-reads the
-    /// keystrokes that opened it spells `quit` into itself and leaves the orb —
-    /// which looks exactly like `quit` having never stopped ending the session.
+    /// `weaving.rs`'s recorded defect one surface over: *"a system that does
+    /// not run keeps its message cursor"*, and a menu re-reading the keystrokes
+    /// that opened it spells `quit` into itself and leaves the orb.
+    #[test]
+    fn escape_out_of_the_manual_leaves_the_menu_standing() {
+        // Two surfaces, two `MessageReader` cursors, one keystroke.
+        // `MenuOutcome::OpenManual` leaves the menu open underneath, and
+        // `type_into_manual` runs first — so the Escape that shut the manual
+        // was gone from `Reading::is_open` before `type_into_menu` looked, and
+        // the menu read the same event and closed too. `ORBS_DUMP` builds no
+        // `App`, so `dumps.sh`'s capture is green either way; this layer can
+        // see it.
+        let mut app = app();
+        app.world_mut().resource_mut::<Standing>().open(
+            orbs_shell::Stance::InTower,
+            orbs_shell::Driver::default(),
+            crate::shell::setting::defaults(),
+        );
+        let book = orbs_shell::manual_book(app.world().resource::<Tower>().sim());
+        app.world_mut().resource_mut::<Reading>().open(book);
+        app.update();
+        assert!(app.world().resource::<Reading>().is_open());
+        assert!(app.world().resource::<Standing>().is_open());
+
+        // One Escape: out of the manual, and no further.
+        app.world_mut().write_message(KeyboardInput {
+            key_code: KeyCode::Escape,
+            logical_key: Key::Escape,
+            state: ButtonState::Pressed,
+            text: None,
+            repeat: false,
+            window: Entity::PLACEHOLDER,
+        });
+        app.update();
+
+        assert!(
+            !app.world().resource::<Reading>().is_open(),
+            "Escape did not leave the manual",
+        );
+        assert!(
+            app.world().resource::<Standing>().is_open(),
+            "the same Escape closed the menu behind it",
+        );
+    }
+
+    #[test]
+    fn a_word_typed_at_the_manual_does_not_also_drive_the_menu() {
+        // The other half, and the one that could leave the game: `q` is not a
+        // chapter, so the menu underneath prefix-matched its own `quit` and
+        // wrote an `AppExit` from inside the manual.
+        let mut app = app();
+        app.world_mut().resource_mut::<Standing>().open(
+            orbs_shell::Stance::InTower,
+            orbs_shell::Driver::default(),
+            crate::shell::setting::defaults(),
+        );
+        let book = orbs_shell::manual_book(app.world().resource::<Tower>().sim());
+        app.world_mut().resource_mut::<Reading>().open(book);
+        app.update();
+
+        type_only(&mut app, "q");
+        app.world_mut().write_message(KeyboardInput {
+            key_code: KeyCode::Enter,
+            logical_key: Key::Enter,
+            state: ButtonState::Pressed,
+            text: Some("\r".into()),
+            repeat: false,
+            window: Entity::PLACEHOLDER,
+        });
+        app.update();
+
+        assert!(
+            app.world()
+                .resource::<Messages<bevy::app::AppExit>>()
+                .is_empty(),
+            "typing at the manual left the orb",
+        );
+        assert!(
+            app.world().resource::<Standing>().is_open(),
+            "typing at the manual closed the menu behind it",
+        );
+    }
+
     #[test]
     fn opening_the_menu_does_not_eat_the_word_that_opened_it() {
         let mut app = app();
 
-        // The keystrokes, with **no update between them and the tick**.
+        // The keystrokes, with no update between them and the tick.
         type_only(&mut app, "menu");
         app.world_mut().write_message(KeyboardInput {
             key_code: KeyCode::Enter,
@@ -1459,6 +1582,104 @@ mod tests {
         );
     }
 
+    /// The shell standing at the threshold: no tower chosen, the menu up.
+    ///
+    /// `Threshold::Waiting` is inserted directly rather than by `SimPlugin`,
+    /// which this harness does not install — what is under test here is the
+    /// *keyboard*, and the plugin's own half has tests beside it in `sim`.
+    fn at_the_threshold() -> App {
+        let mut app = app();
+        app.insert_resource(orbs_shell::Threshold::Waiting);
+        // One frame for `open_at_the_threshold` to put the menu up.
+        app.update();
+        app
+    }
+
+    /// The keyboard belongs to the menu, whatever is pressed at it.
+    ///
+    /// A real keyboard and not a dump: `ORBS_DUMP` builds no `App` and presses
+    /// no key, so it draws a correct threshold whatever the routing does — §19
+    /// records the orb's menu shipping a keyboard defect through four green
+    /// dump latches.
+    ///
+    /// It holds the routing: keys reach the menu, none leaks to the prompt
+    /// behind it, none ends the session. It does *not* hold "the menu is never
+    /// closed" — `open_at_the_threshold` puts the menu back on the same frame
+    /// anything closes it, so this passed with `Stance::may_close` deliberately
+    /// broken. That rule is held where it can fail: `orbs-shell`'s
+    /// `the_threshold_has_no_way_to_close_the_menu`.
+    #[test]
+    fn the_threshold_gives_no_keystroke_to_the_prompt_behind_it() {
+        let mut app = at_the_threshold();
+        assert!(
+            app.world().resource::<crate::shell::Standing>().is_open(),
+            "the threshold did not put its menu up",
+        );
+
+        // Escape, the way out of every other surface in the game; `resume`,
+        // whole and by the prefix that reaches it over a tower; and an ordinary
+        // sentence. After all of it the menu still has the keyboard.
+        for _ in 0..3 {
+            tap(&mut app, KeyCode::Escape, Key::Escape);
+        }
+        type_line(&mut app, "resume");
+        type_line(&mut app, "r");
+        type_line(&mut app, "look around");
+        assert!(
+            app.world().resource::<crate::shell::Standing>().is_open(),
+            "the menu did not have the keyboard after all that",
+        );
+
+        // And nothing above leaked into a prompt nobody can see.
+        assert!(
+            app.world()
+                .resource::<Messages<bevy::app::AppExit>>()
+                .is_empty(),
+            "a keystroke at the threshold left the orb",
+        );
+        assert_eq!(
+            app.world().resource::<Line>().text(),
+            "",
+            "the menu's keystrokes reached the prompt behind it",
+        );
+    }
+
+    /// ...and `quit` still leaves, which is what makes the above a rule about
+    /// *closing* rather than about the keyboard being dead.
+    #[test]
+    fn quit_leaves_the_orb_from_the_threshold() {
+        let mut app = at_the_threshold();
+        type_line(&mut app, "quit");
+        assert!(
+            !app.world()
+                .resource::<Messages<bevy::app::AppExit>>()
+                .is_empty(),
+            "the threshold had no way out of the orb at all",
+        );
+    }
+
+    /// The menu is up before the first keystroke can land anywhere else.
+    ///
+    /// With `ORBS_BOOT=0` the frame the sequence finishes is frame one, which is
+    /// exactly when a stray keystroke is most likely to still be in the queue —
+    /// and `menuing.rs` records what a surface opening on such a frame costs.
+    #[test]
+    fn the_threshold_takes_the_keyboard_before_the_prompt_does() {
+        let mut app = app();
+        app.insert_resource(orbs_shell::Threshold::Waiting);
+        // Typed on the very frame the menu goes up, with no update in between.
+        type_only(&mut app, "look around");
+        assert!(
+            app.world().resource::<crate::shell::Standing>().is_open(),
+            "the threshold never opened its menu",
+        );
+        assert_eq!(
+            app.world().resource::<Line>().text(),
+            "",
+            "a keystroke reached the prompt behind the threshold's menu",
+        );
+    }
+
     /// because a `SystemParam` needs a system to live in and this is a helper
     /// inside an assertion. The ordering it asks about is `orbs_shell::Focus`'s
     /// either way, which is the whole point of that type.
@@ -1472,6 +1693,7 @@ mod tests {
             walking: app.world().resource::<crate::shell::Walk>().is_open(),
             reading: app.world().resource::<orbs_shell::Scroll>().is_reading(),
             menuing: app.world().resource::<crate::shell::Standing>().is_open(),
+            reading_manual: app.world().resource::<crate::shell::Reading>().is_open(),
         })
     }
 }

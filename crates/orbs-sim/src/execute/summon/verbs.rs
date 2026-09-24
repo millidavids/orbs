@@ -1,21 +1,13 @@
 //! `summon` and `limn` — the menagerie's two words (DESIGN.md §10).
 //!
-//! The lens's shape, one room over: `summon` opens a beast the way `probe` opens
-//! a ward and then calls it in the way `probe` presses, and `limn` turns a glyph
-//! the way `dial` turns a socket — named, or stepped round the six when a spell
-//! cannot name what it has not tried.
+//! The lens's shape, one room over: `summon` opens a beast and calls it in as
+//! `probe` opens and presses, and `limn` turns a glyph as `dial` turns a
+//! socket — named, or stepped round the six.
 //!
-//! **Neither word takes the production slot**, and neither waits on anything.
-//! A beast waits for ever and a call answers on the tick it is typed, so a bound
-//! search runs *beside* a brew, which is what makes the menagerie's faucet
-//! additive. `spell::block::begins_work` carries the exemption; §19 records it
-//! being forgotten once for the sanctum.
-//!
-//! # What a hold is worth
-//!
-//! Troops into the arsenal, and then the orb earns — the work, and then what the
-//! work bought, which is `muster`'s order and the lens's. A call that balks costs
-//! nothing but the call: this domain has no failure, only time (§19).
+//! Neither word takes the production slot and neither waits, so the menagerie's
+//! faucet is additive; `spell::block::begins_work` carries the exemption (§19).
+//! A hold puts troops into the arsenal and then the orb earns — `muster`'s
+//! order. A balk costs only time (§19).
 
 use bevy_ecs::prelude::*;
 use orbs_render::{FieldName, RecordKind, Role};
@@ -38,20 +30,13 @@ pub const TROOP: &str = "troop";
 
 /// `summon` — draw a beast up at the circle, or call the waiting one in.
 ///
-/// **Two acts in one word**, which is `probe`'s: finding a far orb and pressing
-/// it, here drawing a beast and calling it. There is one circle and one beast at
-/// a time, so there is never anything to name.
+/// Two acts in one word, as `probe` is. One circle and one beast at a time, so
+/// there is never anything to name, and the draw is not a call.
 ///
-/// **The draw is not a call.** A beast arrives with every glyph at the opening
-/// and nothing answered; the next `summon` is the first call, and the one PAR
-/// counts.
-///
-/// **A call is never spent on a guess.** `divined` is the augury having read
-/// the line (§6), and `summon` is what a reader falls back to when a sentence
-/// defeats it: the word takes no argument and resolves in any menagerie, so
+/// A call is never spent on a guess: `divined` is the augury having read the
+/// line (§6), and a reader defeated by a sentence falls back to `summon`, so
 /// *"cycle the widdershins"* came back as a call against par with nothing
-/// limned. A divined `summon` still draws a beast, which costs nothing; it does
-/// not call one in, and says what to type instead.
+/// limned.
 pub(crate) fn summon(world: &mut World, divined: bool) {
     let Some(circle) = fixture(world) else {
         say(world, Verb::Summon, "summon_nowhere", &[], Role::Cost);
@@ -70,15 +55,12 @@ pub(crate) fn summon(world: &mut World, divined: bool) {
 
 /// A beast arrives at the circle.
 fn arrive(world: &mut World, circle: Entity) {
-    // **The domain's one draw, and it is here rather than in a system.** A beast
-    // is drawn once per arrival, so `RngStream::Menagerie` advances only when
-    // somebody asks — the circle has no tick system at all, and nothing a
-    // replay could reorder.
+    // The domain's one draw, here rather than in a system: the circle has no
+    // tick system, so `RngStream::Menagerie` advances only when asked and a
+    // replay has nothing to reorder.
     //
-    // **Which circle is asked of the tower, at the draw.** A sealed tower draws
-    // lesser beasts until `menagerie_2` opens the whole circle; a beast already
-    // waiting keeps its shape when that happens, so the board never changes
-    // under a player mid-read.
+    // A sealed tower draws lesser beasts until `menagerie_2` opens the whole
+    // circle.
     let whole = world.resource::<tower::Opened>().has(tower::opened::CIRCLE);
     let beast = {
         let mut rngs = world.resource_mut::<crate::rng::Rngs>();
@@ -112,16 +94,10 @@ fn call(world: &mut World, circle: Entity) {
     let calls = beast.calls();
     let troops = beast.troops();
     match answered {
-        // **A balk is not a refusal.** It is the circle answering wrongly, which
-        // is the puzzle rather than a dead end — the refused haul's reading, and
-        // why it is a cost and never a fault on the rail.
+        // A balk is the puzzle, not a dead end — a cost, never a fault.
         //
-        // **Nothing is republished**, because nothing a spell can read has moved:
-        // the temper's `fervour` and each glyph's humour are what they were before
-        // the call, and the answer is deliberately not a reading (§19). The board
-        // and the rail read the beast itself. Republishing here despawned and
-        // re-raised every reading on every call to say the same thing with new
-        // ids — which `limn` did too until it republished only its glyph.
+        // Nothing is republished: nothing a spell can read has moved (§19), and
+        // republishing here re-raised every reading with new ids.
         Call::Balked { rows } => {
             let balking = world.resource::<Prose>().counted("summon_rows", rows);
             say(
@@ -145,10 +121,8 @@ fn hold(world: &mut World, circle: Entity, calls: u32, troops: u32) {
     publish(world, circle);
 
     let mut work = tower::Work::event(tower::FIGURE);
-    // **Through `tower::home`, never to a named room.** A troop is finished work
-    // and keeps itself in the arsenal; asking the rule rather than the room is
-    // what stops a held troop and a `debug_spawn`ed one landing in different
-    // places, which §19 records the archive's fragments doing for one change.
+    // Through `tower::home`, never a named room: asking the rule stops a held
+    // troop and a `debug_spawn`ed one landing in different places (§19).
     let shelf = tower::home(world, TROOP);
     if let Some(shelf) = shelf {
         tower::give(
@@ -158,19 +132,16 @@ fn hold(world: &mut World, circle: Entity, calls: u32, troops: u32) {
             crate::parser::NounKind::Essence,
             troops,
         );
-        // **A making**, so the troops arrive fresh and renown is minted for
-        // them: the stores count makings, and a producer that forgot this would
-        // deploy troops the arsenal still calls thin.
+        // A making, so renown is minted: the stores count makings, and a
+        // producer that forgot would deploy troops the arsenal calls thin.
         work = work.making(TROOP);
     }
     let shelved = shelf.is_some();
-    // **A lesser hold is a quarter of the price** — the lesson, not the faucet.
-    // One rule for par either way; the circle's shape says what par is.
+    // A lesser hold is a quarter of the price — the lesson, not the faucet. One
+    // rule for par either way; the circle's shape says what par is.
     let earned = shape.priced(tower::worth_within_par(world, CIRCLE, calls, shape.par()));
-    // **The sentence says what reached a shelf.** `home` answers `None` only for a
-    // tower with no arsenal, which no tower raised today is — but announcing four
-    // troops the arsenal never received would be the record lying about the
-    // world, and the player could not tell the hold had been lost.
+    // The sentence says what reached a shelf: announcing troops that never
+    // arrived would be the record lying about the world.
     let answering = if shelved {
         world.resource::<Prose>().counted("summon_troops", troops)
     } else {
@@ -188,14 +159,12 @@ fn hold(world: &mut World, circle: Entity, calls: u32, troops: u32) {
 
 /// `limn <glyph> [<humour>]` — limn a glyph; bare, step it round the six.
 ///
-/// **Free, and instant**, as `dial` is: limning is not the work, holding the
-/// beast is. It is also what lets a player change two glyphs and call once,
-/// which is the shape a deduction takes.
+/// Free and instant, as `dial` is: limning is not the work, holding the beast
+/// is, and a player may change two glyphs and call once.
 ///
-/// **Bare is what makes a search writable.** A spell has no variables, so it
-/// cannot name the humour it has not tried; `limn keystone` asks the circle for
-/// the next one instead, and three literal `repeat 6` loops around that are an
-/// odometer over every circle there is.
+/// Bare is what makes a search writable. A spell has no variables, so it cannot
+/// name a humour it has not tried; `limn keystone` asks the circle for the next
+/// one, and three `repeat 6` loops around that are an odometer.
 pub(crate) fn limn(intent: &Intent, world: &mut World) {
     let Some(circle) = fixture(world) else {
         say(world, Verb::Limn, "summon_nowhere", &[], Role::Cost);
@@ -206,9 +175,8 @@ pub(crate) fn limn(intent: &Intent, world: &mut World) {
         return;
     }
 
-    // **The leaf, for every sentence below.** A resolved place arrives as its
-    // full path, and prose echoing it would read *"/tower/menagerie/keystone is
-    // limned heed"* — the tower's internals in a line meant for a player.
+    // The leaf, for every sentence below: a resolved place arrives as its full
+    // path, and prose echoing it puts the tower's internals in a player's line.
     let mut named = intent
         .arguments
         .iter()
@@ -217,16 +185,10 @@ pub(crate) fn limn(intent: &Intent, world: &mut World) {
         say(world, Verb::Limn, "limn_incomplete", &[], Role::Cost);
         return;
     };
-    // **Either order, because only one can be meant.** No glyph shares a word
-    // with a humour, so `limn heed keystone` names exactly what `limn keystone
-    // heed` does — and it is the order plain English takes: *"limn the keystone
-    // with heed"* and *"give the keystone heed"* are the glyph first, but a
-    // player who thinks of the humour first types it first.
-    //
-    // **A humour first makes the second word the glyph, whatever it is**, so the
-    // refusal names the word that is wrong: `limn heed laboratory` is told
-    // `laboratory` is no glyph, not that `heed` is. Two glyphs are still refused
-    // below by name.
+    // Either order, because no glyph shares a word with a humour. A humour
+    // first makes the second word the glyph whatever it is, so the refusal
+    // names the wrong word: `limn heed laboratory` is told `laboratory` is no
+    // glyph.
     let (word, humour) = match named.next() {
         Some(second)
             if Glyph::from_word(&first).is_none() && Humour::from_word(&first).is_some() =>
@@ -245,11 +207,8 @@ pub(crate) fn limn(intent: &Intent, world: &mut World) {
         );
         return;
     };
-    // **A dark glyph is refused, and as a cost** — at a lesser circle only the
-    // keystone is part of it, and limning the others would change nothing the
-    // beast answers. Said rather than ignored, so a player who read ahead in
-    // `recall` learns the circle is not whole yet instead of watching a limn
-    // do nothing.
+    // A dark glyph is refused as a cost rather than ignored, so a player who
+    // read ahead in `recall` learns the circle is not whole yet.
     if world
         .get::<Beast>(circle)
         .is_some_and(|beast| !beast.shape().lights(glyph))
@@ -269,10 +228,8 @@ pub(crate) fn limn(intent: &Intent, world: &mut World) {
             .get_mut::<Beast>(circle)
             .map(|mut beast| beast.step(glyph)),
         Some(wanted) => {
-            // **Both slots are `NounKind::Place`**, so `limn keystone sunwise`
-            // parses and has to be refused here — the lens's `dial` has the same
-            // shape. Naming what was wrong beats a generic refusal: a player who
-            // named two glyphs is one word from right.
+            // Both slots are `NounKind::Place`, so two glyphs parse and have
+            // to be refused here, as the lens's `dial` does.
             let Some(humour) = Humour::from_word(&wanted) else {
                 say(
                     world,
@@ -292,9 +249,8 @@ pub(crate) fn limn(intent: &Intent, world: &mut World) {
     let Some(humour) = humour else {
         return;
     };
-    // Published every time, because the glyph's reading is what a spell reads
-    // back to know where its search stands — **that glyph's alone**, since
-    // nothing else a spell can read has moved.
+    // Published every time: the glyph's reading is how a spell knows where its
+    // search stands. That glyph's alone — nothing else has moved.
     republish_glyph(world, circle, glyph);
     say(
         world,
@@ -307,10 +263,8 @@ pub(crate) fn limn(intent: &Intent, world: &mut World) {
 
 /// Let the waiting beast go, for nothing — what `stop circle` does.
 ///
-/// **Returns whether there was one**, so `stop` can fall through to its ordinary
-/// answer when nothing waits. A beast inserts no `Working`, so without this arm
-/// `stop circle` would say the circle is not working while `if the circle is
-/// working` said it was — the disagreement the pylon's arm records.
+/// Returns whether there was one. A beast inserts no `Working`, so without
+/// this arm `stop circle` denied what `if the circle is working` affirmed.
 pub(crate) fn release(world: &mut World, circle: Entity) -> bool {
     if world.get::<Beast>(circle).is_none() {
         return false;
@@ -323,10 +277,8 @@ pub(crate) fn release(world: &mut World, circle: Entity) -> bool {
 
 /// The circle, where the player — or the spell — is standing.
 ///
-/// **`Cwd` is right here, and it is not the lens's bug.** A spell's command runs
-/// inside `spell::run`'s room swap, so `Cwd` is the spell's room when a bound
-/// search calls `summon`. The lens paid for a *tick system* reading `Cwd`, and the
-/// circle has no tick system.
+/// `Cwd` is right here: a spell's command runs inside `spell::run`'s room swap.
+/// The lens paid for a *tick system* reading `Cwd`; the circle has none.
 pub(crate) fn fixture(world: &World) -> Option<Entity> {
     super::super::readings::fixture(world, Verb::Summon)
 }

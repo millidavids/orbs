@@ -5,24 +5,17 @@
 //! control, and it says the same things the domain's own pane would say in
 //! fewer words — never anything extra, which is rule 2's line.
 //!
-//! # Seven, always, and six of them are dark in a fresh game
+//! Seven slots always, six dark in a fresh game. A rail that showed only what is
+//! open would grow a box at a time with no warning, and six anonymous slots say
+//! *there is more* without saying what — which is what §11's discovery loop
+//! wants and what naming them would spend. Every room is raised at tick 0, so
+//! `built` reads *opened*.
 //!
-//! §10 fixes the domain list at seven and §11.5 starts the player with one of
-//! them — the laboratory, with the rest earned along the mastery lines
-//! (Phase 10). A rail that showed only what is open would grow a box at a time
-//! with no warning, and the arrival of a *room* is the least surprising thing
-//! in the game to foreshadow — so all seven slots are drawn and the shut ones
-//! are anonymous. Seven slots with six dark says *there is more* without saying
-//! what, which is what §11's discovery loop wants and what naming them would
-//! spend. Every room is raised at tick 0; `built` reads *opened*.
-//!
-//! # It asks the panel, rather than answering beside it
-//!
+//! It asks the panel rather than answering beside it:
 //! [`state_at`](super::panel::state_at) and
-//! [`instruments_in`](super::panel::instruments_in) are the same derivations the
-//! instrument panel draws, called about a room the player is not standing in.
-//! §19 records the cost of a second answer to *"is this instrument busy"* once
-//! already; this is the same trap with a whole room in it.
+//! [`instruments_in`](super::panel::instruments_in) are the derivations the
+//! instrument panel draws, called about a room nobody is standing in. §19
+//! records the cost of a second answer to *"is this instrument busy"*.
 
 use bevy_ecs::prelude::*;
 
@@ -31,49 +24,37 @@ use super::panel::{Instrument, State};
 
 /// The rooms where work happens, in the order the rail draws them.
 ///
-/// **Six, not §10's seven, and the difference is the grimoire.** §10 names seven
-/// *kinds of play* and Spellcraft is one of them — Phase 3 built the language,
-/// the editor and in-file parts, and none of that is withdrawn. What the
-/// grimoire is not is a room you **work in**: it raises no instrument, earns
-/// nothing, anchors no verb, and `domain_of` has always documented it as one of
-/// the two places that are *"not somewhere work happens"*. §19 said the same
-/// three phases earlier — *"a root domain but not a §9 activity domain… you do
-/// not run the grimoire concurrently with brewing"* — and this list had not
-/// caught up, so it drew a rail box that read `idle` for ever and carried a
-/// mastery line counting a deed done everywhere else.
+/// Six, not §10's seven: the grimoire is a kind of play but not a room you
+/// *work in* — it raises no instrument, earns nothing and anchors no verb, so
+/// its rail box read `idle` for ever. The bailey is absent for the same reason:
+/// a siege is fought there and it is still not a room you tend. Where a place
+/// can be *shut* is a wider question `opened::is_room` answers.
 ///
-/// **This list is what has a line and a box**, which is why the bailey is absent
-/// too: a siege is fought there and it is still not a room you tend. Where a
-/// place can be *shut* is a wider question and `opened::is_room` answers it.
+/// A const table, not content: these are directory names the parser resolves and
+/// `build.rs` raises — decisions, like `Verb::canonical`'s table. The label is
+/// the same word as the path, because §7 makes the filesystem the world.
 ///
-/// **A const table, not content.** These are directory names the parser resolves
-/// and `build.rs` raises — decisions, like `Verb::canonical`'s table, rather than
-/// prose. What each one is *called* on screen is the same word, because §7 makes
-/// the filesystem the world and a room whose label differs from its path would
-/// be two names for one place.
-///
-/// The order is §10's table read top to bottom, with the two opening domains
-/// first so the rail's live half is its top half from the first frame.
+/// The order is §10's table top to bottom, with the two opening domains first so
+/// the rail's live half is its top half from the first frame.
 pub const DOMAINS: [&str; 6] = [
     "laboratory",
     "archive",
     "lens",
     "forge",
     "menagerie",
-    // **`sanctum`, where §10's table says `battlements/`** — §19 records the
-    // supersession. The room is the wizard's warding chamber rather than a wall
-    // walk, because what he defends the tower with is arcane and not masonry.
+    // `sanctum`, where §10's table says `battlements/` (§19): the room is a
+    // warding chamber rather than a wall walk, because what defends the tower
+    // is arcane and not masonry.
     "sanctum",
 ];
 
 /// Something a domain wants noticed, latched until the player goes and looks.
 ///
-/// **A latch cleared by [`attend`](crate::execute), not a timer.** A mark that
-/// faded on its own would be a thing the game told you about while you were
-/// making tea and never again; a mark that clears when you walk into the room is
-/// diegetic, needs no second clock, and cannot drift from what the player has
-/// actually seen. It is also why this is one mark per domain rather than a
-/// queue: the rail says *something happened here*, and the room says what.
+/// A latch cleared by [`attend`](crate::execute), not a timer: a mark that faded
+/// on its own would be something the game told you while you were making tea and
+/// never again. Clearing on arrival needs no second clock and cannot drift from
+/// what the player has seen. One mark per domain, not a queue — the rail says
+/// *something happened here* and the room says what.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mark {
     /// A spell in this domain gave up, or could not read one of its own lines.
@@ -114,10 +95,9 @@ impl Marks {
 
 /// Latch a mark on a domain.
 ///
-/// **A fault outranks news, and never the other way round.** Both can happen in
-/// one tick — a scrying spell finding a recipe on the lap it then gives up on —
-/// and the rail has one glyph to spend. A player who is shown the good news and
-/// not the broken spell has been told the less useful of the two things.
+/// A fault outranks news, never the other way round. Both can happen in one tick
+/// — a scrying spell finding a recipe on the lap it gives up on — and the rail
+/// has one glyph to spend.
 pub fn mark(world: &mut World, domain: &str, mark: Mark) {
     let mut marks = world.resource_mut::<Marks>();
     match marks.0.get(domain) {
@@ -160,15 +140,10 @@ pub struct Brief {
     pub spell: Option<String>,
     /// How many cursors of automation are running here, in total.
     ///
-    /// **Cursors, not spells, and the unit is the decision.** Two things can put
-    /// more than one line's worth of automation in a room — a second `invoke`,
-    /// and an `alongside` fork inside one spell — and from the rail's position
-    /// they are the same fact: *more is running than the name below can say*.
-    /// One number that is true of both beats two suffixes a player has to tell
-    /// apart at a glance.
-    ///
-    /// `status` is where the difference lives, which is the standing split: the
-    /// rail is the glance and `status` is the full answer.
+    /// Cursors, not spells — the unit is the decision. A second `invoke` and an
+    /// `alongside` fork are the same fact from the rail's position: *more is
+    /// running than the name below can say*. `status` is where the difference
+    /// lives, which is the standing split.
     ///
     /// Nought when nothing runs, so `spell.is_some()` and `running > 1` are
     /// separate questions and the painter asks the second only after the first.
@@ -177,20 +152,18 @@ pub struct Brief {
     pub mark: Option<Mark>,
     /// How far along the room's mastery line is, while it has a station left.
     ///
-    /// **The one progression reading on the rail** (§11.5): a percentage of the
-    /// next station's deed, so a glance says how close the room is to opening
-    /// something. Absent on a finished line and on a shut room, because a
-    /// number about neither would be a number about nothing.
+    /// The one progression reading on the rail (§11.5): a percentage of the next
+    /// station's deed, so a glance says how close the room is to opening
+    /// something. Absent on a finished line and on a shut room.
     pub mastery: Option<super::Progress>,
 }
 
 /// A glance at all seven domains, in [`DOMAINS`] order.
 ///
-/// **Total**, so the rail's box count never depends on world state — a room that
-/// is not built yet is a `Brief` with `built: false` rather than a gap, which is
-/// what keeps the seven slots in fixed positions frame to frame. A box that
-/// moved when a domain arrived would make the rail unreadable at the one moment
-/// it has something to say.
+/// Total, so the box count never depends on world state: an unbuilt room is a
+/// `Brief` with `built: false` rather than a gap, which keeps the seven slots in
+/// fixed positions. A box that moved when a domain arrived would make the rail
+/// unreadable at the one moment it has something to say.
 #[must_use]
 pub fn briefs(world: &World) -> Vec<Brief> {
     let rooms = rooms_of(world);
@@ -220,9 +193,8 @@ pub fn briefs(world: &World) -> Vec<Brief> {
             let busiest = busiest(&instruments);
             Brief {
                 name,
-                // **Raised and opened.** Every room is raised at tick 0; what
-                // a fresh game has not earned draws as the dark box §11.5's
-                // breadth track always promised — *"2 of 7 at start"*.
+                // Raised and opened. Every room is raised at tick 0; what a
+                // fresh game has not earned draws as §11.5's dark box.
                 built: open,
                 mastery: if open {
                     lines
@@ -250,11 +222,10 @@ pub fn briefs(world: &World) -> Vec<Brief> {
 
 /// The instrument whose state the whole room should be reported as.
 ///
-/// **Busy beats idle, and the first busy one wins.** A room with four
-/// instruments has one line in the rail, so it reports the thing a player would
-/// want to be told — `working` if anything is, rather than `empty` because the
-/// mortar happens to be. `State::is_busy` is the same test the panel and the
-/// spell language both ask, so the rail cannot disagree with either.
+/// Busy beats idle, first busy wins: a room with four instruments has one line,
+/// so it reports `working` if anything is rather than `empty` because the mortar
+/// happens to be. `State::is_busy` is the test the panel and the spell language
+/// both ask, so the rail cannot disagree with either.
 fn busiest(instruments: &[Instrument]) -> Option<&Instrument> {
     instruments
         .iter()
@@ -264,34 +235,29 @@ fn busiest(instruments: &[Instrument]) -> Option<&Instrument> {
 
 /// `al 22t` — what is working and how much of it is left.
 ///
-/// **The two-letter form, not the name.** The rail has fourteen columns and
-/// `mortar_and_pestle 8t` is twenty; truncating gives `mortar_and_p`, which has
-/// lost the number — the half a glance actually wants. [`Instrument::short`] is
-/// the abbreviation the instrument panel already uses in its own narrow column,
-/// so the rail and the panel name a tool the same way.
+/// The two-letter form, not the name: the rail has fourteen columns and
+/// `mortar_and_pestle 8t` is twenty, so truncating loses the number — the half a
+/// glance wants. [`Instrument::short`] is the panel's own abbreviation, so both
+/// name a tool the same way.
 fn detail_of(instrument: &Instrument) -> Option<String> {
     let meter = instrument.meter?;
     let left = meter.total.saturating_sub(meter.done);
-    // **The one unit that counts up, and it is answered before the gate below.**
-    // Every other meter here measures work left to do, so the rail prints the
-    // remainder and says nothing once there is none. Integrity is a thing you
-    // want *more* of: printing its remainder would read `py 60` for a tower
-    // standing at 40, and falling silent at full would take the sanctum's only
-    // glance away exactly when the barrier is whole.
+    // The one unit that counts up, answered before the gate below. Every other
+    // meter measures work left, so the rail prints the remainder and falls
+    // silent at none — which for integrity would read `py 60` at 40 and take the
+    // sanctum's only glance away when the barrier is whole.
     //
-    // **The `%` is what stops it being read as a remainder**, and it is the `t`
-    // suffix's job one arm down. Integrity is out of a hundred, so a percentage
-    // is what the number already is rather than a decoration — and without it
-    // `py 62` here and a remainder `py 4` below are the same shape, which is how
-    // the sanctum came to say two unrelated things under one prefix.
+    // The `%` is what stops it being read as a remainder, which is the `t`
+    // suffix's job one arm down: without it `py 62` here and `py 4` below are
+    // the same shape, and the sanctum said two unrelated things under one
+    // prefix.
     if meter.unit == super::panel::Unit::Standing {
         return Some(format!("{} {}%", instrument.short, meter.done));
     }
-    // **`t` only when it is a duration.** This suffixed everything, so the
-    // archive read `st 350t` for 350 unwalked squares and the lens `pr 4t` for
-    // four sigils still astray — which counts *down* as the player wins and so
-    // reads, on the one surface meant for a glance, as a job about to finish.
-    // Two of the three built domains were glanceably wrong.
+    // `t` only when it is a duration. It suffixed everything, so the archive
+    // read `st 350t` for 350 unwalked squares and the lens `pr 4t` for four
+    // sigils astray — a number that counts *down* as the player wins, reading
+    // as a job about to finish on the one surface meant for a glance.
     (left > 0).then(|| match meter.unit {
         super::panel::Unit::Ticks => format!("{} {left}t", instrument.short),
         _ => format!("{} {left}", instrument.short),
@@ -300,15 +266,11 @@ fn detail_of(instrument: &Instrument) -> Option<String> {
 
 /// Every room a domain could be, by name.
 ///
-/// **`/tower`'s children *and* the filesystem root's**, and the second half is
-/// not tidiness. §7 puts `/grimoire` beside `/tower` rather than inside it — it
-/// is where the player's spells live, not a room in the tower — but §10 lists
-/// spellcraft as one of the seven domains. Walking only `/tower` would leave the
-/// grimoire's box dark for ever with the directory sitting right there, which is
-/// the rail lying about a room that exists.
-///
-/// [`root`] is the nameless node above both, so `tower` itself and any future
-/// sibling are filtered by [`DOMAINS`] rather than by position.
+/// `/tower`'s children *and* the filesystem root's: §7 puts `/grimoire` beside
+/// `/tower` rather than inside it, but §10 counts spellcraft as a domain — so
+/// walking only `/tower` would leave the grimoire's box dark with the directory
+/// sitting right there. [`root`] is the nameless node above both, so `tower`
+/// itself and any future sibling are filtered by [`DOMAINS`], not by position.
 fn rooms_of(world: &World) -> Vec<(String, Entity)> {
     let named = |node: Entity| world.get::<Name>(node).map(|name| (name.0.clone(), node));
 
@@ -331,16 +293,11 @@ const TOWER: &str = "tower";
 
 /// Which spell is running in each domain, and how many cursors in total.
 ///
-/// **The first spell names the room and the rest are counted**, which is the
-/// rail's shape everywhere: `busiest` picks one instrument out of four for the
-/// same reason. A box has one line for this, so it reports the thing a player
-/// would want to be told and a number saying there is more.
-///
-/// **It counted nothing before, and kept only the first.** A second `invoke` in
-/// one room was simply invisible — the rail said `►tending` whether one spell
-/// ran there or three — and an `alongside` fork was invisible for the same
-/// reason one level down. Both are *"more automation than this line can name"*,
-/// so both are counted here.
+/// The first spell names the room and the rest are counted, which is the rail's
+/// shape everywhere — `busiest` picks one instrument out of four for the same
+/// reason. It counted nothing before and kept only the first, so a second
+/// `invoke` in one room was invisible: the rail said `►tending` whether one
+/// spell ran there or three.
 fn running_by_domain(world: &World) -> Vec<(String, String, usize)> {
     let mut found: Vec<(String, String, usize)> = Vec::new();
     for one in running_spells(world) {
@@ -366,16 +323,14 @@ pub struct Cast {
 
 /// Every spell running anywhere, with where and on how many cursors.
 ///
-/// **One walk of `Running`, read by two surfaces.** The rail folds this by
-/// domain into a name and a count; `status` lists it whole. Two walks would be
-/// two answers to *what is running*, which is the shape §19 records going wrong
-/// more often than any other — and here they would disagree in exactly the case
-/// that matters, since the rail's `+2` is meaningless unless something can say
-/// what the two are.
+/// One walk of `Running`, read by two surfaces: the rail folds it by domain into
+/// a name and a count, `status` lists it whole. Two walks would be two answers
+/// to *what is running*, and they would disagree in exactly the case that
+/// matters — the rail's `+2` is meaningless unless something can say what the
+/// two are.
 ///
-/// **Sorted by spell name**, so a listing does not reorder between two frames of
-/// one tick. `Running` is queried through the ECS and archetype order is not a
-/// promise.
+/// Sorted by spell name, so a listing does not reorder between two frames of one
+/// tick: `Running` is queried through the ECS and archetype order is no promise.
 #[must_use]
 pub fn running_spells(world: &World) -> Vec<Cast> {
     let Some(mut query) = world.try_query::<&super::spell::Running>() else {
@@ -387,23 +342,16 @@ pub fn running_spells(world: &World) -> Vec<Cast> {
         else {
             continue;
         };
-        // **The invocable name, not the filename.** A spell node is named for
-        // the file it was scribed to, so this reported `tending.spell` — which
-        // is six columns of extension in a fourteen-column rail, and the rail
-        // cut it to `tending.spe`. The word a player would type is `tending`.
-        //
-        // Stripped here rather than in the painter: rule 2 gives a frontend only
-        // *how* a cell is drawn, so `orbs-tui` must not have to know that spells
-        // live in files. `peruse` still wants the full name and still has it.
-        //
-        // `content::without_extension`, not a `strip_suffix` of its own: the
-        // rule for what a spell is called already exists in one place.
+        // The invocable name, not the filename: a spell node is named for its
+        // file, so this reported `tending.spell` and the fourteen-column rail
+        // cut it to `tending.spe`. Stripped here rather than in the painter,
+        // because rule 2 gives a frontend only *how* a cell is drawn — and
+        // through `content::without_extension`, so the rule lives in one place.
         found.push(Cast {
             spell: crate::content::without_extension(&spell).to_owned(),
             domain,
-            // **Cursors, not spells.** A forked spell is one `Running` wearing
-            // several `Strand`s, and `strands.len()` is how many places the orb
-            // is at once inside it.
+            // Cursors, not spells: a forked spell is one `Running` wearing
+            // several `Strand`s.
             cursors: state.strands.len().max(1),
         });
     }
@@ -432,10 +380,9 @@ mod tests {
     /// different kind of not-a-room and a rule broad enough to cover all four
     /// would also cover a domain somebody forgot to register.
     const NOT_ROOMS: [&str; 4] = [
-        // **Where the spells live, and not a room you work in** (§19). It raises
-        // no instrument, earns nothing and anchors no verb, so its rail box read
-        // `idle` for ever. It is still a place, still `Protected`, and still
-        // shut until the ley step at 16 — see `opened::is_room`.
+        // Where the spells live, and not a room you work in (§19): it raises no
+        // instrument, earns nothing and anchors no verb. Still a place, still
+        // `Protected`, still shut until the ley step at 16 (`opened::is_room`).
         "grimoire",
         // The container every other room hangs under (§7).
         "tower",
@@ -443,16 +390,11 @@ mod tests {
         // the one room reachable from every other, which is what makes it not
         // one of the seven.
         "arsenal",
-        // **A place you descend into, not an eighth domain.** §10 fixes the
-        // count at *"seven at launch"* and lists them — the siege is not among
-        // them, and §5 says you *"descend into"* one. It is the arsenal's shape
-        // exactly: a real place in the tree, with its own log and its own verbs,
-        // that is deliberately not a rail box.
-        //
-        // The rail is the argument as much as the table is. Seven slots in fixed
-        // positions is what stops a box appearing and pushing the others down at
-        // the one moment it has news, and an eighth would be a redesign of the
-        // rail rather than an addition to it.
+        // A place you descend into, not an eighth domain: §10 fixes the count at
+        // seven and the siege is not among them. The arsenal's shape exactly — a
+        // real place with its own log and verbs, deliberately not a rail box.
+        // Seven fixed slots is what stops a box appearing and pushing the others
+        // down at the one moment it has news.
         siege::BAILEY,
     ];
 
@@ -475,16 +417,10 @@ mod tests {
 
     #[test]
     fn the_grimoire_has_no_box_and_is_still_a_room_that_can_be_shut() {
-        // **This test asserted the opposite for three phases** (§19). The rail
-        // carried a grimoire box because §10 lists spellcraft among the seven —
-        // but the room raises no instrument, earns nothing and anchors no verb,
-        // so the box read `idle` for ever and its mastery line counted a deed
-        // done everywhere else. `domain_of` documented it all along as one of
-        // the two places that are *not somewhere work happens*.
-        //
-        // What it kept is everything that made it worth having: the spells live
-        // there, `scribe` writes into it, and it is shut until the ley step at
-        // 16 — which is `opened::is_room`'s job rather than `DOMAINS`'s.
+        // This test asserted the opposite for three phases (§19): the rail
+        // carried a grimoire box because §10 lists spellcraft among the seven,
+        // and it read `idle` for ever. What the room kept is what made it worth
+        // having — the spells live there and `scribe` writes into it.
         let sim = Sim::new(1);
         assert!(
             !briefs(sim.world())
@@ -506,9 +442,8 @@ mod tests {
     fn the_rail_always_has_six_boxes_and_the_unbuilt_ones_are_anonymous() {
         let sim = Sim::new(1);
         let briefs = briefs(sim.world());
-        // **Six, and the grimoire is the one that left** (§19). §10's seven are
-        // kinds of play; this list is the rooms you *work in*, and writing is
-        // not one of them.
+        // Six, and the grimoire is the one that left (§19): §10's seven are
+        // kinds of play, this list is the rooms you *work in*.
         assert_eq!(briefs.len(), 6, "the rail is not six rooms");
 
         let built: Vec<_> = briefs.iter().filter(|brief| brief.built).collect();
@@ -516,16 +451,10 @@ mod tests {
             built.iter().any(|brief| brief.name == "laboratory"),
             "the laboratory is not on the rail",
         );
-        // **Every one is built now, and the forge was the last.**
-        //
-        // This asserted the *opposite* for six phases — that some domain still
-        // read as unbuilt, so the rail was promising something rather than
-        // drawing identical boxes. That was the right claim while rooms were
-        // still arriving and it stopped being true when Enchanting landed.
-        //
-        // Kept as an assertion rather than deleted, because `built` is still the
-        // honest bit and a domain that stopped being raised should fail loudly
-        // here rather than quietly draw dark.
+        // Every one is built now; the forge was the last. This asserted the
+        // opposite for six phases, which was right while rooms were still
+        // arriving. Kept rather than deleted, because a domain that stopped
+        // being raised should fail loudly here rather than quietly draw dark.
         assert!(
             briefs.iter().all(|brief| brief.built),
             "a room reads as unbuilt, but every one is raised now",

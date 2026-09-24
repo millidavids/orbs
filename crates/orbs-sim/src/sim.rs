@@ -1,9 +1,9 @@
 //! The simulation, and the single entry point frontends drive it through.
 //!
 //! Frontends are *callers*, not hosts: they construct a [`Sim`] and call
-//! [`Sim::step`]. No frontend's own scheduler ever drives the world. This is what
-//! keeps the Bevy build, the terminal build, and the balance harness running the
-//! identical code path — and therefore producing identical results.
+//! [`Sim::step`], never their own scheduler, so the Bevy build, the terminal
+//! build and the balance harness run one code path and produce identical
+//! results.
 
 use bevy_ecs::prelude::*;
 use orbs_render::{Outcome, Presentation, RecordKind};
@@ -32,14 +32,12 @@ pub struct Sim {
 impl Sim {
     /// Create a simulation from a master seed, with an empty schedule.
     ///
-    /// **An open tower**: every room, every gated recipe and every charm, which
-    /// is the tower every test, dump, balance policy and `screens` example has
-    /// always used. A fresh *game* is [`sealed`](Self::sealed).
-    /// **The curve exactly as authored**, which is what every test, dump, balance
-    /// policy and example has always measured against. A game's length is a
-    /// choice a *player* makes, so it arrives through
-    /// [`begun`](Self::begun) rather than through here — otherwise every pinned
-    /// rate in the workspace would silently be measuring a different curve.
+    /// An open tower — every room, gated recipe and charm — and the curve
+    /// exactly as authored, which is what every test, dump, balance policy and
+    /// the `screens` example measures against. A fresh *game* is
+    /// [`sealed`](Self::sealed), and its length arrives through
+    /// [`begun`](Self::begun) rather than here, or every pinned rate in the
+    /// workspace would silently measure a different curve.
     #[must_use]
     pub fn new(seed: u64) -> Self {
         Self::build(seed, false, crate::content::Length::Baseline, |_| {})
@@ -47,36 +45,34 @@ impl Sim {
 
     /// Create a simulation that begins as a laboratory and nothing else.
     ///
-    /// The tower a fresh game builds (§11.5): the rooms, recipes and charms a
-    /// station on either track opens are shut until it is reached, and
-    /// everything nothing opens is open — see `tower::Opened::start`. Whether a
-    /// tower began this way travels in its save, because a sealed and an open
-    /// tower with identical seed and submissions diverge at the first
-    /// `attend archive`.
+    /// The tower a fresh game builds (§11.5): what a station on either track
+    /// opens is shut until it is reached, and everything nothing opens is open —
+    /// see `tower::Opened::start`. Whether a tower began this way travels in its
+    /// save, because a sealed and an open tower with the same seed and
+    /// submissions diverge at the first `attend archive`.
     #[must_use]
     pub fn sealed(seed: u64) -> Self {
         Self::build(seed, true, crate::content::Length::Baseline, |_| {})
     }
 
-    /// An **open** tower at a chosen length — what the balance harness measures.
+    /// An open tower at a chosen length — what the balance harness measures.
     ///
     /// `new` is this at [`Baseline`](crate::content::Length::Baseline), and
     /// [`begun`](Self::begun) is a *game* and therefore sealed. A policy needs
-    /// every room open, so neither of those can answer *"measure the curve a
-    /// player at medium is actually climbing"* — which is the question the
-    /// harness has to be able to ask, or the shipped game runs a curve the
+    /// every room open, so neither can measure the curve a player at medium is
+    /// actually climbing — and unmeasured, the shipped game runs a curve the
     /// instrument never sees.
     #[must_use]
     pub fn measured(seed: u64, length: crate::content::Length) -> Self {
         Self::build(seed, false, length, |_| {})
     }
 
-    /// The tower a fresh **game** builds: sealed, and as long as the player asked.
+    /// The tower a fresh *game* builds: sealed, and as long as the player asked.
     ///
-    /// **One constructor rather than two flags' worth**, because a fresh game is
-    /// sealed *and* has a length, and a `Sim::paced` beside `Sim::sealed` could
-    /// not say both. `new` and `sealed` keep their signatures — there are over
-    /// three hundred call sites between them and none of them is a game.
+    /// One constructor, because a fresh game is sealed *and* has a length and a
+    /// `Sim::paced` beside `Sim::sealed` could not say both. `new` and `sealed`
+    /// keep their signatures — over three hundred call sites between them, and
+    /// none is a game.
     #[must_use]
     pub fn begun(seed: u64, length: crate::content::Length) -> Self {
         Self::build(seed, true, length, |_| {})
@@ -87,27 +83,19 @@ impl Sim {
     /// The schedule is built here and never exposed afterwards, so systems cannot
     /// be added behind the sim's back at runtime.
     ///
-    /// # A frontend must not call this
-    ///
-    /// It exists for tests that need to observe the schedule's ordering
-    /// guarantees from outside — see `tower::scene`, where a caller's system had
-    /// been running *before* the scene rebuild and the topsort was within its
-    /// rights to do it.
-    ///
-    /// Domain systems belong inside [`Sim::new`]. §13 is explicit about why: if
-    /// the Bevy build, `orbs-tui` and `orbs-balance` each registered their own,
-    /// they would be three different games, and *"if the live game and the CLI
-    /// harness diverged, we would not find out until Phase 11."* The seam is left
-    /// open because closing it would cost the ordering test its only handle, not
-    /// because a frontend may reach through it.
+    /// A frontend must not call this. It is for tests that observe the
+    /// schedule's ordering from outside — see `tower::scene`, where a caller's
+    /// system ran *before* the scene rebuild and the topsort was within its
+    /// rights. Domain systems belong inside [`Sim::new`]: if each frontend
+    /// registered its own they would be three different games (§13). The seam is
+    /// open only because closing it would cost the ordering test its handle.
     ///
     /// # Panics
     ///
-    /// If the built-in content files disagree with each other — today, if
-    /// `progression.toml` does not price every instrument `recipes.toml` names.
-    /// Both ship inside the binary, so this is a build-time authoring error that
-    /// no input can reach, and it fails the same way `load::builtin` fails a
-    /// malformed file rather than starting a tower whose work is worth nothing.
+    /// If the built-in content files disagree — today, if `progression.toml`
+    /// does not price every instrument `recipes.toml` names. Both ship in the
+    /// binary, so it is an authoring error no input can reach, and failing as
+    /// `load::builtin` does beats a tower whose work is worth nothing.
     #[must_use]
     pub fn with_schedule(seed: u64, build: impl FnOnce(&mut Schedule)) -> Self {
         Self::build(seed, false, crate::content::Length::Baseline, build)
@@ -127,9 +115,8 @@ impl Sim {
         // The tower is raised before the first tick, so tick 0 already has a
         // world to name.
         tower::raise(&mut world);
-        // **Sealed before anything reads the rooms** — the boot report below
-        // lists only what is open, and the scene is built from what is not
-        // sealed. `bare` opened everything; this shuts what a station opens.
+        // Sealed before anything reads the rooms: the boot report lists only
+        // what is open, and the scene is built from what is not sealed.
         if sealed {
             let start = tower::Opened::start(
                 world.resource::<Recipes>(),
@@ -139,51 +126,31 @@ impl Sim {
             world.insert_resource(start);
             world.insert_resource(tower::Sealing(true));
         }
-        // **The walls have to say how they stand from tick 0.** `integrity` is a
-        // reading on the pylon, published by `erode` when the number moves — and
-        // the number does not move for thirty ticks, so a tower nobody had
-        // touched had no reading at all. `survey pylon` printed nothing, and
-        // worse: `many_at` answers an absent child with **nought**, so a spell
-        // asking `if the pylon has fewer than 60 integrity` fired on a whole
-        // barrier for the first half-minute of every session.
-        //
-        // Raising it here rather than in `tower::build` because `build` names
-        // things and knows no resources, and this is a number.
+        // The walls must say how they stand from tick 0. `erode` publishes
+        // `integrity` only when the number moves, and it does not move for
+        // thirty ticks — so `many_at` read the absent child as nought and `if
+        // the pylon has fewer than 60 integrity` fired on a whole barrier.
+        // Here rather than in `tower::build`, which knows no resources.
         if let Some(pylon) = tower::pylon::fixture(&world) {
             crate::execute::publish_pylon(&mut world, pylon);
         }
-        // **And what each die costs, for exactly the same reason one line up.**
-        // A die's price is a fact about the die rather than about a fight, and it
-        // was raised only by `defend::publish` — which nothing calls until the
-        // first bailey verb. So `survey d20` on a fresh tower answered *"the d20
-        // holds nothing"*, and because `many_at` reads an absent child as nought
-        // the affordability guard every solver ships — `not the coffer has fewer
-        // quintessence than the d20` — compared nought against nought and
-        // answered **yes, afford it** on a tower with no pool at all.
-        //
-        // The sanctum paid for this once already; the comment above is its scar.
+        // And what each die costs, for the same reason. A price is a fact about
+        // the die rather than about a fight, but only `defend::publish` raised
+        // it and nothing calls that until the first bailey verb — so every
+        // solver's affordability guard compared nought against nought and
+        // afforded it on a tower with no pool.
         crate::execute::publish_dice(&mut world);
-        // ...and the forge's, for the same reason and with a sharper edge. A
-        // maintenance spell's whole first rung is `if the hurried has no
-        // graced`, and an unpublished charm node answers *nought* rather than
-        // *nothing* — so without this the rung is true of a tool that has never
-        // been charmed **and** of one that is charmed right now, from tick 0.
+        // ...and the forge's, for the same reason: an unpublished charm node
+        // answers *nought* rather than *nothing*, so a maintenance spell's `if
+        // the hurried has no graced` is true of a tool charmed right now.
+        // `lapse_charms` rather than `refresh_lattice`, which resolves the forge
+        // through `Cwd` — the root at construction, so it would do nothing.
         //
-        // **`lapse_charms`, not `refresh_lattice`**, and the difference is the
-        // whole of what the comment above records. `refresh_lattice` resolves
-        // the forge through `Cwd`, which at construction is the filesystem root
-        // — so it finds nothing and does nothing, which is *exactly* the
-        // bootstrap that silently did nothing three lines up. Writing the
-        // warning and then reintroducing the pattern under it is the shape this
-        // file keeps paying for; `lapse_charms` addresses the forge by path.
-        // **Last of the three, and after every publisher above.** `seal` marks
-        // the nodes that exist when it runs, and the three calls above *create*
-        // nodes — `pylon/integrity` and each die's `quintessence`. Sealing first
-        // left those four unmarked in a fresh sealed tower while the same tower
-        // reloaded from its own save had them, because `restore` seals last:
-        // two worlds that must be identical, differing in the component two
-        // sabotage queries read. Still before the scene and the boot report,
-        // which is what the ordering was for.
+        // `seal` last, after every publisher above: it marks the nodes that
+        // exist when it runs, and those calls *create* nodes. Sealing first left
+        // `pylon/integrity` and each die's `quintessence` unmarked in a fresh
+        // tower while the same tower reloaded from its save had them — `restore`
+        // seals last — and two sabotage queries read that component.
         tower::seal(&mut world);
         tower::rebuild(&mut world);
         tower::report(&mut world);
@@ -198,18 +165,14 @@ impl Sim {
 
     /// Every resource a world needs, and no tower in it.
     ///
-    /// # Why this is a function rather than the top of [`Sim::with_schedule`]
+    /// A function rather than the top of [`Sim::with_schedule`] because there
+    /// are two ways to reach a world — raising one and loading one — and §13
+    /// holds that two constructions of one world are two different games. Thirty
+    /// lines of `init_resource` is where an omission hides, so both callers get
+    /// this one list.
     ///
-    /// Because there are two ways to reach a world now — raising a new tower and
-    /// loading a saved one — and §13's whole argument is that two constructions
-    /// of one world are two different games. The list below is thirty-odd lines
-    /// of `init_resource` and is exactly where an omission would hide: a save
-    /// that built its own world and forgot one entry would start a tower missing
-    /// something no test asks about. So both callers get this list, and there is
-    /// only one of it.
-    ///
-    /// It is deliberately *not* a `Default`: it takes the seed, and a world with
-    /// an unseeded RNG is not a lesser world but a broken one.
+    /// Deliberately *not* a `Default`: it takes the seed, and a world with an
+    /// unseeded RNG is broken rather than lesser.
     ///
     /// # Panics
     ///
@@ -228,72 +191,63 @@ impl Sim {
         world.init_resource::<ParseLog>();
         world.init_resource::<Wizard>();
         world.init_resource::<Choices>();
-        // What each domain wants noticed, for §9's rail. Empty at tick 0 and
-        // latched by whatever raises one; `attend` is the only thing that
-        // clears, so a mark survives a save exactly as the state it describes
-        // does.
+        // What each domain wants noticed, for §9's rail. `attend` is the only
+        // thing that clears, so a mark survives a save as the state it
+        // describes does.
         world.init_resource::<crate::tower::Marks>();
-        // What the player has found. Empty at tick 0 and written only by a
-        // broken ward, so it is reproducible from `(seed, submissions)` exactly
-        // as everything else in the world is.
+        // What the player has found. Written only by a broken ward, so it
+        // replays from `(seed, submissions)` like everything else.
         world.init_resource::<crate::tower::Learned>();
         // The compiled-in default, so a headless `Sim` needs no filesystem
         // (rule 6, rule 8). A frontend swaps it with `set_prose`.
         world.init_resource::<Prose>();
+        // The manual, on the same terms, swappable with `ORBS_CONTENT`. It
+        // registers no parser nouns, which is why it is a second resource
+        // rather than a prefix in `prose.toml` — see `content::manual`.
+        world.init_resource::<crate::content::Manual>();
         // The manual's subjects, fixed here. They are parser nouns, so reading
         // them live from `Prose` would let a hot reload change what a phrase
         // resolves to — see `tower::Topics`.
         let topics = crate::tower::Topics::of(world.resource::<Prose>());
         world.insert_resource(topics);
-        // Recipes are **not** hot-reloadable, unlike prose: they reach
-        // decisions, so swapping them mid-session would break replay from
-        // `(seed, submissions)` unless the content were versioned with it.
+        // Recipes are *not* hot-reloadable, unlike prose: they reach decisions,
+        // so a mid-session swap would break replay from `(seed, submissions)`
+        // unless the content were versioned with it.
         world.init_resource::<Recipes>();
         world.init_resource::<Fuels>();
-        // What the arsenal is worth in a siege. **Recipes' tier, not
-        // materials'**: these reach decisions — how many troops a scroll is
-        // worth changes what a round does — so swapping them mid-session would
-        // break replay from `(seed, submissions)` the same way a recipe swap
-        // would.
+        // What the arsenal is worth in a siege. Recipes' tier, not materials':
+        // how many troops a scroll is worth changes what a round does, so a
+        // mid-session swap would break replay.
         world.init_resource::<crate::content::Spendables>();
         world.init_resource::<crate::content::Charms>();
-        // Materials **are** hot-reloadable in principle, unlike the two above:
-        // a tint is read by the instrument panel and by nothing else, so no verb
-        // branches on it and swapping it mid-session cannot change what the
-        // world does. Installed here beside them because that is where content
-        // lives, not because it shares their constraint.
+        // Materials *are* hot-reloadable in principle: a tint is read by the
+        // instrument panel and nothing else, so no verb branches on it. Beside
+        // the two above because that is where content lives, not because it
+        // shares their constraint.
         world.init_resource::<crate::content::Materials>();
-        // Spells sit in the same tier as recipes and for the same reason: a
-        // spell is nothing *but* decisions, so a reload would break replay from
-        // `(seed, submissions)`. Read once, here, and never again — the player's
-        // own edits go through the world, not through this.
+        // Recipes' tier again: a spell is nothing *but* decisions, so a reload
+        // would break replay. Read once here — the player's own edits go
+        // through the world, not through this.
         world.init_resource::<Spells>();
-        // The progression curve is in the recipes' tier, not the materials':
-        // a weight decides what a run earns and a threshold gates a verb, so
-        // both reach decisions and a mid-session swap would break replay.
+        // Recipes' tier too: a weight decides what a run earns and a threshold
+        // gates a verb, so a mid-session swap would break replay.
         //
-        // **Checked against the recipes, which is why it loads after them.** Its
-        // keys are instrument names and nothing in Rust knows what those are —
-        // `materials.toml` validates against an enum and had no such ordering.
-        // The panic is the same one `load::builtin` uses for a malformed file,
-        // and for the same reason: authoring the two files to disagree is a
-        // build-time error that `the_builtin_curve_prices_every_instrument`
-        // fails on first.
-        // **Stretched before it is checked**, which is the order that matters:
-        // `check`'s `ascends` is the load gate, and it has to run against the
-        // curve the world will actually use rather than the one the file holds.
-        // Every length survives it — a strictly increasing sequence times a
-        // non-decreasing positive one is strictly increasing.
+        // Checked against the recipes, hence loaded after them: its keys are
+        // instrument names and nothing in Rust knows what those are, so
+        // authoring the two files to disagree panics as `load::builtin` does.
+        //
+        // Stretched before it is checked, because `check`'s `ascends` gate has
+        // to run against the curve the world will use. Every length survives it
+        // — a strictly increasing sequence times a non-decreasing positive one
+        // is strictly increasing.
         let curve = crate::content::Progression::default().stretched(length);
         // Kept beside the curve it produced, so a save can say what length this
         // game is without inferring it back out of the thresholds.
         world.insert_resource(length);
-        // **What may be priced: anything that runs.** The recipes' instruments,
-        // plus the fixtures that carry a verb and transform nothing — the
-        // athanor, and the `stacks`, which earns for every walk finished and
-        // has no recipe to be found by. Checking against the recipes alone made
-        // the second impossible to price and the first impossible to price
-        // *ever*.
+        // What may be priced: anything that runs. The recipes' instruments plus
+        // the fixtures that carry a verb and transform nothing — the athanor,
+        // and the `stacks`, which earns per walk finished and has no recipe to
+        // be found by. The recipes alone left both unpriceable.
         let mut instruments = world.resource::<Recipes>().instruments();
         instruments.extend(tower::operated());
         instruments.sort_unstable();
@@ -319,8 +273,8 @@ impl Sim {
         world.init_resource::<tower::Renown>();
         world.init_resource::<tower::siege::Petitioned>();
         world.init_resource::<tower::Stores>();
-        // **Everything open**, which is the tower every test, dump and policy
-        // has always used. A fresh *game* starts sealed — see `Sim::sealed`.
+        // Everything open, the tower every test, dump and policy uses. A fresh
+        // *game* starts sealed — see `Sim::sealed`.
         let opened = tower::Opened::all(
             world.resource::<Recipes>(),
             world.resource::<crate::content::Charms>(),
@@ -331,15 +285,12 @@ impl Sim {
         world.init_resource::<tower::mastery::Reached>();
         // Whole, by `Default`. A tower is not built already crumbling.
         world.init_resource::<tower::Integrity>();
-        // **Full, not empty.** A new tower opens holding its whole ceiling, for
-        // the reason `Integrity` opens whole: a wizard has been tending this
-        // place for years before the first tick, and starting at nought would
-        // mean twelve minutes of an inert forge before the game had a decision
-        // in it. Inserted after `Integrity` because the ceiling reads it.
-        // **Before the ceiling is read**, because the ceiling reads what the
-        // Ley Line's forks have granted — and the readers answer nought for a
-        // missing resource, so this order is a courtesy rather than a
-        // requirement.
+        // Full, not empty, for the reason `Integrity` opens whole: the wizard
+        // has tended this place for years, and nought would mean twelve minutes
+        // of inert forge before the game had a decision in it. After
+        // `Integrity` because the ceiling reads it, and before the ceiling is
+        // read because that reads what the Ley Line's forks granted — a
+        // courtesy, since the readers answer nought for a missing resource.
         world.init_resource::<tower::Taken>();
         let ceiling = tower::ceiling(&world);
         world.insert_resource(tower::Quintessence::new(ceiling));
@@ -357,94 +308,72 @@ impl Sim {
 
     /// The three passes a tick runs, in the order they run.
     ///
-    /// Split out beside [`bare`](Self::bare) and for the same reason: the system
-    /// order below is load-bearing — two of these draw from one RNG stream and
-    /// the comments say what reordering them would cost — so there may be
-    /// exactly one place it is written down. A loaded world runs the same three
-    /// passes as a raised one or it is a different game.
+    /// Split out beside [`bare`](Self::bare) for the same reason: the order
+    /// below is load-bearing — two systems draw from one RNG stream — so it is
+    /// written down in one place. A loaded world runs the same three passes as a
+    /// raised one or it is a different game.
     fn schedules(build: impl FnOnce(&mut Schedule)) -> (Schedule, Schedule, Schedule) {
-        // Its **own** schedule, run before the caller's. Adding `run_pending`
-        // to the same schedule and relying on insertion order would be an
-        // ambiguity, not an ordering: Bevy makes no promise about systems with
-        // no constraint between them, and a domain system added through `build`
-        // could observe the queue either drained or not. A separate pass is
-        // unambiguous by construction and needs no set for callers to remember.
+        // Its own schedule, run before the caller's. Bevy promises nothing
+        // about systems with no constraint between them, so insertion order
+        // would leave a domain system added through `build` free to observe the
+        // queue drained or not. A separate pass is unambiguous by construction.
         let mut commands = new_sim_schedule();
         commands.add_systems(run_pending);
 
         let mut schedule = new_sim_schedule();
-        // `burn` before `finish`: a fire that runs out on the same tick a heated
-        // stage lands should be cold *after* that stage completes, not before —
-        // the run was already committed when it started (§10.1), and ordering it
-        // the other way would make a completion depend on which system Bevy
-        // happened to sort first.
-        // `spell::advance` **before** `finish`: a spell must see the world as
-        // the previous tick left it rather than racing the completion of the run
-        // it is waiting on. Running it after would let a script start the next
-        // stage on the same tick the previous one landed, which is a free tick
-        // no manual player gets — §8's speed advantage arriving by accident, and
-        // arriving at concentration 0 where §19 says nothing may.
-        // `spell::stand` **last**, so a bound spell that ran off the end this
-        // tick is cast again on the next one rather than inside the same pass.
-        // Standing it up before `advance` would give a held spell two goes at
-        // the budget in one tick — §8's speed advantage arriving by the back
-        // door, at concentration 1 where §19 says nothing may.
+        // `burn` before `finish`: a fire that runs out on the tick a heated
+        // stage lands is cold *after* that stage completes, since the run was
+        // committed when it started (§10.1).
+        //
+        // `spell::advance` before `finish`, so a spell sees the world as the
+        // previous tick left it; after, a script would start the next stage on
+        // the tick the previous one landed — a free tick no manual player gets,
+        // at concentration 0 where §19 says nothing may.
+        //
+        // `spell::stand` last, so a spell that ran off the end this tick is cast
+        // again on the next rather than inside the same pass — otherwise a held
+        // spell gets two goes at the budget in one tick.
         schedule.add_systems(
             (
                 tower::spell::advance,
                 tower::burn,
                 tower::finish,
                 tower::drift,
-                // **After `drift`, and the order is load-bearing.** Both draw
-                // once per tick from `RngStream::Threat`, so which one goes
-                // first decides which value each sees — and a schedule that
-                // reordered them would silently change every existing replay.
-                // Appended, never inserted, exactly as a stream index is.
+                // After `drift`, and load-bearing: both draw once per tick from
+                // `RngStream::Threat`, so reordering them would silently change
+                // every existing replay. Appended, never inserted.
                 tower::substitution,
-                // **After the roll, and it draws nothing.** A lie settling is a
-                // clock reading, so it cannot perturb `RngStream::Threat` — which
-                // is what lets it be appended here without touching a replay.
+                // After the roll, and it draws nothing: a lie settling is a
+                // clock reading, so appending it perturbs no replay.
                 tower::settling,
-                // **The same licence, for the same reason.** A barrier wearing
-                // down is a comparison of two ticks; the sanctum's one draw is
-                // in `height_for`, on `RngStream::Battlements`, and happens
-                // inside `muster` rather than in a system. So this is appended
-                // here without shifting a single existing replay.
+                // The same licence: a barrier wearing down compares two ticks,
+                // and the sanctum's one draw is in `height_for` inside `muster`
+                // rather than in a system.
                 tower::erode,
-                // **The menagerie has no system here, and it had one.** A chant's
-                // syllables landed on the tick; a beast at the circle waits for
-                // ever, so there is nothing for a schedule to advance (§19). Its
-                // one draw is `Beast::draw`, inside `summon`.
+                // The menagerie has no system here and once had one: a beast at
+                // the circle waits for ever, so there is nothing to advance
+                // (§19), and its one draw is `Beast::draw` inside `summon`.
                 //
-                // **The same licence, a fourth time.** Quintessence coming back
-                // is a modulo on the tick and nothing else — the forge's one
-                // draw is `Lattice::from_bits`, on `RngStream::Forge`, and it
-                // happens inside `imbue` rather than in a system. So this is
-                // appended here without shifting a single existing replay.
+                // The same licence for this one: quintessence coming back is a
+                // modulo on the tick, and the forge's draw is in `imbue`.
                 //
-                // **After `erode`**, because the ceiling is a function of
-                // integrity: on a tick where both fire, the pool is capped
-                // against the barrier as the wear left it rather than as it
-                // stood a tick ago. That is the ordering defect §19 records the
-                // sanctum paying for twice.
+                // After `erode`, because the ceiling is a function of integrity:
+                // on a tick where both fire the pool is capped against the
+                // barrier as the wear left it — the ordering defect §19 records
+                // the sanctum paying for twice.
                 tower::regenerate,
-                // **The same licence, a fifth time**, and this one is load-
-                // bearing rather than tidy: a charm lapsing is a clock reading,
-                // and without a system saying so the forge's words are only
-                // true when a forge verb happens to run. `ebbing` would never
-                // arrive on its own, and the maintenance spell — which is
-                // entirely built on it arriving — could not work at all.
+                // The same licence, and load-bearing rather than tidy: without
+                // a system saying a charm lapsed, `ebbing` would arrive only
+                // when a forge verb ran, and the maintenance spell is built
+                // entirely on it arriving.
                 crate::execute::lapse_charms,
-                // **The same licence, a sixth time, and the same load-bearing
-                // reason as `lapse_charms` beside it.** A store running down is
-                // a comparison of two ticks and draws nothing, so appending it
-                // shifts no existing replay. And without a system saying so, an
-                // arsenal's words would only be true when a bailey verb happened
-                // to run — `thin` would never arrive on its own, and a spell
-                // written to keep its own stores up could not work at all.
+                // `lapse_charms`'s reason again: a store running down draws
+                // nothing, and without a system saying so `thin` would arrive
+                // only when a bailey verb ran, so a spell keeping its own
+                // stores up could not work.
                 //
-                // **It writes only when a word changes**, so an idle tick issues
-                // no `NodeId` and §19's *insertion order is the parse* holds
+                // It writes only when a word changes, so an idle tick issues no
+                // `NodeId` and §19's *insertion order is the parse* holds
                 // between a watched hour and a `meditate`-collapsed one.
                 tower::stocktake,
                 tower::spell::stand,
@@ -453,14 +382,11 @@ impl Sim {
         );
         build(&mut schedule);
 
-        // A **third** pass, for the same reason `commands` is a first one:
-        // putting `rebuild` in the same schedule as whatever `build` adds is an
-        // ambiguity rather than an ordering, and Bevy's topsort was in fact
-        // running the caller's systems first despite `rebuild` being inserted
-        // first. If that flipped, the scene would go a tick stale — and since
-        // every frontend passes a different `build` closure, the two graphs
-        // could flip differently, which is exactly the game/harness divergence
-        // §13 exists to prevent.
+        // A third pass, for the reason `commands` is a first one: Bevy's topsort
+        // was in fact running the caller's systems before `rebuild` despite the
+        // insertion order, and a flip there leaves the scene a tick stale. Every
+        // frontend passes a different `build`, so the two graphs could flip
+        // differently — the game/harness divergence §13 exists to prevent.
         //
         // Last, so the scene names the world as the tick left it.
         let mut scene = new_sim_schedule();
@@ -471,19 +397,16 @@ impl Sim {
 
     /// Read this world out as a save document.
     ///
-    /// **Takes `&self`**, which is the guarantee rather than a courtesy: saving
-    /// cannot perturb the world it is describing. A `&mut` here could build a
-    /// `QueryState`, which registers components and moves archetypes, and a save
-    /// that changed the thing it measured would make `tests/persistence.rs`
-    /// measure itself.
+    /// Takes `&self` as a guarantee: a `&mut` could build a `QueryState`, which
+    /// registers components and moves archetypes, and a save that changed what
+    /// it measured would make `tests/persistence.rs` measure itself.
     ///
-    /// **Take it at a tick boundary**, which §8 makes the rule: *"instruction
-    /// dispatch is atomic within a tick; saves are permitted only at tick
-    /// boundaries."* Immediately after [`step`](Self::step) is that moment, and
-    /// it is where both frontends take theirs.
+    /// Take it at a tick boundary — §8: *"saves are permitted only at tick
+    /// boundaries."* Immediately after [`step`](Self::step) is where both
+    /// frontends take theirs.
     ///
-    /// Writing the result to a file is a frontend's — see `orbs_shell::save`.
-    /// This crate never touches the filesystem.
+    /// Writing it to a file is a frontend's (`orbs_shell::save`); this crate
+    /// never touches the filesystem.
     #[must_use]
     pub fn snapshot(&self) -> crate::save::Save {
         crate::save::capture(&self.world)
@@ -491,30 +414,23 @@ impl Sim {
 
     /// Build a world from a save document.
     ///
-    /// Raises the tower first and then applies the save over it, which is what
-    /// lets a save written before a domain existed open into a tower that has
-    /// one. `crate::save::restore` carries the reasoning.
-    ///
-    /// The result is a world standing exactly where the saved one stood: the
-    /// same tick, the same eight random-stream positions, the same work in
-    /// flight. Stepping it and stepping the world that wrote it produces the
-    /// same two worlds, which is the property `tests/persistence.rs` holds.
+    /// Raises the tower and applies the save over it, so a save written before a
+    /// domain existed opens into a tower that has one — `crate::save::restore`
+    /// carries the reasoning. The result stands exactly where the saved world
+    /// stood: same tick, same eight stream positions, same work in flight, and
+    /// `tests/persistence.rs` holds that stepping either gives the same world.
     ///
     /// # Panics
     ///
-    /// As [`with_schedule`](Self::with_schedule) does, and for the same reason:
-    /// the built-in content is authored with the crate.
+    /// As [`with_schedule`](Self::with_schedule) does: the built-in content is
+    /// authored with the crate.
     #[must_use]
     pub fn restored(save: &crate::save::Save) -> Self {
-        // **The length comes out of the save, and this line is why the feature
-        // works at all.** `bare` builds the curve, so a restore that did not hand
-        // it the saved length would install the *authored* one — every threshold
-        // silently re-derived, stations re-crossed, rooms opened that should not
-        // be. That is exactly the failure the `FORMAT` gate exists to stop an
-        // older *build* causing, arriving from inside this one instead.
-        //
-        // Nothing would have caught it: `persistence.rs`'s completeness lint
-        // walks components, not resources.
+        // The length comes out of the save: `bare` builds the curve, so a
+        // restore that did not hand it the saved length would install the
+        // *authored* one — thresholds re-derived, stations re-crossed, rooms
+        // opened that should not be. `persistence.rs`'s completeness lint walks
+        // components, not resources, so nothing would have caught it.
         let mut world = Self::bare(save.world.seed, save.world.length);
         let (commands, schedule, scene) = Self::schedules(|_| {});
 
@@ -522,28 +438,21 @@ impl Sim {
         tower::raise(&mut world);
         crate::save::restore(&mut world, save);
         tower::rebuild(&mut world);
-        // **Only a document that disagreed with itself changes here**: a puzzle
-        // refused on load leaves its readings behind, and nothing else would
-        // clear them until the next `summon` or `muster`. One pass over every
-        // `puzzle::Open` rather than one per puzzle a load can refuse today, so a
-        // restore that starts refusing is already covered — and a whole save is
-        // left exactly as saved.
+        // Only a document that disagreed with itself changes here: a puzzle
+        // refused on load leaves readings behind that nothing clears until the
+        // next `summon` or `muster`. One pass over every `puzzle::Open`, so a
+        // restore that starts refusing is already covered.
         crate::execute::settle_puzzles(&mut world);
 
-        // **No `tower::report` here, unlike `with_schedule`**, and the round-trip
-        // test is what settled it. `report` pushes §4's condition report onto the
-        // record stream — which `restore` has just rebuilt from the save — so a
-        // loaded world would carry thirty-odd records the world that wrote it
-        // never had, and `snapshot(loaded) != snapshot(saved)` on the first tick.
+        // No `tower::report` here, unlike `with_schedule`: it would push §4's
+        // condition report onto the stream `restore` just rebuilt, so a loaded
+        // world would carry thirty-odd records the world that wrote it never
+        // had. A restored world is the saved world, exactly.
         //
-        // The contract is worth more than the banner: **a restored world is the
-        // saved world, exactly.** Saying *"you are back, and the orb was dark for
-        // three hours"* is a frontend's line anyway — the away stamp is the
-        // frontend's, because the sim has no wall clock and must not acquire one.
-        //
-        // What a player actually sees on waking is better than a boot report: the
-        // save carries the tail of the stream, so the transcript is the screen
-        // they left.
+        // Saying *"you are back, and the orb was dark for three hours"* is a
+        // frontend's line — the sim has no wall clock and must not acquire one —
+        // and the save carries the tail of the stream anyway, so the transcript
+        // is the screen they left.
 
         Self {
             world,
@@ -555,23 +464,15 @@ impl Sim {
 
     /// Say that this tower was resumed, and how long it was dark.
     ///
-    /// # Why the sim says it and the frontend measures it
-    ///
     /// Rule 6 puts prose in content files, so the words are the sim's; §19
     /// forbids the sim reading a wall clock, so the *gap* is the frontend's.
-    /// This is where the two meet — the caller hands over a number of seconds it
-    /// read from the machine, and the orb finds the sentence.
     ///
-    /// # Why it is not inside [`restored`](Self::restored)
-    ///
-    /// Because a restored world must be **the saved world, exactly**: a banner
-    /// pushed there would put records in the loaded stream that the world which
-    /// wrote it never had, and `tests/persistence.rs` compares the two documents
-    /// byte for byte. Saying so is a thing a *session* does, not a thing a world
-    /// is, which is the same line `quit` draws.
+    /// Not inside [`restored`](Self::restored), because a restored world must be
+    /// the saved world exactly and `tests/persistence.rs` compares the two
+    /// documents byte for byte. Saying so is a thing a *session* does.
     ///
     /// `away` is seconds, or `None` where the machine would not say — a save
-    /// written before the stamp existed, or a clock that has gone backwards.
+    /// written before the stamp existed, or a clock gone backwards.
     pub fn say_resumed(&mut self, away: Option<u64>) {
         let prose = self.world.resource::<Prose>().clone();
         let mut scrollback = self.world.resource_mut::<Scrollback>();
@@ -596,18 +497,13 @@ impl Sim {
 
     /// Say that the tower could not be written out.
     ///
-    /// # Why this is a record and not a `status` line
+    /// A record rather than a `status` line: §3 makes the stream *the* output,
+    /// so anything that never becomes a record is invisible to `sift`, the log
+    /// and the screen reader — and with no `save` verb (§19) a player has no
+    /// reason to look.
     ///
-    /// Because §3 makes the record stream *the* output: a status line is a view
-    /// over records, and a thing that never becomes one is a thing `sift`, the
-    /// log, and the screen reader all cannot see. A player who never types
-    /// `status` would also never learn — and there is no `save` verb (§19), so
-    /// they have no reason to look.
-    ///
-    /// The caller says this **once**. A save is attempted every sixty ticks and
-    /// a read-only directory fails every one of them, so a line per attempt is
-    /// sixty an hour — which is the noise §19 deleted the editor's per-save
-    /// announcement over.
+    /// The caller says this once. A save is attempted every sixty ticks, so a
+    /// line per failed attempt is sixty an hour.
     pub fn say_save_failed(&mut self) {
         let message = self.world.resource::<Prose>().line("save_failed", &[]);
         self.world
@@ -672,11 +568,11 @@ impl Sim {
 
     /// Take a line the player typed.
     ///
-    /// The **second** entry point, and the only other one. Unlike
-    /// [`Sim::step`] it does not advance world time: it echoes immediately and
-    /// queues any resolved command for the next tick. See
-    /// [`session`](crate::session) for why the two clocks are split, and
-    /// DESIGN.md §19 for the rule it is measured against.
+    /// The second entry point, and the only other one. Unlike [`Sim::step`] it
+    /// does not advance world time: it echoes immediately and queues any
+    /// resolved command for the next tick. See [`session`](crate::session) for
+    /// why the two clocks are split, and DESIGN.md §19 for the rule it is
+    /// measured against.
     ///
     /// A blank line does nothing at all, as in every shell. `report` is right to
     /// refuse silence at its own layer — §6 forbids a bare error — but "the
@@ -701,11 +597,10 @@ impl Sim {
         // prompt, so leaving one unanswered must cost nothing.
         self.world.resource_mut::<Choices>().clear();
 
-        // **A tester's door, and only in a build a tester runs.** Matched
-        // exactly and checked before the parser, in the same shape spell words
-        // use — `debug_spawn` is not in §6's vocabulary, so the fuzzy matcher
-        // must never see it and `Verb::ALL` must never grow it. Absent from a
-        // release binary entirely; there, this is an ordinary unresolvable line.
+        // A tester's door, and only in a build a tester runs. Matched exactly
+        // and before the parser: `debug_spawn` is not in §6's vocabulary, so
+        // the fuzzy matcher must never see it and `Verb::ALL` must never grow
+        // it. In a release binary this is an ordinary unresolvable line.
         #[cfg(debug_assertions)]
         if let Some(order) = crate::execute::spawn_order(line) {
             self.debug_spawn(line, order);
@@ -820,37 +715,26 @@ impl Sim {
 
     /// Submit a line, letting `augur` read it if the orb cannot (§6).
     ///
-    /// **The three tiers, in one place.** A frontend calls this instead of
-    /// [`submit`](Self::submit) when it has a reader; everything without one —
-    /// the balance harness, a headless dump, every test that predates this —
+    /// The three tiers in one place. A frontend calls this instead of
+    /// [`submit`](Self::submit) when it has a reader; everything without one
     /// keeps calling `submit` and behaves exactly as it always has.
     ///
-    /// 1. **The orb reads it.** [`is_literal`](crate::parser::is_literal) covers
-    ///    what text alone settles — a digit answering a numbered prompt, a
-    ///    tester's door, a spell word — and
+    /// 1. The orb reads it — [`is_literal`](crate::parser::is_literal) for what
+    ///    text alone settles, and
     ///    [`Analysis::reads_outright`](crate::parser::Analysis::reads_outright)
-    ///    covers the rest: the verb was typed rather than guessed at, and the
-    ///    reading accounted for every word. Either way the line goes to
-    ///    `submit` untouched, so `Elsewhere`, `InSpell`, `Incomplete` and the
-    ///    numbered prompt all survive.
-    /// 2. **The augury reads it**, and [`submit_divined`](Self::submit_divined)
-    ///    runs what it decided.
-    /// 3. **Nobody reads it**, and `submit` answers with §6's suggestions —
-    ///    which is what the game did before any of this existed.
+    ///    for a typed verb whose reading accounted for every word. Either way
+    ///    the line goes to `submit` untouched, so `Elsewhere`, `InSpell`,
+    ///    `Incomplete` and the numbered prompt all survive.
+    /// 2. The augury reads it, and [`submit_divined`](Self::submit_divined) runs
+    ///    what it decided.
+    /// 3. Nobody reads it, and `submit` answers with §6's suggestions.
     ///
-    /// # It cannot regress a line that works today
-    ///
-    /// Tier one is decided before a reader is consulted and is a strict
-    /// property of the deterministic pipeline, so every phrasing that resolves
-    /// now still resolves now, by the same route, to the same command.
-    /// `scripts/dumps.sh` is the proof and it is a `diff`, not an argument.
-    ///
-    /// # The double `analyse` is deliberate
-    ///
-    /// Tier one analyses to decide, and `submit` analyses again to act. It is
-    /// pure, integer-scored and measured under a millisecond, and the
-    /// alternative — threading a half-finished analysis through the entry point
-    /// every other caller uses — would make `submit` mean two things.
+    /// Tier one is decided before a reader is consulted, so nothing that
+    /// resolves today can regress; `scripts/dumps.sh` is the `diff` that proves
+    /// it. The double `analyse` — once to decide, once in `submit` to act — is
+    /// pure and under a millisecond, where threading a half-finished analysis
+    /// through the entry point every other caller uses would make `submit` mean
+    /// two things.
     pub fn submit_reading(&mut self, line: &str, augur: &dyn crate::Augur) {
         if crate::parser::is_literal(line) {
             self.submit(line);
@@ -861,11 +745,10 @@ impl Sim {
             self.submit(line);
             return;
         }
-        // **The first reading that resolves, and the room decides which.** A
-        // reader offers candidates because it cannot see the world — `run
+        // The first reading that resolves, and the room decides which: `run
         // night_watch` is `invoke` or `wield` depending on what `night_watch`
         // *is*, and only the scene knows. Trying them here keeps that judgement
-        // with `analyse`, which is the deterministic, explainable half.
+        // with `analyse`, the deterministic half.
         let scene = self.world.resource::<Scene>().clone();
         let readings: Vec<String> = augur
             .read(line)
@@ -882,13 +765,10 @@ impl Sim {
             return;
         }
 
-        // **Failing that, a deliberate refusal still beats a shrug.** `grind
-        // sage`, read correctly in a room with no mortar, is `Elsewhere` —
-        // *"there is nothing here to grind with"* — which §19 records as worth
-        // having precisely because *"I do not know that word"* would lie about
-        // a word the game taught next door. Requiring a reading to *run* threw
-        // that away, and `the_trace_records_a_consultation_even_when_the_command
-        // _does_not_land` is what caught it.
+        // Failing that, a deliberate refusal beats a shrug: `grind sage` in a
+        // room with no mortar is `Elsewhere`, and §19 wants that because *"I do
+        // not know that word"* would lie about a word the game taught next
+        // door. Requiring a reading to *run* threw it away.
         let answers = readings
             .iter()
             .find(|echo| {
@@ -912,34 +792,23 @@ impl Sim {
 
     /// Run a line the augury read, rather than one the orb read (§6).
     ///
-    /// **The fifth entry point, and the augury's only one.** The caller has
-    /// already established that [`crate::parser::is_literal`] is false and that
-    /// [`Analysis::reads_outright`] said no, asked a model what the line meant,
-    /// and expanded the answer into a canonical command. That command arrives
-    /// here as `echo`.
+    /// The fifth entry point, and the augury's only one: the caller has
+    /// established that neither [`crate::parser::is_literal`] nor
+    /// [`Analysis::reads_outright`] settles the line, asked a model what it
+    /// meant, and expanded the answer into the canonical command `echo`.
     ///
-    /// # The model runs once, here, and never again
+    /// The model runs once, here. `echo` is what is analysed, recorded and
+    /// replayed; `line` is kept for the transcript and never re-read. That is
+    /// the determinism boundary: [`analyse`] is pure and integer-scored, while
+    /// re-deriving from the player's own words would run a model whose spans
+    /// need not match across a GPU, a driver or a backend. See
+    /// [`Submission::Divined`].
     ///
-    /// `echo` is what is analysed, recorded and replayed; `line` is kept for the
-    /// transcript and the trace and is never re-read. That is the determinism
-    /// boundary: [`analyse`] is pure and integer-scored, so re-deriving from a
-    /// canonical command is safe on any machine, while re-deriving from the
-    /// player's own words would mean running a model whose spans need not match
-    /// across a GPU, a driver or a backend. See [`Submission::Divined`].
-    ///
-    /// # Why it does not simply call [`submit`](Self::submit)
-    ///
-    /// Three things differ and each matters. The transcript must show what the
-    /// *player* wrote rather than the canonical form they did not type; the echo
-    /// must carry [`Confidence::Divined`] so it draws `≈` and the destructive
-    /// guard can tell an inferred `purge` from a typed one; and the journal must
-    /// record both halves. None of that is expressible by handing `submit` a
-    /// string.
-    ///
-    /// A canonical command that fails to resolve — because the world moved, or
-    /// because the augury expanded to something this room does not answer to —
-    /// falls through exactly as a typed one would. §6 forbids a bare error and
-    /// this is not a way around it.
+    /// Not [`submit`](Self::submit), because the transcript shows what the
+    /// *player* wrote, the echo carries [`Confidence::Divined`] so it draws `≈`
+    /// and the destructive guard can tell an inferred `purge` from a typed one,
+    /// and the journal records both halves. A command that fails to resolve
+    /// falls through as a typed one would; §6 forbids a bare error.
     pub fn submit_divined(&mut self, line: &str, echo: &str) {
         if line.trim().is_empty() || echo.trim().is_empty() {
             return;
@@ -951,9 +820,9 @@ impl Sim {
         let tick = *self.world.resource::<Tick>();
         let analysis = analyse(echo, self.world.resource::<Scene>(), Mode::Calm);
 
-        // **Traced against what the player typed**, because a session sifted for
-        // what the augury was asked is a session sifted for their words. The
-        // canonical form is in the `echo` column beside it.
+        // Traced against what the player typed: a session sifted for what the
+        // augury was asked is sifted for their words. The canonical form is in
+        // the `echo` column beside it.
         let resolution = match analysis.resolution {
             Resolution::Resolved { intent, .. } => Resolution::Resolved {
                 intent,
@@ -966,12 +835,11 @@ impl Sim {
             candidates: analysis.candidates,
         };
         let mut record = ParseRecord::new(tick.get(), line, Mode::Calm, &traced);
-        // **Stamped here, not derived from the confidence.** Only a `Resolved`
-        // reading carries `Divined`, so deriving it would mark the augury's
-        // successes and silently drop its failures — and a canonical command
-        // that came back `Elsewhere` or `Unresolved` is the most interesting row
-        // in the export, because it is where the model was wrong or the room
-        // was. The consultation is the fact worth recording, not its outcome.
+        // Stamped here, not derived from the confidence: only a `Resolved`
+        // reading carries `Divined`, so deriving it would silently drop the
+        // augury's failures — and an `Elsewhere` or `Unresolved` canonical
+        // command is the most interesting row in the export. The consultation
+        // is the fact worth recording, not its outcome.
         record.divined = true;
         self.world.resource_mut::<ParseLog>().push(record);
 
@@ -991,9 +859,9 @@ impl Sim {
             Resolution::Resolved { intent, .. } => {
                 self.world.resource_mut::<Pending>().push_divined(intent);
             }
-            // **No numbered prompt from a divined reading** (§6). The augury
-            // acts on its best reading and offers correction; stopping to ask is
-            // the interrogation it exists to remove.
+            // No numbered prompt from a divined reading (§6): the augury acts
+            // on its best reading and offers correction, where stopping to ask
+            // is the interrogation it exists to remove.
             Resolution::Ambiguous { .. }
             | Resolution::Incomplete { .. }
             | Resolution::TakesNothing { .. }
@@ -1005,27 +873,17 @@ impl Sim {
 
     /// Save a spell out of the editor.
     ///
-    /// **The third entry point, and the last one.** [`submit`](Self::submit)
-    /// takes a line the player typed; this takes a file the player wrote. Both
-    /// are *decisions*, which is the test for what belongs in
-    /// [`Submissions`] and therefore in a replay —
-    /// and the keystrokes that built the buffer are not, which is why the editor
-    /// itself lives in the frontend beside the prompt's own line editor.
+    /// The third entry point, and the last. [`submit`](Self::submit) takes a
+    /// line the player typed; this takes a file they wrote. Both are
+    /// *decisions*, the test for what belongs in [`Submissions`] and therefore
+    /// in a replay — the keystrokes that built the buffer are not, which is why
+    /// the editor lives in the frontend. Like `submit`, it does not advance
+    /// world time: a world mutated from inside an input call produces a session
+    /// `(seed, submissions)` cannot reproduce, so the write is queued.
     ///
-    /// # What lands, and when
-    ///
-    /// Like `submit`, this does **not** advance world time. It records the
-    /// submission immediately and queues the write for the next tick, because
-    /// `session` is explicit that effects land on a tick boundary through
-    /// `Pending` — a world mutated from inside an input call produces a session
-    /// that `(seed, submissions)` cannot reproduce. `scene::rebuild` runs per
-    /// tick anyway, so a new spell is nameable from the tick after it is saved
-    /// either way.
-    ///
-    /// The **typed** lines are what gets recorded, not the canonical form they
-    /// become. A replay re-derives the canonicalisation, so improving the
-    /// canonicaliser cannot silently make an old session replay into a different
-    /// world.
+    /// The *typed* lines are recorded, not the canonical form they become, so
+    /// improving the canonicaliser cannot make an old session replay into a
+    /// different world.
     pub fn write_spell(&mut self, name: &str, lines: &[String]) {
         self.write_spell_reading(name, lines, &crate::augur::Verbatim);
     }
@@ -1035,21 +893,16 @@ impl Sim {
     /// [`write_spell`](Self::write_spell) is this with a reader that abstains on
     /// everything, so a build with none is the game exactly as it was.
     ///
-    /// # What the player typed is never touched
+    /// What the player typed is never touched: `lines` goes to
+    /// [`Held`](crate::tower::Held) byte-exact (§19), and the reading lands in
+    /// [`Read`](crate::tower::Read) beside it — derived, discardable, rebuilt
+    /// whenever a line changes, and what `spell::compile` compiles.
     ///
-    /// `lines` goes to [`Held`](crate::tower::Held) byte-exact, because §19
-    /// deleted the last thing that rewrote a player's file. The reading lands in
-    /// [`Read`](crate::tower::Read) beside it and is what `spell::compile`
-    /// compiles — derived, discardable, and rebuilt whenever a line changes.
-    ///
-    /// # Read once, on the way in
-    ///
-    /// **Not at cast, and not in `step`.** `orbs-sim` cannot depend on a model
-    /// (rule 1) and a model on the tick spine would break replay (rule 3), so
-    /// the reader is the frontend's and is consulted here — the same shape as
-    /// [`submit_reading`](Self::submit_reading). A line whose text has not
-    /// changed keeps its reading rather than paying for it again, which matters
-    /// because the editor writes the buffer out after every pause in the typing.
+    /// Read once on the way in, not at cast and not in `step`: `orbs-sim` cannot
+    /// depend on a model (rule 1) and a model on the tick spine would break
+    /// replay (rule 3), so the reader is the frontend's —
+    /// [`submit_reading`](Self::submit_reading)'s shape. Unchanged text keeps
+    /// its reading, which matters because the editor saves after every pause.
     pub fn write_spell_reading(
         &mut self,
         name: &str,
@@ -1077,13 +930,11 @@ impl Sim {
 
     /// Each line as the orb reads it, reusing what this reader already read.
     ///
-    /// # The newest reading of the file, queued or landed
-    ///
-    /// A write lands on the next tick, so on the beat the editor saves and then
-    /// reads its buffer the node still holds the reading from before. Asking the
-    /// queue first is what reads a changed line **once** on that beat rather
-    /// than twice — and the save's reading and the editor's are one answer,
-    /// because they are one lookup.
+    /// The newest reading of the file, queued or landed. A write lands on the
+    /// next tick, so on the beat the editor saves and then reads its buffer the
+    /// node still holds the older reading; asking the queue first reads a
+    /// changed line once rather than twice, and makes the save's reading and the
+    /// editor's one lookup.
     fn reading_of(
         &self,
         filename: &str,
@@ -1117,10 +968,9 @@ impl Sim {
                 if trimmed.is_empty() || trimmed.starts_with('#') {
                     return line.clone();
                 }
-                // **Unchanged text keeps its reading — this reader's**, which is
-                // what makes an autosave on every keystroke pause affordable, and
-                // what makes switching the reader reach every line. See
-                // `tower::Read::by`.
+                // Unchanged text keeps its reading — this reader's, which makes
+                // autosave affordable and switching the reader reach every
+                // line. See `tower::Read::by`.
                 if let Some(read) = newest.as_ref().and_then(|newest| newest.kept(line, by)) {
                     return read.to_owned();
                 }
@@ -1131,11 +981,10 @@ impl Sim {
 
     /// Take a mastery node, on the next tick.
     ///
-    /// [`write_spell`](Self::write_spell)'s shape, one screen along: the choice
-    /// is recorded as a [`Submission`] and queued as
-    /// an effect, so it lands on a tick boundary like everything else a player
-    /// decides. **The id, not the keystrokes** — aiming the cursor changes no
-    /// state the world can see.
+    /// [`write_spell`](Self::write_spell)'s shape: recorded as a
+    /// [`Submission`] and queued as an effect, so it lands on a tick boundary
+    /// like everything else a player decides. The id, not the keystrokes —
+    /// aiming the cursor changes no state the world can see.
     ///
     /// The world re-checks every rule before granting; see `execute::weave`.
     pub fn take(&mut self, id: &str) {
@@ -1186,7 +1035,7 @@ impl Sim {
     /// How the tower's defences stand, out of [`tower::STANDING`].
     ///
     /// Falls on its own (`tower::erode`) and is put back by finishing a course
-    /// in the sanctum. **The only resource in the game that goes down.**
+    /// in the sanctum — the only resource in the game that goes down.
     #[must_use]
     pub fn integrity(&self) -> u32 {
         self.world.resource::<tower::Integrity>().get()
@@ -1194,16 +1043,14 @@ impl Sim {
 
     /// Whether the node `named` in `room` is carrying `reading`.
     ///
-    /// **The question a spell's `if` asks, asked directly.** Every other route
-    /// to a published reading goes through `survey`, which costs a tick — and
-    /// while the menagerie was a chant its aperture moved on every tick, so four
-    /// surveys in a row looked at four different moments: `next` shipped
-    /// unpublished and every survey said *"holds nothing"*, which reads exactly
-    /// like the feature being absent and exactly like it working. The circle
-    /// waits, but a reading asked without a tick is still the honest instrument.
+    /// The question a spell's `if` asks, asked directly. Every other route to a
+    /// published reading goes through `survey`, which costs a tick — so four
+    /// surveys in a row read four different moments back when the menagerie's
+    /// aperture moved every tick. A reading asked without a tick is the honest
+    /// instrument.
     ///
     /// Walked from the root rather than from `Cwd`, so it answers about a room
-    /// nobody is standing in — which is the case a bound solver is always in.
+    /// nobody is standing in — which is where a bound solver always is.
     #[must_use]
     pub fn holds_reading(&self, room: &str, named: &str, reading: &str) -> bool {
         let world = &self.world;
@@ -1228,8 +1075,8 @@ impl Sim {
 
     /// How many spells the orb can hold at once.
     ///
-    /// **Derived from [`experience`](Self::experience)**, so this is a reading
-    /// rather than a second piece of state — see `tower::experience`.
+    /// Derived from [`experience`](Self::experience), so it is a reading rather
+    /// than a second piece of state — see `tower::experience`.
     #[must_use]
     pub fn concentration(&self) -> usize {
         tower::concentration(&self.world)
@@ -1237,10 +1084,9 @@ impl Sim {
 
     /// The ward's sheet, where the player is standing.
     ///
-    /// **Reads `Cwd`, exactly as [`stacks`](Self::stacks) does**: a frontend
-    /// asking for the board gets one only where the player could `survey prism`
-    /// themselves, so the picture cannot outrun the readings by following them
-    /// out of the room.
+    /// Reads `Cwd`, as [`stacks`](Self::stacks) does: a frontend gets the board
+    /// only where the player could `survey prism` themselves, so the picture
+    /// cannot outrun the readings by following them out of the room.
     #[must_use]
     pub fn ward(&self) -> Option<orbs_render::Board> {
         let cwd = self.world.resource::<tower::Cwd>().0;
@@ -1252,12 +1098,10 @@ impl Sim {
 
     /// The course itself, for a caller that needs to ask it questions.
     ///
-    /// **`orbs-balance` is the caller**, and the reason it is not
-    /// [`pylon`](Self::pylon) is that a *view* is what a painter needs and a
-    /// *course* is what a solver needs. The harness rotates through
-    /// `pylon::cycle` and asks `Course::between` which way each haul runs, which
-    /// keeps one copy of the algorithm in the game rather than two — see
-    /// `drive::haul_one`.
+    /// `orbs-balance` is the caller, and not [`pylon`](Self::pylon) because a
+    /// *view* is what a painter needs and a *course* what a solver needs. The
+    /// harness asks `Course::between` which way each haul runs, keeping one copy
+    /// of the algorithm in the game — see `drive::haul_one`.
     #[must_use]
     pub fn course(&self) -> Option<&tower::Course> {
         self.world
@@ -1266,17 +1110,14 @@ impl Sim {
 
     /// The child of where the player stands that carries `C`, if any.
     ///
-    /// **One walk, because this was three.** `course`, `pylon` and
-    /// `debug_course` each wrote out the same `children_of(cwd).find(...)`, in
-    /// one file, differing only in the component — which is the shape
-    /// [`tower::reach`] was extracted to stop for *names*. The same argument
-    /// applies to components: a room-scoped lookup is a rule about where a
-    /// player is standing, and three copies of it are three chances to disagree
-    /// about that.
+    /// One walk, because this was three: `course`, `pylon` and `debug_course`
+    /// each wrote out the same `children_of(cwd).find(...)`, and three copies of
+    /// a rule about where the player stands are three chances to disagree — the
+    /// shape [`tower::reach`] was extracted to stop for *names*.
     ///
     /// Room-scoped on purpose. `tower::pylon::fixture` is the tower-wide
-    /// question and is deliberately separate — a bound solver's readings must
-    /// keep up while the player is in another room, and a picture must not.
+    /// question and stays separate: a bound solver's readings must keep up while
+    /// the player is in another room, and a picture must not.
     fn here_with<C: bevy_ecs::component::Component>(&self) -> Option<bevy_ecs::entity::Entity> {
         let cwd = self.world.resource::<tower::Cwd>().0;
         tower::children_of(&self.world, cwd)
@@ -1291,15 +1132,12 @@ impl Sim {
     #[must_use]
     pub fn pylon(&self) -> Option<orbs_render::Pylon> {
         let standing = self.world.resource::<tower::Integrity>().get();
-        // **Through `course`, not a second walk of `Cwd`.** These were the same
-        // three lines twice in one file — and `debug_course` made it three —
-        // which is the shape `tower::reach` was extracted to stop one layer
-        // down. A view is a course plus a sentence; only the sentence is here.
+        // Through `course`, not a second walk of `Cwd`: a view is a course plus
+        // a sentence, and only the sentence is here.
         let course = self.course()?;
-        // **The board's own line, written here.** `orbs-render` holds no
-        // authored English (rule 6), so the sentence under the floor rule is
-        // composed from the same prose key the reader hears — one spelling, one
-        // place, and hot-reloadable like every other line in the game.
+        // The board's own line, written here: `orbs-render` holds no authored
+        // English (rule 6), so the sentence comes from the same prose key the
+        // reader hears — one spelling, and hot-reloadable like the rest.
         let tally = self.prose().line(
             "pylon_tally",
             &[
@@ -1318,9 +1156,8 @@ impl Sim {
     pub fn lattice(&self) -> Option<orbs_render::LatticeBoard> {
         let node = self.here_with::<tower::lattice::Binding>()?;
         let binding = self.world.get::<tower::lattice::Binding>(node)?;
-        // **The board's own line, written here.** `orbs-render` holds no
-        // authored English (rule 6), so the sentence under the rule is composed
-        // from the same prose key the reader hears.
+        // The board's own line, written here: `orbs-render` holds no authored
+        // English (rule 6), so it comes from the prose key the reader hears.
         let tally = self.prose().line(
             "lattice_tally",
             &[
@@ -1350,16 +1187,14 @@ impl Sim {
     /// Reads `Cwd` for the reason [`pylon`](Self::pylon) does: the picture
     /// cannot outrun the readings by following the player out of the room.
     ///
-    /// **A finished siege still draws.** `settle` leaves the board up so the
-    /// last thing that happened stays readable — a board that vanished on the
-    /// winning round would take the postmortem with it.
+    /// A finished siege still draws: `settle` leaves the board up, since one
+    /// that vanished on the winning round would take the postmortem with it.
     #[must_use]
     pub fn rampart(&self) -> Option<orbs_render::Rampart> {
         let rampart = self.here_with::<tower::Siege>()?;
         let siege = self.world.get::<tower::Siege>(rampart)?;
         // The board's own line, written here: `orbs-render` holds no authored
-        // English (rule 6), so the sentence under the rule is composed from the
-        // same prose key the reader hears.
+        // English (rule 6), so it comes from the prose key the reader hears.
         let tally = self.prose().line(
             "siege_tally",
             &[
@@ -1372,11 +1207,10 @@ impl Sim {
 
     /// The beast waiting at the menagerie's circle, if the player is looking at it.
     ///
-    /// **[`course`](Self::course)'s reason, one room over**: a *view* is what a
-    /// painter needs and a *beast* is what a solver needs. `orbs-balance` reads
-    /// where two glyphs stand on every step of `taming`, and building the board —
-    /// three senses looked up in prose, a tally sentence, a row of cells a line —
-    /// three times a step to find two words was the harness's hot path.
+    /// [`course`](Self::course)'s reason, one room over: a *view* is what a
+    /// painter needs and a *beast* what a solver needs. `orbs-balance` reads
+    /// where two glyphs stand on every step of `taming`, and building the whole
+    /// board three times a step to find them was the harness's hot path.
     #[must_use]
     pub fn beast(&self) -> Option<&tower::circle::Beast> {
         self.world
@@ -1395,13 +1229,12 @@ impl Sim {
 
     /// Every domain at a glance — what §9's rail draws.
     ///
-    /// **Derived here rather than in a frontend**, because rule 2 lets a
-    /// frontend decide only how a cell is drawn: `orbs-tui` must be able to draw
-    /// the same rail without re-deriving *what is happening in the forge*, and
-    /// two derivations are two answers that can disagree.
+    /// Derived here rather than in a frontend: rule 2 lets a frontend decide
+    /// only how a cell is drawn, and two derivations of *what is happening in
+    /// the forge* are two answers that can disagree.
     ///
-    /// Always seven, in a fixed order, including the rooms the tower has not
-    /// built yet — see [`tower::briefs`].
+    /// Always seven, in a fixed order, including rooms the tower has not built
+    /// yet — see [`tower::briefs`].
     #[must_use]
     pub fn briefs(&self) -> Vec<tower::Brief> {
         tower::briefs(&self.world)
@@ -1410,8 +1243,8 @@ impl Sim {
     /// The spells the orb is holding, named, in the order the tower keeps them.
     ///
     /// §8 wants concentration *"surfaced in `status` and in the sidebar — never a
-    /// quiet log line"*, and a count alone cannot answer the question a player at
-    /// capacity is actually asking, which is **which one**.
+    /// quiet log line"*, and a count cannot answer what a player at capacity is
+    /// actually asking, which is *which one*.
     #[must_use]
     pub fn bound(&self) -> Vec<String> {
         tower::spell::held(&self.world)
@@ -1419,10 +1252,10 @@ impl Sim {
 
     /// Which domain `name` was written for, if the tower has it.
     ///
-    /// **The fact that survives the file being the player's.** A spell's home is
-    /// what its lines are read against at cast, and it is a component rather than
-    /// anything in the text — so nothing about the text can tell you whether a
-    /// save from the archive re-homed a laboratory spell. This can.
+    /// The fact that survives the file being the player's. A spell's home is
+    /// what its lines are read against at cast, and it is a component rather
+    /// than anything in the text — so only this can say whether a save from the
+    /// archive re-homed a laboratory spell.
     #[must_use]
     pub fn spell_domain(&self, name: &str) -> Option<String> {
         let wanted = crate::content::with_extension(name);
@@ -1440,19 +1273,16 @@ impl Sim {
 
     /// How the orb reads `lines`, if they were a spell for `domain`.
     ///
-    /// # The editor's half of "report it, do not rewrite it"
+    /// The editor's half of *"report it, do not rewrite it"*: nothing rewrites a
+    /// spell, so a player learns what the orb heard only by being told, and
+    /// being told at cast is true but late.
     ///
-    /// Nothing rewrites a spell any more, so the only way a player learns what
-    /// the orb heard — or that it heard nothing — is to be **told**. Being told
-    /// at cast is true and late; this is the same answer at the moment they can
-    /// act on it.
+    /// The sim's decision rather than the frontend's (rule 2): what a line means
+    /// is the spell language, and a frontend working it out would be a second
+    /// parser to keep in step with this one.
     ///
-    /// It is the sim's decision rather than the frontend's (rule 2): what a line
-    /// means is the spell language, and a frontend working it out for itself
-    /// would be a second parser to keep in step with this one.
-    ///
-    /// Pure, and over the **buffer** rather than the saved file, so the answer
-    /// tracks what is on screen rather than what was last written.
+    /// Pure, and over the *buffer* rather than the saved file, so the answer
+    /// tracks what is on screen.
     #[must_use]
     pub fn read_spell(&self, domain: &str, lines: &[String]) -> Vec<crate::tower::spell::Reading> {
         crate::tower::spell::interpret(&self.world, domain, lines, lines)
@@ -1463,14 +1293,11 @@ impl Sim {
     /// [`read_spell`](Self::read_spell) is this with none, so a build without a
     /// reader shows exactly what it always did.
     ///
-    /// # The save's reading, not a second one
-    ///
-    /// `name` is the spell the buffer belongs to, and each line's reading comes
-    /// from the lookup [`write_spell_reading`](Self::write_spell_reading) makes —
-    /// the queued write, then the node's `Read`. So a line the save already read
-    /// is not read again here, and the editor and the runner cannot differ about
-    /// what a line means: it is one reading, looked up twice. A line edited since
-    /// is read now, exactly as the next save would read it.
+    /// The save's reading, not a second one: each line's reading comes from the
+    /// lookup [`write_spell_reading`](Self::write_spell_reading) makes — the
+    /// queued write, then the node's `Read` — so the editor and the runner
+    /// cannot differ about what a line means. A line edited since is read now,
+    /// exactly as the next save would read it.
     #[must_use]
     pub fn read_spell_with(
         &self,
@@ -1485,9 +1312,9 @@ impl Sim {
 
     /// Which line of `name` a running invocation is on, if one is running.
     ///
-    /// **What the editor draws its marker from.** A spell being edited while it
-    /// runs is the loop this whole surface exists for, and a buffer that does
-    /// not say where the orb has reached is a buffer you are editing blind.
+    /// What the editor draws its marker from. Editing a spell while it runs is
+    /// the loop this surface exists for, and a buffer that does not say where
+    /// the orb has reached is one you edit blind.
     #[must_use]
     pub fn running_line(&self, name: &str) -> Option<u64> {
         let wanted = crate::content::with_extension(name);
@@ -1504,7 +1331,7 @@ impl Sim {
 
     /// A spell the orb has been asked to open, if any.
     ///
-    /// **Takes** rather than reads: `scribe` asks once, and a frontend polling a
+    /// Takes rather than reads: `scribe` asks once, and a frontend polling a
     /// persistent flag would reopen the editor every frame. See
     /// [`Opening`](crate::execute::Opening).
     pub fn opening(&mut self) -> Option<crate::execute::Request> {
@@ -1513,11 +1340,10 @@ impl Sim {
 
     /// Whether a `scribe` is waiting, without taking it.
     ///
-    /// **So a frontend can ask before it mutates.** `opening` takes `&mut self`,
-    /// so a system holding `ResMut<Tower>` stamps the resource's change tick
-    /// merely by *asking* — which leaves `resource_changed::<Tower>` true for
-    /// ever and quietly returns every system gated on it to 60 Hz, including the
-    /// two whose doc comments exist to say they must not be.
+    /// So a frontend can ask before it mutates. `opening` takes `&mut self`, so
+    /// a system holding `ResMut<Tower>` stamps the change tick merely by
+    /// *asking* — leaving `resource_changed::<Tower>` true for ever and
+    /// returning every system gated on it to 60 Hz.
     #[must_use]
     pub fn has_opening(&self) -> bool {
         self.world
@@ -1533,7 +1359,7 @@ impl Sim {
 
     /// Whether `unfurl` has asked for the transcript to take the keyboard.
     ///
-    /// **Takes** rather than reads, for the same reason [`Sim::opening`] does: a
+    /// Takes rather than reads, for the same reason [`Sim::opening`] does: a
     /// frontend polling a persistent flag would re-enter reading mode every
     /// frame, including the frame after the player pressed Escape to leave it.
     pub fn unfurling(&mut self) -> bool {
@@ -1550,17 +1376,16 @@ impl Sim {
 
     /// Whether `quit` has asked for the session to end.
     ///
-    /// **Takes** rather than reads, like the four handshakes above it. What
-    /// leaving *means* is entirely a frontend's — dropping a window, or leaving
-    /// raw mode and putting the terminal back — and the two have nothing in
-    /// common, so the sim says only that it was asked for.
+    /// Takes rather than reads, like the handshakes above it. What leaving
+    /// *means* is a frontend's — dropping a window, or putting the terminal
+    /// back — so the sim says only that it was asked for.
     pub fn quitting(&mut self) -> bool {
         self.world.resource_mut::<crate::execute::Quitting>().take()
     }
 
     /// Whether the orb has asked *are you sure* and is waiting to be told again.
     ///
-    /// **Peeked, never taken**: it is state a screen can draw, not a request.
+    /// Peeked, never taken: it is state a screen can draw, not a request.
     #[must_use]
     pub fn is_asking_to_quit(&self) -> bool {
         self.world
@@ -1576,16 +1401,15 @@ impl Sim {
 
     /// Whether `menu` has asked for the orb's menu.
     ///
-    /// **Takes** rather than reads, like the handshakes above it.
+    /// Takes rather than reads, like the handshakes above it.
     pub fn menuing(&mut self) -> bool {
         self.world.resource_mut::<crate::execute::Menuing>().take()
     }
 
     /// Whether `weave` has asked for the progression screen.
     ///
-    /// **Peeked** rather than taken, so a system can decide whether to run
-    /// without stamping the resource's change tick — see [`Sim::has_opening`],
-    /// which exists for a defect this pair prevents.
+    /// Peeked rather than taken, so a system can decide whether to run without
+    /// stamping the resource's change tick — see [`Sim::has_opening`].
     #[must_use]
     pub fn has_weaving(&self) -> bool {
         self.world.resource::<crate::execute::Weaving>().pending()
@@ -1596,31 +1420,22 @@ impl Sim {
         self.world.resource_mut::<crate::execute::Weaving>().take()
     }
 
-    /// Walk the archive's stacks one cell, **now** (§10, §19).
+    /// Walk the archive's stacks one cell, now (§10, §19).
     ///
-    /// # The third entry point, and why the tick was the wrong clock
+    /// A third entry point, because the tick was the wrong clock: an arrow key
+    /// through `submit` landed a step on the next tick, and a maze walked at
+    /// 1 Hz is a wait rather than a minigame.
     ///
-    /// [`Sim::submit`] queues and [`Sim::step`] advances, and for two phases
-    /// those were the only two doors. An arrow key went through `submit`, which
-    /// meant a step landed on the next tick — a second away — and a maze walked
-    /// at 1 Hz is not a minigame, it is a wait. Queueing the presses gave the
-    /// player their keys back and did not make the maze any faster to walk.
+    /// The narrowest door that answers it: the reading moves and no tick is
+    /// consumed, so walking a maze by hand costs world time only in the sense
+    /// that the player is standing there doing it.
     ///
-    /// So this is a door of its own, and it is the *narrowest* one that answers
-    /// the problem: it moves the reading and nothing else. **No tick is
-    /// consumed** — no brew advances, no fire burns down, no spell runs — so
-    /// walking a maze by hand costs world time only in the sense that the player
-    /// is standing there doing it.
-    ///
-    /// # Replay is not weakened, and the reason is the recording
-    ///
-    /// A typed line is recorded against the tick it was *queued* on and executes
-    /// at the start of the next; this executes immediately, so it lands after
-    /// that tick's step. Both are exact, and they are told apart by
-    /// [`Submission::Walked`] rather than by
-    /// a driver having to guess: replay a tick, then apply the walks recorded
-    /// against it in list order. A tick can never hold both kinds, because the
-    /// prompt is dead while the arrows have the maze.
+    /// Replay is not weakened. A typed line is recorded against the tick it was
+    /// *queued* on and runs at the start of the next; this runs immediately, so
+    /// it lands after that tick's step. [`Submission::Walked`] tells them apart:
+    /// replay a tick, then apply the walks recorded against it in list order. A
+    /// tick never holds both kinds, because the prompt is dead while the arrows
+    /// have the maze.
     ///
     /// Returns whether the stacks were open to walk at all.
     pub fn walk(&mut self, way: tower::Way) -> bool {
@@ -1634,19 +1449,17 @@ impl Sim {
         self.world
             .resource_mut::<Submissions>()
             .walked(tick, way.word());
-        // **The same body `follow` runs**, so a hand-walked maze and a
-        // spell-walked one cannot disagree about a wall or about what reaching
-        // the exit is worth.
+        // The same body `follow` runs, so a hand-walked maze and a spell-walked
+        // one cannot disagree about a wall or about what the exit is worth.
         crate::execute::tread(&mut self.world, way);
         true
     }
 
     /// Apply one recorded submission, with this sim already on its tick.
     ///
-    /// **The replay driver, owned here rather than written out by each caller.**
-    /// It was three hand-written `match`es across two test files and a third in
-    /// the session tests, which is three chances to disagree about what a
-    /// variant means — and what a variant means is precisely *when it ran*:
+    /// The replay driver, owned here rather than written out by each caller: it
+    /// was three hand-written `match`es, three chances to disagree about what a
+    /// variant means — and a variant means *when it ran*:
     ///
     /// - [`Typed`](Submission::Typed) was queued during its tick and executes at
     ///   the start of the next.
@@ -1654,21 +1467,18 @@ impl Sim {
     /// - [`Walked`](Submission::Walked) already ran, during its tick, after that
     ///   tick's step — because [`Sim::walk`] does not wait for a clock.
     ///
-    /// Standing on the recorded tick and calling this is correct for all three,
-    /// and adding a fourth kind is now a change in one place that the compiler
-    /// insists on rather than three it does not.
+    /// Standing on the recorded tick is correct for all three, and a fourth kind
+    /// is one change the compiler insists on rather than three it does not.
     pub fn replay(&mut self, submission: Submission) {
         match submission {
             Submission::Typed(line) => self.submit(&line),
-            // **The model does not run again.** The canonical form it settled on
-            // is what was recorded and what replays, which is what keeps a
-            // session reproducible on a machine whose GPU would have read the
-            // player's words differently. See `Sim::submit_divined`.
+            // The model does not run again: the canonical form it settled on is
+            // what replays, so a session stays reproducible on a machine whose
+            // GPU would have read the player's words differently.
             Submission::Divined { line, echo } => self.submit_divined(&line, &echo),
-            // **The reading is applied, never re-derived.** Re-running the
-            // reader here would make a replay depend on a model being present
-            // and identical — the thing `Submission::Divined` carries its echo
-            // to avoid. `read` equals `lines` for every session nothing read.
+            // The reading is applied, never re-derived: re-running the reader
+            // would make a replay depend on a model being present and
+            // identical. `read` equals `lines` for every session nothing read.
             Submission::Wrote {
                 name,
                 lines,
@@ -1760,9 +1570,9 @@ impl Sim {
     /// The room the player is standing in, by name — `None` at `/tower` or
     /// above it, where no work happens.
     ///
-    /// **The room, not the leaf.** A player standing in the alembic is in the
+    /// The room, not the leaf: a player standing in the alembic is in the
     /// laboratory, and anything asking *which line, which panel, which log*
-    /// wants the room; `location` is the path and `domain_of` is the walk.
+    /// wants the room. `location` is the path and `domain_of` the walk.
     #[must_use]
     pub fn domain(&self) -> Option<String> {
         let cwd = self.world.resource::<tower::Cwd>().0;
@@ -1780,12 +1590,11 @@ impl Sim {
 
     /// Queue a tester's `debug_spawn`, on the next tick like everything else.
     ///
-    /// Recorded in the scrollback and in `Submissions` — so a debug session
-    /// replays in a debug build — but **not** in the parse trace, for the reason
-    /// [`choose`](Self::choose) gives below: `debug_spawn` is not a phrasing, and
-    /// counting it as one would dilute §15's first metric with inputs that were
-    /// never a test of the parser. It is not even in the vocabulary being
-    /// measured.
+    /// Recorded in the scrollback and in `Submissions`, so a debug session
+    /// replays — but not in the parse trace, for the reason
+    /// [`choose`](Self::choose) gives below: it is not a phrasing, and counting
+    /// it would dilute §15's first metric with inputs that never tested the
+    /// parser.
     #[cfg(debug_assertions)]
     fn debug_spawn(&mut self, line: &str, order: crate::execute::SpawnOrder) {
         let tick = *self.world.resource::<Tick>();
@@ -1837,19 +1646,16 @@ impl Sim {
 
     /// Echo a debug word, record it for replay, and find what it acts on.
     ///
-    /// **One prologue, because there were two and they were byte-identical.**
-    /// `debug_ward` and `debug_course` each wrote out the same four steps —
-    /// read the tick, echo the line, push a `Submission` so replay stays honest,
-    /// walk `Cwd`'s children for a component — differing only in the type. A
-    /// change to the protocol had to be made twice, and a fix applied to one was
-    /// invisible in the other.
+    /// One prologue, because `debug_ward` and `debug_course` wrote out the same
+    /// four steps byte for byte, differing only in the type — so a protocol
+    /// change had to be made twice and a fix to one was invisible in the other.
     ///
     /// The `Submission` is the load-bearing step: a debug word reaches the world
     /// without going through `submit`'s parser, so a replay that did not see it
     /// would diverge from the session that recorded it.
     ///
-    /// Returns the node carrying `C`, or `None` — what each word does with it,
-    /// and what it says when there is nothing, is the word's own business.
+    /// Returns the node carrying `C`, or `None` — what each word does with it is
+    /// the word's own business.
     #[cfg(debug_assertions)]
     fn debug_shortcut<C: bevy_ecs::component::Component>(
         &mut self,
@@ -1868,15 +1674,13 @@ impl Sim {
 
     /// Hold a mastery node without earning the experience for it.
     ///
-    /// **Straight into `Taken`, skipping `weave::grant`'s `Standing::Open`
-    /// check** — which is the whole point, since that check is the threshold.
-    /// Everything downstream is the real thing: `spell::budget` sums it,
-    /// `is_gated` reads it, and `compile::check_learned` sees exactly what a
-    /// played tower would.
+    /// Straight into `Taken`, skipping `weave::grant`'s `Standing::Open` check,
+    /// since that check is the threshold. Everything downstream is the real
+    /// thing: `spell::budget` sums it, `is_gated` reads it, and
+    /// `compile::check_learned` sees exactly what a played tower would.
     ///
-    /// **A marker is refused**, because a tower holding one is a state the game
-    /// cannot reach and so not one worth testing from — `debug_learn`'s rule
-    /// about a name that is not a secret, applied here.
+    /// A marker is refused: a tower holding one is a state the game cannot
+    /// reach, so not one worth testing from.
     #[cfg(debug_assertions)]
     fn debug_take(&mut self, line: &str, id: Option<&str>) {
         let tick = *self.world.resource::<Tick>();
@@ -1914,9 +1718,9 @@ impl Sim {
 
     /// Put renown at a total, for a tester, and say the title it crossed.
     ///
-    /// **Sets rather than adds**, so one word goes both ways — a rank is lost by
-    /// falling back through it, and reaching that state otherwise means losing a
-    /// siege on purpose. Bare, it says where the tower stands.
+    /// Sets rather than adds, so one word goes both ways — a rank is lost by
+    /// falling back through it, and reaching that otherwise means losing a siege
+    /// on purpose. Bare, it says where the tower stands.
     #[cfg(debug_assertions)]
     fn debug_renown(&mut self, line: &str, total: crate::execute::Asking) {
         let tick = *self.world.resource::<Tick>();
@@ -1942,10 +1746,10 @@ impl Sim {
                 format!("renown is {total}")
             }
             crate::execute::Asking::Where => standing(&self.world),
-            // **Refused, and nothing touched** — `debug_take` and `debug_reach`
-            // answer a bad argument the same way. Reading it as nought set the
-            // total to zero and said so, which destroyed whatever the tester had
-            // just built and looked like it had worked.
+            // Refused, and nothing touched, as `debug_take` and `debug_reach`
+            // answer a bad argument. Reading it as nought zeroed the total and
+            // said so — destroying what the tester had built, and looking like
+            // it had worked.
             crate::execute::Asking::Unreadable => {
                 format!("that is no number. {}", standing(&self.world))
             }
@@ -1960,18 +1764,15 @@ impl Sim {
 
     /// Reach a mastery station without doing its deed.
     ///
-    /// **Every earlier station on the line too**, because a line is walked in
-    /// order and a tower with its third station reached and its first not is a
-    /// state the game cannot reach. What each one opens is opened and said, so
-    /// the See-it line about a gated recipe or charm sees what a played tower
-    /// would.
+    /// Every earlier station on the line too, because a line is walked in order
+    /// and a tower with its third station reached and its first not is a state
+    /// the game cannot reach. What each opens is opened and said, so a See-it
+    /// line about a gated recipe sees what a played tower would.
     ///
-    /// **And the room the line stands in.** `debug_reach archive_3` reached three
+    /// And the room the line stands in: `debug_reach archive_3` reached three
     /// stations inside a room the player could not enter — the archive is opened
-    /// by `laboratory_1`, on a *different* line — and `survey cabinet` then
-    /// answered *"the archive is not yours yet"* while the archive's own line read
-    /// three of five. That is exactly the state this doc promises not to make, and
-    /// the workaround had already been written into two See-it lines by hand.
+    /// by `laboratory_1`, on a *different* line — so `survey cabinet` answered
+    /// *"the archive is not yours yet"* while its own line read three of five.
     #[cfg(debug_assertions)]
     fn debug_reach(&mut self, line: &str, id: Option<&str>) {
         let tick = *self.world.resource::<Tick>();
@@ -2041,15 +1842,14 @@ impl Sim {
 
     /// Open the room `domain`, and whatever had to open first for it to.
     ///
-    /// **The chain, outermost first.** A room is opened by a station on *another*
+    /// The chain, outermost first: a room is opened by a station on *another*
     /// room's line, which may itself stand in a shut room — the sanctum is the
-    /// laboratory's third, and the See-it lines for the wall reach `laboratory_3`
-    /// by hand before `sanctum_1` for exactly this. Walked here instead.
+    /// laboratory's third. Walked here rather than by hand in a See-it line.
     ///
-    /// Where the tower's own line opens a room — the grimoire at 16, the forge at
-    /// 56 — the key is applied directly rather than credited, because this word
-    /// grants no experience and handing out fifty-six would move concentration,
-    /// the pool and every other reading derived from the total.
+    /// Where the tower's own line opens a room — the grimoire at 16, the forge
+    /// at 56 — the key is applied directly rather than credited, because this
+    /// word grants no experience and handing out fifty-six would move
+    /// concentration, the pool and every reading derived from the total.
     #[cfg(debug_assertions)]
     fn debug_unseal(&mut self, domain: &str, stations: &[(String, String, Vec<String>)]) {
         let mut order: Vec<(String, String)> = Vec::new();
@@ -2104,22 +1904,19 @@ impl Sim {
             && let Some(mut course) = self.world.get_mut::<tower::Course>(node)
         {
             course.give_away();
-            // **Republished, unlike `debug_ward`.** A ward's readings are
-            // rewritten by the press that follows it; a course's are rewritten
-            // by the *haul* that follows, and the two `potency` readings this
-            // just moved are what a solver reads to decide which haul that is.
-            // Left stale, the next line of a dump would be hauling at a board
-            // that no longer exists.
+            // Republished, unlike `debug_ward`: a ward's readings are rewritten
+            // by the press that follows, a course's by the *haul* — and a
+            // solver reads the two `potency` readings this just moved to decide
+            // which haul that is.
             crate::execute::refresh_pylon(&mut self.world);
             return;
         }
 
-        // **A shortcut that finds nothing says so.** It was silent, so typing it
-        // before `muster` — or outside the sanctum, since the pylon is found
-        // through `Cwd` — echoed the word, did nothing, and left the *next* line
-        // to report the trouble: `haul` answering "there is nothing drawn to
-        // move" reads as the haul being wrong rather than the shortcut. Every
-        // other debug word in `submit` reports what it did or refused.
+        // A shortcut that finds nothing says so. Silent, typing it before
+        // `muster` — or outside the sanctum, since the pylon is found through
+        // `Cwd` — left the *next* line to report the trouble, and `haul`
+        // answering "there is nothing drawn to move" reads as the haul being
+        // wrong rather than the shortcut.
         let message = self
             .world
             .resource::<crate::content::Prose>()
@@ -2145,16 +1942,14 @@ impl Sim {
             for (glyph, humour) in tower::circle::Glyph::ALL.into_iter().zip(solution) {
                 beast.limn(glyph, humour);
             }
-            // **Republished**, for `debug_course`'s reason: the glyphs' readings
-            // are what a spell reads next, and the next line of a dump would be
-            // calling a circle whose readings still named the opening.
+            // Republished, for `debug_course`'s reason: a spell reads the
+            // glyphs' readings next, and stale they still name the opening.
             crate::execute::refresh_circle(&mut self.world);
             return;
         }
 
-        // **A shortcut that finds nothing says so**, which is `debug_course`'s
-        // rule: silent, it would leave the next `summon` to *draw* a beast, and
-        // that reads as the shortcut having done nothing for a different reason.
+        // A shortcut that finds nothing says so (`debug_course`'s rule): silent,
+        // it would leave the next `summon` to *draw* a beast instead.
         let message = self
             .world
             .resource::<crate::content::Prose>()
@@ -2177,18 +1972,16 @@ impl Sim {
             && siege.running()
         {
             siege.give_away();
-            // **Republished**, for `debug_course`'s reason rather than
-            // `debug_ward`'s: a siege's readings are rewritten by the *round*
-            // that follows, so `foes`, `outnumbered` and `massed` would all be
-            // describing the enemy that arrived rather than the one left — and a
-            // decision tree reads exactly those.
+            // Republished, for `debug_course`'s reason: a siege's readings are
+            // rewritten by the *round* that follows, so `foes`, `outnumbered`
+            // and `massed` would describe the enemy that arrived rather than
+            // the one left — and a decision tree reads exactly those.
             crate::execute::refresh_rampart(&mut self.world);
             return;
         }
 
-        // **A shortcut that finds nothing says so**, which is `debug_course`'s
-        // rule: silent, it would leave the *next* line to report the trouble,
-        // and `hold` answering "nothing is at the wall" reads as the hold being
+        // A shortcut that finds nothing says so (`debug_course`'s rule): silent,
+        // `hold` answering "nothing is at the wall" reads as the hold being
         // wrong rather than the shortcut.
         let message = self
             .world
@@ -2206,9 +1999,9 @@ impl Sim {
 
     /// Learn a secret the lens would otherwise have to find.
     ///
-    /// **Runs now rather than queueing**, like `debug_spell` and unlike
-    /// `debug_spawn`: nothing about it is a world action with a duration, and a
-    /// tester wants the next line of their dump to see the result.
+    /// Runs now rather than queueing, like `debug_spell`: nothing about it is a
+    /// world action with a duration, and a tester wants the next line of their
+    /// dump to see the result.
     #[cfg(debug_assertions)]
     fn debug_learn(&mut self, line: &str, wanted: Option<&str>) {
         let tick = *self.world.resource::<Tick>();
@@ -2244,20 +2037,16 @@ impl Sim {
 
     /// Queue a tester's `debug_spell`.
     ///
-    /// **Runs now rather than queueing, and records the write rather than the
-    /// line.** Both are departures from [`debug_spawn`](Self::debug_spawn) and
-    /// both are the same reason: the effect *is* a write, and
-    /// [`write_spell`](Self::write_spell) already pushes a `Wrote` into
-    /// `Submissions`. Recording the typed line as well would push two
-    /// submissions for one input, and a replay would re-match the word and push
-    /// two more.
+    /// Runs now, and records the write rather than the line — both departures
+    /// from [`debug_spawn`](Self::debug_spawn) for one reason: the effect *is* a
+    /// write, and [`write_spell`](Self::write_spell) already pushes a `Wrote`,
+    /// so recording the line too would push two submissions for one input.
     ///
-    /// Recording only the write is also the stronger guarantee — a replay
-    /// reproduces the **lines that ran**, even if `dev_spells.toml` is edited
-    /// afterwards, where a recorded name would silently pick up the new text.
+    /// It is also the stronger guarantee — a replay reproduces the lines that
+    /// ran, even if `dev_spells.toml` is edited afterwards, where a recorded
+    /// name would silently pick up the new text.
     ///
-    /// Not in the parse trace, for the reason `debug_spawn` gives: it is not a
-    /// phrasing, and §15's first metric measures phrasings.
+    /// Not in the parse trace, for the reason `debug_spawn` gives.
     #[cfg(debug_assertions)]
     fn debug_spell(&mut self, line: &str, order: &crate::execute::SpellOrder) {
         self.world
@@ -2273,11 +2062,9 @@ impl Sim {
 
     /// Answer a numbered prompt.
     ///
-    /// Recorded in the scrollback but **not** in the parse trace: a digit is not
-    /// a phrasing, and counting it as one would dilute §15's first metric with
-    /// inputs that were never a test of the parser. What the gate wants is the
-    /// *original* ambiguous line reaching its intended action, which the
-    /// following selection is the evidence for.
+    /// Recorded in the scrollback but not in the parse trace: a digit is not a
+    /// phrasing, and §15's first metric wants the *original* ambiguous line
+    /// reaching its intended action, which the selection is the evidence for.
     fn choose(&mut self, line: &str, choice: usize) {
         let picked = self.world.resource::<Choices>().pick(choice).cloned();
 
@@ -2318,32 +2105,24 @@ impl Sim {
         self.world.resource::<Scrollback>()
     }
 
-    // There is deliberately no `scrollback_mut`. §3 makes this stream *the* log —
-    // the transcript, the file a player `peruse`s, and what `orbs-balance`
-    // replays — so a frontend writing a line into it directly would produce a
-    // session that replaying `(seed, submissions)` cannot reproduce, which is
-    // what §13 exists to stop. Commands write through
-    // [`run_pending`](crate::execute::run_pending) on a tick boundary or they do
-    // not write, and a test that needs to reach past that says so by going
-    // through [`Sim::world_mut`] and its escape-hatch contract.
+    // There is deliberately no `scrollback_mut`. §3 makes this stream *the* log,
+    // so a frontend writing a line into it directly would produce a session
+    // that replaying `(seed, submissions)` cannot reproduce (§13). Commands
+    // write through `run_pending` on a tick boundary or they do not write; a
+    // test that must reach past that goes through `Sim::world_mut`.
 
     /// What is in flight, if anything (§5.0).
     ///
     /// One at a time: §11.5 opens at multiplex capacity 1 and §9's fourth
     /// invariant reserves that slot for the action's whole duration.
     ///
-    /// # Why `iter_entities` rather than a query
-    ///
-    /// A query needs `&mut World` to build its `QueryState`, and this takes
-    /// `&self` because a **paint** calls it — the frontend holds the sim shared.
-    /// The filter is by component, so it is correct; it is the *breadth* that is
-    /// unfortunate.
-    ///
-    /// **Bevy 0.19 made that breadth wider.** Resources are components now, kept
-    /// on dedicated entities, so this walks those too. Nothing here can carry
-    /// `Working`, so the answer is unchanged — but a future broad walk that
-    /// filters on something a resource *could* have would silently include them,
-    /// which is the trap worth knowing about before writing the next one.
+    /// `iter_entities` rather than a query because a query needs `&mut World`
+    /// for its `QueryState` and a paint calls this with the sim shared. The
+    /// filter is by component, so it is correct; the *breadth* is unfortunate,
+    /// and Bevy 0.19 widened it — resources are components on dedicated
+    /// entities, so this walks those too. Nothing here can carry `Working`, but
+    /// a broad walk filtering on something a resource *could* have would
+    /// silently include them.
     #[must_use]
     pub fn working(&self) -> Option<tower::Working> {
         self.world
@@ -2363,15 +2142,13 @@ impl Sim {
 
     /// The stacks the player is standing over, if they are open (§10, §19).
     ///
-    /// **`None` everywhere but an archive with a maze open**, and for the same
-    /// reason [`Sim::instruments`] is empty outside the laboratory: it goes
-    /// through the stacks, which are found relative to `Cwd`. So the map is a
-    /// property of where the player is, and a frontend cannot carry it out of
-    /// the room and show something `survey` would not.
+    /// `None` everywhere but an archive with a maze open, for the reason
+    /// [`Sim::instruments`] is empty outside the laboratory: the stacks are
+    /// found relative to `Cwd`, so a frontend cannot carry the map out of the
+    /// room and show something `survey` would not.
     ///
-    /// Built fresh rather than cached, and called once a tick by the frontend's
-    /// panel — a 49-cell `Vec` at 1 Hz, against `Instrument`'s recorded
-    /// objection to allocating *per frame*, which is a different rate entirely.
+    /// Built fresh rather than cached, and called once a tick — a 49-cell `Vec`
+    /// at 1 Hz, where `Instrument`'s objection was to allocating per *frame*.
     #[must_use]
     pub fn stacks(&self) -> Option<orbs_render::Stacks> {
         let stacks = crate::execute::stacks(&self.world)?;
@@ -2387,35 +2164,45 @@ impl Sim {
     /// Replace the orb's voice — CLAUDE.md rule 6's hot reload.
     ///
     /// A frontend owns the file watcher (rule 3: the sim is called, never
-    /// hosted; rule 8: no async here) and calls this **between** steps, so a
-    /// reload lands on a tick boundary and never mid-schedule.
+    /// hosted; rule 8: no async here) and calls this between steps, so a reload
+    /// lands on a tick boundary and never mid-schedule.
     ///
-    /// # Replay
+    /// Replay is safe: no line reaches a decision, so `(seed, submissions)`
+    /// still replays to the same world. Recipes will not have this property, and
+    /// when they arrive the content has to be versioned into the submission log.
     ///
-    /// Safe. No line reaches a decision — prose is presentation over a record
-    /// that was already built, so `(seed, submissions)` still replays to the
-    /// same world. **Recipes will not have this property**, and when they arrive
-    /// the content they came from has to be versioned into the submission log.
-    ///
-    /// That claim was **false while `recall_` keys fed the scene**: every one is
-    /// a `NounKind::Topic`, so renaming one mid-session changed what the parser
-    /// resolves. [`Topics`](crate::tower::Topics) is snapshotted at construction
-    /// and deliberately not touched here, which is what makes the paragraph above
-    /// true again — a new manual subject needs a relaunch, its text does not.
+    /// It was false while `recall_` keys fed the scene, every one a
+    /// `NounKind::Topic`. [`Topics`](crate::tower::Topics) is snapshotted at
+    /// construction and not touched here, so a new manual subject needs a
+    /// relaunch and its text does not.
     pub fn set_prose(&mut self, prose: Prose) {
         self.world.insert_resource(prose);
     }
 
-    /// The orb's voice, for the handful of lines a **frontend** must speak.
+    /// The orb's voice, for the handful of lines a frontend must speak.
     ///
     /// Almost nothing needs this: prose belongs on a record, and a frontend
-    /// drawing a record gets the sentence with it. The exception is a screen the
-    /// sim has no record for — §9's "window too small" — which is still authored
-    /// prose and still rule 6's, so it is read from here rather than written as a
-    /// literal in the Bevy crate.
+    /// drawing one gets the sentence with it. The exception is a screen the sim
+    /// has no record for — §9's "window too small" — which is still rule 6's
+    /// prose rather than a literal in the Bevy crate.
     #[must_use]
     pub fn prose(&self) -> &Prose {
         self.world.resource::<Prose>()
+    }
+
+    /// Replace the manual, for `ORBS_CONTENT`.
+    ///
+    /// The pair of [`set_prose`](Self::set_prose) and for the same reason: rule
+    /// 6 is not satisfied by `include_str!` alone, and ten thousand words that
+    /// needed a recompile per edit is what rule 6 exists to prevent.
+    pub fn set_manual(&mut self, manual: crate::content::Manual) {
+        self.world.insert_resource(manual);
+    }
+
+    /// The manual a reader is drawn from.
+    #[must_use]
+    pub fn manual(&self) -> &crate::content::Manual {
+        self.world.resource::<crate::content::Manual>()
     }
 
     /// Commands resolved but not yet run.
@@ -2432,15 +2219,13 @@ impl Sim {
 
     /// Change the register everything said from now on is spoken in.
     ///
-    /// DESIGN.md §3's high-threat tonal register. In Phase 8 this is driven by
-    /// threat rather than set by hand; until the threat system exists it is
-    /// reachable directly, which is what makes the three typefaces and §3's
-    /// corruption exemption something a person can see rather than something an
-    /// example prints.
+    /// DESIGN.md §3's high-threat tonal register, driven by threat in Phase 8
+    /// and reachable directly until then, so the three typefaces and §3's
+    /// corruption exemption are something a person can see.
     ///
     /// Nothing about the *content* changes — §3: *"the renderer corrupts it; the
-    /// model records it faithfully."* Only the face a frontend draws with does,
-    /// and log lines refuse the eldritch one however this is set.
+    /// model records it faithfully."* Only the face a frontend draws with, and
+    /// log lines refuse the eldritch one however this is set.
     pub fn set_register(&mut self, register: Presentation) {
         self.world
             .resource_mut::<Scrollback>()
@@ -2451,8 +2236,7 @@ impl Sim {
     /// What the prompt reads, before the caret.
     ///
     /// `<name> $ `. Composed here rather than in a view because the name is
-    /// world state — see [`Wizard`] — and because both
-    /// frontends must show the same one.
+    /// world state (see [`Wizard`]) and both frontends must show the same one.
     #[must_use]
     pub fn prompt(&self) -> String {
         format!("{} $ ", self.world.resource::<Wizard>().name())

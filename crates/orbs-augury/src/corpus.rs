@@ -1,23 +1,15 @@
 //! What a register is trained on, and what it is measured against.
 //!
-//! # Two registers, one of everything else
+//! Two registers, one of everything else. The prompt's reader and the spell's
+//! are the same architecture over the same vocabulary asking the same question
+//! — *which statement is this, and which words are its argument* — so only the
+//! answer space and the corpus differ, and that difference is gathered here
+//! rather than spread across two trainers that would drift (§19).
 //!
-//! The prompt's reader and the spell's reader are the same architecture over the
-//! same vocabulary asking the same question — *which statement is this, and which
-//! words are its argument*. Only the answer space and the corpus differ, so this
-//! is the whole of the difference between them, gathered in one place rather than
-//! spread across two trainers that would drift.
-//!
-//! §19 records that shape going wrong more often than any other in this project:
-//! two expressions of one rule, one of them wrong later.
-//!
-//! # A refusal is not a class
-//!
-//! [`Sample::reject`] marks an example with [`crate::REJECT`], which is out of range for
-//! both heads on purpose. It is a sentinel meaning *this example has no class*,
-//! and the trainer never shows such a row to the class head — a sentence that
-//! asks for nothing has no right answer, so any target given is noise. The binary
-//! head is what learns it, and that is the only head a refusal trains.
+//! A refusal is not a class. [`Sample::reject`] marks an example with
+//! [`crate::REJECT`], out of range for both heads on purpose, so the trainer
+//! never shows it to the class head. The binary head is the only one a refusal
+//! trains.
 
 use orbs_sim::content::{CORPUS_CAP, Phrasings, corpus_scene};
 
@@ -70,16 +62,13 @@ impl Register {
 
     /// How much of the encoding to drop while training.
     ///
-    /// **A training-time knob only** — burn's `Dropout` is inert on a backend
-    /// with no autodiff, which is every backend a reader is loaded on, so this
-    /// never has to match what the weights were written with.
+    /// A training-time knob only: burn's `Dropout` is inert on a backend with no
+    /// autodiff, which is every backend a reader is loaded on.
     ///
-    /// Higher for spells because the corpus repeats itself far more. Control
-    /// flow has nothing to expand over — five of the eleven shapes take no
-    /// argument at all — so [`Corpus::spells`] lifts them by *repeating* what
-    /// they have, up to twelve times. A corpus with a row twelve times over is
-    /// one a reader can memorise in a pass or two, and the training loss reaching
-    /// 0.0008 by epoch 40 is what that looks like from outside.
+    /// Higher for spells, because control flow has nothing to expand over —
+    /// five of the eleven shapes take no argument — so [`Corpus::spells`] lifts
+    /// them by repeating what they have, and a reader memorises that in a pass
+    /// or two.
     #[must_use]
     pub const fn dropout(self) -> f64 {
         match self {
@@ -124,9 +113,9 @@ impl Corpus {
     /// The prompt's: every phrasing of every verb, and the sentences that ask
     /// for nothing.
     ///
-    /// **Capped, because the expansion was a product.** `move {reagent} {place}`
-    /// is the widest signature in `Verb::ALL` and its cross-product made it 47%
-    /// of the corpus — a prior strong enough that `take me over to the lectern`
+    /// Capped, because the expansion was a product: `move {reagent} {place}` is
+    /// the widest signature in `Verb::ALL` and its cross-product made it 47% of
+    /// the corpus — a prior strong enough that `take me over to the lectern`
     /// came back `move lectern`. See `Phrasings::corpus_capped`.
     #[must_use]
     pub fn verbs(vocabulary: &Vocabulary) -> Self {
@@ -138,12 +127,10 @@ impl Corpus {
             .iter()
             .filter_map(|example| Sample::encode(example, vocabulary))
             .collect();
-        // **Refusals come from the content file, not a `const`.** Twenty
-        // hand-written negatives against eleven thousand commands is not a
-        // class, it is a rounding error — the reader refused 0.0% of
-        // everything. They expand over the same nouns as the commands do,
-        // deliberately: a refusal must not be learnable as *"a sentence with no
-        // game words in it"*.
+        // Refusals come from the content file, not a `const`: twenty
+        // hand-written negatives against eleven thousand commands left the
+        // reader refusing 0.0% of everything. They expand over the same nouns,
+        // so a refusal is not learnable as *"a sentence with no game words"*.
         let refusals = rejected(&phrasings.refused(&scene), vocabulary);
         let counted = refusals.len();
         learn.extend(refusals);
@@ -155,9 +142,8 @@ impl Corpus {
                 .iter()
                 .filter_map(|example| Sample::encode(example, vocabulary))
                 .collect(),
-            // **Kept apart from the command holdout, and scored the opposite
-            // way.** A refusal here is the right answer; on the commands above
-            // it is a miss.
+            // Kept apart from the command holdout and scored the opposite way:
+            // a refusal here is the right answer, and on the commands a miss.
             refused: rejected(&phrasings.refused_holdout(&scene), vocabulary),
             refusals: counted,
         }
@@ -166,21 +152,14 @@ impl Corpus {
     /// The spell's: every phrasing of every control-flow shape, every phrasing
     /// of a *command*, and the lines that must come back untouched.
     ///
-    /// # The command class is thinned to the size of a shape
+    /// The command class is thinned to the size of a shape: `phrasings.toml` is
+    /// eleven thousand lines against `spellings.toml`'s few thousand, all of
+    /// them the single class *this is a command*. Left whole, the reader learns
+    /// that answering *command* is nearly always safe.
     ///
-    /// `phrasings.toml` is eleven thousand lines against `spellings.toml`'s few
-    /// thousand, and all eleven thousand belong to the single class *this is a
-    /// command*. Left whole it would be three quarters of the corpus and one
-    /// answer out of twelve — the reader would learn that answering *command* is
-    /// nearly always safe, which is exactly the prior that makes control flow
-    /// unreadable.
-    ///
-    /// So it is strided down to twice the mean size of a shape's class:
-    /// computed from what the two files actually hold rather than written down
-    /// here, because a constant would be a second expression of a fact the
-    /// corpus already states. Twice, not once, because *command* really is the
-    /// commonest line in a spell and a prior that mild is a fact about the
-    /// language rather than about the expansion.
+    /// Strided down to twice the mean size of a shape's class, computed from
+    /// what the two files hold rather than written down here. Twice, not once,
+    /// because *command* really is the commonest line in a spell.
     #[must_use]
     pub fn spells(vocabulary: &Vocabulary) -> Self {
         let scene = corpus_scene();
@@ -207,19 +186,15 @@ impl Corpus {
         );
         learn.extend(commands);
 
-        // **`phrasings.toml`'s refusals, not thinned** — the sentences that ask
-        // for nothing at all, which a player who typed one into a spell wants
-        // left alone just as much as at the prompt. `spellings.toml`'s are asked
-        // for too and contribute nothing: they are canonical statements, which
-        // `unread` drops because the gate keeps every one from the reader. They
-        // are the population `measure --spells` holds to 100% instead — the
-        // claim that a working line comes back untouched.
+        // `phrasings.toml`'s refusals, not thinned: a player who typed one into
+        // a spell wants it left alone just as much as at the prompt.
+        // `spellings.toml`'s contribute nothing — they are canonical
+        // statements, which `unread` drops.
         //
-        // A refusal is not a class — it trains the binary head and no other — so
-        // the balance argument above does not reach it. Thinning them to a
-        // shape's share was tried and cost twenty-five points: 566 negatives
-        // against four thousand commands left the refusal holdout at **40%**
-        // where the prompt register, with all 2,756, reads 80%.
+        // A refusal is not a class, so the balance argument above does not
+        // reach it. Thinning them to a shape's share cost twenty-five points:
+        // 566 negatives against four thousand commands left the refusal holdout
+        // at 40% where the prompt register, with all 2,756, reads 80%.
         let mut refusing = spellings.refused(&scene);
         refusing.extend(phrasings.refused(&scene));
         let refusals = rejected(&unread(refusing), vocabulary);
@@ -261,39 +236,25 @@ const COPIES: usize = 12;
 
 /// How many examples one spell template may contribute.
 ///
-/// **Twice the prompt's `CORPUS_CAP`, and the reason is the opposite one.**
-/// There the cap fights a cross-product that made one verb 47% of the corpus;
-/// here there is exactly one two-slot shape — `if {place} has {reagent}` — and
-/// it is the shape that needs the pairs. At 24 it read **30.3%** of its holdout
-/// while every one-slot shape read 70–100%: a tagger asked to find two spans on
-/// twenty-four examples per phrasing has seen too few pairings to tell which
-/// span is which. [`balance`] holds the other end up.
+/// Twice the prompt's `CORPUS_CAP`, for the opposite reason: there the cap
+/// fights a cross-product that made one verb 47% of the corpus, and here there
+/// is one two-slot shape — `if {place} has {reagent}` — and it is the shape that
+/// needs the pairs. At 24 it read 30.3% of its holdout while every one-slot
+/// shape read 70–100%. [`balance`] holds the other end up.
 const SPELL_CAP: usize = CORPUS_CAP * 2;
 
 /// Bring the thin classes up towards the mean by repeating what they have.
 ///
-/// # The imbalance is arithmetic, not authorship
+/// The imbalance is arithmetic, not authorship: a shape's size is the size of
+/// its expansion, and five of the eleven have nothing to expand over, so their
+/// twenty authored phrasings *are* their class. `if {place} is idle` has the
+/// same phrasings and twenty-five places to say them about, so it arrives forty
+/// times larger — a fact about the noun tables, not about the language.
 ///
-/// A spell shape's size is the size of its expansion, and five of the eleven
-/// have nothing to expand over: `end`, `else`, `repeat 3`, `bide 10` and `for
-/// each way` take no argument at all, so their twenty authored phrasings *are*
-/// their class. `if {place} is idle` has the same twenty-odd phrasings and
-/// twenty-five places to say them about, so it arrives forty times larger — for
-/// a reason that is a fact about the noun tables and not about the language.
-///
-/// # Repeated rather than reweighted, and both rather than either
-///
-/// The trainer already weights a class by its rarity, clamped to 4× because a
-/// rare class weighted by raw inverse frequency dominates every gradient it
-/// touches (§19). Forty-to-one is well past what a 4× clamp can answer, and
-/// raising the clamp would reintroduce exactly the spikes it was put there to
-/// stop.
-///
-/// Repetition spreads the same correction across batches instead of
-/// concentrating it in one: eight rows of `that is all` in eight different
-/// batches move the head as far as one row weighted eight times, and none of
-/// them lurches. The weighting then sees a nearly flat distribution and
-/// contributes weights near 1, so the two compose rather than compounding.
+/// Repeated rather than reweighted, and both rather than either: the trainer
+/// weights a class by rarity, clamped to 4× (§19), and forty-to-one is past
+/// what that can answer. Repetition spreads the correction across batches
+/// instead of concentrating it in one lurching row.
 fn balance(samples: Vec<Sample>) -> Vec<Sample> {
     let mut count: std::collections::BTreeMap<u32, usize> = std::collections::BTreeMap::new();
     for sample in &samples {
@@ -312,13 +273,11 @@ fn balance(samples: Vec<Sample>) -> Vec<Sample> {
 
 /// Only the lines a spell reader will ever be shown.
 ///
-/// **`Scribe` never sees a line `spell::reads_cleanly` accepts** — a statement
-/// that parses, a call, a lone `end`. So an already-canonical refusal is input
-/// the model will never be given, and teaching it to refuse one is the same
-/// waste as teaching it to rewrite one. It also makes the trainer's report a
-/// fiction: the refusal holdout read **40%** while the shipped scrivener left
-/// 97% of the same population untouched, and the epoch-selection rule was
-/// keeping whichever pass happened to do best at a question nobody asks.
+/// `Scribe` never sees a line `spell::reads_cleanly` accepts, so an
+/// already-canonical refusal is input the model will never be given. It also
+/// made the trainer's report a fiction — the refusal holdout read 40% while the
+/// shipped scrivener left 97% of the same population untouched, so epoch
+/// selection kept whichever pass did best at a question nobody asks.
 fn unread(lines: Vec<String>) -> Vec<String> {
     lines
         .into_iter()
@@ -353,11 +312,10 @@ mod tests {
 
     #[test]
     fn a_spell_corpus_is_not_three_quarters_commands() {
-        // **The skew this file exists to prevent.** Every phrasing of every verb
-        // belongs to one class of twelve; left whole it teaches the reader that
-        // *command* is nearly always safe, which is the prior that makes control
-        // flow unreadable. The same defect as `move` owning 47% of the prompt's
-        // corpus, one register along.
+        // The skew this file exists to prevent: every phrasing of every verb
+        // belongs to one class of twelve, and left whole it teaches the reader
+        // that *command* is nearly always safe. The same defect as `move`
+        // owning 47% of the prompt's corpus, one register along.
         let corpus = Corpus::spells(&Vocabulary::builtin());
         let command = u32::try_from(spelling::command()).expect("twelve classes");
         let commands = corpus
@@ -380,10 +338,10 @@ mod tests {
 
     #[test]
     fn no_shape_is_forty_times_another() {
-        // **What [`balance`] is for.** `end` has twenty authored phrasings and
+        // What `balance` is for. `end` has twenty authored phrasings and
         // nothing to expand over; `if {place} is idle` has twenty-odd and
-        // twenty-five places to say them about. Left alone the class head learns
-        // the noun tables rather than the language.
+        // twenty-five places to say them about. Left alone the class head
+        // learns the noun tables rather than the language.
         let corpus = Corpus::spells(&Vocabulary::builtin());
         let mut counted: Vec<(String, usize)> = spelling::shapes()
             .iter()
