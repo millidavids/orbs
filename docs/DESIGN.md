@@ -2457,6 +2457,87 @@ they are re-pointed at the phases that now need them rather than quietly dropped
 
 ## 19. Decisions log
 
+### A siege waits for the player, and logs are its third surface (`0.17.0`)
+
+**Rule: the enemy acts only when a round resolves, never on a tick.** An open
+siege left alone for an hour is exactly where it was. The siege itself already
+worked this way (`nothing_moves_until_you_hold`). `drift` was the exception: it
+poisoned a log every ~300 world ticks with no guard, so a player who stayed in
+the calm layer was lied to, and so was one who opened a siege and stepped away.
+
+**Why a pause, not a guard.** The first plan guarded `drift` to a *running*
+siege. A review found that `defend` followed by walking away would then poison
+every log for as long as the player was gone. The rule is an accessibility
+commitment: players of all abilities, including those who take a long time to
+act, lose nothing by taking it. Pillar 4, *urgency is consensual*, read
+strictly.
+
+- **`drift` is gone, and log poisoning is `assault::strike`'s third surface.**
+  The roll's quotient picks the surface among those with something on them, and
+  then the node. The first version kept a fixed order (clock, then script, then
+  log) so that no existing strike would move. A review found that ordering left
+  the log dead: every tower starts holding about twenty spells, so a round
+  reached a log only after all of them had been rewritten. The surface is still
+  one draw from `RngStream::Siege`.
+  - The warning is telegraphed like the others: *"a log is not telling the
+    truth"*, never which log. No `shielded` claim is made for logs, because
+    the forge cannot charm one.
+  - All three pools skip shut rooms and sort by name, then `NodeId`, so a
+    restored world picks the same node.
+  - A spell is only in the pool if a line of it can be corrupted, and a `#`
+    comment cannot be. Before this, a spell with no such line was "rewritten"
+    with nothing changed: the round announced it, `verify` found nothing, and
+    the spell stayed in the pool for good.
+  - A retimed spell's drag comes from the part of the roll that the surface and
+    the node did not use. Reusing `choice % 3` made it always 1 once there were
+    three surfaces, which an `xhigh` review caught.
+- **A log lies only while a siege runs.**
+  - One predicate states the rule, `tower::besieged`, and two places read it.
+    - `quiet_logs`, a tick system that draws nothing, clears every lying log
+      whenever no siege is running. It does this silently, the way a swapped
+      reagent settles. Because it watches for the state rather than the event,
+      any way a siege ends keeps the rule without having to remember it. The
+      first version cleared logs in `settle`, and `strike` skipped them on the
+      last round, so a new ending would have had to do both.
+    - `strike` does not reach a log once the round has ended the siege.
+      Otherwise its warning would name a lie that is already gone.
+  - A poisoned log with nothing in it reads back one forged entry, drawn
+    damaged, so `peruse` shows what `verify` finds. Every log starts with its
+    room's boot line, so this happens only after the scrollback has dropped a
+    log's lines. Skipping such logs instead would have made the pool read the
+    scrollback, and the scrollback is trimmed on save, so a restored world
+    would pick a different log.
+  - The three `besieged` copies (quintessence, imbue, and this change's load
+    path) are now one function beside `Siege`.
+  - `FORMAT` 15 clears every poisoned log in an older save, siege or no siege.
+    No round could reach a log before this change, so every lie in one of
+    those saves came from calm-layer drift. An earlier draft cleared logs on
+    every load; that missed a save with a siege open and would have hidden any
+    later bug that left a log lying outside one.
+- **Quintessence is not part of this, and the review that raised it was
+  answered.** An open siege suspends the calm trickle, and each round grants
+  `REGEN_PER_ROUND` instead. That rule is the same promise §14 already made:
+  inside a siege, time spent neither pays nor costs. Opening a siege is the
+  player's choice, and it is the per-tick trickle that the choice gives up.
+- **`drift`'s draw survives it.** `substitution` now draws twice per tick from
+  `Threat` and throws the first away. `drift` drew once per tick, first, and
+  unconditionally, so the sequence is identical and every seed's swap schedule
+  holds. The sweep pins do not move. **Replays do not all hold.** A recorded
+  siege that struck something now lands on a different node, and a calm-layer
+  replay that read a drift-poisoned log now reads a clean one.
+- **Vigilance moves onto the shelf.** `vigilance_1` only widened drift's
+  interval, so it would have bought nothing outside a siege. It now widens
+  `SWAP_INTERVAL`, and its weave line says the shelf, not "sabotage". A tower
+  without vigilance is unchanged, and no balance policy takes a grant.
+- **The calm layer is the shelf alone**, so §8.1's *"is it the log, or the
+  shelf?"* is now a question only a siege asks. A swapped reagent still settles
+  after `WEARS_OFF`.
+
+Named, not settled:
+- Vigilance does not touch `assault::ODDS`.
+- `Rewritten` and `Retimed` still outlast the siege, and a spell stays wrong
+  until it is purged. Whether they should settle with the logs is open.
+
 ### The orb wakes to a menu, not a tower (`0.16.0`)
 
 **The game had no front door.** Launching read `orbs-save.toml` and put a world
@@ -5518,6 +5599,12 @@ vertex today**, and stops being one when `menagerie → sanctum` and the siege's
 drop land.
 
 #### The calm layer breaks the automation contract, and §5.1 already forbids it
+
+> **Resolved at `0.17.0`.** See *"A siege waits for the player, and logs are its
+> third surface"*. Two quotes below are wrong and are kept as written: the
+> `tower::audit` line is not in the code, and neither is a *"roughly 1500
+> unattended ticks"* comment in `drift`. The measured fact they stood for was
+> true: seed 3's `verify` after `meditate 1800` named all five logs.
 
 **This is the most actionable finding and it is a defect, not a design.**
 

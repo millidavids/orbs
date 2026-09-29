@@ -279,3 +279,22 @@ fn the_ambient_swap_never_takes_the_fire() {
         );
     }
 }
+
+/// §5.1: the calm layer touches *"environmental only — never scripts,
+/// schedules, or logs."* It poisoned every log in the tower within half an
+/// hour until `0.17.0` (§19).
+#[test]
+fn the_calm_layer_never_poisons_a_log() {
+    use bevy_ecs::prelude::With;
+    use orbs_sim::tower::{Log, Name, Poisoned};
+    // Seed 3 poisoned a log inside the first 300 ticks when it still could.
+    let mut sim = Sim::new(3);
+    sim.step_n(1800);
+    let world = sim.world_mut();
+    let lying: Vec<String> = world
+        .query_filtered::<&Name, (With<Log>, With<Poisoned>)>()
+        .iter(world)
+        .map(|name| name.0.clone())
+        .collect();
+    assert!(lying.is_empty(), "the calm layer poisoned {lying:?}");
+}

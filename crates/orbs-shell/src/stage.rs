@@ -105,7 +105,7 @@ impl Stage {
 
     /// Whether the tower's clock may run.
     ///
-    /// Not cosmetic: `tower::drift` rolls once per tick, so a sim running
+    /// Not cosmetic: `tower::substitution` rolls every tick, so a sim running
     /// through boot advances its RNG stream by a wall-clock-dependent number of
     /// draws and the same seed builds a different world.
     #[must_use]
@@ -278,7 +278,7 @@ mod tests {
 
     #[test]
     fn the_world_is_stopped_until_the_game_arrives() {
-        // `tower::drift` rolls once per tick, so ticks during boot advance the
+        // `tower::substitution` rolls every tick, so ticks during boot advance the
         // RNG stream by a wall-clock-dependent amount.
         for stage in Stage::SEQUENCE {
             assert!(!stage.world_runs(), "{stage:?} let the clock run");

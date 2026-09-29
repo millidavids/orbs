@@ -23,15 +23,15 @@
 use orbs_sim::{Save, Sim};
 
 /// The `orbs-balance` seed set, for the same reason it uses them: one seed is
-/// one sample, and `drift` and `substitution` fire on a schedule that is fixed
-/// in tick space per seed. 3 poisons a log early and 0 swaps a reagent; 11 and
-/// 42 are quiet through both.
+/// one sample, and `substitution` fires on a schedule that is fixed in tick
+/// space per seed.
 const SEEDS: [u64; 4] = [0, 3, 11, 42];
 
 /// How far the two worlds are run side by side after the load.
 ///
-/// Long enough for the laboratory's slowest stage to land twice, a `repeat` to
-/// lap, and — on the noisy seeds — a log to be poisoned under both worlds.
+/// Long enough for the laboratory's slowest stage to land twice and a `repeat`
+/// to lap. A log is poisoned only by a siege round, which
+/// `a_siege_saved_mid_fight_strikes_the_same_logs` covers.
 ///
 /// Not long enough for a reagent swap, measured rather than assumed: the first
 /// ambient one lands at tick 685 on the kindest of these four seeds and 4,387 on
@@ -288,6 +288,44 @@ fn a_loaded_tower_keeps_running_the_same_world() {
             }
         }
     }
+}
+
+/// A round picks its target from a sort, and a restored world must sort the
+/// same way: archetype order differs between a lived world and a rebuilt one.
+#[test]
+fn a_siege_saved_mid_fight_strikes_the_same_logs() {
+    let mut struck = false;
+    for seed in SEEDS {
+        let mut lived = Sim::new(seed);
+        for line in ["attend bailey", "defend", "hold"] {
+            lived.submit(line);
+            lived.step();
+        }
+
+        let text = lived.snapshot().to_toml().expect("a save renders");
+        let mut loaded = Sim::restored(&Save::from_toml(&text).expect("a save reads back"));
+        // Compared every round, because `settle` clears the logs at the end.
+        for round in 0..12 {
+            for sim in [&mut lived, &mut loaded] {
+                sim.submit("hold");
+                sim.step();
+            }
+            same(
+                &loaded,
+                &lived,
+                &format!("seed {seed}: the two sieges parted {round} rounds after the load"),
+            );
+            struck |= lived
+                .snapshot()
+                .nodes
+                .iter()
+                .any(|node| node.log && node.poisoned);
+        }
+    }
+    assert!(
+        struck,
+        "no seed's siege poisoned a log, so this compared nothing"
+    );
 }
 
 /// The clock, the rolls, and the work in flight all resume rather than restart.
@@ -1278,8 +1316,8 @@ fn the_stream_positions_are_not_interchangeable() {
     // permuted positions are *in* the document, so comparing them whole would
     // differ on the `[rng]` table alone and pass with the positions never
     // reaching a stream — the vacuous shape this file exists to refuse. What
-    // must differ is the world: two streams crossed means a different log
-    // poisoned and a different ward rolled.
+    // must differ is the world: two streams crossed means a different reagent
+    // swapped and a different ward rolled.
     straight.step_n(900);
     crossed.step_n(900);
     assert_ne!(

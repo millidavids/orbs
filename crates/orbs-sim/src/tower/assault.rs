@@ -9,12 +9,15 @@
 //! | Response | Repair occupies a pane | Diagnose and repair under pressure |
 //!
 //! Adversarial aberrations are siege-only, which is what makes Phase A safe
-//! (pillar 4). `sabotage::drift` and `sabotage::substitution` are the calm
-//! layer and are untouched here; nothing in this module runs outside a siege.
+//! (pillar 4). `sabotage::substitution` is the calm layer and is untouched
+//! here; nothing in this module runs outside a siege.
 //!
-//! This is the premise's last clause. The two surfaces added here reach a
-//! *script* — its text and its clock — so the intervention loop is debugging,
-//! which is what makes scrying load-bearing. `verify` is the diagnosis, and
+//! It runs on a resolved round and never on a tick, so an open siege waits for
+//! the player however long they take (§19).
+//!
+//! This is the premise's last clause. Two surfaces reach a *script* — its text
+//! and its clock — so the intervention loop is debugging, which is what makes
+//! scrying load-bearing; the third is a log. `verify` is the diagnosis, and
 //! *which surface do I inspect first* is §5.1's binding constraint.
 //!
 //! Telegraphed: the round that sabotages says so without saying **what** it
@@ -25,7 +28,8 @@
 
 use bevy_ecs::prelude::*;
 
-use super::node::{Held, Name};
+use super::node::{Held, Name, NodeId};
+use super::sabotage::{Log, Poisoned};
 use super::spell::Bound;
 use crate::rng::{RngStream, Rngs};
 
@@ -60,19 +64,25 @@ pub struct Rewritten {
     pub read: super::Read,
 }
 
-/// Which of the two adversarial surfaces a round reached, if either.
+/// Which adversarial surface a round reached, if any.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Reached {
     /// A spell's text was rewritten.
     Script,
     /// A bound spell's clock was dragged.
     Clock,
+    /// A domain's log was poisoned.
+    Log,
 }
 
 /// Roll for sabotage, and do it. Called once per resolved round.
 ///
 /// The draw is unconditional and comes first, before any check that could
 /// return, and the target is that roll's *quotient* rather than a second draw.
+///
+/// A log is out of reach once the round has ended the siege: `quiet_logs`
+/// clears every log when none is running, so a log struck then would be
+/// announced and gone before anyone could look. One predicate for both.
 pub fn strike(world: &mut World) -> Option<Reached> {
     let roll: u32 = {
         let mut rngs = world.resource_mut::<Rngs>();
@@ -86,52 +96,73 @@ pub fn strike(world: &mut World) -> Option<Reached> {
     // The quotient chooses, never a second draw (§19's `drift` defect), which
     // is how `substitution` picks its pile too.
     let choice = roll / ODDS;
+    let running = super::besieged(world);
 
-    // Sorted by name, never by entity: an ECS query has no order worth relying
-    // on, and sabotage that moved between two runs of one seed fails replay.
-    let mut scripts: Vec<(Entity, String)> = world
-        .query::<(Entity, &Name, &Held)>()
-        .iter(world)
-        .map(|(entity, name, _)| (entity, name.0.clone()))
-        .collect();
-    scripts.sort_by(|a, b| a.1.cmp(&b.1));
-    scripts.retain(|(entity, _)| world.get::<Rewritten>(*entity).is_none());
-
-    let mut bound: Vec<(Entity, String)> = world
-        .query::<(Entity, &Name, &Bound)>()
-        .iter(world)
-        .map(|(entity, name, _)| (entity, name.0.clone()))
-        .collect();
-    bound.sort_by(|a, b| a.1.cmp(&b.1));
-    bound.retain(|(entity, _)| world.get::<Retimed>(*entity).is_none());
-
-    // The clock first when anything is bound: it is the surface that punishes
-    // automation (pillar 3). A tower with nothing bound falls back to the text.
-    if !bound.is_empty() {
-        let (node, _) = bound[choice as usize % bound.len()];
-        // A `shielded` spell is struck and holds. Skipped *after* the choice:
-        // filtering it out of `bound` would change which spell the same roll
-        // reaches and move every seed's world.
-        if held(world, node) {
-            return None;
-        }
-        // From the same roll again, so this function takes exactly one draw.
-        let drag = u64::from(choice % 3) + 1;
-        world.entity_mut(node).insert(Retimed { drag });
-        super::poison(world, node);
-        return Some(Reached::Clock);
+    // A spell only counts if a line of it can be corrupted, or the round would
+    // say it rewrote one and `verify` would find nothing.
+    let mut scripts = pool::<(With<Held>, Without<Rewritten>)>(world);
+    scripts.retain(|node| {
+        world
+            .get::<Held>(*node)
+            .is_some_and(|held| held.0.iter().any(|line| corruptible(line)))
+    });
+    let surfaces: Vec<(Reached, Vec<Entity>)> = [
+        (
+            Reached::Clock,
+            pool::<(With<Bound>, Without<Retimed>)>(world),
+        ),
+        (Reached::Script, scripts),
+        (Reached::Log, pool::<(With<Log>, Without<Poisoned>)>(world)),
+    ]
+    .into_iter()
+    .filter(|(_, nodes)| !nodes.is_empty())
+    .filter(|(reached, _)| *reached != Reached::Log || running)
+    .collect();
+    if surfaces.is_empty() {
+        return None;
     }
 
-    if !scripts.is_empty() {
-        let (node, _) = scripts[choice as usize % scripts.len()];
-        if held(world, node) {
-            return None;
-        }
-        rewrite(world, node);
-        return Some(Reached::Script);
+    // The roll picks the surface among those with something on them, then the
+    // node from what is left of it. A fixed order starved the log: every tower
+    // starts holding spells, so it was reached only once all were rewritten.
+    let choice = choice as usize;
+    let (reached, nodes) = &surfaces[choice % surfaces.len()];
+    let node = nodes[(choice / surfaces.len()) % nodes.len()];
+    // A `shielded` node is struck and holds. Skipped *after* the choice:
+    // filtering it out would change which node the same roll reaches and move
+    // every seed's world.
+    if held(world, node) {
+        return None;
     }
+    match reached {
+        Reached::Clock => {
+            // From the same roll again, so this function takes exactly one draw,
+            // and from the part the surface and the node did not use: `choice %
+            // 3` is the surface itself when there are three, so it was always 1.
+            let drag = (choice / surfaces.len() / nodes.len() % 3) as u64 + 1;
+            world.entity_mut(node).insert(Retimed { drag });
+            super::poison(world, node);
+        }
+        Reached::Script => rewrite(world, node),
+        Reached::Log => super::poison(world, node),
+    }
+    Some(*reached)
+}
 
-    None
+/// What a round can reach on one surface, in an order a restored world agrees
+/// with.
+fn pool<F: bevy_ecs::query::QueryFilter>(world: &mut World) -> Vec<Entity> {
+    // Never a shut room's: a strike there latches a rail mark on a box drawn
+    // dark, a fault nobody can walk in and find.
+    let mut nodes: Vec<(Entity, String, NodeId)> = world
+        .query_filtered::<(Entity, &Name, &NodeId), (F, Without<super::Sealed>)>()
+        .iter(world)
+        .map(|(entity, name, id)| (entity, name.0.clone(), *id))
+        .collect();
+    // Name, then `NodeId`: archetype order differs between a lived world and a
+    // rebuilt one, and a name alone ties when two rooms hold one spell.
+    nodes.sort_unstable_by(|(_, a, x), (_, b, y)| a.cmp(b).then(x.cmp(y)));
+    nodes.into_iter().map(|(entity, _, _)| entity).collect()
 }
 
 /// Whether a live `shielded` charm is holding this node.
@@ -239,6 +270,10 @@ fn corrupt(line: &str) -> String {
 /// - a set — `for each way-` binds a cursor over nothing, so the body never
 ///   runs at all rather than running against a lie.
 fn corruptible(line: &str) -> bool {
+    // A comment compiles to nothing, so corrupting one changes nothing.
+    if line.trim_start().starts_with('#') {
+        return false;
+    }
     let words: Vec<&str> = line.split_whitespace().collect();
     if words.len() < 2 {
         return false;

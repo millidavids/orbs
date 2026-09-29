@@ -414,6 +414,7 @@ pub(in crate::execute) fn hold(world: &mut World) {
             match reached {
                 tower::Reached::Script => "assault_script",
                 tower::Reached::Clock => "assault_clock",
+                tower::Reached::Log => "assault_log",
             },
             &[],
             Role::Danger,

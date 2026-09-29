@@ -58,7 +58,10 @@ use super::node::NodeSave;
 ///   `mastery::caught_up`. `BeastSave`'s wiring became optional here too.
 /// - 14, a beast's turned wires. Absence is the honest reading, so `migrate`
 ///   does nothing and the bump buys only the version gate.
-pub const FORMAT: u32 = 14;
+/// - 15, a log lies only while a siege runs. Every poisoned log in an older
+///   document is calm-layer drift, which no round announced, so the migration
+///   clears them all.
+pub const FORMAT: u32 = 15;
 
 /// Bring an older document up to [`FORMAT`], or say why it cannot be.
 ///
@@ -83,6 +86,7 @@ pub const FORMAT: u32 = 14;
 /// | 11 → 12 | The menagerie's chant replaced by the circle: four syllable nodes and their readings, gone | Yes — drop the nodes; a figure mid-song loads as a circle with no beast |
 /// | 12 → 13 | `[progress] opened` gains `circle`, whose absence draws lesser beasts | Yes — an open tower gains the key; a sealed one catches up on its own |
 /// | 13 → 14 | A waiting beast gains `turned`, its turned wires | Yes — absent is none turned, which is what it was |
+/// | 14 → 15 | Calm-layer log drift removed; a log lies only in a siege | Yes — clear every poisoned log |
 ///
 /// Padding a stream is exact: `Rngs::restore` winds a stream forward from the
 /// master seed by the stored position, so nought is precisely a world that
@@ -182,6 +186,14 @@ fn migrate(mut save: Save) -> Result<Save, super::SaveError> {
         && !opened.iter().any(|key| key == crate::tower::opened::CIRCLE)
     {
         opened.push(crate::tower::opened::CIRCLE.to_owned());
+    }
+
+    // 14 → 15: before this no round could reach a log, so every lying one is
+    // the calm layer's, siege or no siege (§19).
+    if save.world.format < 15 {
+        for node in save.nodes.iter_mut().filter(|node| node.log) {
+            node.poisoned = false;
+        }
     }
 
     save.world.format = FORMAT;

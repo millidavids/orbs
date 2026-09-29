@@ -116,7 +116,7 @@ impl Plugin for SimPlugin {
             })
             .insert_resource(Time::<Fixed>::from_hz(1.0))
             // Gated on boot being over and a tower having been chosen. Not
-            // cosmetic: `tower::drift` rolls once per tick, so ticking through
+            // cosmetic: `tower::substitution` rolls every tick, so ticking through
             // a wall-clock animation would advance the RNG stream by however
             // long boot took — the same seed, a different world. A menu is the
             // same argument with a longer clock. A `run_if` on `FixedUpdate` is

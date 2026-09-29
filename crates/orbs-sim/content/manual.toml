@@ -316,6 +316,8 @@ lines = [
   "the clocks      a bound spell retimed so it fires uselessly early or late",
   "the logs        lines written to send you looking in the wrong place",
   "",
+  "Only the world is touched while the tower is quiet: a swapped reagent settles back on its own if nobody catches it. The other three are the enemy's work, and it only works when a siege round resolves. A siege left open waits for you, however long you take.",
+  "",
   "how to find it",
   "",
   "`verify <thing>` checks one surface and says whether it is sound. It is cheap, it is instant, and it is the whole diagnosis. You do not have to spot anything with your eyes.",
@@ -353,7 +355,7 @@ lines = [
   "",
   "while it runs",
   "",
-  "Sieges are the one part of the game with a clock, and the tampering does not stop while one is on. What is bound keeps running, and what is bound is what the enemy is rewriting behind you.",
+  "A siege waits for you. The enemy moves only when you `hold`, and a siege left open is exactly where you left it, however long you take. What is bound keeps running meanwhile, and what is bound is what the enemy rewrites behind you each time a round resolves.",
   "",
   "`verify` still works during a siege, and still answers in one command. That is deliberate: nothing here requires fast typing.",
 ]

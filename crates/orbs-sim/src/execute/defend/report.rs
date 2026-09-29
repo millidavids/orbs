@@ -162,7 +162,6 @@ pub(super) fn settle(world: &mut World, rampart: Entity, outcome: Outcome) {
         Outcome::Held => tower::mend_by(world, siege::VICTORY_MEND),
         Outcome::Fallen => tower::wear_by(world, siege::DEFEAT_WEAR),
     };
-
     // Escrow: progress-scaled, with a floor (§11.5). Losing at 60% keeps
     // something worth having, which stops a lost siege being an evening thrown
     // away.

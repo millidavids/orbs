@@ -20,7 +20,6 @@
 use bevy_ecs::prelude::*;
 use orbs_render::{FieldName, Presentation, RecordKind, Records, Role};
 
-use super::charm;
 use super::node::{Name, NodeId};
 use crate::parser::Verb;
 use rand::Rng as _;
@@ -39,6 +38,22 @@ pub struct Poisoned;
 /// Mark `target` as tampered with.
 pub fn poison(world: &mut World, target: Entity) {
     world.entity_mut(target).insert(Poisoned);
+}
+
+/// A log lies only while a siege runs, so with none running every log tells the
+/// truth again. A system, so every way a siege can end keeps the rule rather
+/// than each remembering it (§19). Silently, like a swapped reagent settling.
+pub fn quiet_logs(
+    sieges: Query<&super::Siege>,
+    lying: Query<Entity, (With<Log>, With<Poisoned>)>,
+    mut commands: Commands,
+) {
+    if sieges.iter().any(super::Siege::running) {
+        return;
+    }
+    for log in &lying {
+        commands.entity(log).remove::<Poisoned>();
+    }
 }
 
 /// Whether `target` has been tampered with.
@@ -182,7 +197,8 @@ pub fn restore(world: &mut World, node: Entity) -> Option<String> {
 /// 0.058 and staying there. §5.1 caps aberration arrival *"so repairs cannot
 /// spiral"*.
 ///
-/// The number is swept, not chosen. Downtime is `WEARS_OFF / SWAP_INTERVAL`, so
+/// The number is swept, not chosen. Downtime is `WEARS_OFF / SWAP_INTERVAL`
+/// without vigilance, which only makes it smaller, so
 /// the two constants are set together: (1200, never) lost an unattended tower
 /// 42% of its rate permanently, (1200, 1800) lost 60% of every window. 300
 /// against 3600 is 8% — short enough that waiting one out is never better than
@@ -212,94 +228,11 @@ pub fn settling(now: Res<Tick>, lies: Query<(Entity, &Substituted)>, mut command
     }
 }
 
-/// Roughly how many ticks pass between interferences.
-///
-/// §15's scenario is fifteen minutes — 900 ticks at 1 Hz — so this puts a
-/// handful in a tester's session: log-poisoning is *met* rather than described,
-/// and a clean log is still the normal case a tampered one stands out against.
-///
-/// §5.3 caps aberration arrival so repairs cannot spiral.
-const DRIFT_INTERVAL: u64 = 300;
-
-/// Interfere with something, occasionally.
-///
-/// Rolled from the seeded stream — the first thing in the game to roll at all.
-/// [`RngStream::Threat`] specifically: §19 gives each subsystem its own stream
-/// so a roll here cannot perturb the parser's.
-pub fn drift(
-    mut rngs: ResMut<Rngs>,
-    // Never a log in a room the player cannot enter: a strike there latches a
-    // rail mark on a box drawn dark, a fault nobody can walk in and find.
-    // `tower::Sealed` marks the shut rooms for exactly this query.
-    logs: Query<(Entity, &Name, &NodeId), (With<Log>, Without<Poisoned>, Without<super::Sealed>)>,
-    // Not a query filter, and it cannot be. A charm has no expiry system — it
-    // is an interval, so a lapsed one is still a present component — and
-    // `Without<Charmed>` would shield a log for ever after its first charm.
-    charmed: Query<&charm::Charmed>,
-    now: Res<crate::tick::Tick>,
-    taken: Res<super::Taken>,
-    mut commands: Commands,
-) {
-    // Drawn before anything can return. An integer draw rather than a ratio
-    // helper: the same arithmetic on every platform and every `rand` release,
-    // which replay depends on.
-    //
-    // The draw used to sit *after* the "is there a log left to poison" check,
-    // so once every domain log was poisoned this system stopped drawing and
-    // every subsequent `substitution` roll shifted one position along the
-    // shared `Threat` stream — the swap schedule was a function of how many
-    // logs existed. Both systems now draw once per tick, unconditionally.
-    let roll: u64 = rngs.stream(RngStream::Threat).random();
-
-    // Sorted by name, not query order — the other half of the fix above.
-    // `logs.iter().next()` is archetype order, which in a *lived* world depends
-    // on which log was poisoned when and in a *rebuilt* one is spawn order, so
-    // a world reloaded from a save poisoned a different log than the session
-    // that wrote it, from the same seed on the same tick.
-    let mut surfaces: Vec<(Entity, &Name, NodeId)> = logs
-        .iter()
-        .map(|(entity, name, id)| (entity, name, *id))
-        .collect();
-    // `NodeId` breaks the tie, or the sort is not a total order:
-    // `sort_unstable` promises nothing for equal keys, so two same-named logs
-    // fall back to the archetype order this sort exists to remove. The id is
-    // safe as a secondary key because a save carries it.
-    surfaces.sort_unstable_by(|(_, a, x), (_, b, y)| a.0.cmp(&b.0).then(x.cmp(y)));
-
-    // The Ley Line's `vigilance` widens the interval, so the calm layer strikes
-    // less often by exactly the tiers taken. The draw is unchanged, so a tower
-    // with no vigilance keeps every replay it ever had.
-    let interval = vigilant_interval(DRIFT_INTERVAL, super::grant::vigilance_percent(&taken));
-    if !roll.is_multiple_of(interval) {
-        return;
-    }
-
-    // Drawn from the pool, not `first()`: taking the sort's head turns a
-    // determinism fix into content — `archive.log` first, every session, every
-    // seed. The index reuses `roll`, whose quotient is untouched entropy once it
-    // has cleared the interval, so the shared stream costs no extra draw.
-    let index = usize::try_from(roll / interval).unwrap_or(usize::MAX) % surfaces.len().max(1);
-    let Some((target, _, _)) = surfaces.get(index).copied() else {
-        return;
-    };
-    // A `shielded` log is struck and holds, rather than never being picked.
-    // Filtering charmed nodes *out of the pool* would change which log the same
-    // roll hits — every seed's world, moved, by a thing the player did. The
-    // charm holds, it does not hide.
-    if charmed
-        .get(target)
-        .is_ok_and(|held| held.left(charm::Kind::Shielded, *now) > 0)
-    {
-        return;
-    }
-    commands.entity(target).insert(Poisoned);
-}
-
 /// How many ticks apart the calm layer strikes, under `less` percent of
 /// vigilance.
 ///
-/// `300` at nought; `400` at a quarter less, because a quarter fewer strikes
-/// is an interval a third longer. Integer, exact, and never nought.
+/// `base` at nought; a third longer at a quarter less, because a quarter fewer
+/// strikes is an interval a third longer. Integer, exact, and never nought.
 #[must_use]
 pub const fn vigilant_interval(base: u64, less: u64) -> u64 {
     let less = if less > 99 { 99 } else { less };
@@ -309,22 +242,23 @@ pub const fn vigilant_interval(base: u64, less: u64) -> u64 {
 
 /// Swap a reagent somewhere in the tower, occasionally — §8.1's world surface.
 ///
-/// A second system rather than a branch inside [`drift`], because of the
-/// stream: both draw from [`RngStream::Threat`], and interleaving two rolls in
-/// one system would make *which* surface is hit depend on how many draws had
-/// happened before. Two systems drawing once per tick each reorder nothing.
-///
-/// Rarer than log drift: a poisoned log misdirects a diagnosis, a swapped
-/// reagent stops a bound spell, and this is the more expensive to repair.
+/// The calm layer's only interference: §5.1 lets it touch the environment and
+/// never scripts, schedules or logs. Logs are a siege surface
+/// (`assault::strike`).
 pub fn substitution(
     mut rngs: ResMut<Rngs>,
     fuels: Res<crate::content::Fuels>,
+    taken: Res<super::Taken>,
     stock: Query<
         (Entity, &Name, &NodeId, &super::Stock),
         (Without<Poisoned>, Without<super::Sealed>),
     >,
     mut commands: Commands,
 ) {
+    // Thrown away. It is the draw calm-layer log drift made before it was
+    // removed, kept so every seed's swap schedule, and every replay, holds (§19).
+    let _: u64 = rngs.stream(RngStream::Threat).random();
+
     // Endless base stock only. A first pass took any pile at all and swapped
     // `ground-sage` sitting between a grind and a digestion, which destroys work
     // in flight rather than misdirecting — §5.1 keeps environmental damage in
@@ -335,11 +269,17 @@ pub fn substitution(
     // the tower always has more, so a swap costs the *spell that named it* and
     // nothing half-made. It is also what a spell names most.
     //
-    // The roll comes first, unconditionally, and the order is the whole reason
-    // this is a separate system: drawing *after* an early return means that
-    // once every endless pile is poisoned this system stops drawing and every
-    // subsequent `drift` roll shifts one position along the shared stream.
+    // The roll comes first, unconditionally: drawing after an early return
+    // would make the stream's position depend on how many piles were left.
     let roll: u64 = rngs.stream(RngStream::Threat).random();
+
+    // The Ley Line's `vigilance` widens the interval. The draw is unchanged, so
+    // a tower without it keeps every replay it ever had. Before the pool is
+    // built, because this returns on all but one tick an hour.
+    let interval = vigilant_interval(SWAP_INTERVAL, super::grant::vigilance_percent(&taken));
+    if !roll.is_multiple_of(interval) {
+        return;
+    }
 
     let mut piles: Vec<(Entity, &Name, NodeId)> = stock
         .iter()
@@ -356,19 +296,15 @@ pub fn substitution(
         .map(|(node, name, id, _)| (node, name, *id))
         .collect();
     // Sorted by name, not query order: a replay has to swap the *same* pile from
-    // the same seed. Total, for the reason `drift` gives above — `sort_unstable`
-    // leaves equal keys in the archetype order the sort exists to remove.
+    // the same seed. `NodeId` breaks ties, because `sort_unstable` leaves equal
+    // keys in the archetype order the sort exists to remove.
     piles.sort_unstable_by(|(_, a, x), (_, b, y)| a.0.cmp(&b.0).then(x.cmp(y)));
-
-    if !roll.is_multiple_of(SWAP_INTERVAL) {
-        return;
-    }
 
     // Drawn from the pool, not `first()`: taking the sort's head made *which*
     // pile is hit alphabetical for ever, on every seed. The index reuses `roll`
-    // rather than a second draw, because a draw that only happens when the swap
-    // fires would move `drift`'s stream position by a variable amount.
-    let index = (roll / SWAP_INTERVAL) as usize % piles.len().max(1);
+    // rather than a second draw, which would only happen when a swap fires and
+    // so move the stream by a variable amount.
+    let index = usize::try_from(roll / interval).unwrap_or(usize::MAX) % piles.len().max(1);
     let Some((target, name, _)) = piles.get(index).copied() else {
         return;
     };
@@ -381,10 +317,8 @@ pub fn substitution(
 
 /// Roughly how many ticks pass between reagent swaps.
 ///
-/// Twelve times rarer than [`DRIFT_INTERVAL`], and it was four: a poisoned log
-/// misleads one reading, a swapped reagent stops every loop that named it, so
-/// pricing them a step apart said they were the same order of interruption. One
-/// an hour, paired with [`WEARS_OFF`] — see there for the swept ratio.
+/// Once an hour at nought vigilance, paired with [`WEARS_OFF`], which has the
+/// swept ratio.
 const SWAP_INTERVAL: u64 = 3600;
 
 /// A file that accumulates what a domain did.

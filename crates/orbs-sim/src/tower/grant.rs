@@ -286,8 +286,8 @@ pub fn mend_bonus(world: &World) -> u32 {
 }
 
 /// How much less often the calm layer strikes, in percent — read off
-/// [`Taken`] directly, because the two sabotage systems are queries and cannot
-/// ask the world.
+/// [`Taken`] directly, because `substitution` is a system and cannot ask the
+/// world.
 #[must_use]
 pub fn vigilance_percent(taken: &Taken) -> u64 {
     (VIGILANCE_PERCENT

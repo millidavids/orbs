@@ -99,12 +99,13 @@ numbers below are not consecutive.
 | **The augury** | `0.13.19` | ✅ closed |
 | **The scrivener** | `0.14.11` | ✅ every box ticked |
 | [**The circle**](#the-circle) `menagerie/` | `0.15.7` | ✅ every box ticked · supersedes Phase 5's rhythm game |
+| [**The threshold**](#the-threshold--closed-at-01613) | `0.16.13` | ✅ every box ticked · the orb's front door |
 
 ### Open — and **this table is not a running order**
 
 | | Months | Words | |
 |---|---|---|---|
-| [The tower as one machine](#the-tower-as-one-machine) | 2 | ~3k | the dependency web, and two defects it cannot open on top of (§19) |
+| [**The tower as one machine**](#the-tower-as-one-machine) — **`0.17`, in hand** | 2 | ~3k | the dependency web, and two defects it cannot open on top of (§19) — the first fixed at `0.17.0` |
 | [Spellcraft's three](#phase-3--spellcraft) | — | ~1k | the terse register, a typed action at execution, hidden-directory authoring |
 | [Enchanting's two](#phase-9--enchanting) | — | ~1k | the shared-engine extraction, split into a refactor and a behaviour box |
 | [Breadth](#breadth) | 2 | ~4k | all seven domains, research, full drift, offline progression |
@@ -6209,18 +6210,29 @@ be stranded there** by a mechanical renumber.
 > out to be **most of the way built** — `keep::admits` already takes
 > `Essence | Scroll` by kind from any room, so potions and scrolls cross today.
 
-- [ ] **The calm layer stops poisoning logs** — §5.1 says the idle layer touches
-      *"environmental only, never scripts, schedules, or logs"* and
-      `sabotage::drift` targets `With<Log>` unguarded in the tick schedule. It
-      does not heal, either: the settling path only restores `Substituted` nodes,
-      so a poisoned log stays poisoned, and `drift`'s own comment records
-      saturation at ~1500 unattended ticks.
-      **This phase's exit is "leave, come back, and the tower ran itself"**, and a
-      tower that lies in every log after twenty-five minutes away fails it by
-      construction. Guard it to the siege, or give it the decay `substitution`
-      already has. §19 has the five tests and which two fail
-      **See it:** `ORBS_BOOT=0 ORBS_DUMP="meditate 1800; peruse laboratory.log"` —
-      a fresh tower, half an hour alone, and nothing in the log is a lie
+- [x] **The calm layer stops poisoning logs, and a siege waits** (`0.17.0`) —
+      §5.1 says the idle layer touches *"environmental only, never scripts,
+      schedules, or logs"*, and `sabotage::drift` poisoned a log every ~300
+      ticks with no guard and no healing. After half an hour alone, seed 3's
+      audit named all five logs.
+
+      **Guarding it to the siege was the plan and was wrong.** A siege has no
+      clock, so `defend` and then walking away would have kept the lies coming.
+      The rule is now that **the enemy acts only when a round resolves**. It is
+      an accessibility commitment: nobody loses anything by taking their time.
+      `drift` is gone. A log is now `assault::strike`'s third surface, and the
+      round's roll picks among the three surfaces. A log lies only while the
+      siege runs: `quiet_logs` clears it however the siege ends, and format
+      15 clears it in an older save.
+      `drift`'s draw stays in `substitution`, so the calm layer's replays hold,
+      and vigilance now widens the swap. **A `/code-review high` pass** found the
+      first version's fixed order left logs unreachable, because every tower
+      starts with about twenty spells. It also found that a script could be
+      "rewritten" with nothing changed. §19
+      **See it:** `ORBS_BOOT=0 ORBS_SEED=3 ORBS_DUMP="meditate 1800; verify; meditate 40" cargo run -p orbs`
+      reads `sound` where it named all five logs. The same line with
+      `attend bailey; defend; meditate 3600; survey rampart` reads turn 0, and
+      `cargo test -p orbs-sim --test besieging siege` holds both halves
 - [ ] **`stillness` and `vigour` can be spent** — two rows in `siege.toml` and the
       lint that stops it recurring. Both are real potions, gated and prosed, with
       **out-degree zero**: `defend::spending` refuses any name it has no entry

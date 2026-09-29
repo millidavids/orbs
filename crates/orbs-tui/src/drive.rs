@@ -1149,7 +1149,7 @@ fn play(session: &mut Session) -> std::io::Result<()> {
         // Step first. The maze arrives in step D and this is already right for it.
         let now = Instant::now();
         // The tower's clock does not run during boot, and that is correctness
-        // rather than cosmetics: `tower::drift` rolls once per tick, so a sim
+        // rather than cosmetics: `tower::substitution` rolls every tick, so a sim
         // left running through the sequence advances its RNG stream by a
         // wall-clock-dependent number of draws and the same seed reaches a
         // different world (`Stage::world_runs`). Holding `ticked` at `now` keeps

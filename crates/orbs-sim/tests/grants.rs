@@ -255,12 +255,58 @@ fn mend_puts_more_back_per_course() {
 }
 
 #[test]
-fn vigilance_widens_the_calm_layers_interval_and_nothing_else() {
+fn vigilance_widens_an_interval_by_exactly_its_share() {
     use orbs_sim::tower::vigilant_interval;
-    assert_eq!(vigilant_interval(300, 0), 300);
-    assert_eq!(vigilant_interval(300, 25), 400);
-    assert_eq!(vigilant_interval(300, 50), 600);
-    assert!(vigilant_interval(300, 99) > 300);
+    assert_eq!(vigilant_interval(3600, 0), 3600);
+    assert_eq!(vigilant_interval(3600, 25), 4800);
+    assert_eq!(vigilant_interval(3600, 50), 7200);
+    assert!(vigilant_interval(3600, 99) > 3600);
+}
+
+/// The tick the calm layer first swaps a reagent, if it does inside `limit`.
+#[cfg(debug_assertions)]
+fn first_swap(sim: &mut Sim, limit: u64) -> Option<u64> {
+    for tick in 0..limit {
+        sim.step();
+        let world = sim.world_mut();
+        if world
+            .query::<&orbs_sim::tower::Substituted>()
+            .iter(world)
+            .next()
+            .is_some()
+        {
+            return Some(tick);
+        }
+    }
+    None
+}
+
+/// The shelf is the calm layer's only surface now that logs are the siege's
+/// (§19), so vigilance has to reach it or the node buys nothing outside a
+/// fight.
+#[cfg(debug_assertions)]
+#[test]
+fn vigilance_reaches_the_shelf() {
+    // Several seeds, because a roll that is a multiple of both intervals swaps
+    // on the same tick either way — one seed in four, and seed 3 is one.
+    let moved = (0..4).filter(|seed| {
+        let mut plain = Sim::new(*seed);
+        let mut vigilant = Sim::new(*seed);
+        run(&mut vigilant, &["debug_take vigilance_1"]);
+        // The tick the line above spent, so the two clocks agree.
+        plain.step();
+        let unguarded = first_swap(&mut plain, 20_000);
+        let guarded = first_swap(&mut vigilant, 20_000);
+        assert!(
+            guarded.is_some(),
+            "seed {seed}: vigilance stopped the shelf"
+        );
+        guarded != unguarded
+    });
+    assert!(
+        moved.count() > 0,
+        "vigilance left every seed's swap schedule where it was",
+    );
 }
 
 #[cfg(debug_assertions)]

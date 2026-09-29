@@ -82,12 +82,12 @@ pub use quintessence::{
 };
 pub use renown::{Ahead, Renown, Toward};
 pub use sabotage::{
-    Log, Poisoned, Substituted, claimed, drift, emit_lines, poison, poisoned, restore, settling,
-    substitute, substitution, verify, vigilant_interval,
+    Log, Poisoned, Substituted, claimed, emit_lines, poison, poisoned, quiet_logs, restore,
+    settling, substitute, substitution, verify, vigilant_interval,
 };
 pub use satchel::{SATCHEL, Satchel};
 pub use scene::{Topics, rebuild, scene_at};
-pub use siege::{Band, Intent, Outcome, Round, Siege};
+pub use siege::{Band, Intent, Outcome, Round, Siege, besieged};
 pub use stock::{Stock, give, give_endless, held, holdings, take};
 pub use stores::{FRESH_AT, STORE, Stores, Supply, THIN_AT, WINDOW, made, stocktake, supply_of};
 pub use tally::{BOUND, EVENTS, FIGURE, SECRET, SIEGE, SIEGE_WON, Tally, Work, done, note};

@@ -264,8 +264,8 @@ pub struct Sealing(pub bool);
 /// A node under a room the player may not enter yet.
 ///
 /// The same fact as [`Opened`], as a marker, for systems that query rather than
-/// ask: calm-layer sabotage picks its target from a `Query`, and a query cannot
-/// walk to a node's room and consult a resource. [`seal`] is the only writer.
+/// ask: sabotage picks its target from a query filter, and a filter cannot walk
+/// to a node's room and consult a resource. [`seal`] is the only writer.
 #[derive(Component, Debug, Clone, Copy)]
 pub struct Sealed;
 

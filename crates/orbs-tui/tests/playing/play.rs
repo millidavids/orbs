@@ -50,10 +50,9 @@ const POLL: Duration = Duration::from_millis(10);
 
 /// A seed whose first two hundred ticks are free of ambient sabotage.
 ///
-/// `drift` and `substitution` fire from the seeded `Threat` stream, so the
-/// schedule is fixed in tick space and can be *chosen away*. Measured across
-/// seeds 0, 3, 11 and 42: 3 poisons a log inside 200 ticks, 0 swaps a reagent
-/// inside 7200, and 11 and 42 are quiet through both.
+/// `substitution` fires from the seeded `Threat` stream, so the schedule is
+/// fixed in tick space and can be *chosen away*. Only a siege poisons a log
+/// (§19); the shelf is all the calm layer touches.
 pub const QUIET: u64 = 11;
 
 /// The game's own grid, so a capture is directly comparable with `ORBS_DUMP`.

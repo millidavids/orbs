@@ -135,7 +135,7 @@ fn held(world: &mut World) -> usize {
 ///
 /// Sorted, by name rather than entity: an ECS query has no order worth relying
 /// on, and a report whose rows moved between two runs of one seed would fail the
-/// lockstep test. `sabotage::drift` follows the same rule picking a target.
+/// lockstep test. `assault::strike` follows the same rule picking a log.
 fn tampered(world: &mut World) -> Vec<String> {
     let mut found: Vec<String> = world
         .query::<(Entity, &tower::Name)>()

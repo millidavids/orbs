@@ -33,6 +33,34 @@ keyboard; `ink` is the only thing that can see a colour in the terminal build.
 
 ---
 
+### The calm layer never lies in a log, and a siege waits (`0.17.0`)
+
+§5.1: while the tower is quiet the enemy touches the shelf and nothing else. A
+log is poisoned only when a siege round resolves, and **an open siege left alone
+does nothing at all**. That is an accessibility rule (§19): nobody loses anything
+by taking their time.
+
+```bash
+ORBS_BOOT=0 ORBS_SEED=3 ORBS_DUMP="meditate 1800; verify; meditate 40" cargo run -p orbs
+ORBS_BOOT=0 ORBS_SEED=3 ORBS_DUMP="meditate 1800; peruse laboratory.log" cargo run -p orbs
+```
+
+After half an hour alone the audit reads `sound`, and no log line carries the
+tampered face. Seed 3 swapped a reagent along the way, and it settled. Before
+`0.17.0` the same audit named all five logs.
+
+```bash
+ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend; meditate 3600; survey rampart" cargo run -p orbs
+```
+
+An hour of standing at an open wall: the rampart still reads turn 0.
+`cargo test -p orbs-sim --test besieging an_open_siege_waits_for_the_player`
+holds the same claim against every surface.
+`a_round_can_poison_a_log_and_the_lie_ends_with_the_siege` holds the other
+half: a round whose roll lands on the logs says *"a log is not telling the
+truth"*, `verify` names that log, and the lie is gone once the siege is
+settled.
+
 ### The world sabotage surface — a reagent that is not what it says
 
 §8.1's second of four surfaces. A base reagent is **substituted**: its name
@@ -78,13 +106,12 @@ word nobody knew when it was written. `verify` → `purge` is therefore human-on
 and without an expiry an unattended tower had no path back at all. `purge` still
 repairs it instantly, which is what keeps finding one worth doing.
 
-**`drift` and `substitution` are two systems, not one branch.** Both draw once
-per tick from `RngStream::Threat`, so interleaving them would make which surface
-is hit depend on prior draws and invalidate every existing replay. The second is
-**appended** to the schedule, never inserted — the same rule a stream index has.
-`settling` is appended after both and draws **nothing**: it is a clock reading, so
-it cannot perturb the stream. A second draw taken only *when* a swap fires would —
-which is why the pile is chosen from the quotient of the roll that already fired.
+**`substitution` draws twice a tick from `RngStream::Threat` and throws the first
+away.** The first was calm-layer log drift's, which is gone (§19). Keeping the
+draw keeps every seed's swap schedule and every replay. `settling` comes after it
+and draws **nothing**: it is a clock reading, so it cannot perturb the stream. A
+second draw taken only *when* a swap fires would, which is why the pile is chosen
+from the quotient of the roll that already fired.
 
 ### `verify` has two forms, and looking is what costs
 
@@ -103,7 +130,7 @@ ORBS_BOOT=0 ORBS_DUMP="attend laboratory; verify; grind sage; meditate 25" cargo
 ```text
 the orb turns its attention on the whole tower. 21 ticks
 the tower is busy verifying. wait for it, or stop it   ← the grind, refused
-name: verify, state: tampered, message: these are not what they say: sanctum.log
+name: verify, state: sound, message: everything the orb can see is what it says it is
 ```
 
 **`/tower`, never `tower::root`.** The filesystem root is deliberately nameless,
@@ -3981,11 +4008,9 @@ Four more things the driver has to do, each of which failed loudly first:
   tick passes. It caught three scenarios, one of which asked for 7,200 ticks and
   got none.
 
-**Seeds are chosen, not tolerated.** `drift` poisons a log at 1/300 per tick and
-`substitution` renames a base reagent at 1/3600, both from the seeded `Threat`
-stream — so the schedule is fixed in tick space. Measured: seed 3 poisons a log
-inside 200 ticks and seed 0 swaps a reagent inside 7200; **11 and 42 are quiet
-through both**, and `play::QUIET` is 11.
+**Seeds are chosen, not tolerated.** `substitution` renames a base reagent at
+1/3600 from the seeded `Threat` stream, so the schedule is fixed in tick space
+and `play::QUIET` is 11. Logs are poisoned only by a siege round (§19).
 
 **Both frontends boot** (§19, `0.3.12`). `orbs-tui` skipped §4's sequence for a
 version on an "instant-startup" argument that was really about the development
@@ -3994,7 +4019,7 @@ are `orbs-shell`'s; the terminal supplies a frame and the engine line, so the
 card reads `crossterm 0.29` where the other says `bevy 0.19.0`.
 
 **The world does not tick through it**, and that is a determinism rule rather
-than a nicety: `tower::drift` rolls once per tick, so a sim running through nine
+than a nicety: `tower::substitution` rolls every tick, so a sim running through nine
 and a half seconds of animation would reach a different world on the same seed
 depending on how fast the machine drew a logo. Nothing is typed during boot
 either — except **leaving**, which a terminal needs because raw mode makes

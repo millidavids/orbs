@@ -51,8 +51,8 @@ pub enum RngStream {
     /// The siege: every die the tower rolls (§10, `tower::dice`).
     ///
     /// Its own stream, where sharing [`Threat`](Self::Threat) was the tempting
-    /// shortcut: that one is drawn once a tick by `drift` and again by
-    /// `substitution`, so a combat roll from it would shift the ambient sabotage
+    /// shortcut: that one is drawn twice a tick by `substitution`, so a combat
+    /// roll from it would shift the ambient sabotage
     /// schedule and invalidate every replay with a siege in it.
     Siege,
     /// The forge: the lattice a charm is bound with.

@@ -34,7 +34,16 @@ use super::{LOG, acknowledge, missing};
 pub(super) fn peruse(intent: &Intent, world: &mut World) {
     // Snapshot first: the stream being read is the stream being written to.
     let tampered = tampered_source(world, intent);
-    let listing = read_file(world, intent, None);
+    let mut listing = read_file(world, intent, None);
+    // A round can poison a log nothing has been written to yet. It still lies:
+    // one forged entry, drawn damaged, so looking finds what `verify` finds.
+    if tampered && listing.lines.is_empty() && listing.kind == RecordKind::LogLine {
+        listing.lines.push(
+            world
+                .resource::<crate::content::Prose>()
+                .line("log_forged", &[]),
+        );
+    }
     emit(world, Verb::Peruse, &listing, tampered);
 }
 

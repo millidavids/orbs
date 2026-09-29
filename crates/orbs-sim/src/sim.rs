@@ -338,14 +338,16 @@ impl Sim {
                 tower::spell::advance,
                 tower::burn,
                 tower::finish,
-                tower::drift,
-                // After `drift`, and load-bearing: both draw once per tick from
-                // `RngStream::Threat`, so reordering them would silently change
-                // every existing replay. Appended, never inserted.
+                // Draws twice a tick from `RngStream::Threat`, and was two
+                // systems: calm-layer log drift is gone (§19) and its draw
+                // stayed, so every existing replay holds.
                 tower::substitution,
                 // After the roll, and it draws nothing: a lie settling is a
                 // clock reading, so appending it perturbs no replay.
                 tower::settling,
+                // The same licence: a log settling is a question about the
+                // siege, and draws nothing.
+                tower::quiet_logs,
                 // The same licence: a barrier wearing down compares two ticks,
                 // and the sanctum's one draw is in `height_for` inside `muster`
                 // rather than in a system.

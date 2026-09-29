@@ -675,7 +675,9 @@ fn a_siege_rolls_its_own_stream_and_does_not_move_the_sabotage_schedule() {
     for _ in 0..5 {
         run(&mut fighting, "hold");
     }
-    for _ in 0..400 {
+    // 900, because seed 3's first swap lands before it: measured, so the
+    // comparison below has something in it.
+    for _ in 0..900 {
         quiet.step();
         fighting.step();
     }
@@ -684,7 +686,7 @@ fn a_siege_rolls_its_own_stream_and_does_not_move_the_sabotage_schedule() {
     quiet.step_n(40);
     fighting.step_n(40);
 
-    // Logs and shelves only. A siege is expected to corrupt spells — §5.1's
+    // Shelves only. A siege is expected to corrupt spells and logs — §5.1's
     // adversarial half, drawing from `Siege` — so the claim is narrower: the
     // ambient schedule, which draws from `Threat`, is untouched.
     //
@@ -703,9 +705,15 @@ fn a_siege_rolls_its_own_stream_and_does_not_move_the_sabotage_schedule() {
                     .map(|name| name.trim().to_owned())
                     .collect::<Vec<_>>()
             })
-            .filter(|name| !name.ends_with("spell"))
+            // A swapped pile carries its lie as a trailing `-`: `rock-salt-`.
+            .filter(|name| name.ends_with('-'))
             .collect()
     };
+    assert!(
+        !ambient(&quiet).is_empty(),
+        "nothing on the shelf was swapped, so the comparison is vacuous: {:?}",
+        said(&quiet),
+    );
     assert_eq!(
         ambient(&quiet),
         ambient(&fighting),
@@ -729,11 +737,206 @@ fn a_siege_reaches_the_automation() {
     );
 }
 
+/// Every log that is lying, by name.
+fn lying_logs(sim: &mut Sim) -> Vec<String> {
+    use bevy_ecs::prelude::With;
+    let world = sim.world_mut();
+    let mut names: Vec<String> = world
+        .query_filtered::<&tower::Name, (With<tower::Log>, With<tower::Poisoned>)>()
+        .iter(world)
+        .map(|name| name.0.clone())
+        .collect();
+    names.sort();
+    names
+}
+
+const LOG_STRUCK: &str = "a log is not telling the truth";
+
+/// Whether a siege is still being fought.
+fn fighting(sim: &mut Sim) -> bool {
+    let world = sim.world_mut();
+    world
+        .query::<&tower::Siege>()
+        .iter(world)
+        .any(tower::Siege::running)
+}
+
+/// The first seed whose siege reaches a log, found rather than assumed.
+fn a_seed_that_strikes_a_log() -> u64 {
+    (0..16)
+        .find(|seed| {
+            let mut sim = at_the_wall(*seed);
+            run(&mut sim, "defend");
+            for _ in 0..12 {
+                run(&mut sim, "hold");
+            }
+            ever_said(&sim, LOG_STRUCK)
+        })
+        .expect("no siege on sixteen seeds reached a log, so the surface is dead")
+}
+
+/// An open siege waits for the player, however long they take (§19). Nothing
+/// adversarial happens on a tick, only on a resolved round.
+#[test]
+fn an_open_siege_waits_for_the_player() {
+    use bevy_ecs::prelude::{Entity, Or, With};
+    let mut sim = at_the_wall(3);
+    run(&mut sim, "defend");
+    sim.step_n(3600);
+    run(&mut sim, "survey rampart");
+    assert_eq!(
+        last(&sim, tower::siege::TURNS),
+        Some(0),
+        "an hour of standing still advanced the siege",
+    );
+    assert_eq!(
+        lying_logs(&mut sim),
+        Vec::<String>::new(),
+        "an open siege poisoned a log while nobody held",
+    );
+    let world = sim.world_mut();
+    let struck = world
+        .query_filtered::<Entity, Or<(With<tower::Rewritten>, With<tower::Retimed>)>>()
+        .iter(world)
+        .count();
+    assert_eq!(struck, 0, "an open siege reached a spell while nobody held");
+}
+
+/// Logs are the siege's third surface, rolled for beside a spell's clock and
+/// its text, and a tower full of spells still meets one.
+#[test]
+fn a_round_can_poison_a_log_and_the_lie_ends_with_the_siege() {
+    let seed = a_seed_that_strikes_a_log();
+    let mut sim = at_the_wall(seed);
+    run(&mut sim, "defend");
+    for round in 1..=12 {
+        run(&mut sim, "hold");
+        let strikes = said(&sim)
+            .iter()
+            .filter(|line| line.contains(LOG_STRUCK))
+            .count();
+        if fighting(&mut sim) {
+            // One log per telegraph: the sentence never says which, so it
+            // must never cover two.
+            assert_eq!(
+                lying_logs(&mut sim).len(),
+                strikes,
+                "seed {seed}, round {round}: telegraphs and poisoned logs disagree",
+            );
+        } else {
+            assert_eq!(
+                lying_logs(&mut sim),
+                Vec::<String>::new(),
+                "seed {seed}: a log still lies after the siege",
+            );
+            assert!(strikes > 0, "seed {seed} stopped reaching a log");
+            return;
+        }
+    }
+    panic!("seed {seed}: twelve rounds and the siege never ended");
+}
+
+/// A pre-`0.17.0` save carries every calm-poisoned log lying, siege or none,
+/// and no round announced any of them; format 15's migration clears them.
+#[test]
+fn an_older_save_loads_with_no_log_lying() {
+    for defending in [false, true] {
+        let mut sim = at_the_wall(3);
+        if defending {
+            run(&mut sim, "defend");
+        }
+        let mut save = sim.snapshot();
+        for node in &mut save.nodes {
+            if node.log {
+                node.poisoned = true;
+            }
+        }
+        let text = save.to_toml().expect("a save renders").replacen(
+            &format!("format = {}", orbs_sim::save::FORMAT),
+            "format = 14",
+            1,
+        );
+        let mut loaded = Sim::restored(&Save::from_toml(&text).expect("a format-14 save opens"));
+        assert_eq!(
+            lying_logs(&mut loaded),
+            Vec::<String>::new(),
+            "defending: {defending}",
+        );
+    }
+}
+
+/// The rule is kept by one system, not by whatever ended the siege: a siege
+/// ended by any route leaves no log lying.
+#[test]
+fn a_siege_ended_any_way_leaves_no_log_lying() {
+    use bevy_ecs::prelude::{Entity, With};
+    let mut sim = at_the_wall(3);
+    run(&mut sim, "defend");
+    let world = sim.world_mut();
+    let logs: Vec<Entity> = world
+        .query_filtered::<Entity, With<tower::Log>>()
+        .iter(world)
+        .collect();
+    for log in logs {
+        world.entity_mut(log).insert(tower::Poisoned);
+    }
+    sim.step();
+    assert!(
+        !lying_logs(&mut sim).is_empty(),
+        "logs cleared while the siege still ran",
+    );
+
+    // Ended behind `hold`'s back, the way a future retreat might.
+    let world = sim.world_mut();
+    for mut siege in world.query::<&mut tower::Siege>().iter_mut(world) {
+        siege.outcome = Some(tower::Outcome::Held);
+    }
+    sim.step();
+    assert_eq!(lying_logs(&mut sim), Vec::<String>::new());
+}
+
+/// A round can poison a log nothing has been written to yet, and reading it
+/// shows the lie rather than nothing.
+#[test]
+fn an_empty_poisoned_log_reads_back_a_forgery() {
+    use bevy_ecs::prelude::With;
+    let mut sim = Sim::new(3);
+    run(&mut sim, "attend forge");
+    // Every log opens with its room's boot line, so a log is only ever empty
+    // once the scrollback has let its lines go. Emptied here to reach that.
+    let world = sim.world_mut();
+    world
+        .resource_mut::<orbs_sim::session::Scrollback>()
+        .records_mut()
+        .clear();
+    let forge = world
+        .query_filtered::<(bevy_ecs::prelude::Entity, &tower::Name), With<tower::Log>>()
+        .iter(world)
+        .find(|(_, name)| name.0 == "forge.log")
+        .map(|(log, _)| log)
+        .expect("the forge keeps a log");
+    world.entity_mut(forge).insert(tower::Poisoned);
+
+    run(&mut sim, "peruse forge.log");
+    let tampered = sim
+        .scrollback()
+        .records()
+        .iter()
+        .filter(|record| record.presentation() == orbs_render::Presentation::Tampered)
+        .count();
+    assert_eq!(
+        tampered,
+        1,
+        "an empty poisoned log did not read back one forged line: {:?}",
+        said(&sim),
+    );
+}
+
 /// §5.1's pillar 4: *"Phase A stays genuinely safe."*
 #[test]
 fn the_calm_layer_never_sees_an_adversarial_aberration() {
-    // The ambient nuisances still fire — that is `drift` and `substitution` —
-    // but nothing ever reaches a *spell* outside a siege.
+    // The shelf can still be swapped, but nothing ever reaches a *spell*
+    // outside a siege. Logs are `the_calm_layer_never_poisons_a_log`'s.
     let mut sim = Sim::new(3);
     sim.step_n(3000);
     run(&mut sim, "verify");

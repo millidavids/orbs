@@ -82,7 +82,7 @@ pub use band::{
     AGAINST, ASSIGNED, BAILEY, BASE_MOST, Band, CADENCE, DEFEAT_WEAR, ENEMY, FEWEST, GARRISON,
     Intent, MOST, Outcome, RAMPART, RANKS_PER_FOE, Round, THIN, VICTORY_MEND, VIGOUR, WEARY,
 };
-pub use battle::{Pledged, Siege};
+pub use battle::{Pledged, Siege, besieged};
 pub use escrow::{
     COMPLETION_BONUS, ESCROW_FLOOR, ESCROW_PER_FOE, RENOWN_PER_FOE, escrow, renown_stake,
 };

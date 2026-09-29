@@ -14,7 +14,8 @@ use crate::tower::lattice::{Binding, COLUMNS, Lattice};
 use crate::tower::{self, charm};
 
 use super::publish::publish;
-use super::shared::{besieged, fixture, say};
+use super::shared::{fixture, say};
+use crate::tower::besieged;
 
 /// `imbue <tool> <charm>` — open a lattice.
 ///

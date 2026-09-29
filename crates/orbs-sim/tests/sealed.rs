@@ -422,10 +422,7 @@ fn a_save_from_before_sealing_restores_open_and_a_sealed_one_stays_sealed() {
 }
 
 #[test]
-fn sabotage_never_strikes_a_shut_room() {
-    // The calm layer poisons a log now and then; a strike in a room the player
-    // cannot enter would latch a mark on a dark box and be a fault nobody can
-    // find. Two hours of ticks, and every log under a shut room stays clean.
+fn a_shut_room_stays_shut_through_a_quiet_two_hours() {
     let mut sim = Sim::sealed(3);
     sim.step_n(7200);
     for domain in [
@@ -438,27 +435,47 @@ fn sabotage_never_strikes_a_shut_room() {
     ] {
         assert!(!sim.is_open(domain), "{domain} opened on its own");
     }
-    let poisoned = sim
-        .scrollback()
-        .records()
-        .iter()
-        .filter_map(|record| record.field(FieldName::Source))
-        .filter_map(|value| match value {
-            Value::Text(text) => Some(text.to_owned()),
-            _ => None,
-        })
-        .filter(|source| {
-            [
-                "archive",
-                "lens",
-                "grimoire",
-                "sanctum",
-                "menagerie",
-                "forge",
-            ]
-            .iter()
-            .any(|room| source.contains(room))
-        })
-        .count();
-    assert_eq!(poisoned, 0, "something happened in a shut room");
+}
+
+#[cfg(debug_assertions)]
+#[test]
+fn sabotage_never_strikes_a_shut_room() {
+    // A siege round can poison a log or reach a spell (§19). A strike in a room
+    // the player cannot enter would latch a mark on a dark box and be a fault
+    // nobody can find.
+    let mut struck = 0;
+    for seed in 0..8 {
+        let mut sim = Sim::sealed(seed);
+        // The sanctum's first station arms the wall, so a siege can be fought.
+        run(
+            &mut sim,
+            &["debug_reach laboratory_3", "debug_reach sanctum_1"],
+        );
+        let shut: Vec<String> = ["archive", "lens", "grimoire", "menagerie", "forge"]
+            .into_iter()
+            .filter(|domain| !sim.is_open(domain))
+            .map(|domain| format!("/{domain}"))
+            .collect();
+        assert!(!shut.is_empty(), "seed {seed}: no room is still shut");
+        run(&mut sim, &["attend bailey", "defend"]);
+        // Checked every round, because `settle` clears the logs at the end.
+        for _ in 0..12 {
+            run(&mut sim, &["hold"]);
+            let lying: Vec<String> = sim
+                .snapshot()
+                .nodes
+                .into_iter()
+                .filter(|node| node.poisoned)
+                .map(|node| node.path)
+                .collect();
+            struck += lying.len();
+            assert!(
+                !lying
+                    .iter()
+                    .any(|path| shut.iter().any(|room| path.contains(room.as_str()))),
+                "seed {seed}: a round struck a shut room: {lying:?}",
+            );
+        }
+    }
+    assert!(struck > 0, "no round on eight seeds struck anything");
 }

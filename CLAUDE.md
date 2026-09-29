@@ -17,7 +17,8 @@ its exit with three boxes deliberately left. Phase 9 (Enchanting) is met on thre
 of its five boxes — the shared-engine extraction, split into a refactor and a
 behaviour box, is what is left. Renown closed at `0.11.14` and the interlude at
 `0.11.10`. `0.16` — the threshold — closed at `0.16.13`: eleven boxes, and three
-more for the corrections two `/code-review max` passes found in them.** The
+more for the corrections two `/code-review max` passes found in them. `0.17` —
+the tower as one machine — is in hand.** The
 determinism spine, the Frame boundary, the parser, the cell renderer, brewing,
 the archive, the lens, the sanctum, the menagerie, the bailey, the forge, the
 tower rail, the balance harness, the spell engine and its scripting language are

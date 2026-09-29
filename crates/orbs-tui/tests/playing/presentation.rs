@@ -263,7 +263,7 @@ fn the_sequence_hands_over_to_a_tower_whose_clock_never_started() {
     if !available() {
         return;
     }
-    // Not cosmetic: `tower::drift` rolls once per tick, so a sim left running
+    // Not cosmetic: `tower::substitution` rolls every tick, so a sim left running
     // through the animation advances its RNG stream by a wall-clock-dependent
     // number of draws — one seed reaching different worlds on different
     // machines.

@@ -7,8 +7,8 @@
 //! that only misbehaves once something else has happened in it.
 //!
 //! They assert on outcomes, never on stock. A long run meets ambient sabotage —
-//! `drift` poisons a log at 1/300 per tick — so a listing is not a stable claim,
-//! while a count, a name and an experience total are.
+//! `substitution` swaps a reagent about once an hour — so a listing is not a
+//! stable claim, while a count, a name and an experience total are.
 
 use crate::play::{Game, available};
 

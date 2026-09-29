@@ -10,7 +10,7 @@ use orbs_render::{FieldName, RecordKind, Role};
 use crate::content::Prose;
 use crate::parser::Verb;
 use crate::session::Scrollback;
-use crate::tower::{self, charm};
+use crate::tower::charm;
 
 /// The lattice, if the player is standing where one is.
 pub(super) fn fixture(world: &World) -> Option<Entity> {
@@ -38,12 +38,4 @@ pub(super) fn say(world: &mut World, verb: Verb, key: &str, args: &[(&str, &str)
         .text(FieldName::Source, charm::LATTICE)
         .role(role)
         .finish();
-}
-
-/// Whether a siege is being fought anywhere, which is what the surcharge asks.
-pub(super) fn besieged(world: &mut World) -> bool {
-    world
-        .query::<&tower::Siege>()
-        .iter(world)
-        .any(tower::Siege::running)
 }

@@ -34,6 +34,15 @@ pub enum Pledged {
     },
 }
 
+/// Whether a siege is being fought anywhere in the tower.
+///
+/// Asked of the world rather than of `Cwd`, because a siege runs whether or not
+/// the player is standing in the bailey.
+#[must_use]
+pub fn besieged(world: &mut World) -> bool {
+    world.query::<&Siege>().iter(world).any(Siege::running)
+}
+
 /// A siege in progress.
 ///
 /// A component on the rampart rather than a resource, so it saves through the

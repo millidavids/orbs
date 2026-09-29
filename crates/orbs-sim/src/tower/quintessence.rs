@@ -159,18 +159,6 @@ pub fn ceiling(world: &World) -> u32 {
     )
 }
 
-/// Whether a siege is being fought anywhere in the tower.
-///
-/// What suspends the calm trickle. Asked of the world rather than of `Cwd`,
-/// because a siege runs whether or not the player is standing in the bailey.
-#[must_use]
-fn besieged(world: &mut World) -> bool {
-    world
-        .query::<&super::Siege>()
-        .iter(world)
-        .any(super::Siege::running)
-}
-
 /// The calm trickle.
 ///
 /// Appended to the schedule and drawing nothing — the licence `settling` and
@@ -188,7 +176,7 @@ pub fn regenerate(world: &mut World) {
     {
         return;
     }
-    if besieged(world) {
+    if super::besieged(world) {
         return;
     }
     let ceiling = ceiling(world);

@@ -7,10 +7,9 @@
 //! `verify --all` by another name.
 //!
 //! Neither shipped until now, so four instant checks audited the whole tower
-//! for nothing. The ambient surfaces make it matter before the siege does:
-//! `drift` poisons a log every ~300 ticks and `substitution` swaps a reagent
-//! every ~3600, in the calm layer — so *is it the log lying, or the shelf?* was
-//! already a choice that cost nothing.
+//! for nothing. In the calm layer only the shelf lies — `substitution` swaps
+//! a reagent about once an hour — so *is it the log, or the shelf?* is a
+//! question the siege asks (§19).
 
 use bevy_ecs::prelude::*;
 
@@ -18,7 +17,7 @@ use crate::tick::Tick;
 
 /// One of §8.1's tamperable surfaces.
 ///
-/// The two ambient ones shipped first; script text and trigger clocks waited
+/// The log and the shelf shipped first; script text and trigger clocks waited
 /// for the siege that produces them, because a variant nothing can ever be is a
 /// cooldown nobody can ever be on. A poisoned log and a swapped pile are told
 /// apart by *which* surface you look at, and the cooldown is what makes looking

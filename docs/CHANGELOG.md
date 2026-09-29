@@ -15,6 +15,36 @@
   at 1.0 (DESIGN.md §19).
 -->
 
+## [v0.17.0] - 2026-09-29
+
+### Description
+In development — a dev log, not patch notes. The tower stopped lying to you
+while you were away. Only a siege can poison a log now, and a siege waits for
+you however long you take: nobody should lose anything by playing slowly.
+
+### Changed
+- **A quiet tower tells the truth.** Left alone, the tower used to fill every
+  log with lies inside half an hour. Now only the shelf can be tampered with
+  while nothing is attacking, and a swapped reagent still settles on its own.
+- **A siege waits for you.** The enemy moves only when you `hold`. Open a siege
+  and walk away for an hour, and it is exactly where you left it.
+- **Logs are a siege target.** A round can now poison a log as well as rewrite
+  or retime a spell. It warns you that "a log is not telling the truth", and
+  `verify` tells you which. The lie ends when the siege does.
+- **Vigilance slows the shelf.** Its first node now makes reagent swaps a
+  quarter rarer, and the weave says so.
+
+### Fixed
+- **A siege no longer cries wolf.** A round could claim it had rewritten a
+  spell when there was nothing in the spell it could change, and `verify` would
+  find nothing. It now only goes after spells it can actually tamper with.
+- **A retimed spell drags by one, two or three ticks** again, instead of always
+  one.
+- **Older towers load clean.** Logs poisoned before this version are cleared
+  when the tower is opened.
+- **The manual no longer says a siege runs on a clock**, and the potion pages
+  for insight and dreaming describe what they actually do.
+
 ## [v0.16.13] - 2026-09-23
 
 ### Description

@@ -621,7 +621,7 @@ weave_node_floor_1 = "a worn wall keeps more pool"
 weave_node_floor_2 = "a worn wall keeps most pool"
 weave_node_garrison_1 = "a troop brings one more body"
 weave_node_mend_1 = "every course mends three more"
-weave_node_vigilance_1 = "sabotage a quarter rarer"
+weave_node_vigilance_1 = "shelf swaps a quarter rarer"
 # Craft: the orb. `haste` is the orb's speed, never the tool's - a run a spell
 # issued lands sooner, and a player's own does not.
 weave_node_haste_1 = "spells' work lands a tenth sooner"
@@ -1230,9 +1230,9 @@ recall_vigour = "a potion of hard work, wrung from the dregs of a combination"
 using_clarity = "quaff it on the wall. it adds four to every answering roll"
 using_warding = "quaff it on the wall. three on every roll, for the whole round"
 using_haste = "quaff it on the wall. you roll twice and keep the better"
-using_insight = "quaff it on the wall. the enemy's next swing comes up short"
+using_insight = "quaff it on the wall. two on every answering roll, for the round"
 using_mending = "quaff it on the wall. six of the garrison's fight, put back"
-using_dreaming = "quaff it on the wall. they come on slower for a round"
+using_dreaming = "quaff it on the wall. five on every answering roll, for the round"
 # **The two with no sink at all**, and they are honest about it. The forge spends
 # quintessence rather than essences (§19), so `stillness` and `vigour` are still
 # waiting for something to want them.
@@ -2024,6 +2024,9 @@ defend_nothing_to_give = "nothing is at the wall to thin"
 # spell would answer the question the audit exists to ask.
 assault_script = "something got past the wall. a spell does not read as it was written"
 assault_clock = "something got past the wall. a spell is not keeping its own time"
+assault_log = "something got past the wall. a log is not telling the truth"
+# What an empty log a round poisoned reads back: work that never happened.
+log_forged = "everything here was done, and done well"
 defend_already = "the enemy is already at the wall"
 defend_too_soon = "the road is empty. nothing comes for {quantity} yet"
 defend_opens = "{quantity} come up the road. they mean to {state}"
