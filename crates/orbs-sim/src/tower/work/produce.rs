@@ -163,7 +163,14 @@ pub(super) fn transmute(world: &mut World, place: Entity) {
     // A flat one rather than a chance, deliberately narrower than what was
     // asked: a chance is a draw, and a draw here runs on a path `meditate` can
     // take hundreds of times inside one `step`.
-    let over = super::super::charmed(world, place, super::super::charm::Kind::Fruitful);
+    //
+    // Never for what the tower may hold only so many of: a second stillness
+    // out of one brew would walk straight past its cap.
+    let over = super::super::charmed(world, place, super::super::charm::Kind::Fruitful)
+        && world
+            .resource::<crate::content::Recipes>()
+            .most_of(&output)
+            .is_none();
     for (product, kind, wanted) in std::iter::once((&output, kind, true)).chain(byproduct) {
         // Merged into whatever is already there, so a second run adds to the
         // pile rather than standing a second node beside it under the same name.

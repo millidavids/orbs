@@ -765,11 +765,18 @@ fn say_step(world: &mut World, step: &Step, index: Option<usize>) {
 /// Only the record it lands in differs.
 fn step_line(world: &World, step: &Step, index: Option<usize>, inputs: &str) -> String {
     let prose = world.resource::<Prose>();
-    let heat = if step.heat {
+    let mut heat = if step.heat {
         prose.line("route_heat", &[])
     } else {
         String::new()
     };
+    // The same clause, for the one cost a recipe can carry beyond its inputs.
+    if step.quintessence > 0 {
+        heat.push_str(&prose.line(
+            "route_quintessence",
+            &[("quantity", &step.quintessence.to_string())],
+        ));
+    }
     // Composed in like the heat clause beside it, for the same reason: not every
     // step has one. The `+` lives in `route_leaves`, so a step that leaves
     // nothing does not print a plus with nothing after it.
@@ -830,6 +837,8 @@ struct Step {
     ticks: u64,
     /// Whether the athanor must be lit, from the recipe's own `heat` key.
     heat: bool,
+    /// Quintessence taken when it starts.
+    quintessence: u32,
 }
 
 impl Step {
@@ -841,6 +850,7 @@ impl Step {
             leaves: recipe.leaves.clone().unwrap_or_default(),
             ticks: recipe.ticks,
             heat: recipe.heat,
+            quintessence: recipe.quintessence,
         }
     }
 }

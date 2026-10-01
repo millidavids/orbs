@@ -80,9 +80,8 @@ pub enum Reached {
 /// The draw is unconditional and comes first, before any check that could
 /// return, and the target is that roll's *quotient* rather than a second draw.
 ///
-/// A log is out of reach once the round has ended the siege: `quiet_logs`
-/// clears every log when none is running, so a log struck then would be
-/// announced and gone before anyone could look. One predicate for both.
+/// What it breaks stays broken after the siege, until the player purges it
+/// (§19).
 pub fn strike(world: &mut World) -> Option<Reached> {
     let roll: u32 = {
         let mut rngs = world.resource_mut::<Rngs>();
@@ -96,7 +95,6 @@ pub fn strike(world: &mut World) -> Option<Reached> {
     // The quotient chooses, never a second draw (§19's `drift` defect), which
     // is how `substitution` picks its pile too.
     let choice = roll / ODDS;
-    let running = super::besieged(world);
 
     // A spell only counts if a line of it can be corrupted, or the round would
     // say it rewrote one and `verify` would find nothing.
@@ -116,7 +114,6 @@ pub fn strike(world: &mut World) -> Option<Reached> {
     ]
     .into_iter()
     .filter(|(_, nodes)| !nodes.is_empty())
-    .filter(|(reached, _)| *reached != Reached::Log || running)
     .collect();
     if surfaces.is_empty() {
         return None;

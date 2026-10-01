@@ -135,7 +135,14 @@ mod tests {
             assert!(
                 matches!(
                     entry.kind.as_str(),
-                    "troops" | "vigour" | "bonus" | "advantage" | "disadvantage" | "upgrade"
+                    "troops"
+                        | "vigour"
+                        | "fortify"
+                        | "still"
+                        | "bonus"
+                        | "advantage"
+                        | "disadvantage"
+                        | "upgrade"
                 ),
                 "{name} has an unknown kind {:?}",
                 entry.kind,
@@ -172,7 +179,7 @@ mod tests {
             let entry = spendables.get(name).expect("just listed");
             let effect = entry.effect();
             match entry.kind.as_str() {
-                "troops" | "vigour" => assert!(
+                "troops" | "vigour" | "fortify" | "still" => assert!(
                     effect.is_none(),
                     "{name} changes a band and also produced a dice effect",
                 ),

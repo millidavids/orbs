@@ -13,6 +13,9 @@
 # `kind` is one of:
 #   troops   — joins the garrison. `count` is how many
 #   vigour   — puts fight back. `points` is how much
+#   fortify  — raises how much fight the garrison can hold, for this siege.
+#              `points` is how much; it heals nothing
+#   still    — ends the siege with both sides standing. Drunk by hand only
 #   bonus    — adds to every garrison roll next round. `amount` may be negative
 #   advantage / disadvantage — draw twice, keep the better / worse
 #   upgrade  — roll a bigger die. `die` is one of d4 d6 d8 d10 d12 d20 d100
@@ -46,6 +49,19 @@ count = 2
 verb = "quaff"
 kind = "vigour"
 points = 6
+
+# Vigour is hard work, so the line can hold more: three troops' worth of room
+# that mending and succour then fill. It heals nothing by itself.
+[vigour]
+verb = "quaff"
+kind = "fortify"
+points = 9
+
+# Stillness ends the fight. No wear, no stake either way, and escrow on what was
+# won so far. Its price is in the brewing, not here.
+[stillness]
+verb = "quaff"
+kind = "still"
 
 # Warding is defensive, so it buys a flat edge on every answering roll.
 [warding]

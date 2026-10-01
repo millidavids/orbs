@@ -224,6 +224,8 @@ pub enum Outcome {
     Held,
     /// The garrison broke.
     Fallen,
+    /// Stillness ended it with both sides standing (§19).
+    Stilled,
 }
 
 /// What one resolved round did.

@@ -56,10 +56,11 @@ ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend; meditate 3600; survey rampart" car
 An hour of standing at an open wall: the rampart still reads turn 0.
 `cargo test -p orbs-sim --test besieging an_open_siege_waits_for_the_player`
 holds the same claim against every surface.
-`a_round_can_poison_a_log_and_the_lie_ends_with_the_siege` holds the other
+`a_round_can_poison_a_log_and_the_lie_outlasts_the_siege` holds the other
 half: a round whose roll lands on the logs says *"a log is not telling the
-truth"*, `verify` names that log, and the lie is gone once the siege is
-settled.
+truth"*, and `verify` names that log. **It is still lying after the siege**
+(`0.17.1`): the player repairs the tower, and `a_lie_outlasts_the_siege_until_purged`
+holds that only `purge` clears it.
 
 ### The world sabotage surface — a reagent that is not what it says
 
@@ -199,6 +200,34 @@ ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend; survey enemy; survey garrison; hol
 foes = 5   massed   troops = 5   vigour = 15
 troops = 6   vigour = 18                     ← the king's contingent. always six
 they onslaught. you lose 2 and take 2
+```
+
+**Stillness ends a siege; vigour raises the wall** (`0.17.1`). A stilled siege
+wears nothing, stakes nothing, and pays escrow on progress. Only a hand can
+drink it. A spell gets *"a spell cannot end a siege"*.
+
+```bash
+ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend; hold; hold; debug_spawn stillness 1; quaff stillness; survey rampart" cargo run -p orbs
+ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend; hold; debug_spawn vigour 1; quaff vigour; survey garrison" cargo run -p orbs
+```
+```text
+the enemy turns for home. 20 of the way, and you keep 14   ← state: stilled
+lifted
+garrison  ████████████░░░░░░░░  16/27                      ← was 16/18
+```
+
+**What it costs is in the laboratory:**
+- a `gleaning-scroll`, carried from the arsenal into the flask;
+- 600 ticks of the alembic;
+- 20 quintessence at the start, gone if the brew is stopped;
+- one held at most, so the alembic refuses a second.
+
+`debug_spawn` stocks a store fresh, so it never shows a thin one.
+`cargo test -p orbs-sim --test stilling` drives each of these costs, including
+a vigour from a thin store being worth 4.
+
+```bash
+ORBS_BOOT=0 ORBS_DUMP="attend laboratory; kindle charcoal; debug_spawn quiet-draught 1; debug_spawn gleaning-scroll 1; move quiet-draught to flask_and_rod; move gleaning-scroll to flask_and_rod; wield flask_and_rod; meditate 22; recall stillness" cargo run -p orbs
 ```
 
 ### The dice are placed, and that is the decision

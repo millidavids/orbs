@@ -157,6 +157,12 @@ with = "gold"
 tint = "brown"
 with = "bone"
 
+# Quiet-draught and a gleaning scroll's gold: the only draught that takes
+# another room's work.
+[stilling-draught]
+tint = "brown"
+with = "gold"
+
 # ---------------------------------------------------------------------------
 # Essences — the end of the pipeline.
 #
@@ -212,7 +218,7 @@ with = "gold"
 
 [stillness]
 tint = "brown"
-with = "bone"
+with = "gold"
 
 # The archive's fragment, and what four of them make. One family, one colour: a
 # scroll is what its fragments become, which is the same rule the flask's

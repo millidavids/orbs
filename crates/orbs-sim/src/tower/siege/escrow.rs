@@ -33,7 +33,9 @@ pub fn escrow(arrived: u32, completion: u32, outcome: Outcome, more: u64) -> u64
     let pool = pool + (pool * more) / 100;
     match outcome {
         Outcome::Held => pool + (pool * COMPLETION_BONUS) / 100,
-        Outcome::Fallen => {
+        // A stilled siege keeps what the fight had earned, exactly as a loss
+        // does, without the loss.
+        Outcome::Fallen | Outcome::Stilled => {
             let share = u64::from(completion).max(ESCROW_FLOOR);
             (pool * share) / 100
         }
@@ -70,5 +72,7 @@ pub fn renown_stake(arrived: u32, completion: u32, outcome: Outcome) -> u64 {
     match outcome {
         Outcome::Held => stake,
         Outcome::Fallen => (stake * u64::from(100 - completion.min(100))).div_ceil(100),
+        // Neither won nor lost, so standing moves neither way.
+        Outcome::Stilled => 0,
     }
 }

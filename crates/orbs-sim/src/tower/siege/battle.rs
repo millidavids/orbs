@@ -79,6 +79,10 @@ pub struct Siege {
     /// them, so the solver's `quaff mending` rung was dead code.
     #[serde(default)]
     pub mustered: u32,
+    /// Fight the garrison can hold above what it mustered — vigour's gift,
+    /// for this siege only (§19).
+    #[serde(default)]
+    pub fortified: u32,
     /// Modifiers the player has staged for the coming round.
     ///
     /// Cleared when the round resolves: an advantage that persisted would make
@@ -151,6 +155,7 @@ impl Siege {
             // function of the stream and the tower's standing is not in it.
             standing: None,
             mustered: ASSIGNED,
+            fortified: 0,
             staged: Vec::new(),
             pledges: Vec::new(),
             edge: 0,
@@ -164,6 +169,14 @@ impl Siege {
     #[must_use]
     pub const fn running(&self) -> bool {
         self.outcome.is_none()
+    }
+
+    /// The most fight the garrison can hold: what it mustered, and what vigour
+    /// raised it by. Not what [`hurt`](Self::hurt) measures against, or a
+    /// potion would read as a wound.
+    #[must_use]
+    pub const fn full(&self) -> u32 {
+        self.mustered * VIGOUR + self.fortified
     }
 
     /// The garrison is thin.
@@ -314,8 +327,25 @@ impl Siege {
 
     /// Put fight back into the garrison — what `quaff` does.
     pub fn heal(&mut self, points: u32) {
-        let ceiling = self.mustered * VIGOUR;
-        self.garrison.mend(points, ceiling);
+        self.garrison.mend(points, self.full());
+    }
+
+    /// Raise what the garrison can hold, without healing it — vigour's gift.
+    /// Mending and succour fill the room it makes.
+    pub const fn fortify(&mut self, points: u32) {
+        self.fortified += points;
+    }
+
+    /// End the siege with both sides standing — stillness.
+    ///
+    /// Returns what was pledged and staged for the round that will now never
+    /// resolve, so the caller can hand it back.
+    pub fn still(&mut self) -> (Vec<Pledge>, Vec<Modifier>) {
+        self.outcome = Some(Outcome::Stilled);
+        (
+            std::mem::take(&mut self.pledges),
+            std::mem::take(&mut self.staged),
+        )
     }
 
     /// How far through the siege the player got, as a percentage.
@@ -360,7 +390,7 @@ impl Siege {
                 // `mustered`, not the current count: against `count` the bar
                 // never fell below ~89%, so a line cut from six to two drew
                 // full one round before it routed.
-                full: self.mustered * VIGOUR,
+                full: self.full(),
                 chance: self.garrison_roll().chance(),
             },
             enemy: orbs_render::SiegeSide {
@@ -519,8 +549,7 @@ impl Siege {
         // big roll on a nearly-whole line is mostly wasted.
         let before = self.garrison.vigour;
         if strengths.succour > 0 {
-            let ceiling = self.mustered * VIGOUR;
-            self.garrison.mend(strengths.succour, ceiling);
+            self.garrison.mend(strengths.succour, self.full());
         }
         let mended = self.garrison.vigour.saturating_sub(before);
 

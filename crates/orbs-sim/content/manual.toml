@@ -316,7 +316,7 @@ lines = [
   "the clocks      a bound spell retimed so it fires uselessly early or late",
   "the logs        lines written to send you looking in the wrong place",
   "",
-  "Only the world is touched while the tower is quiet: a swapped reagent settles back on its own if nobody catches it. The other three are the enemy's work, and it only works when a siege round resolves. A siege left open waits for you, however long you take.",
+  "Only the world is touched while the tower is quiet: a swapped reagent settles back on its own if nobody catches it. The other three are the enemy's work, and it only works when a siege round resolves. A siege left open waits for you, however long you take. What it breaks stays broken after the siege is over, until you find it and `purge` it.",
   "",
   "how to find it",
   "",
@@ -356,6 +356,8 @@ lines = [
   "while it runs",
   "",
   "A siege waits for you. The enemy moves only when you `hold`, and a siege left open is exactly where you left it, however long you take. What is bound keeps running meanwhile, and what is bound is what the enemy rewrites behind you each time a round resolves.",
+  "",
+  "A stillness ends a siege where it stands: no wear on the barrier, no standing lost or won, and you keep what the fight had earned so far. It is the dearest thing the laboratory makes, the tower holds one at most, and only your own hand can drink it.",
   "",
   "`verify` still works during a siege, and still answers in one command. That is deliberate: nothing here requires fast typing.",
 ]

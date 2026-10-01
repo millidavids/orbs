@@ -345,9 +345,6 @@ impl Sim {
                 // After the roll, and it draws nothing: a lie settling is a
                 // clock reading, so appending it perturbs no replay.
                 tower::settling,
-                // The same licence: a log settling is a question about the
-                // siege, and draws nothing.
-                tower::quiet_logs,
                 // The same licence: a barrier wearing down compares two ticks,
                 // and the sanctum's one draw is in `height_for` inside `muster`
                 // rather than in a system.

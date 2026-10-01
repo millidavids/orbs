@@ -82,8 +82,8 @@ pub use quintessence::{
 };
 pub use renown::{Ahead, Renown, Toward};
 pub use sabotage::{
-    Log, Poisoned, Substituted, claimed, emit_lines, poison, poisoned, quiet_logs, restore,
-    settling, substitute, substitution, verify, vigilant_interval,
+    Log, Poisoned, Substituted, claimed, emit_lines, poison, poisoned, restore, settling,
+    substitute, substitution, verify, vigilant_interval,
 };
 pub use satchel::{SATCHEL, Satchel};
 pub use scene::{Topics, rebuild, scene_at};

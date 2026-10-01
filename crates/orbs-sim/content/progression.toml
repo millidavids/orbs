@@ -371,7 +371,7 @@ opens = ["recipe:haste"]
 domain = "laboratory"
 id = "laboratory_6"
 done = { potions = 40 }
-opens = ["recipe:stillness"]
+opens = ["recipe:stilling-draught", "recipe:stillness"]
 
 # The archive. Its first walk is what shows the player there is a lens.
 [[mastery]]

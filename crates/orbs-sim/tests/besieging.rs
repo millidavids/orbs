@@ -803,9 +803,10 @@ fn an_open_siege_waits_for_the_player() {
 }
 
 /// Logs are the siege's third surface, rolled for beside a spell's clock and
-/// its text, and a tower full of spells still meets one.
+/// its text, and a tower full of spells still meets one. What a round poisons
+/// is still lying when the siege is over: the player repairs the tower (§19).
 #[test]
-fn a_round_can_poison_a_log_and_the_lie_ends_with_the_siege() {
+fn a_round_can_poison_a_log_and_the_lie_outlasts_the_siege() {
     let seed = a_seed_that_strikes_a_log();
     let mut sim = at_the_wall(seed);
     run(&mut sim, "defend");
@@ -815,21 +816,21 @@ fn a_round_can_poison_a_log_and_the_lie_ends_with_the_siege() {
             .iter()
             .filter(|line| line.contains(LOG_STRUCK))
             .count();
-        if fighting(&mut sim) {
-            // One log per telegraph: the sentence never says which, so it
-            // must never cover two.
+        // One log per telegraph: the sentence never says which, so it must
+        // never cover two.
+        assert_eq!(
+            lying_logs(&mut sim).len(),
+            strikes,
+            "seed {seed}, round {round}: telegraphs and poisoned logs disagree",
+        );
+        if !fighting(&mut sim) {
+            assert!(strikes > 0, "seed {seed} stopped reaching a log");
+            sim.step_n(600);
             assert_eq!(
                 lying_logs(&mut sim).len(),
                 strikes,
-                "seed {seed}, round {round}: telegraphs and poisoned logs disagree",
+                "seed {seed}: a lie healed itself after the siege",
             );
-        } else {
-            assert_eq!(
-                lying_logs(&mut sim),
-                Vec::<String>::new(),
-                "seed {seed}: a log still lies after the siege",
-            );
-            assert!(strikes > 0, "seed {seed} stopped reaching a log");
             return;
         }
     }
@@ -865,34 +866,252 @@ fn an_older_save_loads_with_no_log_lying() {
     }
 }
 
-/// The rule is kept by one system, not by whatever ended the siege: a siege
-/// ended by any route leaves no log lying.
+/// The tower stays broken until the player fixes it: a log a siege poisoned is
+/// cleared by `purge`, and by nothing else.
 #[test]
-fn a_siege_ended_any_way_leaves_no_log_lying() {
-    use bevy_ecs::prelude::{Entity, With};
+fn a_lie_outlasts_the_siege_until_purged() {
+    use bevy_ecs::prelude::With;
     let mut sim = at_the_wall(3);
     run(&mut sim, "defend");
     let world = sim.world_mut();
-    let logs: Vec<Entity> = world
-        .query_filtered::<Entity, With<tower::Log>>()
+    let log = world
+        .query_filtered::<(bevy_ecs::prelude::Entity, &tower::Name), With<tower::Log>>()
         .iter(world)
-        .collect();
-    for log in logs {
-        world.entity_mut(log).insert(tower::Poisoned);
-    }
-    sim.step();
-    assert!(
-        !lying_logs(&mut sim).is_empty(),
-        "logs cleared while the siege still ran",
-    );
+        .find(|(_, name)| name.0 == "bailey.log")
+        .map(|(log, _)| log)
+        .expect("the bailey keeps a log");
+    world.entity_mut(log).insert(tower::Poisoned);
 
-    // Ended behind `hold`'s back, the way a future retreat might.
     let world = sim.world_mut();
     for mut siege in world.query::<&mut tower::Siege>().iter_mut(world) {
         siege.outcome = Some(tower::Outcome::Held);
     }
-    sim.step();
+    sim.step_n(3600);
+    assert_eq!(lying_logs(&mut sim), vec!["bailey.log".to_owned()]);
+
+    run(&mut sim, "purge bailey.log");
+    sim.step_n(60);
     assert_eq!(lying_logs(&mut sim), Vec::<String>::new());
+}
+
+/// Read the board's ceiling for the garrison off the rampart.
+fn garrison_full(sim: &mut Sim) -> u32 {
+    let world = sim.world_mut();
+    world
+        .query::<&tower::Siege>()
+        .iter(world)
+        .next()
+        .map(tower::Siege::full)
+        .expect("a siege on the rampart")
+}
+
+/// The siege on the rampart, as it stands.
+fn the_siege(sim: &mut Sim) -> tower::Siege {
+    let world = sim.world_mut();
+    world
+        .query::<&tower::Siege>()
+        .iter(world)
+        .next()
+        .cloned()
+        .expect("a siege on the rampart")
+}
+
+/// Stillness ends the fight with no penalty: no wear, no stake, and escrow on
+/// what was won so far (§19).
+#[cfg(debug_assertions)]
+#[test]
+fn stillness_ends_a_siege_and_keeps_what_was_earned() {
+    let mut sim = at_the_wall(11);
+    run(&mut sim, "defend");
+    run(&mut sim, "hold");
+    run(&mut sim, "hold");
+    let integrity = sim.integrity();
+    let renown = sim.renown();
+    let before = the_siege(&mut sim);
+    assert!(before.running(), "the siege ended before stillness could");
+
+    run(&mut sim, "debug_spawn stillness 1");
+    run(&mut sim, "quaff stillness");
+    let after = the_siege(&mut sim);
+    assert_eq!(after.outcome, Some(tower::Outcome::Stilled));
+    assert_eq!(
+        sim.integrity(),
+        integrity,
+        "stillness wore or mended the wall"
+    );
+    assert_eq!(sim.renown(), renown, "stillness moved renown",);
+    let earned = tower::siege::escrow(
+        before.arrived,
+        before.completion(),
+        tower::Outcome::Fallen,
+        0,
+    );
+    assert!(
+        ever_said(&sim, &format!("you keep {earned}")),
+        "stillness did not pay escrow on progress ({earned}): {:?}",
+        said(&sim),
+    );
+
+    run(&mut sim, "hold");
+    assert!(
+        ever_said(&sim, "over"),
+        "a stilled siege took another round"
+    );
+}
+
+/// A spell cannot end a siege: stillness is the player's own decision.
+#[cfg(debug_assertions)]
+#[test]
+fn a_spell_cannot_quaff_stillness() {
+    let mut sim = at_the_wall(11);
+    run(&mut sim, "defend");
+    run(&mut sim, "debug_spawn stillness 1");
+    // Through a nested spell's caller, the marker a running line carries.
+    sim.world_mut()
+        .insert_resource(tower::spell::Caller(Some(tower::spell::Casting {
+            depth: 0,
+            unattended: true,
+        })));
+    run(&mut sim, "quaff stillness");
+    sim.world_mut().insert_resource(tower::spell::Caller(None));
+    assert!(ever_said(&sim, "drunk by hand"), "{:?}", said(&sim));
+    assert!(the_siege(&mut sim).running(), "a spell ended the siege");
+}
+
+/// Vigour raises what the line can hold without healing it; mending fills the
+/// room it makes.
+#[cfg(debug_assertions)]
+#[test]
+fn vigour_raises_the_ceiling_and_mending_fills_it() {
+    let mut sim = at_the_wall(11);
+    run(&mut sim, "defend");
+    let full = garrison_full(&mut sim);
+    let vigour = the_siege(&mut sim).garrison.vigour;
+
+    run(&mut sim, "debug_spawn vigour 1");
+    run(&mut sim, "quaff vigour");
+    assert_eq!(garrison_full(&mut sim), full + 9, "{:?}", said(&sim));
+    assert_eq!(
+        the_siege(&mut sim).garrison.vigour,
+        vigour,
+        "vigour healed the line"
+    );
+
+    run(&mut sim, "debug_spawn mending 2");
+    run(&mut sim, "quaff mending");
+    run(&mut sim, "quaff mending");
+    assert!(
+        the_siege(&mut sim).garrison.vigour > full,
+        "mending could not fill the room vigour made: {:?}",
+        said(&sim),
+    );
+}
+
+/// What vigour raised survives a save, and a format-15 save still opens.
+#[cfg(debug_assertions)]
+#[test]
+fn a_fortified_line_comes_back_fortified() {
+    let mut sim = at_the_wall(11);
+    run(&mut sim, "defend");
+    run(&mut sim, "debug_spawn vigour 1");
+    run(&mut sim, "quaff vigour");
+    let full = garrison_full(&mut sim);
+
+    let text = sim.snapshot().to_toml().expect("a save renders");
+    let mut loaded = Sim::restored(&Save::from_toml(&text).expect("a save reads back"));
+    assert_eq!(garrison_full(&mut loaded), full);
+
+    // A real format-15 document has no `fortified` key at all, so the line is
+    // taken out rather than the number merely relabelled: the field has to
+    // default, and the siege comes back at what it mustered.
+    let older: String = text
+        .replacen(
+            &format!("format = {}", orbs_sim::save::FORMAT),
+            "format = 15",
+            1,
+        )
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("fortified"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert_ne!(older.len(), text.len(), "the save never wrote `fortified`");
+    let mut old = Sim::restored(&Save::from_toml(&older).expect("a format-15 save opens"));
+    assert_eq!(garrison_full(&mut old), full - 9);
+}
+
+/// No penalty means the round stillness cancels costs nothing either: a die
+/// pledged and a potion staged for it both come back.
+#[cfg(debug_assertions)]
+#[test]
+fn stillness_hands_back_what_the_cancelled_round_was_given() {
+    let mut sim = at_the_wall(11);
+    run(&mut sim, "defend");
+    run(&mut sim, "hold");
+    run(&mut sim, "hold");
+    let pool = sim.world().resource::<tower::Quintessence>().get();
+    run(&mut sim, "pledge d20 line");
+    assert!(
+        sim.world().resource::<tower::Quintessence>().get() < pool,
+        "the pledge cost nothing, so this asks nothing: {:?}",
+        said(&sim),
+    );
+    run(&mut sim, "debug_spawn warding 1");
+    run(&mut sim, "quaff warding");
+    assert_eq!(
+        the_siege(&mut sim).staged.len(),
+        1,
+        "the warding was not staged: {:?}",
+        said(&sim),
+    );
+
+    run(&mut sim, "debug_spawn stillness 1");
+    run(&mut sim, "quaff stillness");
+    assert_eq!(
+        sim.world().resource::<tower::Quintessence>().get(),
+        pool,
+        "the pledged quintessence did not come back",
+    );
+    let arsenal = tower::keep(sim.world()).expect("the tower has an arsenal");
+    assert!(
+        tower::held(sim.world(), arsenal, "warding").is_some(),
+        "the staged warding did not come back",
+    );
+}
+
+/// A spell with no stillness is told there is none, not that it may not.
+#[test]
+fn a_spell_with_no_stillness_is_told_there_is_none() {
+    let mut sim = at_the_wall(11);
+    run(&mut sim, "defend");
+    sim.world_mut()
+        .insert_resource(tower::spell::Caller(Some(tower::spell::Casting {
+            depth: 0,
+            unattended: true,
+        })));
+    run(&mut sim, "quaff stillness");
+    sim.world_mut().insert_resource(tower::spell::Caller(None));
+    assert!(!ever_said(&sim, "drunk by hand"), "{:?}", said(&sim));
+}
+
+/// The potions the alembic makes all have somewhere to go — the scroll test's
+/// twin, which is why `stillness` and `vigour` sat inert for so long.
+#[test]
+fn every_potion_the_alembic_makes_can_be_spent() {
+    use orbs_sim::content::{Recipes, Spendables};
+    let recipes = Recipes::builtin();
+    let spendables = Spendables::builtin();
+    let potions: Vec<&str> = recipes
+        .outputs()
+        .into_iter()
+        .filter(|name| recipes.kind_of(name) == orbs_sim::parser::NounKind::Essence)
+        .collect();
+    assert!(!potions.is_empty(), "the alembic makes no potion at all");
+    for potion in potions {
+        assert!(
+            spendables.get(potion).is_some(),
+            "`{potion}` is brewed and nothing spends it",
+        );
+    }
 }
 
 /// A round can poison a log nothing has been written to yet, and reading it
@@ -1239,17 +1458,22 @@ fn every_authored_arsenal_row_changes_the_siege() {
         run(&mut sim, "survey garrison");
         let spears = last(&sim, tower::siege::SPEARS);
         let mettle = last(&sim, tower::siege::METTLE);
+        let before = the_siege(&mut sim);
 
         run(&mut sim, &format!("{} {name}", verb.canonical()));
         run(&mut sim, "survey garrison");
+        let after = the_siege(&mut sim);
 
         let moved = match entry.kind.as_str() {
             // Bodies and fight are visible on the board directly.
             "troops" => last(&sim, tower::siege::SPEARS) != spears,
             "vigour" => last(&sim, tower::siege::METTLE) != mettle,
-            // A dice modifier is visible in the odds, which is exactly what §5.1
-            // requires be shown before the commitment.
-            _ => sim.rampart().is_some(),
+            "fortify" => after.full() > before.full(),
+            "still" => !after.running(),
+            // A dice modifier is staged for the round, and the odds show it.
+            // Asked of the staging, not of the board existing — that passed for
+            // a row that did nothing at all.
+            _ => after.staged.len() > before.staged.len(),
         };
         if !moved {
             inert.push(format!("{name} ({})", entry.kind));

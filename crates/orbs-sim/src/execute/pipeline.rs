@@ -381,10 +381,18 @@ fn start(world: &mut World, at: Entity, name: &str, verb: Verb) {
 
     // §10.1: the material's state decides what an instrument can do, so a
     // refusal has to say what is in there.
-    let Some((ticks, heat)) = world
+    let Some((ticks, heat, cost, most, made)) = world
         .resource::<Recipes>()
         .matching(name, &holding, &tower::known(world))
-        .map(|recipe| (recipe.ticks, recipe.heat))
+        .map(|recipe| {
+            (
+                recipe.ticks,
+                recipe.heat,
+                recipe.quintessence,
+                recipe.most,
+                recipe.outputs().first().map(|made| (*made).to_owned()),
+            )
+        })
     else {
         let key = if holding.is_empty() {
             "wield_empty"
@@ -396,21 +404,14 @@ fn start(world: &mut World, at: Entity, name: &str, verb: Verb) {
             .map(|(name, _)| name.as_str())
             .collect::<Vec<_>>()
             .join(", ");
-        let message = world
-            .resource::<Prose>()
-            .line(key, &[("name", name), ("detail", &listed)]);
-        let mut scrollback = world.resource_mut::<Scrollback>();
-        scrollback
-            .records_mut()
-            .push(RecordKind::Completion)
-            .text(FieldName::Name, verb.canonical())
-            .text(FieldName::Path, name)
-            // A fact, so `State` and not `Detail`: a view that honours prose
-            // draws `Detail` in front of the message written to explain it.
-            .text(FieldName::State, &listed)
-            .text(FieldName::Message, &message)
-            .role(Role::Cost)
-            .finish();
+        refuse(
+            world,
+            verb,
+            name,
+            key,
+            &[("detail", &listed)],
+            Some(&listed),
+        );
         return;
     };
 
@@ -429,9 +430,51 @@ fn start(world: &mut World, at: Entity, name: &str, verb: Verb) {
         missing(verb, name, world);
         return;
     };
+    if let Some((key, fields)) = super::price::refusal(world, cost, most, made.as_deref()) {
+        let fields: Vec<(&str, &str)> = fields
+            .iter()
+            .map(|(field, value)| (*field, value.as_str()))
+            .collect();
+        refuse(world, verb, name, key, &fields, None);
+        return;
+    }
+
     // The verb the player used goes on the `Working`, so a refusal says "busy
     // grinding" rather than "busy wielding" — see `Verb::participle`.
-    tower::begin(world, at, verb, subject, ticks);
+    if tower::begin(world, at, verb, subject, ticks) {
+        super::price::charge(world, cost);
+    }
+}
+
+/// Refuse a run, saying why, at `Role::Cost`.
+///
+/// `state` is a fact about the refusal that a pipe can read. `State` and not
+/// `Detail`: a view that honours prose draws `Detail` in front of the message
+/// written to explain it.
+fn refuse(
+    world: &mut World,
+    verb: Verb,
+    name: &str,
+    key: &str,
+    fields: &[(&str, &str)],
+    state: Option<&str>,
+) {
+    let mut fields = fields.to_vec();
+    fields.push(("name", name));
+    let message = world.resource::<Prose>().line(key, &fields);
+    let mut scrollback = world.resource_mut::<Scrollback>();
+    let mut record = scrollback
+        .records_mut()
+        .push(RecordKind::Completion)
+        .text(FieldName::Name, verb.canonical())
+        .text(FieldName::Path, name);
+    if let Some(state) = state {
+        record = record.text(FieldName::State, state);
+    }
+    record
+        .text(FieldName::Message, &message)
+        .role(Role::Cost)
+        .finish();
 }
 
 /// Turn everything an instrument holds out into the store (§10.1).

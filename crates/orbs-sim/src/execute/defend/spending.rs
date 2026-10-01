@@ -83,7 +83,7 @@ pub(super) fn spend(intent: &Intent, world: &mut World, verb: Verb) {
     // shipped solver hangs its `quaff` rung on.
     if entry.kind == "vigour"
         && let Some(siege) = world.get::<Siege>(rampart)
-        && siege.garrison.vigour >= siege.mustered * siege::VIGOUR
+        && siege.garrison.vigour >= siege.full()
     {
         say(world, verb, "spend_whole", &[("name", &named)], Role::Cost);
         return;
@@ -120,6 +120,24 @@ pub(super) fn spend(intent: &Intent, world: &mut World, verb: Verb) {
         return;
     }
 
+    // Ending a siege is the player's call, never a spell's: a rung that stilled
+    // every bad fight would make the wall something nobody stands on (§19).
+    // After "there is none", so a spell with an empty shelf is told that.
+    if entry.kind == "still"
+        && world
+            .get_resource::<tower::spell::Caller>()
+            .is_some_and(|caller| caller.0.is_some())
+    {
+        say(
+            world,
+            verb,
+            "still_by_hand",
+            &[("name", &named)],
+            Role::Cost,
+        );
+        return;
+    }
+
     // How well stocked the tower is in this, which is a rate and not a count
     // (§19): what the arsenal *holds* and what your industry can still *supply*
     // are different questions, and a shelf full of something nobody has made in
@@ -127,7 +145,19 @@ pub(super) fn spend(intent: &Intent, world: &mut World, verb: Verb) {
     //
     // Refused whole when spent, and the item is kept, which is `spend_whole`'s
     // rule. Checked before the withdrawal, so a refusal costs nothing.
-    let supply = tower::supply_of(world, &named);
+    //
+    // Except what the tower may hold only so many of: one stillness is brewed
+    // to be kept against the day, and staleness would leave it unspendable
+    // while its own cap refused another.
+    let kept = world
+        .resource::<crate::content::Recipes>()
+        .most_of(&named)
+        .is_some();
+    let supply = if kept {
+        tower::Supply::Fresh
+    } else {
+        tower::supply_of(world, &named)
+    };
     if supply == tower::Supply::Spent {
         say(world, verb, "spend_stale", &[("name", &named)], Role::Cost);
         return;
@@ -161,9 +191,12 @@ pub(super) fn spend(intent: &Intent, world: &mut World, verb: Verb) {
     // Scaled by the store it came from: a thin supply is half of what the recipe
     // authored, rounded down. Anything that would scale to nothing was refused
     // above, so nothing here is spent for zero.
+    let mut unspent = None;
     match entry.kind.as_str() {
         "troops" => siege.reinforce(supply.scale(entry.count.saturating_add(garrison))),
         "vigour" => siege.heal(supply.scale(entry.points)),
+        "fortify" => siege.fortify(supply.scale(entry.points)),
+        "still" => unspent = Some(siege.still()),
         _ => {
             if let Some(effect) = entry.effect() {
                 siege.stage(&named, effect.scaled(supply));
@@ -172,19 +205,68 @@ pub(super) fn spend(intent: &Intent, world: &mut World, verb: Verb) {
     }
     // The borrow ends here; `publish` needs the world back.
     let _ = siege;
+    if let Some((pledges, staged)) = unspent {
+        hand_back(world, &pledges, &staged);
+    }
     super::publish::publish(world, rampart);
 
     say(
         world,
         verb,
-        match verb {
-            Verb::Deploy => "deploy_sent",
-            Verb::Wield => "scroll_spent",
+        // Said by what it does, not only by the word: "it lasts this round"
+        // was true of a roll modifier and false of everything else drunk.
+        match (verb, entry.kind.as_str()) {
+            (Verb::Deploy, _) => "deploy_sent",
+            (Verb::Wield, _) => "scroll_spent",
+            (_, "vigour") => "quaff_mended",
+            (_, "fortify") => "quaff_fortified",
+            (_, "still") => "quaff_stilled",
             _ => "quaff_drunk",
         },
         &[("name", &named)],
         Role::Success,
     );
+
+    // The drink, then the ending: `hold`'s order, its round's sentence before
+    // `settle` says what the fight came to.
+    if entry.kind == "still" {
+        super::report::settle(world, rampart, siege::Outcome::Stilled);
+    }
+}
+
+/// Give back what was committed to a round that will never resolve.
+///
+/// Stillness ends a siege with no penalty, and a die pledged or a potion staged
+/// for the round it cancelled would be one: quintessence returns to the pool and
+/// each staged item to the arsenal.
+fn hand_back(world: &mut World, pledges: &[siege::Pledge], staged: &[tower::Modifier]) {
+    let pledged: u32 = pledges
+        .iter()
+        .map(|pledge| siege::cost_of(pledge.die))
+        .sum();
+    let ceiling = tower::ceiling(world);
+    world
+        .resource_mut::<tower::Quintessence>()
+        .restore(pledged, ceiling);
+
+    let Some(arsenal) = tower::keep(world) else {
+        return;
+    };
+    for modifier in staged {
+        // Only what the arsenal spent: a charm stages a modifier too, and it
+        // is not a thing to put on a shelf.
+        if world
+            .resource::<crate::content::Spendables>()
+            .get(&modifier.source)
+            .is_none()
+        {
+            continue;
+        }
+        let kind = world
+            .resource::<crate::content::Recipes>()
+            .kind_of(&modifier.source);
+        tower::give(world, arsenal, &modifier.source, kind, 1);
+    }
 }
 
 /// What an authored row is worth once `supply` has scaled it.
@@ -196,7 +278,7 @@ pub(super) fn spend(intent: &Intent, world: &mut World, verb: Verb) {
 fn scaled_worth(entry: &crate::content::Spendable, supply: tower::Supply) -> u32 {
     match entry.kind.as_str() {
         "troops" => supply.scale(entry.count),
-        "vigour" => supply.scale(entry.points),
+        "vigour" | "fortify" => supply.scale(entry.points),
         _ => match entry.effect() {
             Some(tower::Effect::Bonus(amount)) => supply.scale_signed(amount).unsigned_abs(),
             // A switch has no magnitude to scale away; `keeps_whole` is what

@@ -3597,8 +3597,8 @@ with making things, so idle buff-time is waste exactly as idle lit time is.
 > **nine** prose lines said *"a siege will be what spends them"*, not five — and
 > every one had been false since Phase 8 shipped, because `siege.toml` gives six
 > of the eight potions a `quaff` entry and a troop a `deploy`. Those nine now say
-> what actually spends them. Two — `stillness` and `vigour` — have no sink at all
-> and say so.
+> what actually spends them. ~~Two — `stillness` and `vigour` — have no sink at all
+> and say so.~~ Both are spent on the wall since `0.17.1`.
 
 ---
 
@@ -6221,9 +6221,10 @@ be stranded there** by a mechanical renumber.
       The rule is now that **the enemy acts only when a round resolves**. It is
       an accessibility commitment: nobody loses anything by taking their time.
       `drift` is gone. A log is now `assault::strike`'s third surface, and the
-      round's roll picks among the three surfaces. A log lies only while the
-      siege runs: `quiet_logs` clears it however the siege ends, and format
-      15 clears it in an older save.
+      round's roll picks among the three surfaces. ~~A log lies only while the
+      siege runs~~ — **corrected at `0.17.1`: what a siege breaks stays broken
+      until the player purges it.** Format 15 clears calm-layer lies in an
+      older save.
       `drift`'s draw stays in `substitution`, so the calm layer's replays hold,
       and vigilance now widens the swap. **A `/code-review high` pass** found the
       first version's fixed order left logs unreachable, because every tower
@@ -6233,16 +6234,33 @@ be stranded there** by a mechanical renumber.
       reads `sound` where it named all five logs. The same line with
       `attend bailey; defend; meditate 3600; survey rampart` reads turn 0, and
       `cargo test -p orbs-sim --test besieging siege` holds both halves
-- [ ] **`stillness` and `vigour` can be spent** — two rows in `siege.toml` and the
-      lint that stops it recurring. Both are real potions, gated and prosed, with
-      **out-degree zero**: `defend::spending` refuses any name it has no entry
-      for, and no other system in the game reads a potion at all. Phase 9 noted
-      they *"have no sink at all and say so"*; what it did not say is that nothing
-      else could ever spend them
-      **See it:** `debug_spawn stillness 1; attend bailey; defend; quaff stillness`
-      — and `every_potion_the_alembic_makes_can_be_spent`, which is
-      `every_scroll_the_lectern_makes_can_be_spent` one file over and is why the
-      scrolls never had this problem
+- [x] **`stillness` and `vigour` can be spent** (`0.17.1`). Both had **out-degree
+      zero**: `defend::spending` refused any name with no row, and nothing else
+      reads a potion. Each now brings the siege a mechanic it lacked.
+
+      **Stillness ends a siege with no penalty.** There is no wear and no stake
+      either way, and escrow pays on progress. Because of that it is the dearest
+      thing the laboratory makes:
+      - it needs a scroll from the archive;
+      - the alembic takes 600 ticks;
+      - it costs 20 quintessence;
+      - the tower can hold only one;
+      - only the player's own hand can drink it, never a spell.
+
+      **Vigour raises how much fight the garrison can hold**, and mending fills
+      the new room.
+
+      **The tower stays broken after a siege** until the player purges it. That
+      reverses `0.17.0`'s automatic clear. A `/code-review` pass on the plan
+      found three things before any code: a kept stillness would go stale and
+      then block its own replacement, the colour lint would fail, and a spell
+      could still every bad siege. §19
+      **See it:** `ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend; hold; hold; debug_spawn stillness 1; quaff stillness; survey rampart" cargo run -p orbs`
+      reads `stilled` and the rampart `lifted`. `…; debug_spawn vigour 1; quaff vigour; survey garrison`
+      grows the garrison bar from 16/18 to 16/27. And
+      `ORBS_BOOT=0 ORBS_DUMP="attend laboratory; kindle charcoal; debug_spawn quiet-draught 1; debug_spawn gleaning-scroll 1; move quiet-draught to flask_and_rod; move gleaning-scroll to flask_and_rod; wield flask_and_rod; meditate 22; recall stillness" cargo run -p orbs`
+      makes the draught and reads the 600-tick, 20-quintessence route.
+      `every_potion_the_alembic_makes_can_be_spent` keeps it from recurring
 - [ ] Pane addressing — acting on a domain you are not standing in. **First, not
       fourth** (§19)
       **See it:** start a grind from the archive

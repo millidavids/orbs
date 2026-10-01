@@ -58,10 +58,13 @@ use super::node::NodeSave;
 ///   `mastery::caught_up`. `BeastSave`'s wiring became optional here too.
 /// - 14, a beast's turned wires. Absence is the honest reading, so `migrate`
 ///   does nothing and the bump buys only the version gate.
-/// - 15, a log lies only while a siege runs. Every poisoned log in an older
-///   document is calm-layer drift, which no round announced, so the migration
-///   clears them all.
-pub const FORMAT: u32 = 15;
+/// - 15, calm-layer log drift removed. Every poisoned log in an older document
+///   is that drift, which no round announced, so the migration clears them all.
+/// - 16, a siege gaining `fortified` and the `Stilled` outcome, and stillness
+///   distilled from `stilling-draught`. An older build would drop the field in
+///   silence; the migration renames a quiet-draught already in the alembic, or
+///   a brew in flight would land on no recipe.
+pub const FORMAT: u32 = 16;
 
 /// Bring an older document up to [`FORMAT`], or say why it cannot be.
 ///
@@ -86,7 +89,8 @@ pub const FORMAT: u32 = 15;
 /// | 11 → 12 | The menagerie's chant replaced by the circle: four syllable nodes and their readings, gone | Yes — drop the nodes; a figure mid-song loads as a circle with no beast |
 /// | 12 → 13 | `[progress] opened` gains `circle`, whose absence draws lesser beasts | Yes — an open tower gains the key; a sealed one catches up on its own |
 /// | 13 → 14 | A waiting beast gains `turned`, its turned wires | Yes — absent is none turned, which is what it was |
-/// | 14 → 15 | Calm-layer log drift removed; a log lies only in a siege | Yes — clear every poisoned log |
+/// | 14 → 15 | Calm-layer log drift removed | Yes — clear every poisoned log |
+/// | 15 → 16 | A siege gains `fortified` and the `Stilled` outcome; stillness distils from `stilling-draught` | Yes — absent is nought, and a quiet-draught in the alembic is renamed |
 ///
 /// Padding a stream is exact: `Rngs::restore` winds a stream forward from the
 /// master seed by the stored position, so nought is precisely a world that
@@ -193,6 +197,20 @@ fn migrate(mut save: Save) -> Result<Save, super::SaveError> {
     if save.world.format < 15 {
         for node in save.nodes.iter_mut().filter(|node| node.log) {
             node.poisoned = false;
+        }
+    }
+
+    // 15 → 16: the alembic distils stillness from `stilling-draught` now, and a
+    // run is matched again when it lands. A quiet-draught already in the
+    // alembic would land on no recipe and foul, so it becomes the draught the
+    // new recipe wants. Generous, once: that brew skips the scroll.
+    if save.world.format < 16 {
+        const WAS: &str = "/alembic/quiet-draught";
+        const NOW: &str = "/alembic/stilling-draught";
+        for node in &mut save.nodes {
+            if let Some(room) = node.path.strip_suffix(WAS) {
+                node.path = format!("{room}{NOW}");
+            }
         }
     }
 

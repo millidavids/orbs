@@ -40,22 +40,6 @@ pub fn poison(world: &mut World, target: Entity) {
     world.entity_mut(target).insert(Poisoned);
 }
 
-/// A log lies only while a siege runs, so with none running every log tells the
-/// truth again. A system, so every way a siege can end keeps the rule rather
-/// than each remembering it (§19). Silently, like a swapped reagent settling.
-pub fn quiet_logs(
-    sieges: Query<&super::Siege>,
-    lying: Query<Entity, (With<Log>, With<Poisoned>)>,
-    mut commands: Commands,
-) {
-    if sieges.iter().any(super::Siege::running) {
-        return;
-    }
-    for log in &lying {
-        commands.entity(log).remove::<Poisoned>();
-    }
-}
-
 /// Whether `target` has been tampered with.
 #[must_use]
 pub fn poisoned(world: &World, target: Entity) -> bool {

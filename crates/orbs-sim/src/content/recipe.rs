@@ -127,6 +127,15 @@ pub struct Recipe {
     /// of "made" and offer it as an endless herb.
     #[serde(default)]
     pub secret: bool,
+    /// Quintessence taken when a run starts, on top of the inputs. Stillness is
+    /// the one that costs any (§19).
+    #[serde(default)]
+    pub quintessence: u32,
+    /// How many of the output the tower may hold at once. A run is refused
+    /// while that many are held or one is already brewing, and what it makes
+    /// never goes stale (§19).
+    #[serde(default)]
+    pub most: Option<u32>,
     /// Whether the player has to *earn* this before it will fire (§11.5).
     ///
     /// The other door: a secret is *found* — rolled on a broken ward, in the
@@ -294,6 +303,15 @@ impl Recipes {
                 return Err(super::ContentError::new(
                     FILE,
                     format!("a `{instrument}` recipe gates `{stray}`, which it does not make"),
+                ));
+            }
+            // A cap counts one name. A recipe whose product is drawn has
+            // several, and the cap would be checked against whichever came
+            // first.
+            if recipe.most.is_some() && recipe.outputs().len() != 1 {
+                return Err(super::ContentError::new(
+                    FILE,
+                    format!("a `{instrument}` recipe sets `most` and makes more than one thing"),
                 ));
             }
         }
@@ -601,6 +619,16 @@ impl Recipes {
             .filter(|recipe| recipe.outputs().contains(&name))
             .peekable();
         routes.peek().is_some() && routes.all(|recipe| recipe.secret)
+    }
+
+    /// How many of `name` the tower may hold at once, if any route limits it.
+    #[must_use]
+    pub fn most_of(&self, name: &str) -> Option<u32> {
+        self.by_instrument
+            .values()
+            .flatten()
+            .filter(|recipe| recipe.outputs().contains(&name))
+            .find_map(|recipe| recipe.most)
     }
 
     /// Every product that has to be found, in the file's own order.

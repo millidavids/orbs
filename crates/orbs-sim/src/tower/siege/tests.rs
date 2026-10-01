@@ -269,6 +269,47 @@ fn a_lost_siege_still_pays_and_a_won_one_pays_more() {
 }
 
 #[test]
+fn a_stilled_siege_pays_a_losses_escrow_and_stakes_nothing() {
+    // No penalty and no victory: escrow on progress with the loss's floor, and
+    // standing moved neither way by the ending.
+    for completion in [0, 40, 99] {
+        assert_eq!(
+            escrow(8, completion, Outcome::Stilled, 0),
+            escrow(8, completion, Outcome::Fallen, 0),
+        );
+        assert_eq!(renown_stake(8, completion, Outcome::Stilled), 0);
+    }
+}
+
+#[test]
+fn vigour_raises_the_ceiling_and_not_the_wound() {
+    let mut siege = Siege::begin(&mut rngs());
+    let full = siege.full();
+    let vigour = siege.garrison.vigour;
+    siege.fortify(9);
+    assert_eq!(siege.full(), full + 9);
+    assert_eq!(siege.garrison.vigour, vigour, "fortify healed");
+    // `hurt` measures a wound against what was mustered, so room to hold more
+    // is not mistaken for damage taken.
+    assert!(!siege.hurt(), "a whole line read hurt after vigour");
+    siege.heal(9);
+    assert_eq!(
+        siege.garrison.vigour,
+        full + 9,
+        "healing stopped at the old ceiling"
+    );
+}
+
+#[test]
+fn stillness_ends_a_running_siege() {
+    let mut siege = Siege::begin(&mut rngs());
+    assert!(siege.running());
+    siege.still();
+    assert_eq!(siege.outcome, Some(Outcome::Stilled));
+    assert!(!siege.running());
+}
+
+#[test]
 fn a_near_miss_costs_standing_but_less_than_a_collapse() {
     // Falling short costs, and how much depends on how far short: a
     // first-round collapse is not a wall carried at ninety percent.

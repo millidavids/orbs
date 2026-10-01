@@ -147,6 +147,7 @@ route_line = "{name}: {count} steps, {ticks} ticks"
 route_step = "{index} {detail} -> {name}{state}  ({source}, {ticks}t{kind})"
 route_step_or = "or {detail} -> {name}{state}  ({source}, {ticks}t{kind})"
 route_heat = ", needs heat"
+route_quintessence = ", {quantity} quintessence, lost if stopped"
 # The byproduct clause, composed in like `route_heat` beside it - because not
 # every step leaves one. Byproducts are the laboratory's mechanic, and a step
 # without one used to read "-> gleaning-scroll +  " with nothing after the plus.
@@ -195,6 +196,9 @@ athanor_out = "the athanor gutters and goes cold"
 damp_done = "you damp the athanor. {left} ticks of fuel keep"
 damp_idle = "the athanor is already cold"
 wield_cold = "the {name} wants heat, and the athanor is cold"
+wield_short = "the {name} wants {kind} quintessence, and you hold {quantity}"
+wield_beyond = "the {name} wants {kind} quintessence. a worn barrier holds {quantity}"
+wield_most = "one {kind} is all the tower keeps. the {name} will not make another"
 
 # ---------------------------------------------------------------------------
 # Experience and concentration (§11.5, §19). The work is worth something, and
@@ -1198,7 +1202,8 @@ recall_valerian-tincture = "valerian drawn out over gentle heat"
 recall_clarified-draught = "tincture and salt combined. the alembic makes clarity"
 recall_fixed-draught = "tincture and potash combined. it distils into warding"
 recall_keen-draught = "mugwort held in amber. it distils into insight"
-recall_quiet-draught = "valerian cut with salt. it distils into stillness"
+recall_quiet-draught = "valerian cut with salt. a gleaning scroll stills it"
+recall_stilling-draught = "quiet held still by a gleaning scroll. it distils into stillness"
 
 # ---------------------------------------------------------------------------
 # Essences. **Every one says its use is not built**, because it is not: S11.5's
@@ -1220,24 +1225,17 @@ recall_stillness = "a potion of deep quiet, which is valerian's own gift"
 recall_mending = "a potion that knits what is worn. distilled from ash and salt"
 recall_dreaming = "a potion of sleeping sight, out of what a bath leaves"
 recall_vigour = "a potion of hard work, wrung from the dregs of a combination"
-# **These nine said "a siege will be what spends them" and it stopped being
-# true when the bailey shipped.** Six of the eight potions have had a `quaff`
-# entry in `siege.toml` since Phase 8, and a troop has been deployable for as
-# long — so every one of these pages told a player the thing they were holding
-# was inert while the verb that spends it stood two rooms away. A page that has
-# stopped being true is the defect this project keeps finding, and the fix is a
-# content edit.
+# **These said "a siege will be what spends them" and it stopped being true when
+# the bailey shipped.** Every potion has a `quaff` entry in `siege.toml` now, and
+# a page that has stopped being true is the defect this project keeps finding.
 using_clarity = "quaff it on the wall. it adds four to every answering roll"
 using_warding = "quaff it on the wall. three on every roll, for the whole round"
 using_haste = "quaff it on the wall. you roll twice and keep the better"
 using_insight = "quaff it on the wall. two on every answering roll, for the round"
 using_mending = "quaff it on the wall. six of the garrison's fight, put back"
 using_dreaming = "quaff it on the wall. five on every answering roll, for the round"
-# **The two with no sink at all**, and they are honest about it. The forge spends
-# quintessence rather than essences (§19), so `stillness` and `vigour` are still
-# waiting for something to want them.
-using_stillness = "nothing spends it yet. it is the quietest thing you can brew"
-using_vigour = "nothing spends it yet, and it is the hardest-won of the eight"
+using_stillness = "quaff it on the wall by hand. they leave, and you keep what you won"
+using_vigour = "quaff it on the wall. the line can hold more than it mustered"
 
 # ---------------------------------------------------------------------------
 # Byproducts. S10.1's rule is that every one has a use, so every page names it -
@@ -2089,12 +2087,17 @@ spend_whole = "the line is whole. keep the {name} for when it is not"
 spend_unanswered = "they {state} next, so you will not swing. keep the {name}"
 deploy_sent = "{name} goes down to the line"
 quaff_drunk = "{name}, drunk. it lasts this round"
+quaff_mended = "{name}, drunk. the fight it puts back is kept"
+quaff_fortified = "{name}, drunk. the line can hold more until this siege ends"
+quaff_stilled = "{name}, drunk. a stillness falls along the wall"
 scroll_spent = "{name} burns away on the wall. it lasts this round"
 hold_round = "they {state}. you lose {quantity} and take {detail}"
 roll_tells = "{name} strikes - {kind} gives {detail} against {state}, and it tells"
 roll_misses = "{name} swings - {kind} gives {detail} against {state}, and misses"
 siege_held = "the enemy breaks and runs. the wall holds, and you earn {detail}"
 siege_fallen = "the wall is carried. {quantity} of the way, and you keep {detail}"
+siege_stilled = "the enemy turns for home. {quantity} of the way, and you keep {detail}"
+still_by_hand = "{name} is drunk by hand. a spell cannot end a siege"
 
 # The bailey, where a siege is fought (§5.1). The room, then its five words.
 man_here_bailey = "the courtyard inside the wall. where a siege is met"

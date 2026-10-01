@@ -2457,6 +2457,102 @@ they are re-pointed at the phases that now need them rather than quietly dropped
 
 ## 19. Decisions log
 
+### Stillness ends a siege, vigour raises the wall, and the tower stays broken (`0.17.1`)
+
+`stillness` and `vigour` were the only potions with nowhere to go: no row in
+`siege.toml`, and nothing else reads a potion. Both now have a use, each one
+a mechanic the siege lacked.
+
+**Stillness ends a siege with no penalty.** This adds `Outcome::Stilled`, a
+third ending, reached only by quaffing stillness while a siege runs.
+- The barrier is neither worn nor mended.
+- The end-of-siege renown stake is zero. Renown the rounds already moved stays
+  where it is.
+- Escrow pays on progress, using the same floored share as a loss.
+- The cadence applies as usual, and the siege deed is still credited. That is
+  a choice: a stilled fight was still fought.
+- No round resolves, so nothing is struck on the way out.
+
+**Stillness is drunk by hand only.** `spend` refuses `still` while a spell's
+`Caller` is set. A review found that a solver rung, *if the garrison is hurt
+quaff stillness*, would end every bad siege automatically and strictly beat
+losing. Ending a siege is the player's decision, the same way `quit` asks.
+
+**Stillness is very costly**, and the cost comes in four parts:
+- **A richer recipe.** A new flask stage takes `quiet-draught` and a
+  `gleaning-scroll`, so the archive has to feed the laboratory. The scroll
+  crosses through the arsenal, the way potions already do. The stage is gated
+  and opens with stillness at `laboratory_6`.
+- **A long brew.** The alembic takes 600 ticks, the top of §11.5's band.
+- **Quintessence.** A new recipe field, `quintessence`, is charged when the
+  run starts. Stillness costs 20 against a base pool of 24, about one brew's
+  length of regeneration.
+  - It is taken only after `begin` succeeds, so a slot refusal costs nothing.
+  - `stop` does not refund it, and `recall` says so.
+- **One at a time.** A new recipe field, `most`, refuses a run while the tower
+  already holds one, anywhere.
+  - `fruitful` never doubles a recipe that has `most`.
+  - What `most` limits never goes stale. One stillness brewed against the day
+    would otherwise read `Spent` past `WINDOW`, and its own cap would refuse
+    a replacement.
+
+The colour rules decided one thing as a side effect: stillness is now brown
+with gold, the colour of the draught it is distilled from.
+
+**Vigour raises the garrison's maximum health.** A new siege field,
+`fortified`, adds 9 points to `Siege::full()` for the rest of the siege.
+- It is scaled by supply, so a thin store gives 4.
+- It heals nothing on its own. Mending and succour fill the room it makes.
+- `hurt` still measures against what was mustered, or drinking it would read
+  as a wound.
+- A band's count derives from its vigour, so a higher maximum also lets three
+  more troops come back through healing. That is accepted: the model has one
+  number for both.
+
+**The tower stays broken after a siege.** `quiet_logs` is removed. A poisoned
+log, a rewritten spell and a retimed one all wait for `purge`. This closes
+`0.17.0`'s open question and supersedes its *"a log lies only while a siege
+runs"*. Format 15's migration stands, because calm-layer drift was never a
+siege's doing.
+
+`FORMAT` 16 covers the new `fortified` field and the `Stilled` variant. An
+older build would drop the first in silence. The migration does one thing: a
+`quiet-draught` already in the alembic becomes a `stilling-draught`. A run is
+matched again when it lands, so a brew saved mid-flight would otherwise land
+on no recipe and foul. That one brew skips the scroll.
+
+**What a `/code-review high` pass changed**, all found by reading:
+- **Stillness hands back the round it cancels.** A die pledged and a potion
+  staged for a round that will never resolve were lost. "No penalty" covers
+  them: the pledged quintessence returns to the pool and each staged item to
+  the arsenal.
+- **A ceiling under the price is said as the barrier.** A worn barrier can
+  lower the tower's ceiling to 12, below stillness's 20, and the pool never
+  regenerates past its ceiling. *"You hold 12"* would send a player to wait
+  for what cannot arrive, so the refusal names the barrier. The tower that
+  is losing has to mend its wall before it can brew a way out, which is the
+  rule quintessence already had.
+- **`most` counts a brew in flight**, not only stock. One alembic and its busy
+  lock made the gap unreachable; a second route or a wider slot would have
+  opened it. A recipe with `most` must make exactly one thing, checked at load.
+- **A spell with no stillness is told there is none**, and only one holding a
+  stillness is told it must be drunk by hand.
+- The cost and cap checks live in `execute/price.rs`.
+
+Two findings were answered rather than changed:
+- **A stilled siege with no round fought still pays the escrow floor and
+  credits the siege deed.** That was offered as a limit and declined. It does
+  not pay: the floor is 14 to 34 experience against a brew that holds the
+  alembic for 600 ticks, which is about 84 experience of clarity.
+- **Vigour on a whole line redraws 18/18 as 18/27**, and the bar falls. That
+  is what raising the maximum without healing looks like. The alternative,
+  filling the room as well, makes vigour a second `troop`.
+
+Folded in: `anneal` spent quintessence before `begin`, so a slot refusal took
+the pool and bound nothing. It now spends afterwards, which is the order the
+new recipe charge uses. Each quaff now says what it did. *"It lasts this
+round"* had been true only of a roll modifier.
+
 ### A siege waits for the player, and logs are its third surface (`0.17.0`)
 
 **Rule: the enemy acts only when a round resolves, never on a tick.** An open
@@ -2491,7 +2587,10 @@ strictly.
   - A retimed spell's drag comes from the part of the roll that the surface and
     the node did not use. Reusing `choice % 3` made it always 1 once there were
     three surfaces, which an `xhigh` review caught.
-- **A log lies only while a siege runs.**
+- ~~**A log lies only while a siege runs.**~~ **Superseded at `0.17.1`: the
+  player repairs the tower after a siege**, so a poisoned log stays poisoned
+  until it is purged, and `quiet_logs` is gone. What follows is kept as
+  history. The forged entry and format 15 still stand.
   - One predicate states the rule, `tower::besieged`, and two places read it.
     - `quiet_logs`, a tick system that draws nothing, clears every lying log
       whenever no siege is running. It does this silently, the way a swapped
@@ -2535,8 +2634,10 @@ strictly.
 
 Named, not settled:
 - Vigilance does not touch `assault::ODDS`.
-- `Rewritten` and `Retimed` still outlast the siege, and a spell stays wrong
-  until it is purged. Whether they should settle with the logs is open.
+- ~~`Rewritten` and `Retimed` still outlast the siege, and a spell stays wrong
+  until it is purged. Whether they should settle with the logs is open.~~
+  **Settled at `0.17.1`:** nothing settles. The player fixes the tower after
+  a siege, logs included.
 
 ### The orb wakes to a menu, not a tower (`0.16.0`)
 

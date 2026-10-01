@@ -158,9 +158,11 @@ pub(super) fn settle(world: &mut World, rampart: Entity, outcome: Outcome) {
         siege.clear_at = Some(now.saturating_add(siege::CADENCE));
     }
 
+    // Stilled touches the barrier neither way: no penalty, and no victory.
     let _ = match outcome {
         Outcome::Held => tower::mend_by(world, siege::VICTORY_MEND),
         Outcome::Fallen => tower::wear_by(world, siege::DEFEAT_WEAR),
+        Outcome::Stilled => 0,
     };
     // Escrow: progress-scaled, with a floor (§11.5). Losing at 60% keeps
     // something worth having, which stops a lost siege being an evening thrown
@@ -175,6 +177,7 @@ pub(super) fn settle(world: &mut World, rampart: Entity, outcome: Outcome) {
     let key = match outcome {
         Outcome::Held => "siege_held",
         Outcome::Fallen => "siege_fallen",
+        Outcome::Stilled => "siege_stilled",
     };
     let message = world.resource::<Prose>().line(
         key,
@@ -194,6 +197,7 @@ pub(super) fn settle(world: &mut World, rampart: Entity, outcome: Outcome) {
             match outcome {
                 Outcome::Held => "held",
                 Outcome::Fallen => "fallen",
+                Outcome::Stilled => "stilled",
             },
         )
         .count(FieldName::Quantity, u64::from(completion))
@@ -201,6 +205,7 @@ pub(super) fn settle(world: &mut World, rampart: Entity, outcome: Outcome) {
         .role(match outcome {
             Outcome::Held => Role::Success,
             Outcome::Fallen => Role::Danger,
+            Outcome::Stilled => Role::Normal,
         })
         .finish();
 
@@ -224,6 +229,7 @@ pub(super) fn settle(world: &mut World, rampart: Entity, outcome: Outcome) {
     match outcome {
         Outcome::Held => tower::renown::earn(world, stake),
         Outcome::Fallen => tower::renown::slip(world, stake),
+        Outcome::Stilled => {}
     }
     // No snapshot, nothing said. A siege carried from a save written before the
     // snapshot has nothing to measure from, and nought is not a safe stand-in:

@@ -15,6 +15,43 @@
   at 1.0 (DESIGN.md §19).
 -->
 
+## [v0.17.1] - 2026-10-01
+
+### Description
+In development — a dev log, not patch notes. Two potions that did nothing now
+matter: stillness ends a siege outright, at a steep price to brew, and vigour
+lets the garrison hold more. And a siege's damage stays until you repair it.
+
+### Added
+- **Stillness ends a siege.** Drink it on the wall and the enemy leaves: no
+  wear on the barrier, no standing won or lost, and you keep what the fight had
+  earned so far. Anything you had already pledged or drunk for the round it
+  cancels comes back to you.
+- **Stillness is the dearest thing the laboratory makes.** It needs a gleaning
+  scroll from the archive, ten minutes of the alembic and most of the tower's
+  quintessence, and the tower keeps one at a time. Only your own hand can drink
+  it; a spell cannot end a siege for you.
+- **Vigour raises the garrison's limit.** The line can hold more fight for the
+  rest of the siege. It heals nothing by itself, so pair it with mending.
+
+### Changed
+- **The tower stays broken after a siege.** A log the enemy poisoned no longer
+  cleans itself when the fight ends. Like a rewritten spell, it waits for you to
+  find it and `purge` it.
+- **Stillness is brown and gold**, the colour of the draught it is now distilled
+  from.
+- **`recall` shows what a brew costs in quintessence**, and that stopping the
+  brew loses it.
+
+### Fixed
+- **The forge no longer charges for nothing.** An anneal that was refused
+  because the tower was busy still took your quintessence.
+- **Each potion says what it did.** Every one used to end "it lasts this round",
+  which was only true of some.
+- **A brew caught mid-way by this update still finishes.** A quiet-draught
+  already in the alembic of an older save becomes the new draught rather than
+  spoiling.
+
 ## [v0.17.0] - 2026-09-29
 
 ### Description

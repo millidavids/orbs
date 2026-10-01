@@ -237,7 +237,6 @@ pub(in crate::execute) fn anneal(world: &mut World) {
         );
         return;
     }
-    world.resource_mut::<tower::Quintessence>().spend(cost);
 
     // The fall takes time, and the tower's one slot with it. This resolved
     // instantly for a whole step, so `Charm::takes` was dead and §10's scarcity
@@ -256,6 +255,9 @@ pub(in crate::execute) fn anneal(world: &mut World) {
     if !tower::begin(world, lattice, Verb::Anneal, subject, takes) {
         return;
     }
+    // Only once the fall has begun: `begin` can refuse for the slot, and a
+    // refused anneal took the quintessence and bound nothing.
+    world.resource_mut::<tower::Quintessence>().spend(cost);
 
     // The spend is recorded on the binding now, so the tally is true while it
     // falls rather than only after it lands.

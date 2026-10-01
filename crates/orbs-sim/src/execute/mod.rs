@@ -32,6 +32,7 @@ mod imbue;
 mod muster;
 mod navigate;
 mod pipeline;
+mod price;
 mod queue;
 mod quit;
 mod readings;

@@ -170,6 +170,14 @@ output = "quiet-draught"
 leaves = "dregs"
 ticks = 10
 
+# Stillness's first price: a scroll from the archive, carried through the
+# arsenal into the flask. Opened with stillness itself.
+[[flask_and_rod]]
+inputs = ["quiet-draught", "gleaning-scroll"]
+output = "stilling-draught"
+ticks = 20
+gated = true
+
 # Dregs and sediment are not litter: together they make the salt the alembic
 # needs to fix a distillation.
 [[flask_and_rod]]
@@ -288,15 +296,19 @@ potion = true
 heat = true
 secret = true
 
-# The laboratory's last station opens this one — forty potions in.
+# The laboratory's last station opens this one — forty potions in. It ends a
+# siege, so it costs: ten minutes of the alembic, most of the tower's
+# quintessence, and never more than one held (§19).
 [[alembic]]
-input = "quiet-draught"
+input = "stilling-draught"
 output = "stillness"
 leaves = "phlegm"
-ticks = 40
+ticks = 600
 potion = true
 heat = true
 gated = true
+quintessence = 20
+most = 1
 
 # ---------------------------------------------------------------------------
 # athanor - fuel, not recipes. Arrives with step 4.

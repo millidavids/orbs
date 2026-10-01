@@ -379,3 +379,32 @@ fn a_charm_on_one_tool_does_not_reach_its_neighbour() {
         "a charm laid on the mortar was found on the alembic too",
     );
 }
+
+/// An anneal the slot refuses costs nothing: the quintessence is taken only
+/// once the fall has begun.
+#[test]
+fn an_anneal_refused_for_the_slot_keeps_its_quintessence() {
+    let mut sim = laboratory();
+    for line in [
+        "grind sage",
+        "attend forge",
+        "imbue mortar_and_pestle hurried",
+        "snap apex",
+    ] {
+        sim.submit(line);
+        sim.step();
+    }
+    let held = sim
+        .world()
+        .resource::<orbs_sim::tower::Quintessence>()
+        .get();
+    sim.submit("anneal");
+    sim.step();
+    assert_eq!(
+        sim.world()
+            .resource::<orbs_sim::tower::Quintessence>()
+            .get(),
+        held,
+        "an anneal refused for the slot still took quintessence",
+    );
+}
