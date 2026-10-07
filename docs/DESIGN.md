@@ -1619,7 +1619,9 @@ the set of what is open.
 
 **A deed is a count, not a currency.** No room has an experience number of its
 own; `Tally` counts things done — `made:clarity`, `potion`, `at:stacks`,
-`event:figure` — and a station asks for one count. A per-domain total would be
+`event:figure` — and a station asks for one count. A spell's work is counted a
+second time under `spell:` (**amended §19**, `0.17.4`), which no station reads
+and the ledger does. A per-domain total would be
 a second curve to balance and a second number to save, and both of the user's
 examples (*"a certain number of potions"*, *"certain potions"*) are one count.
 
@@ -2456,6 +2458,115 @@ they are re-pointed at the phases that now need them rather than quietly dropped
    price-shop — Exapunks is $19.99.
 
 ## 19. Decisions log
+
+### Number go up — progress a player can watch (`0.17.2`–`0.17.6`)
+
+#### A number rolls to the truth (`0.17.2`)
+
+The player asked for progress they can *watch*: bars filling, numbers counting
+up, a count of what was made. Every number on screen snapped. `Panel::refresh`
+overwrote the gauges once a tick and nothing remembered what they had said.
+
+**This is presentation, not the curve.** §11.5's *"an automation game, not a
+numbers-go-up game"* is about the curve's shape (no exponentials), and it is
+untouched: no rate moves.
+
+**A changed number rolls to its new value and its bar fills with it.** The fire's
+flare is the precedent: *a value animating to the truth reads better than one
+teleporting to it.* `orbs_render::Roll` is the shape and `orbs_shell::Climb` the
+edges and the clock.
+
+| Question | Decision |
+|---|---|
+| How long | `ROLL_SECS = 0.5`, half a world tick — the crossing's bound. A roll as long as a tick would pace itself by its own length, and automation changes a number most ticks |
+| How fast a digit turns | On the `FLIP_HZ` grid, so three steps in a roll. The step is **floored**: the first change lands a whole flip tick after a roll starts, so a roll restarted mid-way cannot change twice inside one. Front-loaded, so three steps read as a count settling |
+| The bar | Drawn from the same shown value as the digits. One value means the two cannot disagree and a retarget cannot step the bar backwards, and the rate holds by construction |
+| **The bar's colour is the truth's** | `gauge` coloured every filled cell by `Fill::of(done, total)`. Rolling `done` would turn forty cells over together through several ramp steps, which is what the `FLIP_HZ` exemption's *"nothing turns over together"* forbids. `Painter::gauge_hued` takes the hue separately |
+| Speech | The truth, always. The reading draws the rolled digits and speaks the true text through `Span::with_spoken`, the channel eldritch text already uses, so a frame mid-roll speaks exactly what the settled frame does |
+| Width | Measured from the truth alone, so no roll can move the bar or decide whether the room's column fits. A rise is right-aligned in the truth's width and keeps the slash still. A fall or a crossing draws more digits than it ends on, so those spill right for the half second and the reading re-lays on the frame it lands, when its digits and fill change anyway. *Superseded in review:* width was first reserved from where the roll began too, which released at landing and could drop the column for the length of a beat |
+| The edge | A world change, never a view change. First sight settles. **A number absent from an observation is forgotten**, so its next appearance settles. That is the opposite of the fire's `observe_hearth`, which keeps its last value on `None`: a room worked by a spell while the player was elsewhere would otherwise roll on their return |
+| A crossing | Cuts, for now. `15/16 → 2/8` rolled in one scale counts *down*, a gain drawn as a loss. `0.17.3` gives it a beat of its own |
+| A fall | Rolls down within its tier |
+| Reduce-motion | `Climb` defaults to off and only the Bevy frontend turns it on, from the tube's switch. Off is the truth, so `orbs-tui`, a dump and the F5 mirror draw every number settled without doing anything — the crossings' rule that §14 will not have motion without a switch a player can reach |
+| Swap and load | `Climb` is on `shell_resources!`, so `reset_for_swap` forgets every number and the new tower's first sight settles |
+| See it | `ORBS_ROLL_AT` poses a roll. It holds back the last `ORBS_DUMP` command as `ORBS_PASSAGE_AT` does, so the command that moves the number must be last; `ORBS_THEN` runs after the pose. `examples/screens` prints a whole roll with the hue as a ramp letter |
+
+**The versioning is a new decision.** These boxes bump `0.17.2` onward and
+interleave with *the tower as one machine*. A minor of its own would either
+rename `0.17`, and a minor that names a feature never moves, or send the POST
+card's number backwards when `0.17` resumes. Phase 0.5's no-minor rule for an
+interlude is historical, so this stands on the POST-card argument alone.
+
+#### A gain says how much, and a station lands (`0.17.3`)
+
+| Question | Decision |
+|---|---|
+| What `+N` measures | The **whole** total — experience, renown — not the gauge's `done`, which drops at every crossing. `Panel` carries both totals for this |
+| How long it stays | `PLUS_SECS = 1.0`, one world tick, the flare's length and the longest an animation here may run. Longer than the roll so it can be read. Bright, normal, dim, gone, a third of a second each |
+| When gains sum | Only while the roll they belong to is still moving, so a hitch that lands two says their total. After that a gain is news of its own. Summing for as long as the `+N` stays would count up for ever under a spell that earns every tick |
+| Spoken? | Never. Renown's *"earning is silent"* holds, and a run's own sentence already says what it paid |
+| Where | In the blank after the reading, never measured into it, so it cannot move the bar. No room, no `+N` |
+| A fall | Shows none, and clears one still fading: the loss has its own record |
+| **The beat** | A crossing upward is one beat, however many tiers it crossed: the tier being left holds a flip tick, shows *arrived* in the ramp's own green for two, and the bar lands in the tier reached. The tiers between were never on screen. *Superseded in review:* the first flip tick drew the fill already under way, which changed cells on the frame the crossing was seen — two changes inside one tick when it followed a digit turning. It now draws what was showing, like any roll's first tick |
+| The flash | Old hue, `Fill::Whole`, new hue: one pair of opposing changes, at most once per crossing. The one place a bar's colour is not the truth's |
+| Into the top | Fills and stays full. The tier left is drawn in digits until it lands, inside the width *nothing more authored* needs, so the bar does not move |
+| Off the top, or down across a tier | Cuts. Only a gain gets a beat |
+| A change mid-beat | Cuts to the truth. A second crossing folded into the first would draw an arrival already superseded |
+| The title | Is the truth's throughout, so it changes as the beat starts. The passage's *"the title leads the content"*, for the same reason |
+
+#### The tally learns whose hand, and `status` keeps a ledger (`0.17.4`)
+
+No surface showed a lifetime count, and what a spell did was never counted at
+all — the one number pillar 3 is about.
+
+| Question | Decision |
+|---|---|
+| How a spell's work is told apart | `tally::done` reads `Records::attributed()`. Every seam already runs inside the window `attribute` opens for a spell's line and for the run a spell bid (`Bidden`), and the player's own work never does. One door, so no seam had to change |
+| What it counts | Each key a second time as `spell:<key>`, and `spell` once per completion. No deed spells either, so a spell's run still reaches a station exactly once |
+| Save | No `FORMAT` bump. Nought is the honest reading of an older save — renown's precedent — and the spell share counts from this build forward |
+| The ledger | `[[ledger]]` rows in `progression.toml`: an `id`, an optional room, and what is counted. Read from the tally, never kept, so it saves nothing and cannot disagree with a station counting the same key |
+| **`Counted`, beside `Deed`** | A deed's spellings without the number. Reusing `Deed` would make an author write a count that means nothing, and `check` refuses nought. The name half of `Deed::check` moved into `Named`, which both call, so there is one answer to *can the game count this* |
+| In `status` | A `ledger` section after the readings and before `casting`, which returns early. Its rows are readings — name, dots, count — under a heading of their own, so they take a column of their own. A row's spell share follows it, **named in full** — *scrolls copied by your spells* — so each record stands alone for `sift` and a pipe (rule 4); *your spells' share*, said of the row above, was the first draft and needed adjacency to mean anything. *done by your spells* is the tower-wide total. Nought rows are left out, and the section with them |
+| What `done by your spells` counts | Each completion once. A `note` riding on one — a secret a ward gave up, a siege held, a spell bound — counts its own key and that key's share, and is not another thing a spell did; counting it doubled a spell's ward break that found a secret |
+| The heading | `ledger` is a table entry beside `casting`, not prose: a section heading is the record's `Kind`, a token `sift` finds, which is the rule `CASTING` records. A review asked for it in prose and this is the answer |
+| No argument | `status` still takes none. A narrowing form waits for `status rates`, which decides the verb's argument shape |
+| No comma in a label | A reader hears a row as `name: …, qty: …`, and a comma in the name splits it |
+| The dumps | Moved first, byte-identical, in a stage of its own. Then exactly two captures changed — `lab_clarity` and `pylon_done`, the two that run `status` after making something. The third the plan named, `satchel_rail`, counts nothing in its six ticks |
+| The economy | A sweep reads clarity at 996 experience and 1,103 renown, the figures this log recorded at `0.11.14`. The tally gains keys; nothing earns differently |
+
+#### The room counts what it made (`0.17.5`)
+
+**The gauge strip's identity is superseded.** `gauges.rs` said *"these two and
+nothing else… everything else on screen is local"*, and `prompt.rs` called the
+strip *"the two rows about the tower's whole life"*. It is now the tower's two
+standings **and what the room in front of the player has made in all** — a
+whole-life number about a room, at the strip's right edge. Still two bars; the
+column has none.
+
+| Question | Decision |
+|---|---|
+| Why the strip and not the road | The road's row is the room's line and is already full: its run stretches to meet the deed's sentence. The strip has blank cells beside its bars at every width the game opens at, because a bar stops at forty |
+| What it shows | The room's **first** `[[ledger]]` row and, when a spell had a hand, *your spells' share* under it. Two readings, counts in one column, each rolling with a `+N` |
+| Who wins the width | **The column reserves its width first** — label, count, and a five-cell slot for its `+N` kept whether or not one shows, so a gain moves nothing. The label is measured with the share's (*your spells' share*, short because it sits under its own row) before a spell has a share, so a spell's first hand in a room widens nothing; review caught the column growing four cells on that frame and dropping at the floor. Then it draws only if each gauge keeps a bar of 24 and its title, measured from the truth; otherwise it drops whole and the gauges are exactly as they were. The bar outranks the count, and the title outranks the column. At 120×45 every bar keeps forty. At 80×22, the floor, the column fits while the tower has no title and drops whole once it earns one |
+| `ORBS_ROLL_AT` and `ORBS_THEN` | The pose observes the numbers straight after the held-back command. Anything `ORBS_THEN` moves — and its extra tick — draws settled, as the arriving screen's. Review found the pose observing after `ORBS_THEN`, so a `debug_renown 30` there turned a posed roll into a beat |
+| A gauge's `+N` | Yields to the column, never the reverse: it draws in the gauges' own width or not at all |
+| Spoken? | No. Silent glyphs, the rail's precedent; `status` is the spoken whole |
+| Which room | `Sim::domain`, as the road takes it, so the bailey counts sieges held and `/tower` shows nothing |
+| A room change | Is a different number, not a gain. A count's scale is the row's name, so walking from the laboratory's forty potions to the archive's three scrolls settles. The road's `n of m` takes its station's id for the same reason, so reaching a station never rolls `5 of 5` back to `0 of 10` |
+| The road | Its `n of m` rolls with the same completion, right-aligned in the wider of where it began and ends, and speaks the truth |
+| `dumps.sh` | Four captures — a roll, a beat, the column, and the ledger — so the next refactor's instrument is not blind to them, which is how Phase 8 shipped the bailey |
+
+#### The siege board's stock rolls (`0.17.6`)
+
+| Question | Decision |
+|---|---|
+| What rolls | The coffer's quintessence and both sides' vigour — the band's length with its numbers. A pledge counts the coffer down; a round counts both bands down together |
+| How | The board is drawn from a copy holding the rolled values and spoken from the truth, which it already was: every cell is `glyphs` and one summary is announced. The copy is made only while a number is moving |
+| Width | Nothing to reserve: every field on the board is a fixed width, `{:>3}/{:<3}` and `{:>4}`, so a roll moves digits and a bar's end and nothing else |
+| `chance` | Snaps. It is a probability of the round to come, not a stock |
+| No `+N` | The board's rows are fixed text with no blank to put one in, and a siege's gains and losses each already have a sentence |
+| **The pylon is out** | Its integrity is spoken but never drawn on the board (`pylon_tally`), and its hauls arrive as a sentence the sim already wrote. Rolling them would compose that sentence a second time in the shell |
+| The rail's percentage | Static. It is awareness, drawn on every branch including the modal ones, and motion there would compete with the pane |
 
 ### Stillness ends a siege, vigour raises the wall, and the tower stays broken (`0.17.1`)
 

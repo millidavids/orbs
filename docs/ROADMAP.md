@@ -100,6 +100,7 @@ numbers below are not consecutive.
 | **The scrivener** | `0.14.11` | ✅ every box ticked |
 | [**The circle**](#the-circle) `menagerie/` | `0.15.7` | ✅ every box ticked · supersedes Phase 5's rhythm game |
 | [**The threshold**](#the-threshold--closed-at-01613) | `0.16.13` | ✅ every box ticked · the orb's front door |
+| [**Number go up**](#number-go-up) | `0.17.6` | ✅ every box ticked · interleaved with `0.17` |
 
 ### Open — and **this table is not a running order**
 
@@ -6323,6 +6324,61 @@ by *"the economy and the focus system are the same system"*.
 > saves. It returns as texture once made goods have proved the shape, and its rule
 > is **derived** — a good is a material another domain's recipe consumes — never a
 > list of names in a file, which is the judgement `keep::admits` refuses (§19).
+
+---
+
+## Number go up
+
+**Progress a player can watch.** Every number on screen snapped, nothing showed
+a lifetime count, and what a spell did was never counted at all. Aesthetic
+first, and like both interludes before it, not only aesthetic: the tally learns
+whose hand did the work.
+
+**Its boxes bump `0.17.x`** and interleave with *the tower as one machine*. A
+minor of its own would rename `0.17` or send the POST card backwards (§19).
+**Every box ticked at `0.17.6`.** Aesthetic, so it carried no month or word
+budget and the Open table's arithmetic never moved.
+
+- [x] **A number rolls to the truth** (`0.17.2`) — `orbs_render::Roll` and
+      `orbs_shell::Climb`. Both gauges' digits roll and their bars fill, half a
+      tick, three steps on the flip grid. Speech, colour and width are the
+      truth's; a crossing cuts; a number that leaves the screen is forgotten, so
+      coming back is never a gain. F3 stops it, and `orbs-tui` never rolls
+      **See it:** `ORBS_BOOT=0 ORBS_ROLL_AT=0.4 ORBS_DUMP="debug_renown 0; debug_renown 20" cargo run -p orbs`
+      reads `11/25` on its way to `20/25` and speaks `20 of 25`.
+      `cargo run -p orbs-render --example screens` — *A number climbing*.
+      `scripts/dumps.sh` byte-identical without the switch
+- [x] **A gain says how much, and a station lands** (`0.17.3`) — a fading
+      `+N` of the whole total earned, silent, in the blank after the reading;
+      and one beat across a tier however many it crossed: the tier left fills,
+      shows *arrived*, and the bar lands in the next. Into the top it stays full
+      **See it:** `ORBS_BOOT=0 ORBS_ROLL_AT=0.5 ORBS_DUMP="debug_renown 20; debug_renown 30" cargo run -p orbs`
+      reads `25/25  hedge-wizard  +10`; `0.1` still reads `20/25`, `1.0` lands
+      on `5/35`. `debug_renown 400` is one beat with `+380`
+- [x] **The tally learns whose hand, and `status` keeps a ledger** (`0.17.4`) —
+      a spell's work counted a second time under `spell:`, read off the
+      attribution `done` already ran inside; `[[ledger]]` rows authored with a
+      deed's spellings and no number; and a `ledger` section in `status`. No
+      `FORMAT` bump, and the sweep is unmoved
+      **See it:** `ORBS_BOOT=0 ORBS_DUMP="attend archive; debug_spawn fragment 8; debug_spell assembling" ORBS_THEN="invoke assembling; meditate 120; status" cargo run -p orbs`
+      reads `scrolls copied 1`, `scrolls copied by your spells 1`,
+      `done by your spells 1`.
+      `cargo test -p orbs-sim --test ledger`
+- [x] **The room counts what it made** (`0.17.5`) — the room's first ledger row
+      and its spell share at the right of the gauge strip, rolling with `+N`.
+      It reserves its width first and draws only where every bar keeps 24 cells
+      and its title, otherwise it drops whole. The road's `n of m` rolls too.
+      The strip's *"these two and nothing else"* is superseded (§19)
+      **See it:** `ORBS_BOOT=0 ORBS_ROLL_AT=0.4 ORBS_DUMP="attend archive; debug_spawn fragment 8; debug_spell assembling; invoke assembling; meditate 30" cargo run -p orbs`
+      reads `scrolls copied 0 +1` and `your spells' share 0 +1` on their way to
+      `1`; `1.0` arrives. `attend laboratory` reads `potions brewed 0`.
+      `scripts/dumps.sh` captures `roll_column`
+- [x] **The siege board's stock rolls** (`0.17.6`) — the coffer and both sides'
+      vigour, drawn from a rolled copy and spoken from the truth. `chance`
+      snaps; the pylon and the rail stay still, and §19 says why
+      **See it:** `ORBS_BOOT=0 ORBS_ROLL_AT=0.4 ORBS_DUMP="attend bailey; defend; pledge d20 to buckler" cargo run -p orbs`
+      reads the coffer at `22` on its way from `24` to `19`. `…; pledge d20 to sortie; hold`
+      rolls both bands — the enemy `15 → 12 → 9`, the garrison `18 → 16 → 14`
 
 ---
 

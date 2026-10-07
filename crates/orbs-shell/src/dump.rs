@@ -87,6 +87,19 @@ pub const PASSAGE: &str = "ORBS_PASSAGE";
 /// ```
 const PASSAGE_AT: &str = "ORBS_PASSAGE_AT";
 
+/// How far through a number's roll to draw, `0.0`..`1.0`.
+///
+/// A roll starts on a change, and a dump has none, so this holds back the last
+/// `;`-separated command as `ORBS_PASSAGE_AT` does: the numbers are noted, the
+/// command runs, and whatever it moved is drawn part way. The command that makes
+/// the change must be the last one in `ORBS_DUMP` — `ORBS_THEN` runs after.
+///
+/// ```text
+/// ORBS_BOOT=0 ORBS_ROLL_AT=0.4 \
+///   ORBS_DUMP="debug_renown 0; debug_renown 20" cargo run -p orbs
+/// ```
+const ROLL_AT: &str = "ORBS_ROLL_AT";
+
 /// A line left **unsubmitted** in the prompt.
 ///
 /// `ORBS_DUMP` submits every `;`-separated segment, so the buffer is empty by
@@ -358,19 +371,35 @@ pub fn run_script(
     // Every line goes through `submit` and a real `step`, so what prints is the
     // world having actually run rather than a pose struck for the screenshot.
     let posed = requested_crossing();
+    let rolled = number(ROLL_AT);
+    let mut climb = super::climb::Climb::default();
     if request != "1" {
-        match posed {
+        if posed.is_some() || rolled.is_some() {
             // The last command is held back, the screen it was about to replace
             // is painted and kept, then it runs. Without this `ORBS_PASSAGE_AT`
             // has nothing to depart from and prints a settled screen while
-            // looking as though it worked.
-            Some(_) => {
-                let (head, last) = split_last(request);
-                drive(&mut sim, head);
+            // looking as though it worked — and `ORBS_ROLL_AT` has no number
+            // that moved.
+            let (head, last) = split_last(request);
+            drive(&mut sim, head);
+            if posed.is_some() {
                 leaving(&sim, &screen, grid, &mut passing);
-                drive(&mut sim, last);
             }
-            None => drive(&mut sim, request),
+            let mut seen = super::glance::Panel::default();
+            if rolled.is_some() {
+                seen.refresh(&sim);
+                climb.set_enabled(true);
+                climb.observe(&seen);
+            }
+            drive(&mut sim, last);
+            // Observed here, before `ORBS_THEN` and its extra tick: whatever
+            // those move belongs to the arriving screen and draws settled.
+            if rolled.is_some() {
+                seen.refresh(&sim);
+                climb.observe(&seen);
+            }
+        } else {
+            drive(&mut sim, request);
         }
     }
 
@@ -508,6 +537,9 @@ pub fn run_script(
         // and forgotten here.
         let mut panel = super::glance::Panel::default();
         panel.refresh(&sim);
+        if let Some(fraction) = rolled {
+            climb.pose(fraction);
+        }
         // Posed here rather than where the script ran: whether the transcript
         // is spared turns on which surface ended up open — the same question
         // `Showing::replaces_the_pane` asks in the game — and the three flags
@@ -556,6 +588,8 @@ pub fn run_script(
                 // phase zero for ever and the See-it gate would be "it
                 // compiles". `ORBS_FIRE_PHASE` steps them; see CLAUDE.md.
                 bench: &bench(),
+                // Settled unless `ORBS_ROLL_AT` posed it.
+                climb: &climb,
                 editing: editing.as_mut(),
                 weaving: weaving.as_ref(),
                 walking,
@@ -736,6 +770,7 @@ fn leaving(
             panel: &panel,
             scroll: &super::scrollback::Scroll::default(),
             bench: &super::bench::Bench::default(),
+            climb: &super::climb::Climb::default(),
             editing: None,
             weaving: None,
             walking: false,

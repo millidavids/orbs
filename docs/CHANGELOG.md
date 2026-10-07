@@ -15,6 +15,36 @@
   at 1.0 (DESIGN.md §19).
 -->
 
+## [v0.17.6] - 2026-10-07
+
+### Description
+In development — a dev log, not patch notes. Numbers go up now, and you can
+watch them: gauges count and fill, a gain says how much, and every room keeps
+a running count of what it made, and of how much your spells made for you.
+
+### Added
+- **Numbers count up.** When experience, renown or a count changes, it rolls to
+  its new value over half a second and its bar fills with it, instead of
+  jumping.
+- **A gain says how much.** A `+N` appears beside a gauge as it rises, and
+  fades over a second.
+- **Reaching a station is a moment.** The bar fills to its end, shows green for
+  a beat, then lands in the next tier — once, however many tiers you passed.
+- **Each room counts what it made.** Beside the gauges: potions brewed in the
+  laboratory, scrolls copied in the archive, sieges held in the bailey, and
+  under it how many of those your spells made. It only appears where it fits
+  without squeezing the bars.
+- **`status` keeps a ledger.** Every room's count of all it has made, how much
+  of each your spells did, and everything your spells have done in all.
+- **The siege board counts too.** The coffer counts down as you pledge, and
+  both sides' strength counts down as a round lands.
+- **Nothing to wait out.** A screen reader always hears the settled number,
+  never one on its way, and turning the tube off with F3 shows every number
+  straight away.
+
+### Changed
+- **The road's progress count rolls** with the work that moves it.
+
 ## [v0.17.1] - 2026-10-01
 
 ### Description

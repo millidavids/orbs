@@ -906,6 +906,10 @@ impl Session {
                     panel: &self.panel,
                     scroll: &self.scroll,
                     bench: &self.bench,
+                    // Settled for ever: a roll is motion, and this build has no
+                    // switch a player can reach to stop it (§14). The crossing's
+                    // rule, held the same way.
+                    climb: &orbs_shell::Climb::default(),
                     // The editor's viewport follows its caret, and how many
                     // lines fit is a fact only the painter has — which is why
                     // this one field is `&mut`.

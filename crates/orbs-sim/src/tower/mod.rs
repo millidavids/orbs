@@ -16,6 +16,7 @@ mod home;
 mod keep;
 pub mod lattice;
 mod learned;
+mod ledger;
 pub mod ley;
 pub mod mastery;
 pub mod maze;
@@ -63,6 +64,7 @@ pub use learned::{CERTAIN, Learned, discover, learn};
 pub use ley::{Node, Standing, Station, Taken, holds, is_real, ley_line, next, scale};
 // `mastery::Reached` is reached through its module: the siege's `assault::Reached`
 // already holds the bare name here.
+pub use ledger::{Row as LedgerRow, ledger, ledger_of};
 pub use mastery::{Line, Progress, Stop, Walk, advance, mastery, progress};
 pub use maze::{Maze, Sense, Square, Way};
 pub use node::{
@@ -90,7 +92,9 @@ pub use scene::{Topics, rebuild, scene_at};
 pub use siege::{Band, Intent, Outcome, Round, Siege, besieged};
 pub use stock::{Stock, give, give_endless, held, holdings, take};
 pub use stores::{FRESH_AT, STORE, Stores, Supply, THIN_AT, WINDOW, made, stocktake, supply_of};
-pub use tally::{BOUND, EVENTS, FIGURE, SECRET, SIEGE, SIEGE_WON, Tally, Work, done, note};
+pub use tally::{
+    BOUND, EVENTS, FIGURE, SECRET, SIEGE, SIEGE_WON, SPELL, Tally, Work, by_spell, done, note,
+};
 pub use ward::{SIGILS, SOCKETS, Shift, Ward};
 pub mod spell;
 pub use work::{

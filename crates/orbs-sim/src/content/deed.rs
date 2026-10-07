@@ -139,21 +139,45 @@ impl Deed {
         if self.times() == 0 {
             return Err(format!("`{}` asks for nothing to be done", self.key()));
         }
-        match self {
-            Self::Made(name) if !outputs.contains(&name.as_str()) => Err(format!(
+        let named = match self {
+            Self::Made(name) => Named::Made(name),
+            Self::At { at, .. } => Named::At(at),
+            Self::Event { event, .. } => Named::Event(event),
+            Self::Potions { .. } | Self::Scrolls { .. } => Named::Kind,
+        };
+        named.check(outputs, instruments)
+    }
+}
+
+/// What a count names, for the one check a deed and a ledger row are both held
+/// to — two copies of it would be two answers to *can the game count this*.
+pub(super) enum Named<'a> {
+    /// A product.
+    Made(&'a str),
+    /// An instrument.
+    At(&'a str),
+    /// One of [`EVENTS`](crate::tower::EVENTS).
+    Event(&'a str),
+    /// Potions or scrolls, which name nothing that could be misspelled.
+    Kind,
+}
+
+impl Named<'_> {
+    /// Whether the game counts it.
+    pub(super) fn check(&self, outputs: &[&str], instruments: &[&str]) -> Result<(), String> {
+        match *self {
+            Self::Made(name) if !outputs.contains(&name) => Err(format!(
                 "`{name}` is not something any recipe makes. One of: {}",
                 outputs.join(", "),
             )),
-            Self::At { at, .. } if !instruments.contains(&at.as_str()) => Err(format!(
+            Self::At(at) if !instruments.contains(&at) => Err(format!(
                 "`{at}` is not an instrument. One of: {}",
                 instruments.join(", "),
             )),
-            Self::Event { event, .. } if !crate::tower::EVENTS.contains(&event.as_str()) => {
-                Err(format!(
-                    "`{event}` is not something a room does. One of: {}",
-                    crate::tower::EVENTS.join(", "),
-                ))
-            }
+            Self::Event(event) if !crate::tower::EVENTS.contains(&event) => Err(format!(
+                "`{event}` is not something a room does. One of: {}",
+                crate::tower::EVENTS.join(", "),
+            )),
             _ => Ok(()),
         }
     }

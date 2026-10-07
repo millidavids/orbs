@@ -160,6 +160,23 @@ impl<'a> Painter<'a> {
     /// triad for meaning), so `Role::Success` would give a green bar at every
     /// fill and never say why. The brackets take `style` as given.
     pub fn gauge(&mut self, area: Rect, done: u32, total: u32, style: Style, spoken: &str) {
+        self.gauge_hued(area, done, total, Fill::of(done, total), style, spoken);
+    }
+
+    /// [`gauge`](Self::gauge), its fill coloured by `hue` rather than by its own
+    /// length.
+    ///
+    /// For a bar partway through a roll: the length moves and the colour is the
+    /// true value's, or forty cells would turn over together on every step.
+    pub fn gauge_hued(
+        &mut self,
+        area: Rect,
+        done: u32,
+        total: u32,
+        hue: Fill,
+        style: Style,
+        spoken: &str,
+    ) {
         // Spoken before the clip test, for `progress`'s reason: §14's stream does
         // not depend on what happened to fit.
         self.frame
@@ -180,7 +197,7 @@ impl<'a> Painter<'a> {
         self.fill(
             Rect::new(area.col.saturating_add(1), area.row, filled, area.rows),
             '|',
-            style.with_depiction(Depiction::gauge(Fill::of(done, total))),
+            style.with_depiction(Depiction::gauge(hue)),
         );
         self.fill(
             Rect::new(

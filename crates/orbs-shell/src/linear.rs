@@ -123,6 +123,8 @@ pub fn paint(
         // The real one, not a default: `Bench::default()` reads the
         // environment, and this runs every frame F5 is up.
         bench,
+        // Settled: only the speech is kept, and speech is the truth anyway.
+        &super::climb::Climb::default(),
     );
 
     let mut painter = frame.painter(pane);

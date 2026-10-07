@@ -7,14 +7,15 @@
 
 use bevy::prelude::*;
 
-use orbs_shell::{Bench, Panel, Passing};
+use orbs_shell::{Bench, Climb, Panel, Passing};
 
 use crate::crt::CrtSettings;
 
-/// Advance the fire and the crossing, and stop them when the tube is off.
+/// Advance the fire, the crossing and the rolling numbers, and stop them when
+/// the tube is off.
 ///
-/// One system because it is one decision, and the two clocks it drives are the
-/// two things §14 makes disableable: neither `Bench` nor `Passing` has any
+/// One system because it is one decision, and the clocks it drives are the
+/// things §14 makes disableable: none of `Bench`, `Passing` or `Climb` has any
 /// business knowing what a `CrtSettings` is on a frame it is not being driven.
 ///
 /// The crossing's clock is advanced in `revealing::drive_passing`, not here.
@@ -28,6 +29,7 @@ pub(crate) fn advance(
     panel: Res<Panel>,
     mut bench: ResMut<Bench>,
     mut passing: ResMut<Passing>,
+    mut climb: ResMut<Climb>,
 ) {
     // No camera yet, or no CRT component on it: `None`, which leaves whatever
     // `ORBS_FIRE` said. A missing switch is not the same as a switch set to off,
@@ -61,6 +63,9 @@ pub(crate) fn advance(
     // The switch only. Zero seconds, because `drive_passing` owns this clock and
     // two systems advancing one clock would run it at twice the rate.
     passing.advance(0.0, motion);
+    // The numbers ride the same read, after `refresh_panel` like the bench, so
+    // a change is seen on the frame it lands.
+    climb.advance(time.delta_secs(), motion, &panel);
 }
 
 #[cfg(test)]
@@ -78,6 +83,7 @@ mod tests {
         app.add_plugins(MinimalPlugins)
             .init_resource::<Bench>()
             .init_resource::<Passing>()
+            .init_resource::<Climb>()
             .init_resource::<Panel>()
             .add_systems(Update, advance);
         app.world_mut().spawn(CrtSettings::OFF);
@@ -111,6 +117,7 @@ mod tests {
         app.add_plugins(MinimalPlugins)
             .init_resource::<Bench>()
             .init_resource::<Passing>()
+            .init_resource::<Climb>()
             // `advance` reads the panel to catch the moment the athanor lights.
             // Empty here: this test is about the tube, and an empty panel is the
             // "no athanor on screen" case that leaves the flare alone.
@@ -152,6 +159,7 @@ mod tests {
         app.add_plugins(MinimalPlugins)
             .init_resource::<Bench>()
             .init_resource::<Passing>()
+            .init_resource::<Climb>()
             .init_resource::<Panel>()
             .add_systems(Update, advance);
         let camera = app.world_mut().spawn(CrtSettings::DEFAULT).id();
@@ -169,6 +177,43 @@ mod tests {
             "a kept screen survived the switch — 43 KiB a player asked not to pay",
         );
         assert!(!crosses(&mut app), "F3 to OFF left screens crossing");
+    }
+
+    #[test]
+    fn killing_the_tube_stops_the_numbers_rolling() {
+        // §14 for the third clock: through the system, for
+        // `killing_the_tube_kills_the_fire`'s reason.
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .init_resource::<Bench>()
+            .init_resource::<Passing>()
+            .init_resource::<Climb>()
+            .init_resource::<Panel>()
+            .add_systems(Update, advance);
+        let camera = app.world_mut().spawn(CrtSettings::DEFAULT).id();
+
+        assert!(rolls(&mut app), "a gain did not roll with the tube on");
+        app.world_mut().entity_mut(camera).insert(CrtSettings::OFF);
+        assert!(!rolls(&mut app), "F3 to OFF left the numbers rolling");
+    }
+
+    /// Whether a gain on the ley gauge would be drawn rolling, right now.
+    fn rolls(app: &mut App) -> bool {
+        let at = |done| orbs_sim::Toward {
+            done,
+            span: 100,
+            ahead: orbs_sim::Ahead::Tier(100),
+        };
+        app.world_mut().resource_mut::<Panel>().station = at(0);
+        app.update();
+        app.world_mut().resource_mut::<Panel>().station = at(90);
+        app.update();
+        let shown = app
+            .world()
+            .resource::<Climb>()
+            .toward(orbs_shell::Watch::Ley, at(90))
+            .shown;
+        shown != 90
     }
 
     /// Whether a screen change would start a crossing, right now.

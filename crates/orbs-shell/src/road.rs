@@ -14,6 +14,7 @@
 use orbs_render::{Painter, Pos, Rect, Span, Style};
 use orbs_sim::{Line, Prose};
 
+use super::climb::{Climb, Watch};
 use super::stations;
 
 /// The row the road took, and what is left for the rest of the pane.
@@ -72,7 +73,7 @@ pub fn split(body: Rect, line: Option<&Line>) -> Split {
 /// as a sentence and its count pinned to the right edge. **The count outranks
 /// the sentence** when the row is short: `3 of 5` is the fact, and the
 /// sentence is what the weave's panel says at length.
-pub fn paint(painter: &mut Painter<'_>, area: Rect, line: &Line, prose: &Prose) {
+pub fn paint(painter: &mut Painter<'_>, area: Rect, line: &Line, climb: &Climb, prose: &Prose) {
     if area.is_empty() {
         return;
     }
@@ -87,35 +88,50 @@ pub fn paint(painter: &mut Painter<'_>, area: Rect, line: &Line, prose: &Prose) 
     let stations = u16::try_from(line.stops.len()).unwrap_or(u16::MAX);
     let run_needed = STRIDE.saturating_mul(stations).saturating_add(1);
 
-    // The label, cut down until it fits beside the stations.
-    let count = line.next().map(|next| {
+    // The label, cut down until it fits beside the stations. Each candidate is
+    // the truth, which is measured and spoken, beside what is drawn: the count
+    // rolls (§19, number go up), right-aligned in the truth's width.
+    let progress = |done: u64, needed: u32| {
         prose.line(
             "weave_progress",
             &[
-                ("count", &next.done.to_string()),
-                ("quantity", &next.needed.to_string()),
+                ("count", &done.to_string()),
+                ("quantity", &needed.to_string()),
             ],
         )
+    };
+    let count = line.next().map(|next| {
+        let truth = progress(u64::from(next.done), next.needed);
+        let rolled = climb.count(Watch::Road, &next.id, u64::from(next.done));
+        let width = truth.chars().count();
+        let shown = format!("{:>width$}", progress(rolled.shown, next.needed));
+        (truth, shown)
     });
     let sentence = line
         .next()
         .map(|next| prose.counted(&format!("mastery_{}", next.id), next.needed));
-    let candidates: [Option<String>; 3] = [
+    let candidates: [Option<(String, String)>; 3] = [
         match (&sentence, &count) {
-            (Some(sentence), Some(count)) => Some(format!("{sentence}{SEP}{count}")),
-            (None, None) => Some(prose.line("road_done", &[])),
+            (Some(sentence), Some((truth, shown))) => Some((
+                format!("{sentence}{SEP}{truth}"),
+                format!("{sentence}{SEP}{shown}"),
+            )),
+            (None, None) => {
+                let done = prose.line("road_done", &[]);
+                Some((done.clone(), done))
+            }
             _ => None,
         },
         count.clone(),
         None,
     ];
-    let label = candidates.into_iter().flatten().find(|label| {
-        let cells = u16::try_from(label.chars().count()).unwrap_or(u16::MAX);
+    let label = candidates.into_iter().flatten().find(|(truth, _)| {
+        let cells = u16::try_from(truth.chars().count()).unwrap_or(u16::MAX);
         run_needed.saturating_add(cells).saturating_add(2) <= width
     });
-    let label_cells = label
-        .as_ref()
-        .map_or(0, |label| u16::try_from(label.chars().count()).unwrap_or(0));
+    let label_cells = label.as_ref().map_or(0, |(truth, _)| {
+        u16::try_from(truth.chars().count()).unwrap_or(0)
+    });
 
     let run_width = width.saturating_sub(label_cells.saturating_add(u16::from(label_cells > 0)));
     stations::run(painter, Pos::new(start, y), run_width);
@@ -129,7 +145,11 @@ pub fn paint(painter: &mut Painter<'_>, area: Rect, line: &Line, prose: &Prose) 
         let (mark, style) = stations::walk_mark(stop.walk);
         stations::framed(painter, x, y, mark, style, false);
     }
-    if let Some(label) = label {
+    if let Some((truth, drawn)) = label {
+        let mut said = Span::new(&drawn).with_style(Style::DIM);
+        if drawn != truth {
+            said = said.with_spoken(&truth);
+        }
         painter.span(
             Pos::new(
                 area.col
@@ -137,7 +157,7 @@ pub fn paint(painter: &mut Painter<'_>, area: Rect, line: &Line, prose: &Prose) 
                     .saturating_sub(label_cells),
                 y,
             ),
-            &Span::new(&label).with_style(Style::DIM),
+            &said,
         );
     }
 }
@@ -186,5 +206,52 @@ mod tests {
         assert!(split(body, None).area.is_empty());
         assert!(split(body, Some(&line(false, 6))).area.is_empty());
         assert!(split(body, Some(&line(true, 0))).area.is_empty());
+    }
+
+    /// The count draws on its way and is spoken as it is (§14), whichever
+    /// candidate label fitted.
+    #[test]
+    fn a_rolling_count_draws_on_its_way_and_says_the_truth() {
+        let prose = Prose::builtin();
+        let mut before = line(true, 3);
+        before.stops[0].done = 1;
+        let after = line(true, 3);
+        let panel = |line: &Line| crate::glance::Panel {
+            line: Some(line.clone()),
+            ..crate::glance::Panel::default()
+        };
+        let mut climb = Climb::default();
+        climb.set_enabled(true);
+        climb.observe(&panel(&before));
+        climb.observe(&panel(&after));
+
+        // Wide enough for the deed's sentence, and narrow enough for the count
+        // alone.
+        for cols in [100, 40] {
+            let draw = |climb: &Climb| {
+                let mut frame = orbs_render::Frame::new(orbs_render::GridSize::new(cols, 1));
+                let mut painter = frame.painter(Rect::new(0, 0, cols, 1));
+                paint(
+                    &mut painter,
+                    Rect::new(0, 0, cols, 1),
+                    &after,
+                    climb,
+                    &prose,
+                );
+                frame
+            };
+            let rolling = draw(&climb);
+            let settled = draw(&Climb::default());
+            assert!(
+                rolling.to_text().contains("1 of 5"),
+                "{}",
+                rolling.to_text()
+            );
+            assert_eq!(
+                rolling.speech().to_transcript(),
+                settled.speech().to_transcript(),
+                "a road on its way spoke differently at {cols}",
+            );
+        }
     }
 }

@@ -276,6 +276,20 @@ mod tests {
     }
 
     #[test]
+    fn every_ledger_row_has_a_label() {
+        // `Prose::line` falls back to the key, so a row authored without one
+        // would draw `ledger_elixirs` in `status` and the room's column.
+        let prose = Prose::builtin();
+        for entry in super::super::Progression::builtin().ledger() {
+            let key = format!("ledger_{}", entry.id);
+            assert!(prose.has(&key), "ledger `{}` has no `{key}`", entry.id);
+        }
+        for key in ["ledger_by_spell", "ledger_share", "ledger_spells"] {
+            assert!(prose.has(key), "`{key}` is missing");
+        }
+    }
+
+    #[test]
     fn a_line_interpolates_its_fields() {
         let prose = Prose::builtin();
         let line = prose.line(

@@ -1587,6 +1587,19 @@ impl Sim {
         self.world.resource::<tower::Tally>().count(key)
     }
 
+    /// Every ledger row, counted: what the tower has done in all, and how much
+    /// of it a spell did (§19, *number go up*).
+    #[must_use]
+    pub fn ledger(&self) -> Vec<tower::LedgerRow> {
+        tower::ledger(&self.world)
+    }
+
+    /// The row `room`'s column shows, counted alone.
+    #[must_use]
+    pub fn ledger_of(&self, room: &str) -> Option<tower::LedgerRow> {
+        tower::ledger_of(&self.world, room)
+    }
+
     /// Queue a tester's `debug_spawn`, on the next tick like everything else.
     ///
     /// Recorded in the scrollback and in `Submissions`, so a debug session

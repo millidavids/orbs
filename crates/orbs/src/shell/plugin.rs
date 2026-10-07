@@ -71,6 +71,7 @@ macro_rules! shell_resources {
             orbs_shell::Passing,
             Reveal,
             super::Bench,
+            super::Climb,
             super::Editing,
             super::Loom,
             super::Standing,

@@ -51,6 +51,8 @@ pub struct View<'a> {
     pub scroll: &'a super::scrollback::Scroll,
     /// Where the athanor's fire has reached, and whether it burns at all.
     pub bench: &'a super::bench::Bench,
+    /// How far each changing number has rolled.
+    pub climb: &'a super::climb::Climb,
     /// The spell being edited, if the player is in the editor.
     ///
     /// `&mut`, because the editor's viewport follows the caret and only the
@@ -243,6 +245,7 @@ fn paint_view(frame: &mut Frame, linear: &mut Linear, view: View<'_>) -> Crossed
         panel,
         scroll,
         bench,
+        climb,
         editing,
         weaving,
         walking,
@@ -382,6 +385,7 @@ fn paint_view(frame: &mut Frame, linear: &mut Linear, view: View<'_>) -> Crossed
             panel,
             scroll,
             bench,
+            climb,
         );
         Crossed {
             parts,
@@ -535,6 +539,7 @@ pub(super) fn session(
     panel: &super::glance::Panel,
     scroll: &super::scrollback::Scroll,
     bench: &super::bench::Bench,
+    climb: &super::climb::Climb,
 ) -> [(Rect, Toward); MOST] {
     if pane.is_empty() {
         return [(Rect::EMPTY, Toward::Up); MOST];
@@ -607,7 +612,8 @@ pub(super) fn session(
     // before the panel and boards divide what is left, so a short pane loses the
     // road rather than the transcript. Its two standings go above it — the only
     // numbers about the tower's whole life rather than the room in front of you
-    // — and they yield before the road does. See `gauges::split`.
+    // — with the room's own count beside them where there is room, and they
+    // yield before the road does. See `gauges::split`.
     let gauges = super::gauges::split(body);
     super::gauges::paint(
         &mut painter,
@@ -615,17 +621,19 @@ pub(super) fn session(
         panel.station,
         panel.rankward,
         panel.rank.as_deref(),
+        panel.ledger.as_ref(),
+        climb,
         sim.prose(),
     );
     body = gauges.rest;
 
     let road = super::road::split(body, panel.line.as_ref());
     if let Some(line) = panel.line.as_ref() {
-        super::road::paint(&mut painter, road.area, line, sim.prose());
+        super::road::paint(&mut painter, road.area, line, climb, sim.prose());
     }
     body = road.rest;
-    // The strip along the top: the two rows about the tower's whole life rather
-    // than the room. It leaves upward, by the edge it sits against. Measured as
+    // The strip along the top: the standings and the road. It leaves upward, by
+    // the edge it sits against. Measured as
     // what `body` lost rather than the sum of the two splits, because either can
     // refuse at a short pane and a sum of refusals is a rectangle nothing drew
     // in. Only ever rows, so the second slab is empty and is dropped.
@@ -676,7 +684,7 @@ pub(super) fn session(
     // The bailey's board, fifth, on the same terms.
     let siege = super::rampart::split(body, panel.rampart.as_ref());
     if let Some(fighting) = panel.rampart.as_ref() {
-        super::rampart::paint(&mut painter, siege.area, fighting, sim.prose());
+        super::rampart::paint(&mut painter, siege.area, fighting, climb, sim.prose());
     }
     body = siege.rest;
 

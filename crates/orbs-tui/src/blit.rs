@@ -547,6 +547,7 @@ mod tests {
                 panel: &panel,
                 scroll: &orbs_shell::Scroll::default(),
                 bench: &Bench::default(),
+                climb: &orbs_shell::Climb::default(),
                 editing: None,
                 weaving: None,
                 walking: false,

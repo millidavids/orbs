@@ -230,6 +230,7 @@ struct ShellState<'w> {
     passing: ResMut<'w, crate::shell::Passing>,
     reveal: Res<'w, crate::shell::Reveal>,
     bench: Res<'w, crate::shell::Bench>,
+    climb: Res<'w, crate::shell::Climb>,
     /// `ResMut` because the editor's viewport follows its caret, and how many
     /// lines fit is a fact only the painter has — see `Editor::scroll_to`.
     editing: ResMut<'w, crate::shell::Editing>,
@@ -276,6 +277,7 @@ fn repaint(
         mut passing,
         reveal,
         bench,
+        climb,
         ref mut editing,
         ref mut weaving,
         walk,
@@ -311,6 +313,7 @@ fn repaint(
                 panel: &panel,
                 scroll: &scroll,
                 bench: &bench,
+                climb: &climb,
                 editing: editing.get_mut(),
                 weaving: weaving.get_mut().map(|screen| &*screen),
                 walking: walk.is_open(),

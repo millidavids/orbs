@@ -23,6 +23,7 @@ Nothing was reworded in the move. Every line below is what CLAUDE.md said.
 | the spell language, the editor, or highlighting | *A spell's verb is read at cast*, *A spell is highlighted*, *The satchel* |
 | a duration, a rate, or anything the economy touches | *`orbs-balance`* — and **run a sweep**, which is the instrument that has caught what tests did not |
 | a painter, a record, or the way something reads | *The output style*, *The terminal build* |
+| a number that rolls — the gauges, the room's count, the road, the siege board — or `status`'s ledger | *A number rolls to the truth* |
 | accessibility, colour, or the tube | *Greyscale* |
 | the manual, `recall`, or a room's primer | *`recall apprentice`* |
 
@@ -32,6 +33,109 @@ whose claim is that nothing changed; `scripts/play.sh` plays the game at a real
 keyboard; `ink` is the only thing that can see a colour in the terminal build.
 
 ---
+
+### A number rolls to the truth (`0.17.2`)
+
+A number that changes rolls to its new value over half a second, three steps on
+the flip grid, and its bar fills with it. A dump is a still, so `ORBS_ROLL_AT`
+poses one: the last `ORBS_DUMP` command is held back, the numbers are noted, it
+runs, and whatever it moved is drawn part way. **The command that moves the
+number must be the last one in `ORBS_DUMP`** — `ORBS_THEN` runs after the pose.
+
+```bash
+ORBS_BOOT=0 ORBS_ROLL_AT=0.4 ORBS_DUMP="debug_renown 0; debug_renown 20" cargo run -p orbs
+```
+
+```text
+│renown   [||||||||||||||||                      ] 11/25      ← 0.4: on its way
+  Progress   renown: 20 of 25 toward the next                 ← speech is the truth
+```
+
+`0.0` reads ` 0/25` (right-aligned in the width `20/25` needs, so the slash
+does not move), `0.75` reads `17/25`, `1.0` reads `20/25`.
+`cargo run -p orbs-render --example screens` prints a whole roll, *A number
+climbing*, with the fill's hue as a ramp letter — it stays the truth's at every
+frame.
+
+In a window: `cargo run -p orbs`, `attend laboratory; grind sage`, and watch
+the ley gauge count. F3 to `OFF` and it cuts. `orbs-tui` never rolls.
+
+**A gain says how much, and a crossing is a beat** (`0.17.3`). Renown's first
+rank is 25:
+
+```bash
+ORBS_BOOT=0 ORBS_ROLL_AT=0.5 ORBS_DUMP="debug_renown 20; debug_renown 30" cargo run -p orbs
+```
+
+```text
+│renown   [||||||||||||||||||||||||||||||||||||||] 25/25  hedge-wizard  +10   ← arrived
+```
+
+`0.1` still reads `20/25` — a crossing's first flip tick changes nothing, like
+any roll's — `0.5` and `0.9` read `25/25` in the ramp's green, and `1.0` lands
+on `5/35`. The `+10` is the whole gain, not
+the tier's, and is never spoken. `debug_renown 400` crosses four ranks in one
+beat with `+380`; `attend laboratory; grind sage; meditate 8` at `0.1` shows
+`+1` on both gauges, because a making mints renown too.
+
+**`status` keeps a ledger, and knows whose hand** (`0.17.4`):
+
+```bash
+ORBS_BOOT=0 ORBS_DUMP="attend archive; debug_spawn fragment 8; debug_spell assembling" \
+  ORBS_THEN="invoke assembling; meditate 120; status" cargo run -p orbs
+```
+
+```text
+│ledger ───────────────────────────
+│  scrolls copied ................. 1
+│  scrolls copied by your spells .. 1      ← named in full: a record stands alone
+│  done by your spells ............ 1      ← each completion once
+```
+
+A grind by hand counts nothing there; brew a clarity by hand (`lab_clarity` in
+`scripts/dumps.sh`) and the row is `potions brewed 1` with no share under it. A
+tower that has made nothing has no ledger section at all.
+`cargo test -p orbs-sim --test ledger` holds that the player's run straight after
+a spell's is the player's.
+
+**The room counts what it made** (`0.17.5`), at the right of the gauges:
+
+```bash
+ORBS_BOOT=0 ORBS_ROLL_AT=0.4 ORBS_DUMP="attend archive; debug_spawn fragment 8; \
+  debug_spell assembling; invoke assembling; meditate 30" cargo run -p orbs
+```
+
+```text
+│ley line [||||                ] 2/16  +4          scrolls copied      0 +1  │
+│renown   [|                   ] 1/25  +2          your spells' share  0 +1  │
+```
+
+`ORBS_ROLL_AT=1.0` arrives at `1`. Silent — `status` is the spoken whole. It
+reserves its width first, the share's label included before there is a share,
+and draws only while each bar keeps 24 cells and its title. At the floor,
+`ORBS_GRID=80x22 ORBS_DUMP="attend laboratory"` fits it, and
+`ORBS_DUMP="debug_renown 30; attend laboratory"` — the tower titled — drops it
+whole, the bars back at forty. Walk to another room and its count arrives
+settled; the road's `n of m` rolls on the same completion. A change made in
+`ORBS_THEN` draws settled: the pose sees only the last `ORBS_DUMP` command.
+`scripts/dumps.sh` captures `roll_renown`, `roll_beat`, `roll_column` and
+`ledger`.
+
+**The siege board's stock rolls** (`0.17.6`):
+
+```bash
+ORBS_BOOT=0 ORBS_ROLL_AT=0.4 ORBS_DUMP="attend bailey; defend; pledge d20 to buckler" cargo run -p orbs
+ORBS_BOOT=0 ORBS_ROLL_AT=0.4 ORBS_DUMP="attend bailey; defend; pledge d20 to sortie; hold" cargo run -p orbs
+```
+
+```text
+│coffer    d6 1  d8 2                     22│      ← 24 on its way to 19
+│enemy     ████████████████░░░░  12/15   60%│      ← 15 on its way to 9
+│garrison  ██████████████████░░  16/18   50%│      ← 18 on its way to 14
+```
+
+`0.0` and `1.0` are the two ends. The summary a reader hears is the truth
+throughout, and `chance` snaps. `scripts/dumps.sh` captures `roll_siege`.
 
 ### The calm layer never lies in a log, and a siege waits (`0.17.0`)
 

@@ -24,6 +24,7 @@ mod bench;
 mod beside;
 mod board;
 mod circle;
+mod climb;
 mod dump;
 mod editor;
 mod environment;
@@ -66,6 +67,7 @@ mod threshold;
 mod transition;
 
 pub use bench::Bench;
+pub use climb::{Climb, Rolled, Watch};
 pub use dump::{
     PASSAGE as PASSAGE_VAR, requested as dump_requested, run as dump, run_script as dump_script,
 };

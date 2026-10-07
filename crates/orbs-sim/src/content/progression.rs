@@ -79,6 +79,11 @@ pub struct Progression {
     /// nobody has heard of rather than a load failure.
     #[serde(default)]
     renown: Vec<Rank>,
+    /// The lifetime counts a player can look at, in the order `status` lists
+    /// them. Defaulted, so a file with none is a tower that counts and shows
+    /// nothing rather than a load failure.
+    #[serde(default)]
+    ledger: Vec<super::LedgerEntry>,
 }
 
 /// One thing the tower may be called.
@@ -225,6 +230,8 @@ impl Progression {
                     id: rank.id.clone(),
                 })
                 .collect(),
+            // A count, never a threshold, so a game's length has nothing to say.
+            ledger: self.ledger,
         }
     }
 
@@ -261,6 +268,7 @@ impl Progression {
         ascends("renown", self.renown.iter().map(|rank| rank.at))?;
         self.check_stations()?;
         self.check_milestones(catalogue)?;
+        self.check_ledger(catalogue)?;
         self.check_ids()?;
         self.check_opens(catalogue)?;
         self.check_gated(catalogue)?;
@@ -382,6 +390,34 @@ impl Progression {
                     FILE,
                     format!("`{}`: {why}", milestone.id),
                 ));
+            }
+        }
+        Ok(())
+    }
+
+    /// Every ledger row counts something countable, in a real room, once.
+    fn check_ledger(&self, catalogue: &Catalogue<'_>) -> Result<(), super::ContentError> {
+        let fail = |why: String| Err(super::ContentError::new(FILE, why));
+        for (index, entry) in self.ledger.iter().enumerate() {
+            if let Some(room) = entry.domain.as_deref()
+                && !crate::tower::opened::is_room(room)
+            {
+                return fail(format!(
+                    "ledger `{}` is kept in `{room}`, and there is no such room. One of: {}",
+                    entry.id,
+                    crate::tower::opened::ROOMS.join(", "),
+                ));
+            }
+            if let Err(why) = entry.counts.check(catalogue.outputs, catalogue.instruments) {
+                return fail(format!("ledger `{}`: {why}", entry.id));
+            }
+            // An id is what the label is keyed by, so a second would be a row
+            // whose label is the first's.
+            if self.ledger[..index]
+                .iter()
+                .any(|earlier| earlier.id == entry.id)
+            {
+                return fail(format!("ledger `{}` appears twice", entry.id));
             }
         }
         Ok(())
@@ -510,6 +546,12 @@ impl Progression {
     #[must_use]
     pub fn mastery(&self) -> &[Milestone] {
         &self.mastery
+    }
+
+    /// Every ledger row, in the order `status` lists them.
+    #[must_use]
+    pub fn ledger(&self) -> &[super::LedgerEntry] {
+        &self.ledger
     }
 
     /// Every rank, lowest first.
@@ -1023,5 +1065,54 @@ mod tests {
             curve.line("laboratory").next().map(|m| m.done.key()),
             Some("made:clarity".to_owned()),
         );
+    }
+
+    #[test]
+    fn a_ledger_row_counts_something_real_in_a_real_room_once() {
+        let checked = |rows: &str| {
+            let text = format!("[earns]\nmortar_and_pestle = 1\n{rows}");
+            Progression::parse(&text)
+                .map_err(|error| error.to_string())
+                .and_then(|curve| {
+                    curve
+                        .check(&catalogue(&["clarity"], &[], &[]))
+                        .map_err(|error| error.to_string())
+                })
+        };
+        let row = |id: &str, domain: &str, counts: &str| {
+            format!("[[ledger]]\nid = \"{id}\"\ndomain = \"{domain}\"\ncounts = {counts}\n")
+        };
+        assert!(checked(&row("potions", "laboratory", "\"potions\"")).is_ok());
+        assert!(checked(&row("held", "bailey", "{ event = \"siege_won\" }")).is_ok());
+        assert!(
+            checked(&row("potions", "kitchen", "\"potions\"")).is_err(),
+            "a row in no room loaded",
+        );
+        assert!(
+            checked(&row("pots", "laboratory", "{ at = \"kettle\" }")).is_err(),
+            "a row counting nothing loaded",
+        );
+        let twice = format!(
+            "{}{}",
+            row("potions", "laboratory", "\"potions\""),
+            row("potions", "archive", "\"scrolls\"")
+        );
+        assert!(checked(&twice).is_err(), "a duplicate id loaded");
+    }
+
+    #[test]
+    fn every_room_keeps_a_ledger_row() {
+        // The room's column draws its first row, so a room with none shows
+        // nothing climbing however much it makes.
+        let curve = Progression::builtin();
+        for room in crate::tower::DOMAINS.iter().chain(&["bailey"]) {
+            assert!(
+                curve
+                    .ledger()
+                    .iter()
+                    .any(|entry| entry.domain.as_deref() == Some(*room)),
+                "the {room} keeps no ledger row",
+            );
+        }
     }
 }

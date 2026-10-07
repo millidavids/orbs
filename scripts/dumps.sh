@@ -458,4 +458,18 @@ run cross_woken ORBS_BOOT=0 ORBS_PASSAGE_AT=wake:0.75 ORBS_DUMP="attend laborato
 run cross_off    ORBS_BOOT=0 ORBS_PASSAGE=0 ORBS_PASSAGE_AT=0.30 \
   ORBS_DUMP="attend laboratory; attend forge"
 
+# --- number go up ----------------------------------------------------------
+# A number on its way, and a crossing at *arrived*. `ORBS_ROLL_AT` holds back the
+# last `ORBS_DUMP` command, so whatever moves the number has to be last.
+run roll_renown  ORBS_BOOT=0 ORBS_ROLL_AT=0.4 ORBS_DUMP="debug_renown 0; debug_renown 20"
+run roll_beat    ORBS_BOOT=0 ORBS_ROLL_AT=0.5 ORBS_DUMP="debug_renown 20; debug_renown 30"
+# The room's column climbing with its `+N`, a spell's share beside it, and the
+# ledger `status` keeps for the same work.
+run roll_column  ORBS_BOOT=0 ORBS_ROLL_AT=0.4 ORBS_DUMP="attend archive; debug_spawn fragment 8; \
+  debug_spell assembling; invoke assembling; meditate 30"
+run ledger       ORBS_BOOT=0 ORBS_DUMP="attend archive; debug_spawn fragment 8; debug_spell assembling" \
+  ORBS_THEN="invoke assembling; meditate 120; status"
+# The siege board's stocks on their way: both bands after a round resolves.
+run roll_siege   ORBS_BOOT=0 ORBS_ROLL_AT=0.4 ORBS_DUMP="attend bailey; defend; pledge d20 to sortie; hold"
+
 echo "captured $(ls -1 "$out"/*.txt | wc -l) screens into $out"

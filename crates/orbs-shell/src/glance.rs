@@ -80,6 +80,14 @@ pub struct Panel {
     pub rankward: orbs_sim::Toward,
     /// The tower's title, if it has earned one.
     pub rank: Option<String>,
+    /// Experience, whole rather than toward a tier — what a gain's `+N` is
+    /// measured on, since `station.done` drops at every crossing.
+    pub experience: u64,
+    /// Renown, whole, for the same reason.
+    pub renown: u64,
+    /// What the room the player is standing in has made in all: its first
+    /// ledger row, which the gauge strip draws at its right edge.
+    pub ledger: Option<orbs_sim::tower::LedgerRow>,
     /// The mastery line of the room the player is standing in, for the road
     /// under the pane's title (§11.5).
     ///
@@ -109,7 +117,8 @@ impl Panel {
         // `None` above `/tower`, where no work happens — the leaf is the honest
         // fallback there, so `/tower` and the arsenal are still different places
         // to be standing.
-        self.room = sim.domain().unwrap_or_else(|| self.domain.clone());
+        let domain = sim.domain();
+        self.room = domain.clone().unwrap_or_else(|| self.domain.clone());
         self.stacks = sim.stacks();
         self.ward = sim.ward();
         self.pylon = sim.pylon();
@@ -119,11 +128,15 @@ impl Panel {
         self.briefs = sim.briefs();
         // The room, not the leaf: a player standing in the alembic is in the
         // laboratory, and the laboratory's line is the road they should see.
-        self.line = sim
-            .domain()
+        self.line = domain
+            .as_deref()
             .and_then(|domain| sim.mastery().into_iter().find(|line| line.domain == domain));
         self.station = sim.toward_station();
         self.rankward = sim.toward_rank();
         self.rank = sim.rank();
+        self.experience = sim.experience();
+        self.renown = sim.renown();
+        // The room's count, as the road takes the room — none above `/tower`.
+        self.ledger = domain.as_deref().and_then(|room| sim.ledger_of(room));
     }
 }

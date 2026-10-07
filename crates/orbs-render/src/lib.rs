@@ -104,6 +104,7 @@ mod pylon;
 // draws the rule between the two bands and needs the glyph by name.
 pub mod lattice;
 pub mod rampart;
+mod roll;
 mod span;
 mod style;
 mod tiling;
@@ -148,6 +149,7 @@ pub use record::{
     FieldName, Outcome, Record, RecordBuilder, RecordKind, RecordView, Records, Sift, Value,
     contains_ignoring_case,
 };
+pub use roll::{PLUS_SECS, ROLL_SECS, ROLL_STEPS, Roll, fading};
 pub use span::Span;
 pub use style::{
     Density, Depiction, Fill, Heat, Intensity, Lexeme, Presentation, Roil, Role, Style, Tint, Wash,

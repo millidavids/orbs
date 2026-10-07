@@ -11,7 +11,8 @@
 //!
 //! | Module | Verbs |
 //! |---|---|
-//! | `dispatch` | the `match`, `meditate`, `status`, and the two records every verb can need |
+//! | `dispatch` | the `match`, `meditate`, and the two records every verb can need |
+//! | `status` | `status` — the tower in one glance, and its ledger |
 //! | `pipeline` | `move`, `wield`, `stop`, `siphon`, `purge`, `divine` — §10.1's loop |
 //! | `recall` | `recall` — §6.1's manual, read *before* the loop |
 //! | `navigate` | `attend`, `survey` — §7's places |
@@ -42,6 +43,7 @@ mod scribe;
 mod scroll;
 mod scry;
 mod settle;
+mod status;
 mod summon;
 mod unfurl;
 mod wander;

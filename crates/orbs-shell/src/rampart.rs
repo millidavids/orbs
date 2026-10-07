@@ -17,6 +17,7 @@ use orbs_render::{Painter, Pos, Rampart, Rect, Role, Style, UtteranceKind, Wash}
 use orbs_sim::content::Prose;
 
 use crate::beside::{self, Split};
+use crate::climb::{Climb, Watch};
 
 /// The board's footprint, and what is left for the transcript.
 ///
@@ -34,10 +35,45 @@ pub const fn split(area: Rect, siege: Option<&Rampart>) -> Split {
 }
 
 /// Draw the board where [`split`] put it.
-pub fn paint(painter: &mut Painter<'_>, at: Rect, siege: &Rampart, prose: &Prose) {
+///
+/// The coffer and both sides' vigour roll as they move (§19, number go up):
+/// the cells are drawn from a copy holding the rolled values and the summary is
+/// spoken from `siege`, so a reader never hears a number on its way. Every
+/// field on the board is a fixed width, so a roll moves nothing but digits and
+/// a bar's end. `chance` snaps: it is a probability, not a stock.
+pub fn paint(painter: &mut Painter<'_>, at: Rect, siege: &Rampart, climb: &Climb, prose: &Prose) {
     if at.is_empty() {
         return;
     }
+    let rolled = rolled(siege, climb);
+    let drawn = rolled.as_ref().unwrap_or(siege);
+    draw(painter, at, drawn, prose);
+    speak(painter, siege, prose);
+}
+
+/// The board with its stocks where their rolls have reached, or `None` when
+/// nothing is moving — the copy is only paid for while a number is.
+fn rolled(siege: &Rampart, climb: &Climb) -> Option<Rampart> {
+    let at = |watch, truth: u32| {
+        u32::try_from(climb.stock(watch, u64::from(truth)).shown).unwrap_or(truth)
+    };
+    let coffer = at(Watch::Coffer, siege.quintessence);
+    let ours = at(Watch::Garrison, siege.garrison.vigour);
+    let theirs = at(Watch::Enemy, siege.enemy.vigour);
+    let still = coffer == siege.quintessence
+        && ours == siege.garrison.vigour
+        && theirs == siege.enemy.vigour;
+    (!still).then(|| {
+        let mut shown = siege.clone();
+        shown.quintessence = coffer;
+        shown.garrison.vigour = ours;
+        shown.enemy.vigour = theirs;
+        shown
+    })
+}
+
+/// Every cell of the board, silently.
+fn draw(painter: &mut Painter<'_>, at: Rect, siege: &Rampart, prose: &Prose) {
     painter.border(at, Some(&prose.line("siege_title", &[])), Style::DIM);
 
     let inside = at.inset(1);
@@ -93,8 +129,6 @@ pub fn paint(painter: &mut Painter<'_>, at: Rect, siege: &Rampart, prose: &Prose
         &truncate(&siege.tally, cols),
         Style::DIM,
     );
-
-    speak(painter, siege, prose);
 }
 
 /// Draw one side's row, and tint its bar.
@@ -256,5 +290,57 @@ mod tests {
             whole.col + whole.cols,
             "the board floated off the right edge",
         );
+    }
+
+    /// A board drawn with `climb`, and the frame it was drawn into.
+    fn board(siege: &Rampart, climb: &Climb) -> orbs_render::Frame {
+        let size = orbs_render::GridSize::new(Rampart::COLS + 2, Rampart::rows() + 2);
+        let mut frame = orbs_render::Frame::new(size);
+        let mut painter = frame.painter(frame.area());
+        let at = Rect::new(0, 0, size.cols, size.rows);
+        paint(&mut painter, at, siege, climb, &Prose::builtin());
+        frame
+    }
+
+    /// A climb that has watched the coffer fall from 24 to `left`, just begun.
+    fn pledged(left: u32) -> (Rampart, Climb) {
+        let mut climb = Climb::default();
+        climb.set_enabled(true);
+        let before = crate::glance::Panel {
+            rampart: Some(siege()),
+            ..crate::glance::Panel::default()
+        };
+        climb.observe(&before);
+        let mut after = siege();
+        after.quintessence = left;
+        after.enemy.vigour = 9;
+        climb.observe(&crate::glance::Panel {
+            rampart: Some(after.clone()),
+            ..crate::glance::Panel::default()
+        });
+        (after, climb)
+    }
+
+    #[test]
+    fn the_coffer_and_the_bands_roll_and_say_only_the_truth() {
+        let (after, climb) = pledged(19);
+        let rolling = board(&after, &climb);
+        let settled = board(&after, &Climb::default());
+        assert!(
+            rolling.to_text().contains(&siege().coffer_row()),
+            "the coffer jumped:\n{}",
+            rolling.to_text(),
+        );
+        assert!(
+            rolling.to_text().contains(&siege().row(&siege().enemy)),
+            "the enemy's band jumped:\n{}",
+            rolling.to_text(),
+        );
+        assert_eq!(
+            rolling.speech().to_transcript(),
+            settled.speech().to_transcript(),
+            "a board on its way spoke differently",
+        );
+        assert!(settled.to_text().contains(&after.coffer_row()));
     }
 }

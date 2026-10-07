@@ -113,6 +113,7 @@ fn main() {
     speak(&weave);
 
     gauge_ramp();
+    climbing();
 
     // 35×35 — the block the archive's map takes, at its natural size. Three
     // states, because the fog is the whole mechanic and one of them is not
@@ -688,6 +689,43 @@ fn gauge_ramp() {
     println!("    `F` is reserved for a bar that is *actually* full: one step short");
     println!("    reads `E`, so green is the arrival rather than the approach.");
     println!("    A blank is an unfilled cell — it is a picture of nothing.");
+}
+
+/// A gauge rolling from `3/25` to `21/25`, eight frames across the roll.
+///
+/// A dump poses one frame of a roll; this shows the whole of one, with the hue
+/// as a ramp letter — it is the truth's at every frame, which is the property a
+/// still cannot show.
+fn climbing() {
+    println!("\n=== A number climbing, 3/25 to 21/25 (§19, number go up) ===\n");
+    println!("    t      bar                                 reading  hue");
+    for eighth in 0..=8u16 {
+        let roll = orbs_render::Roll {
+            from: 3,
+            to: 21,
+            t: f32::from(eighth) / 8.0,
+        };
+        let shown = u32::try_from(roll.shown()).unwrap_or(u32::MAX);
+        let mut frame = Frame::new(GridSize::new(40, 1));
+        let mut painter = frame.painter(Rect::new(0, 0, 40, 1));
+        painter.gauge_hued(
+            Rect::new(0, 0, 34, 1),
+            shown,
+            25,
+            orbs_render::Fill::of(21, 25),
+            Style::default(),
+            "renown: 21 of 25 toward the next",
+        );
+        let row = frame.to_text();
+        let bar = row.lines().next().unwrap_or_default().trim_end();
+        let hue = frame
+            .cell(Pos::new(1, 0))
+            .map_or(' ', |cell| depiction_mark(cell.style.depicted()));
+        println!("    {eighth}/8    {bar:<34}  {shown:>2}/25    {hue}");
+    }
+    println!("\n    Three steps a flip tick apart, most of the way in the first.");
+    println!("    The hue is 21/25's throughout: a bar coloured by its own length");
+    println!("    would turn every filled cell over together on each step.");
 }
 
 /// A depiction as one character, so a text dump can show colour it cannot draw.

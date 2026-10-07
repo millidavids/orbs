@@ -5,6 +5,7 @@
 mod deed;
 mod forge;
 mod fuel;
+mod ledger;
 mod length;
 mod load;
 mod manual;
@@ -20,6 +21,7 @@ mod trials;
 pub use deed::Deed;
 pub use forge::{Charm as CharmCost, Charms};
 pub use fuel::{Fuel, Fuels};
+pub use ledger::{Counted, Entry as LedgerEntry, Kind as CountedKind};
 pub use length::Length;
 pub use load::ContentError;
 pub use manual::{Chapter, Manual};

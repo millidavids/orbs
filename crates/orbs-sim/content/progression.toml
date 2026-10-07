@@ -509,3 +509,73 @@ done = { at = "lattice", times = 5 }
 domain = "forge"
 id = "forge_3"
 done = { at = "lattice", times = 15 }
+
+# ---------------------------------------------------------------------------
+# LEDGER — what the tower has done, in all (§19, number go up).
+#
+# A row is `id`, `counts` and, if it belongs to a room, `domain`. `counts` takes
+# a deed's spellings without the number:
+#
+#   counts = "potions"                  potions of any kind ("scrolls" too)
+#   counts = { made = "clarity" }       one product
+#   counts = { at = "prism" }           runs finished at an instrument
+#   counts = { event = "figure" }       something a room does
+#
+# `status` lists every row with a count, in this order, and beside each how much
+# of it a spell did. A room shows its **first** row at the right of the gauges
+# while the player stands in it, climbing as it is made. A row with no `domain`
+# is about the whole tower and only `status` shows it.
+#
+# The label is prose: `ledger_<id>` in `prose.toml`.
+# ---------------------------------------------------------------------------
+[[ledger]]
+id = "potions"
+domain = "laboratory"
+counts = "potions"
+
+[[ledger]]
+id = "scrolls"
+domain = "archive"
+counts = "scrolls"
+
+[[ledger]]
+id = "walks"
+domain = "archive"
+counts = { at = "stacks" }
+
+[[ledger]]
+id = "wards"
+domain = "lens"
+counts = { at = "prism" }
+
+[[ledger]]
+id = "courses"
+domain = "sanctum"
+counts = { at = "pylon" }
+
+[[ledger]]
+id = "beasts"
+domain = "menagerie"
+counts = { event = "figure" }
+
+[[ledger]]
+id = "charms"
+domain = "forge"
+counts = { at = "lattice" }
+
+[[ledger]]
+id = "held"
+domain = "bailey"
+counts = { event = "siege_won" }
+
+[[ledger]]
+id = "sieges"
+counts = { event = "siege" }
+
+[[ledger]]
+id = "bound"
+counts = { event = "bound" }
+
+[[ledger]]
+id = "secrets"
+counts = { event = "secret" }

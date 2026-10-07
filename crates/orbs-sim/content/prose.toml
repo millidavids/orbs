@@ -270,6 +270,36 @@ gauge_spoken = "{name}: {count} of {quantity} toward the next"
 gauge_spoken_topped = "{name}: nothing more authored"
 
 # ---------------------------------------------------------------------------
+# THE LEDGER (§19, number go up).
+#
+# A label per `[[ledger]]` row in `progression.toml`, keyed by its id. `status`
+# draws each as a reading - the label, dots, the count - so a label is a short
+# noun phrase that reads as *how many*, and the room's column draws the same
+# label beside its count.
+#
+# `ledger_by_spell` is a spell's share of one row, named in full so the record
+# stands alone - `sift` and a pipe see one record at a time, never the row above
+# it. `ledger_share` is the same share in the room's column, where it sits
+# under its own row and space is short. `ledger_spells` is everything the
+# tower's spells have done. No commas: a reader hears a row as
+# `name: ..., qty: ...`, and a comma in the name splits it.
+# ---------------------------------------------------------------------------
+ledger_potions = "potions brewed"
+ledger_scrolls = "scrolls copied"
+ledger_walks = "walks of the stacks"
+ledger_wards = "wards broken"
+ledger_courses = "courses run"
+ledger_beasts = "beasts held"
+ledger_charms = "charms laid"
+ledger_held = "sieges held"
+ledger_sieges = "sieges fought"
+ledger_bound = "spells bound"
+ledger_secrets = "secrets found"
+ledger_by_spell = "{name} by your spells"
+ledger_share = "your spells' share"
+ledger_spells = "done by your spells"
+
+# ---------------------------------------------------------------------------
 # THE TEN THINGS THE TOWER IS CALLED (§11.5).
 #
 # Titles, not gates - a rank names where you stand and unlocks nothing. Each is

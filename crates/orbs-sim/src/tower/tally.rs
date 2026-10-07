@@ -39,6 +39,20 @@ pub const BOUND: &str = "bound";
 /// A secret recipe found (`tower::learned::discover`).
 pub const SECRET: &str = "secret";
 
+/// Every completion a spell did, whatever it was (§19, *number go up*), once
+/// each — a [`note`] riding on one is not another.
+///
+/// Beside it each key is counted a second time under [`by_spell`], so the
+/// ledger can say how much of a room's work was the orb's. No deed spells
+/// either, so a spell's run still counts toward a station exactly once.
+pub const SPELL: &str = "spell";
+
+/// The key a spell's share of `key` is counted under.
+#[must_use]
+pub fn by_spell(key: &str) -> String {
+    format!("{SPELL}:{key}")
+}
+
 /// How many times each key has been counted.
 #[derive(Resource, Debug, Default, Clone, PartialEq, Eq)]
 pub struct Tally(BTreeMap<String, u32>);
@@ -63,6 +77,20 @@ impl Tally {
     fn bump(&mut self, key: &str) {
         let count = self.0.entry(key.to_owned()).or_default();
         *count = count.saturating_add(1);
+    }
+
+    /// Count `work`, and a spell's share of it if `by_spells`; the completion
+    /// itself, not a note riding on one, is one more for [`SPELL`].
+    fn bump_work(&mut self, work: &Work, by_spells: bool, itself: bool) {
+        for key in work.keys() {
+            self.bump(key);
+            if by_spells {
+                self.bump(&by_spell(key));
+            }
+        }
+        if by_spells && itself {
+            self.bump(SPELL);
+        }
     }
 }
 
@@ -167,12 +195,24 @@ impl Work {
 /// Renown is minted only for a making ([`Work::sold`]); the door carries events
 /// too, and paying for those would pay a siege twice.
 pub fn done(world: &mut World, work: &Work, earned: u64) {
-    {
-        let mut tally = world.resource_mut::<Tally>();
-        for key in work.keys() {
-            tally.bump(key);
-        }
-    }
+    count(world, work, earned, true);
+}
+
+/// [`done`], and whether this is the completion itself rather than a note
+/// riding on one — a secret a ward gave up, a siege held — which [`SPELL`]
+/// must not count a second time.
+fn count(world: &mut World, work: &Work, earned: u64, itself: bool) {
+    // Whose hand, read off the stream the seam is writing into: a spell's line
+    // and the run a spell bid both land inside the window `attribute` opens,
+    // and the player's own work never does.
+    let by_spells = world
+        .resource::<crate::session::Scrollback>()
+        .records()
+        .attributed()
+        .is_some();
+    world
+        .resource_mut::<Tally>()
+        .bump_work(work, by_spells, itself);
     super::credit(world, earned);
     if work.sold() {
         // A store's standing is a rate, so this door has to see every making.
@@ -201,8 +241,12 @@ pub fn done(world: &mut World, work: &Work, earned: u64) {
 }
 
 /// Count an event that earns nothing.
+///
+/// Every caller notes something that rode on a completion already counted —
+/// a secret from a ward, a siege held, a spell bound — so it is not another
+/// thing a spell did.
 pub fn note(world: &mut World, event: &str) {
-    done(world, &Work::event(event), 0);
+    count(world, &Work::event(event), 0, false);
 }
 
 #[cfg(test)]
@@ -229,6 +273,24 @@ mod tests {
         assert_eq!(tally.count("scroll"), 0);
         let entries: Vec<(&str, u32)> = tally.entries().collect();
         assert_eq!(entries, [("potion", 2)]);
+    }
+
+    #[test]
+    fn a_spells_run_and_the_note_riding_on_it_are_one_thing_done() {
+        // A spell's ward break that finds a secret is one run: two keys, each
+        // with its share, and one more thing the spells did — not two.
+        let mut tally = Tally::default();
+        tally.bump_work(&Work::at("prism"), true, true);
+        tally.bump_work(&Work::event(SECRET), true, false);
+        assert_eq!(tally.count(SPELL), 1);
+        assert_eq!(tally.count("spell:at:prism"), 1);
+        assert_eq!(tally.count("spell:event:secret"), 1);
+
+        // ...and the player's own is nobody's but theirs.
+        tally.bump_work(&Work::at("prism"), false, true);
+        assert_eq!(tally.count("at:prism"), 2);
+        assert_eq!(tally.count("spell:at:prism"), 1);
+        assert_eq!(tally.count(SPELL), 1);
     }
 
     #[test]
