@@ -25,6 +25,10 @@ pub const DRIVER: &str = "driver";
 /// 0.5 — §19 records the keypress version being removed rather than kept.
 pub const SKIP: &str = "skip";
 
+/// The key the installation is kept under: whether a new tower is installed
+/// before it wakes. On unless a player turned it off.
+pub const INSTALL: &str = "install";
+
 /// The key §9's focus mode is kept under.
 ///
 /// Here rather than in a frontend because both builds bind `F4` and both must
@@ -57,6 +61,15 @@ pub fn set_driver(driver: Driver) {
 #[must_use]
 pub fn skips_boot() -> bool {
     get(SKIP).is_some_and(|word| is_on(&word))
+}
+
+/// Whether a new tower is installed before it wakes, as far as the file says.
+///
+/// `ORBS_INSTALL` outranks it; see [`install_wanted`](crate::install_wanted).
+/// Read once per frontend, at startup, for `skips_boot`'s reason.
+#[must_use]
+pub fn installs() -> bool {
+    get(INSTALL).is_none_or(|word| is_on(&word))
 }
 
 #[cfg(test)]

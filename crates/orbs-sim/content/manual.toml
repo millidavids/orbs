@@ -447,6 +447,8 @@ lines = [
   "",
   "`skip` passes over the boot sequence. It is worth seeing once and it is not worth seeing every time, and this is a setting rather than a key you press because the first thing you do to a game should not be dismissing it.",
   "",
+  "`install` is the setup a new tower begins with: a practice tower where the orb learns your voice, thrown away when you wake the real one. Turn it off once you know the way around. Typing `skip` during the setup ends it for that tower alone.",
+  "",
   "where they are kept",
   "",
   "In `orbs-settings.toml`, beside your towers, in the folder named in the `entering` chapter. It is plain text. Deleting it puts everything back to how it arrived.",

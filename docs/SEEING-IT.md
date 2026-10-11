@@ -1819,6 +1819,7 @@ ORBS_DUMP=1 ORBS_BOOT=post cargo run -p orbs     # a boot stage as text
 ORBS_BOOT=0 cargo run -p orbs                    # skip the boot sequence
 ORBS_THRESHOLD=0 cargo run -p orbs               # ...and the orb's menu, straight into a tower
 ORBS_THRESHOLD=1 ORBS_DUMP=1 cargo run -p orbs   # the threshold, which a dump has no other way to reach
+ORBS_INSTALL=1 ORBS_DUMP="help" cargo run -p orbs   # the installation, posed over its practice tower
 ORBS_MENU='settings\nsound' ORBS_DUMP="menu" cargo run -p orbs   # a menu page, driven by words
 ORBS_MANUAL=entering ORBS_MENU=manual ORBS_DUMP=1 ORBS_THRESHOLD=1 cargo run -p orbs  # a chapter
 ORBS_SOUND=1 cargo run -p orbs                   # names every cue as it plays — the one surface with no picture
@@ -3805,6 +3806,54 @@ menu first would be testing the door.
 > It found a defect on its first run that nothing else could: the terminal build
 > noticed a swap inside `Session::tick`, the threshold stops the clock, and so
 > the menu asked for a tower that nothing ever heard. Every unit test was green.
+
+### The installation — the orb initialised, in a tower thrown away
+
+**`new` and a length reach a practice tower first**: the real sealed tower from
+the same seed, held as the tower while a strip where the gauges sit teaches five
+steps. `wake` at the end, or `skip` at any step, raises the real tower at tick
+0; a bare Enter is only a line. The habits page's `install` row turns it off.
+
+```bash
+ORBS_INSTALL=1 ORBS_BOOT=0 ORBS_DUMP=1 cargo run -q -p orbs
+#   initialising the orb      step 1 of 5   skip ends it
+ORBS_INSTALL=1 ORBS_BOOT=0 ORBS_DUMP="help; survey" cargo run -q -p orbs
+#   [ok] listening  [ok] sight  [>>] paths   ← step 3 of 5
+ORBS_INSTALL=1 ORBS_BOOT=0 ORBS_DUMP="help; survey; cd laboratory" cargo run -q -p orbs
+#   step 4 of 5, not 5        ← `cd` is a shell's word, and one line finishes one step
+ORBS_INSTALL=1 ORBS_BOOT=0 ORBS_DUMP="help; survey; attend laboratory; go to the tower; status" cargo run -q -p orbs
+#   the orb is initialised, and knows your voice      try  wake
+ORBS_INSTALL=1 ORBS_BOOT=0 ORBS_DUMP="help; survey; attend laboratory; go to the tower; status; wake; status" cargo run -q -p orbs
+#   the real tower at tick 1, cold start, the seed it practised on
+ORBS_INSTALL=1 ORBS_BOOT=0 ORBS_GRID=80x22 ORBS_DUMP="help" cargo run -q -p orbs
+#   the floor: six rows of strip, the transcript under it
+ORBS_INSTALL=1 ORBS_BOOT=0 ORBS_DUMP="help; skip; status" cargo run -q -p orbs
+#   the real tower: its boot report, and the same seed
+ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_THRESHOLD=1 ORBS_DUMP=1 ORBS_MENU='settings\nhabits' cargo run -q -p orbs
+#   install  setup on a new orb  [on]
+```
+
+**`ORBS_INSTALL` has three values.** `0` never installs and `1` always does;
+unset or blank leaves it to the setting. In a dump only `1` poses it, because a
+dump keeps no settings and every capture expects the open tower. `dumps.sh` and
+the played suite export `0`, and `Game::installing` and
+`Game::at_the_threshold_by_setting` are the two ways back in. `scripts/tui.sh`
+passes `0` too: `ORBS_THRESHOLD=1 ORBS_INSTALL=1 scripts/tui.sh start`, then
+`play`, `new` and a length, reaches it by hand.
+
+> ⚠ **The swap from the menu into the practice tower is not in a dump**, which
+> builds no `App`. `skip` or `wake` in `ORBS_DUMP` raises the real tower the way
+> the frontends do. The rest is played:
+>
+> ```bash
+> scripts/play.sh installing::   # the menu, five lines, the wake, F5, the setting
+> ```
+>
+> Its first run found an older defect: every swap in the terminal build left
+> the old screen's glyphs wherever the new screen drew a blank.
+
+**The practice tower is a tower**, so `menu`, `quit` and every verb work in it.
+`quit` writes nothing, because the practice tower is kept nowhere.
 
 ### The menu's pages, and more than one tower
 

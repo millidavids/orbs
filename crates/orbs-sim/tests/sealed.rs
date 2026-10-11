@@ -44,6 +44,28 @@ fn brew_a_clarity(sim: &mut Sim) {
     sim.step_n(60);
 }
 
+/// The installation's practice tower is the tower the player will get, minus
+/// the opening report — so the report is read once, in the real one.
+#[test]
+fn a_sandbox_is_a_begun_tower_that_says_nothing() {
+    use orbs_sim::content::Length;
+
+    let sandbox = Sim::sandbox(7, Length::Medium);
+    let begun = Sim::begun(7, Length::Medium);
+    assert!(sandbox.scrollback().records().is_empty());
+    assert!(!begun.scrollback().records().is_empty());
+
+    // The transcript and the count of records ever pushed are the only things
+    // the report touched.
+    let without_transcript = |sim: &Sim| {
+        let mut save = sim.snapshot();
+        save.records.clear();
+        save.world.sequence = 0;
+        save.to_toml().expect("a save renders")
+    };
+    assert_eq!(without_transcript(&sandbox), without_transcript(&begun));
+}
+
 #[test]
 fn a_sealed_tower_is_a_laboratory_and_an_open_one_is_everything() {
     let sealed = Sim::sealed(1);

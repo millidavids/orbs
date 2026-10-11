@@ -32,6 +32,7 @@ mod focus;
 mod gauges;
 mod glance;
 mod guide;
+mod install;
 mod keys;
 mod lattice;
 mod lexing;
@@ -76,6 +77,7 @@ pub use environment::{LENGTH, RUSTC, SEALED, augury, fresh, scrivener, wizard};
 pub use focus::{Focus, Open};
 pub use glance::Panel;
 pub use guide::{Entry, Guide, guide};
+pub use install::{Begun, Install, Raise, wanted as install_wanted};
 pub use keys::{
     Key, apply, apply_to_editor, apply_to_manual, apply_to_maze, apply_to_menu, apply_to_weave,
 };

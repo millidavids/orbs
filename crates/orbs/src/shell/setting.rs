@@ -95,6 +95,7 @@ pub(crate) struct Settable<'w, 's> {
     readers: Option<Res<'w, crate::sim::Readers>>,
     levels: Option<Res<'w, crate::sound::Levels>>,
     skipping: Option<Res<'w, Skipping>>,
+    installs: Option<Res<'w, super::Installs>>,
 }
 
 impl Settable<'_, '_> {
@@ -120,6 +121,7 @@ impl Settable<'_, '_> {
             self.driver(),
             self.levels.as_deref().copied(),
             self.skipping.as_deref().copied(),
+            self.installs.as_deref().copied(),
         )
     }
 }
@@ -141,6 +143,7 @@ pub(crate) fn defaults() -> Vec<Row> {
         orbs_shell::Driver::default(),
         None,
         None,
+        None,
     )
 }
 
@@ -157,6 +160,7 @@ fn rows(
     driver: orbs_shell::Driver,
     levels: Option<crate::sound::Levels>,
     skipping: Option<Skipping>,
+    installs: Option<super::Installs>,
 ) -> Vec<Row> {
     let themes: Vec<&str> = palette::ALL.iter().map(|phosphor| phosphor.name).collect();
     let theme = theme.map_or(palette::ALL[0].name, |theme| theme.0.name);
@@ -223,6 +227,14 @@ fn rows(
             switched(skipping.unwrap_or_default().on()),
             &SWITCH,
         ),
+        // From the resource, for `skip`'s reason. With none — the dump — it is
+        // the file's answer, which on a first launch is on.
+        Row::new(
+            Category::Habits,
+            settings::INSTALL,
+            switched(installs.map_or_else(settings::installs, |installs| installs.0)),
+            &SWITCH,
+        ),
     ]
 }
 
@@ -279,6 +291,12 @@ pub(crate) fn apply(world: &mut World, setting: &str, value: &str) {
         settings::SKIP => {
             if let Some(mut skipping) = world.get_resource_mut::<Skipping>() {
                 *skipping = Skipping(is_on(value));
+            }
+        }
+        // Asked at the next `new`, so this is all there is to honour.
+        settings::INSTALL => {
+            if let Some(mut installs) = world.get_resource_mut::<super::Installs>() {
+                *installs = super::Installs(is_on(value));
             }
         }
         VOICE | HUM => {

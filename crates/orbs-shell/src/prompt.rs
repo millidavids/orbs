@@ -82,6 +82,8 @@ pub struct View<'a> {
     /// wide and how tall the pane is — see
     /// [`ManualReader::measured`](crate::ManualReader::measured).
     pub reading_manual: Option<&'a mut crate::ManualReader>,
+    /// The installation, while the tower being drawn is its practice tower.
+    pub installing: Option<&'a crate::install::Install>,
 }
 
 /// Paint the session into `frame`.
@@ -251,6 +253,7 @@ fn paint_view(frame: &mut Frame, linear: &mut Linear, view: View<'_>) -> Crossed
         walking,
         menuing,
         reading_manual,
+        installing,
     } = view;
     let grid = frame.size();
     // The prompt spends a second row so it can be drawn at double size — see
@@ -369,6 +372,7 @@ fn paint_view(frame: &mut Frame, linear: &mut Linear, view: View<'_>) -> Crossed
             panel,
             scroll,
             bench,
+            installing,
         );
         // `F5`'s mirror is the fourth surface that replaces the pane, and the one
         // no `Focus` variant names — so it is spelled out here rather than
@@ -386,6 +390,7 @@ fn paint_view(frame: &mut Frame, linear: &mut Linear, view: View<'_>) -> Crossed
             scroll,
             bench,
             climb,
+            installing,
         );
         Crossed {
             parts,
@@ -540,6 +545,7 @@ pub(super) fn session(
     scroll: &super::scrollback::Scroll,
     bench: &super::bench::Bench,
     climb: &super::climb::Climb,
+    installing: Option<&crate::install::Install>,
 ) -> [(Rect, Toward); MOST] {
     if pane.is_empty() {
         return [(Rect::EMPTY, Toward::Up); MOST];
@@ -614,24 +620,33 @@ pub(super) fn session(
     // numbers about the tower's whole life rather than the room in front of you
     // — with the room's own count beside them where there is room, and they
     // yield before the road does. See `gauges::split`.
-    let gauges = super::gauges::split(body);
-    super::gauges::paint(
-        &mut painter,
-        gauges.area,
-        panel.station,
-        panel.rankward,
-        panel.rank.as_deref(),
-        panel.ledger.as_ref(),
-        climb,
-        sim.prose(),
-    );
-    body = gauges.rest;
+    //
+    // The installation's strip takes their place: the orb is not up yet, and a
+    // practice tower's standings are thrown away with it.
+    if let Some(install) = installing {
+        let strip = crate::install::split(body);
+        crate::install::paint(&mut painter, strip.area, install);
+        body = strip.rest;
+    } else {
+        let gauges = super::gauges::split(body);
+        super::gauges::paint(
+            &mut painter,
+            gauges.area,
+            panel.station,
+            panel.rankward,
+            panel.rank.as_deref(),
+            panel.ledger.as_ref(),
+            climb,
+            sim.prose(),
+        );
+        body = gauges.rest;
 
-    let road = super::road::split(body, panel.line.as_ref());
-    if let Some(line) = panel.line.as_ref() {
-        super::road::paint(&mut painter, road.area, line, climb, sim.prose());
+        let road = super::road::split(body, panel.line.as_ref());
+        if let Some(line) = panel.line.as_ref() {
+            super::road::paint(&mut painter, road.area, line, climb, sim.prose());
+        }
+        body = road.rest;
     }
-    body = road.rest;
     // The strip along the top: the standings and the road. It leaves upward, by
     // the edge it sits against. Measured as
     // what `body` lost rather than the sum of the two splits, because either can

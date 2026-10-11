@@ -32,7 +32,9 @@ run() {
   # Both readers off first: weights are a gitignored build artefact, so a
   # capture made against them is not reproducible from a clean checkout. A
   # block wanting one names it in its own arguments, which come after and win.
-  env ORBS_AUGURY=off ORBS_SCRIVENER=off "$@" "$orbs" > "$out/$name.txt" 2>"$out/$name.err" || true
+  # The installation off for the same reason: a capture poses it only by
+  # asking, so an `ORBS_INSTALL` exported in this shell cannot move a baseline.
+  env ORBS_AUGURY=off ORBS_SCRIVENER=off ORBS_INSTALL=0 "$@" "$orbs" > "$out/$name.txt" 2>"$out/$name.err" || true
   # A dump prints nothing to stderr in the ordinary case; keep the file only if
   # it has content, so `diff -r` is not full of empty noise.
   [ -s "$out/$name.err" ] || rm -f "$out/$name.err"
@@ -229,6 +231,20 @@ run manual_closed  ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_THRESHOLD=1 ORBS_DUMP=1 ORB
 # The floor. One word shorter than the in-tower page, so if that fits so does
 # this — pinned anyway, for the day the top page grows and nobody checks.
 run threshold_narrow ORBS_BOOT=0 ORBS_GRID=80x22 ORBS_THRESHOLD=1 ORBS_DUMP=1
+
+# --- the installation ---------------------------------------------------------
+# A new tower's practice run, posed over the practice tower itself. `skip` and a
+# last `wake` cross into the real tower; `scripts/play.sh installing::` holds the
+# menu around it.
+run install_listening ORBS_INSTALL=1 ORBS_BOOT=0 ORBS_DUMP=1
+run install_paths     ORBS_INSTALL=1 ORBS_BOOT=0 ORBS_DUMP="help; survey"
+# One line finishes one step: `cd` moves the player and is a shell's word, and
+# `speech` still waits for a line of its own.
+run install_one_line  ORBS_INSTALL=1 ORBS_BOOT=0 ORBS_DUMP="help; survey; cd laboratory"
+run install_done      ORBS_INSTALL=1 ORBS_BOOT=0 ORBS_DUMP="help; survey; attend laboratory; go to the tower; status"
+run install_narrow    ORBS_INSTALL=1 ORBS_BOOT=0 ORBS_GRID=80x22 ORBS_DUMP="help"
+run install_skip      ORBS_INSTALL=1 ORBS_BOOT=0 ORBS_DUMP="help; skip; status"
+run install_wake      ORBS_INSTALL=1 ORBS_BOOT=0 ORBS_DUMP="help; survey; attend laboratory; go to the tower; status; wake; status"
 
 # --- a sealed tower -----------------------------------------------------------
 run sealed_doors ORBS_SEALED=1 ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="attend archive; attend stacks; survey archive; survey /tower"

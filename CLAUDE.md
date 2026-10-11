@@ -29,7 +29,10 @@ built and the game plays.
 nineteen chapters reachable before there is a tower, and `quit` asks once. Saves
 and settings live in the platform's app-data directory, and the orb makes a
 sound — cues generated in code, every one chosen from what the transcript
-already draws.
+already draws. **A new tower is installed first** (`0.17.8`): a practice
+tower, thrown away, teaches the prompt and the way around in five steps, and
+`ORBS_INSTALL=0` is the harness's way past it, as `ORBS_THRESHOLD=0` is the
+menu's.
 
 **§10's seven domains are all raised, and a fresh game opens them one at a
 time.** `Sim::new` is the open tower every test, dump and balance policy uses;
@@ -409,6 +412,7 @@ has exactly the standing it had here: it is the gate, not supplementary reading.
 | a screen changing — a domain, a tool, `F5` | *The passage* — and it is one of the few that genuinely needs a window |
 | accessibility, colour, or the tube | *Greyscale* |
 | the manual, `recall`, or a room's primer | *`recall apprentice`* |
+| the installation, or what a new game opens on | *The installation* |
 
 **Four things from it are worth carrying without looking**, because they are the
 ones a session gets wrong before it thinks to check:

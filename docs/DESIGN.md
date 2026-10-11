@@ -1825,7 +1825,9 @@ demand changes to vocabulary, filesystem shape, and gating order, all of which
 freeze early.
 
 1. **Diegetic apprenticeship** (first ~hour) — the orb teaches as a mentor. Each
-   command arrives with in-world justification. Onboarding is story.
+   command arrives with in-world justification. Onboarding is story. Its first
+   minutes are the installation: the orb initialised in a practice tower,
+   teaching the prompt and the way around (§19, `0.17.7`).
 2. **Progressive reveal** (throughout) — the world starts tiny. Three commands,
    two directories.
 3. **In-world grimoire** (always) — `help`/`man` as magical reference, plus errors
@@ -2458,6 +2460,55 @@ they are re-pointed at the phases that now need them rather than quietly dropped
    price-shop — Exapunks is $19.99.
 
 ## 19. Decisions log
+
+### The orb is installed before the tower wakes (`0.17.7`–`0.17.8`)
+
+A new game opened straight onto the sealed tower: a boot report, a list of
+verbs, and a prompt. Nothing taught a player to type a word, read the echo or
+walk between rooms. The owner asked for an **installation**, in which the wizard
+initialises the orb, and settled three things: it runs in a **sandbox**, not the
+tower the player keeps; it teaches **the prompt and navigation only**, in a few
+minutes; and it can be **turned off in settings**.
+
+**The sandbox is the real tower, thrown away.** `Sim::sandbox(seed, length)` is
+`begun` without the opening report, and the frontend holds it *as its tower* for
+the length of the installation. So the prompt, the parser, Tab, the ghost, the
+echo, the reveal, PgUp, the augury and the rail are the game's own. A bespoke
+mini-world would have been a second prompt and a second parser to drift from the
+first, which is the shape this log keeps recording as the expensive one. At the
+end, `Raise::tower` builds `begun(seed, length)` fresh, so the tower is
+byte-identical whether the installation ran or was skipped.
+
+| Question | Decision |
+|---|---|
+| The five steps | `help`, `survey`, `attend`, plain words, `status` — `listening`, `sight`, `paths`, `speech`, `self-check`. Each `try` line is prose and is **typed by a test** that requires it to finish its own step and no other, `recall apprentice`'s rule that a lesson is typed rather than read past |
+| What finishes a step | A `ParseLog` record whose outcome is `Resolved` or `Forced` — checked first, because `Incomplete` and `Elsewhere` records carry a verb and a register too. The verb is the echo's first word; `ParseRecord` keeps none. `speech` wants the plain or shell register, or a divined reading that resolved: `divined` is stamped on every consultation, including one that ran nothing. `paths` wants the player standing anywhere but where they began |
+| One line, one step | `Install` keeps `from`, an index into `ParseLog`, and a step is judged only on records after it. Without it `cd laboratory` finished `paths` and `speech` together, `overview` finished `speech` and `self-check`, and `look` in a room finished three |
+| Not counted | A numbered answer: `Sim::choose` writes no record. A line typed before its step, except a location, which counts as soon as it holds |
+| The clock | Runs. The sandbox ticks at 1 Hz like any tower, so answers arrive as they will afterwards. A sealed tower idle for 300 ticks says nothing unasked, and the sandbox's RNG positions are thrown away with it |
+| The wake | `wake` once all five are done, or `skip` at any step, matched whole and in any case. Neither is submitted. Any other line at the done strip still reaches the sandbox: §6 forbids a modal prompt, and a question left unanswered must cost nothing. **A word, not a bare Enter**, which the first build used: a player still practising presses Enter out of habit, and lost the practice tower to it. The done strip's `try` row shows `wake` as every step's shows its line |
+| `skip`, beside the boot's `skip` row | Deliberate. Menu words never reach the prompt, and `skip` is the word a player reaches for |
+| Kept nowhere | The sandbox's `Kept` is `None` whatever slot `new` found, so autosave, the way out and a swap write nothing — the threshold's *"a tower nobody played cannot be written"*. The slot travels in `Raise`. **It is asked again at the wake** (`Raise::wake`), because the gap between `new` and the first write is now minutes: a slot another orb wrote meanwhile is traded for the lowest free one and the tower says which, and with none free it plays and says it will not be remembered. `Raise::begin` and `Raise::wake` are the one copy of this for both builds and the dump. A dump with `ORBS_SAVE` writes no practice tower either |
+| The seed | Chosen once, at `new`, and shared, so `status` reads the same before and after |
+| Which new games install | Only `new` from the menu, in both stances. `ORBS_THRESHOLD=0` with no save, the unreadable-save fallback and loading a slot whose file vanished do not: harness paths and recovery corners, not a player choosing a tower |
+| `ORBS_INSTALL` | `0` never, `1` always, unset or blank to the setting — `environment::switch`, now the one reading of every on/off switch. In a dump, `1` poses the installation and nothing else does: a dump keeps no settings, so honouring the setting's default would have turned all 192 captures into installations. `dumps.sh` and the played suite export `0` |
+| The strip | Where the gauges and the road sit, since the orb is not up yet and a practice tower's standings are discarded. Six rows; a short pane drops the gap, then the checklist, before the transcript loses a row. Its words are built on `Install::observe`, once a tick, and a frame only places them: they change five times an installation, and a tick is still soon enough for a prose reload |
+| Unlogged | The strip is the shell's affordance over a world that is thrown away, as the Tab listing is. §3's *"unlogged output is forbidden"* is about the orb's output |
+| §14 | The strip speaks through `Painter::span` and `announce`. The F5 mirror shows a stream's tail, and `help` answers in more rows than the pane, so the mirror **pins** the strip's speech above the tail. Its scratch pane is painted with the strip too: painted without it, the mirror read out the gauges the strip had replaced |
+| `Installs` | Read once, as `Skipping` is, and off under `cargo test` (`Readers::from_environment`'s rule), so no test reaching `new` depends on the developer's shell. A test that wants it inserts it |
+| The dump | `skip`, or `wake` at the done strip, in `ORBS_DUMP` raises the real tower as the frontends do, and the rest of the script runs there. Only the menu around it needs the played scenario |
+
+**Found by playing it, and older than this work.** The terminal build answers a
+swap with a new `Session`, and the new shadow buffer believed the terminal was
+blank, which is true only of the first. So every cell the new screen left blank
+kept the old screen's glyph. The installation's played scenario looked for
+`cold start` and found it interleaved with the practice tower's words. The menu
+had been leaving its own behind every tower a swap raised; no scenario asserted
+that anything was *gone*. The swap now wipes on its first draw, through
+`blit::Screen::resize`, which already did exactly that for a resize.
+
+**The versioning** is *Number go up*'s: these boxes bump `0.17.7` and `0.17.8`
+and interleave with *the tower as one machine*.
 
 ### Number go up — progress a player can watch (`0.17.2`–`0.17.6`)
 

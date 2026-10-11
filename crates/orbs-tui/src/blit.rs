@@ -553,6 +553,7 @@ mod tests {
                 walking: false,
                 menuing: None,
                 reading_manual: None,
+                installing: None,
             },
         );
 

@@ -77,6 +77,9 @@ macro_rules! shell_resources {
             super::Standing,
             super::Reading,
             super::Walk,
+            // Every swap ends an installation: the wake, a load from the menu,
+            // and another `new`, which sets a fresh one after the reset.
+            super::Installing,
             // Not a shell resource, and on the list anyway. `Heard` is the
             // audio watermark, derived from *this tower's* transcript exactly
             // as `Scroll` and `Panel` are. Left off, a swap kept the old mark:
@@ -154,6 +157,8 @@ impl Plugin for ShellPlugin {
         // sticky skip is the player's property, not the tower's. Read once at
         // startup and the truth thereafter — see `setting::Skipping`.
         app.init_resource::<super::setting::Skipping>();
+        // ...and whether a new tower is installed first, for the same reason.
+        app.init_resource::<super::Installs>();
 
         app.add_message::<SubmittedMessage>()
             .add_message::<super::menuing::SwapMessage>()
@@ -226,6 +231,15 @@ impl Plugin for ShellPlugin {
                 Update,
                 super::input::refresh_panel
                     .in_set(ShellSystems::Drive)
+                    .run_if(resource_changed::<crate::sim::Tower>),
+            )
+            // On the tower moving, not only on a line: `attend` is judged by
+            // where the player stands, which changes on the tick after it.
+            .add_systems(
+                Update,
+                super::installing::follow_install
+                    .in_set(ShellSystems::Drive)
+                    .run_if(super::installing::installing)
                     .run_if(resource_changed::<crate::sim::Tower>),
             )
             .add_systems(

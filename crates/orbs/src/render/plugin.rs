@@ -248,6 +248,8 @@ struct ShellState<'w> {
     /// `Res`, not `ResMut`: this one owns no pane, so there is nothing for the
     /// painter to hand back to it.
     walk: Res<'w, crate::shell::Walk>,
+    /// The installation, while the tower is its practice tower.
+    installing: Res<'w, crate::shell::Installing>,
 }
 
 /// Paint the screen into the `Frame`.
@@ -283,6 +285,7 @@ fn repaint(
         walk,
         menuing,
         ref mut reading_manual,
+        installing,
     } = shell;
     let frame = &mut canvas.frame;
     // Before the reset, the last moment last frame exists. A crossing departs
@@ -319,6 +322,7 @@ fn repaint(
                 walking: walk.is_open(),
                 menuing: menuing.get(),
                 reading_manual: reading_manual.get_mut(),
+                installing: installing.get(),
             },
         );
     } else {

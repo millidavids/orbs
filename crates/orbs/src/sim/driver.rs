@@ -139,24 +139,26 @@ impl Tower {
         ))
     }
 
-    /// The tower a *chosen* length builds, for a new game begun at the menu.
+    /// The tower `new` or a wake raised, practice or real, as
+    /// `orbs_shell::Raise` decided for both builds.
     ///
     /// Not [`fresh`](Self::fresh) with an argument: `fresh` lets `ORBS_LENGTH`
-    /// speak, while this is an answer the player just typed, and an environment
-    /// variable must not outrank it.
+    /// speak, while this length is an answer the player just typed.
+    pub(crate) const fn raised(begun: Sim) -> Self {
+        Self(begun)
+    }
+
+    /// Hand a line to the installation, which submits it or wakes the tower.
     ///
-    /// Renamed here, unlike a restored tower — this is a new world, the case
-    /// `session::Wizard` says the environment may seed.
-    pub(crate) fn begun(
-        seed: u64,
-        length: orbs_sim::content::Length,
-        wizard: Option<&str>,
-    ) -> Self {
-        let mut tower = Self(Sim::begun(seed, length));
-        if let Some(wizard) = wizard {
-            tower.rename(wizard);
-        }
-        tower
+    /// Through `Install::submit` rather than [`submit_with`](Self::submit_with)
+    /// and a check beside it, so both frontends and the dump take one path.
+    pub(crate) fn submit_installing(
+        &mut self,
+        install: &mut orbs_shell::Install,
+        line: &str,
+        augur: Option<&dyn orbs_sim::Augur>,
+    ) -> Option<orbs_shell::Raise> {
+        install.submit(&mut self.0, line, augur)
     }
 
     /// The tower a save describes.

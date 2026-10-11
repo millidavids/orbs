@@ -101,6 +101,7 @@ numbers below are not consecutive.
 | [**The circle**](#the-circle) `menagerie/` | `0.15.7` | ✅ every box ticked · supersedes Phase 5's rhythm game |
 | [**The threshold**](#the-threshold--closed-at-01613) | `0.16.13` | ✅ every box ticked · the orb's front door |
 | [**Number go up**](#number-go-up) | `0.17.6` | ✅ every box ticked · interleaved with `0.17` |
+| [**The installation**](#the-installation) | `0.17.8` | ✅ every box ticked · interleaved with `0.17` · minute one of the apprenticeship |
 
 ### Open — and **this table is not a running order**
 
@@ -6382,6 +6383,57 @@ budget and the Open table's arithmetic never moved.
 
 ---
 
+## The installation
+
+**A new tower is installed before it wakes.** The wizard initialises the orb.
+After `new` and a length, the player stands in a **practice tower**: the real
+sealed tower from the same seed, used through the real prompt, and thrown away
+afterwards. A strip where the gauges sit teaches the prompt and the way around in
+five steps, a line each. Prompt and navigation only, a few minutes at most; the
+potion and the spell stay with *Onboarding + demo*.
+
+**Its boxes bump `0.17.x`** and interleave with *the tower as one machine*, for
+*Number go up*'s reason: a minor of its own would send the POST card backwards
+when `0.17` resumes. **Every box ticked at `0.17.8`.** About 300 words, inside
+*Onboarding + demo*'s budget, so the Open table's arithmetic does not move.
+
+- [x] **A new tower is installed first** (`0.17.7`). `new` and a length reach
+      the practice tower, `Sim::sandbox`: `begun` with no opening report, so the
+      report is read once, in the real tower. It is kept nowhere; the slot
+      `new` found travels in `orbs_shell::Raise` and is checked again at the
+      wake.
+
+      Five steps: `help`, `survey`, `attend`, plain words, `status`. Each is
+      finished by a line that resolved, judged on `ParseLog` from the step's own
+      start, so one line finishes one step. `wake` at the end, or `skip` at
+      any step, raises the real tower from the same seed at tick 0. Neither
+      reaches a world; a bare Enter is only a line. The F5 mirror pins the
+      strip above the transcript's tail, or `help`'s answer would push the
+      lesson out of §14's route.
+
+      **Found by playing it:** every swap in the terminal build kept the old
+      screen's glyphs wherever the new one drew a blank, because the new
+      session's shadow buffer believed the terminal was empty. The menu's
+      words were left behind every tower a swap raised; the scenarios never
+      asserted that anything was gone. §19
+      **See it:** `ORBS_INSTALL=1 ORBS_BOOT=0 ORBS_DUMP="help; survey" cargo run -p orbs`
+      reads `step 3 of 5`. `…="help; survey; cd laboratory"` reads `step 4 of
+      5`, not 5. `…="help; survey; attend laboratory; go to the tower; status"`
+      reads `the orb is initialised` and `try  wake`; `…; status; wake; status"`
+      and `…="help; skip; status"` are the real tower.
+      `scripts/play.sh installing::` plays what a dump cannot: the menu around
+      it, and F5. `scripts/dumps.sh` adds `install_*`, with every earlier
+      capture byte-identical
+- [x] **`install` in settings** (`0.17.8`). A habits row beside `skip`, on by
+      default; off, `new` raises the tower at once. `ORBS_INSTALL` outranks it:
+      `0` never installs, `1` always does, blank falls through
+      **See it:** `ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_THRESHOLD=1 ORBS_DUMP=1 ORBS_MENU='settings\nhabits' cargo run -p orbs`
+      shows `install  setup on a new orb  [on]`.
+      `scripts/play.sh installing::the_setting` turns it off at the threshold
+      and gets a tower. The `menu_habits` and `menu_plain` captures gain the row
+
+---
+
 ## Phase 8 — Siege ✅
 
 **Exit:** sieges are tense and scripts visibly matter.
@@ -6689,7 +6741,9 @@ decision under known risk.
 
 *Was **Phase 14**, and much of the file defers to it by that name.*
 
-- [ ] Diegetic apprenticeship, polished
+- [ ] Diegetic apprenticeship, polished. Minute one's prompt and navigation
+      are [the installation](#the-installation) (`0.17.8`); the first potion
+      and the first spell are still this item's
       **See it:** a non-terminal player reaches hour two unaided, watched
 - [ ] Progressive reveal throughout
       **See it:** nothing on screen at minute one that has not been earned

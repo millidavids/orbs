@@ -25,6 +25,9 @@ use orbs_shell::TRACE_PATH;
 ///
 /// The sim resolves it immediately and queues any command for the next tick —
 /// see `orbs_sim::session` for why those are two different clocks.
+///
+/// During an installation the line goes through it instead, and a line that
+/// wakes the tower asks the swap for the real one and reaches no world.
 pub(super) fn submit(
     mut lines: MessageReader<SubmittedMessage>,
     mut tower: ResMut<Tower>,
@@ -34,15 +37,38 @@ pub(super) fn submit(
     // break every test that never wanted one. Absent is the same as empty.
     readers: Option<Res<crate::sim::Readers>>,
     mut scroll: ResMut<orbs_shell::Scroll>,
+    mut installing: ResMut<super::Installing>,
+    mut swapping: MessageWriter<super::menuing::SwapMessage>,
 ) {
     let reader = readers.as_deref().and_then(crate::sim::Readers::reader);
+    let mut woke = false;
     for submitted in lines.read() {
+        // Peeked first: `get_mut` through `ResMut` stamps `Installing` changed,
+        // and in an ordinary game there is nothing to change.
+        if installing.get().is_some()
+            && let Some(install) = installing.get_mut()
+        {
+            if let Some(raise) = tower.submit_installing(install, &submitted.line, reader) {
+                swapping.write(super::menuing::SwapMessage {
+                    seed: raise.seed,
+                    raising: super::menuing::Raising::Installed(raise),
+                });
+                woke = true;
+                break;
+            }
+            scroll.rewind();
+            continue;
+        }
         tower.submit_with(&submitted.line, reader);
         // Back to the newest output. The player acted; what they want to see is
         // what it did, and leaving them in history to watch their own command
         // scroll past off screen is the one place terminal convention is wrong
         // here — a terminal has no orb answering on its own clock.
         scroll.rewind();
+    }
+    // A second Enter in the same frame belongs to neither tower.
+    if woke {
+        lines.clear();
     }
 }
 
@@ -117,7 +143,9 @@ mod tests {
         let mut app = App::new();
         app.add_plugins(MinimalPlugins)
             .add_message::<SubmittedMessage>()
+            .add_message::<super::super::menuing::SwapMessage>()
             .init_resource::<orbs_shell::Scroll>()
+            .init_resource::<super::super::Installing>()
             .insert_resource(Tower::new(0))
             .insert_resource(Readers::holding(Box::new(orbs_sim::Fixture::worked())))
             .add_systems(Update, submit);
@@ -151,7 +179,9 @@ mod tests {
         let mut app = App::new();
         app.add_plugins(MinimalPlugins)
             .add_message::<SubmittedMessage>()
+            .add_message::<super::super::menuing::SwapMessage>()
             .init_resource::<orbs_shell::Scroll>()
+            .init_resource::<super::super::Installing>()
             .insert_resource(Tower::new(0))
             .add_systems(Update, submit);
 

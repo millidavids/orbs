@@ -15,6 +15,32 @@
   at 1.0 (DESIGN.md §19).
 -->
 
+## [v0.17.8] - 2026-10-11
+
+### Description
+In development — a dev log, not patch notes. A new game now opens with a short
+setup: the orb is installed in a practice tower that teaches the prompt and the
+way around in five steps, then wakes your real one. Skip it, or turn it off.
+
+### Added
+- **A new game installs the orb first.** After choosing a length you arrive in
+  a practice tower, and a strip across the top teaches five things: typing a
+  command, looking around, moving between rooms, saying it in your own words,
+  and asking the orb for its status. Each step is finished by doing it.
+- **`wake` raises your tower.** Once every step is done, typing `wake` throws
+  the practice tower away and starts your real one, from the same seed, at its
+  very beginning. Nothing from the practice tower is saved.
+- **`skip` ends the setup at any step.**
+- **The setup can be turned off.** A new `install` row on the settings' habits
+  page; off, a new game opens straight onto your tower.
+- **The linear view keeps the lesson.** With F5, the setup's instructions stay
+  at the top however long an answer runs.
+
+### Fixed
+- **The terminal build no longer leaves the old screen behind.** Moving from
+  the menu into a tower could leave the menu's words wherever the new screen
+  was blank.
+
 ## [v0.17.6] - 2026-10-07
 
 ### Description

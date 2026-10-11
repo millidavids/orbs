@@ -33,6 +33,7 @@ mod bailey;
 mod brewing;
 mod carrying;
 mod forge;
+mod installing;
 mod keys;
 mod lens;
 mod menagerie;

@@ -64,11 +64,8 @@ pub const LENGTH: &str = "ORBS_LENGTH";
 pub fn fresh(seed: u64, sealed: bool, length: orbs_sim::content::Length) -> orbs_sim::Sim {
     let wanted = std::env::var(SEALED)
         .ok()
-        .and_then(|value| match value.trim() {
-            "1" | "true" | "yes" => Some(true),
-            "0" | "false" | "no" => Some(false),
-            _ => None,
-        })
+        .as_deref()
+        .and_then(switch)
         .unwrap_or(sealed);
     let long = std::env::var(LENGTH)
         .ok()
@@ -81,6 +78,18 @@ pub fn fresh(seed: u64, sealed: bool, length: orbs_sim::content::Length) -> orbs
         (false, _) => orbs_sim::Sim::new(seed),
         (true, orbs_sim::content::Length::Baseline) => orbs_sim::Sim::sealed(seed),
         (true, long) => orbs_sim::Sim::begun(seed, long),
+    }
+}
+
+/// An on/off switch's value, or [`None`] when it is blank or unrecognised.
+///
+/// The one reading for every such switch, so they cannot come to accept
+/// different words.
+pub(crate) fn switch(value: &str) -> Option<bool> {
+    match value.trim() {
+        "1" | "true" | "yes" => Some(true),
+        "0" | "false" | "no" => Some(false),
+        _ => None,
     }
 }
 

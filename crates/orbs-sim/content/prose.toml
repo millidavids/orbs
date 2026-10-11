@@ -475,6 +475,7 @@ menu_set_linear = "linear   the plain stream  "
 menu_set_reading = "reading  how lines are read"
 menu_set_focus = "focus    how the panes sit "
 menu_set_skip = "skip     the boot sequence "
+menu_set_install = "install  setup on a new orb"
 
 # The manual, which is a surface of its own rather than a page of the menu: it
 # has paragraphs, it scrolls, and the menu has no scroll at all.
@@ -498,6 +499,38 @@ manual_contents = "which part?"
 manual_more = "pgdn for more"
 manual_unknown = "there is no chapter called '{detail}'"
 manual_too_small = "the window is too small to read in"
+
+# The installation: a new tower's practice run at the prompt, drawn as a strip
+# where the gauges sit. One block per step, `install_<step>_*`; the `try` line
+# is typed by a test and must finish its own step. See `orbs-shell::install`.
+install_title = "initialising the orb"
+install_step = "step {count} of {quantity}"
+install_skip = "skip ends it"
+install_try = "try"
+install_ok = "ok"
+install_now = "now"
+install_listening_name = "listening"
+install_listening_1 = "the orb hears what you type. a word, then enter"
+install_listening_2 = "help is the word for when you are lost"
+install_listening_try = "help"
+install_sight_name = "sight"
+install_sight_1 = "survey shows what is around you. look and ls work too"
+install_sight_2 = "the rooms it lists are the ones you can enter"
+install_sight_try = "survey"
+install_paths_name = "paths"
+install_paths_1 = "the tower is a tree of rooms. attend one to stand in it"
+install_paths_2 = "the pane's title says where you are. tab finishes a word"
+install_paths_try = "attend laboratory"
+install_speech_name = "speech"
+install_speech_1 = "the orb forgives phrasing. say it however you like"
+install_speech_2 = "the line after the arrow is what it understood"
+install_speech_try = "go to the tower"
+install_report_name = "self-check"
+install_report_1 = "status is the orb's account of itself"
+install_report_2 = "ask for it, and the orb is ready"
+install_report_try = "status"
+install_done_1 = "the orb is initialised, and knows your voice"
+install_done_2 = "wake raises your own tower, and this one is let go"
 
 # Refusals. §6: never a bare error, and every one names what to do instead.
 menu_unknown = "the orb does not know '{detail}'"
@@ -813,6 +846,9 @@ resumed_away = "it was dark for {span}. nothing turned while you were gone"
 save_unreadable = "the orb cannot make out what it wrote last. this tower is new"
 # ...and the other direction, said once however many times it fails.
 save_failed = "the orb cannot write what it remembers down"
+# A second orb wrote the slot `new` found while this one was installing. `{count}`
+# is the slot the play page will list it in.
+save_moved = "another orb took this tower's place. it is kept in {count}"
 
 # Calling a spell off. **What it started keeps going** - stopping the spell is
 # not stopping the mortar, exactly as walking away from a brew you typed by hand

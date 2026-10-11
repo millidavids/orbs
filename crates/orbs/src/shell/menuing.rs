@@ -106,7 +106,8 @@ pub(crate) enum Raising {
     /// A path, not a slot number: the game being left is written to the file it
     /// came from, and a number resolved twice disagrees if `ORBS_SAVE` changes.
     Load(std::path::PathBuf),
-    /// Begin a tower at this length.
+    /// Begin a tower at this length — installed first, when
+    /// [`Installs`](super::Installs) says so.
     Begin {
         /// Where it will be kept, and written back to — or [`None`] for a
         /// session that keeps nothing (`ORBS_SAVE=off`), which is the ordinary
@@ -115,6 +116,8 @@ pub(crate) enum Raising {
         /// How long it is to be.
         length: orbs_sim::content::Length,
     },
+    /// The installation has woken this tower: raise it, never install it.
+    Installed(orbs_shell::Raise),
 }
 
 /// A setting the menu changed, waiting to be honoured.
@@ -297,7 +300,7 @@ pub(crate) fn swap(world: &mut World) {
     let waiting = match &asked.raising {
         // A new tower: nothing to read, and the file is written on the first
         // autosave. `free_slot` already found it empty.
-        Raising::Begin { .. } => orbs_shell::Opened::New,
+        Raising::Begin { .. } | Raising::Installed(_) => orbs_shell::Opened::New,
         Raising::Load(path) => orbs_shell::read_save_from(path),
     };
     if let (orbs_shell::Opened::Unreadable, Raising::Load(path)) = (&waiting, &asked.raising) {
@@ -315,11 +318,26 @@ pub(crate) fn swap(world: &mut World) {
 
     let seed = asked.seed;
     let wizard = orbs_shell::wizard();
+    let installs = world
+        .get_resource::<super::Installs>()
+        .is_some_and(|installs| installs.0);
+    let mut installing = None;
     let (mut tower, kept) = match asked.raising {
-        Raising::Begin { keep, length } => (
-            crate::sim::Tower::begun(seed, length, wizard.as_deref()),
-            keep,
-        ),
+        Raising::Begin { keep, length } => {
+            let begun = orbs_shell::Raise {
+                keep,
+                length,
+                seed,
+                wizard,
+            }
+            .begin(installs);
+            installing = begun.install;
+            (crate::sim::Tower::raised(begun.sim), begun.keep)
+        }
+        Raising::Installed(raise) => {
+            let woken = raise.wake();
+            (crate::sim::Tower::raised(woken.sim), woken.keep)
+        }
         Raising::Load(path) => (
             crate::sim::raise(waiting, seed, wizard.as_deref()),
             Some(path),
@@ -333,6 +351,10 @@ pub(crate) fn swap(world: &mut World) {
     // 4. Together, and nothing between them can observe one without the other.
     world.insert_resource(tower);
     world.insert_resource(crate::sim::Kept::at(kept));
+    // After the reset, which blanks it.
+    if let Some(install) = installing {
+        world.insert_resource(super::Installing::begun(install));
+    }
     // 6.
     world.resource_mut::<Standing>().close();
     // 7. Not in `shell_resources!`: `reset_for_swap` blanks that list, and a
@@ -467,6 +489,10 @@ mod tests {
         let two = dir.join("orbs-save-2.toml");
 
         let mut app = app(11, one.clone());
+        // Pinned, not left to the default: this would pass against a practice
+        // tower too, which has the same length and seed.
+        app.world_mut()
+            .insert_resource(crate::shell::Installs(false));
         app.world_mut().write_message(SwapMessage {
             raising: Raising::Begin {
                 keep: Some(two),
@@ -476,6 +502,13 @@ mod tests {
         });
         app.update();
 
+        assert!(
+            app.world()
+                .resource::<crate::shell::Installing>()
+                .get()
+                .is_none(),
+            "a new game with the installation off was installed",
+        );
         let snapshot = app.world().resource::<Tower>().sim().snapshot();
         assert_eq!(
             snapshot.world.length,
@@ -490,6 +523,95 @@ mod tests {
         );
         // ...and the tower it replaced was still written out first.
         assert!(one.exists(), "the tower being left was not kept");
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// `new`, with the installation on.
+    fn installing(app: &mut App, keep: std::path::PathBuf) {
+        app.world_mut()
+            .insert_resource(crate::shell::Installs(true));
+        app.world_mut().write_message(SwapMessage {
+            raising: Raising::Begin {
+                keep: Some(keep),
+                length: orbs_sim::content::Length::Long,
+            },
+            seed: 482_913,
+        });
+        app.update();
+    }
+
+    fn installation(app: &App) -> Option<&orbs_shell::Install> {
+        app.world().resource::<crate::shell::Installing>().get()
+    }
+
+    #[test]
+    fn the_practice_tower_is_kept_nowhere_and_the_wake_raises_a_clean_one() {
+        let dir = scratch("installed");
+        let one = dir.join("orbs-save.toml");
+        let two = dir.join("orbs-save-2.toml");
+        let mut app = app(11, one);
+        installing(&mut app, two.clone());
+
+        // Silent, from the chosen seed, and kept nowhere although `new` found
+        // a slot: the autosave would otherwise write it there.
+        assert!(installation(&app).is_some(), "`new` was not installed");
+        assert_eq!(app.world().resource::<Kept>().path(), None);
+        let sandbox = app.world().resource::<Tower>().sim();
+        assert_eq!(sandbox.seed(), 482_913);
+        assert!(sandbox.scrollback().records().is_empty());
+        let prompt = sandbox.prompt();
+
+        for line in ["help", "skip"] {
+            app.world_mut()
+                .write_message(super::super::input::SubmittedMessage {
+                    line: line.to_owned(),
+                });
+            app.update();
+        }
+        app.update();
+
+        assert!(installation(&app).is_none(), "the wake left it running");
+        let tower = app.world().resource::<Tower>().sim();
+        assert!(
+            tower.submissions().all().is_empty(),
+            "the practice tower's lines reached the real one",
+        );
+        assert_eq!(tower.seed(), 482_913);
+        assert_eq!(
+            tower.prompt(),
+            prompt,
+            "the wizard changed name at the wake"
+        );
+        assert!(
+            !tower.scrollback().records().is_empty(),
+            "the real tower made no opening report",
+        );
+        assert_eq!(app.world().resource::<Kept>().path(), Some(two.as_path()));
+        assert!(!two.exists(), "the practice tower was written");
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn loading_a_tower_ends_an_installation() {
+        let dir = scratch("install-load");
+        let one = dir.join("orbs-save.toml");
+        let two = dir.join("orbs-save-2.toml");
+        let three = dir.join("orbs-save-3.toml");
+        orbs_shell::write_save_to(&two, &orbs_sim::Sim::new(909).snapshot()).expect("slot two");
+        let mut app = app(11, one);
+        installing(&mut app, three);
+        assert!(installation(&app).is_some());
+
+        app.world_mut().write_message(SwapMessage {
+            raising: Raising::Load(two),
+            seed: 1,
+        });
+        app.update();
+
+        assert!(installation(&app).is_none(), "the strip outlived its tower");
+        assert_eq!(app.world().resource::<Tower>().sim().seed(), 909);
 
         std::fs::remove_dir_all(&dir).ok();
     }

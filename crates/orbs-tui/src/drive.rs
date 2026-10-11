@@ -29,7 +29,12 @@ const TICK: Duration = Duration::from_secs(1);
 /// capture, since `scripts/dumps.sh` runs with `ORBS_SAVE=off`.
 #[must_use]
 pub(crate) fn default_settings() -> Vec<orbs_shell::settings::Row> {
-    settings(orbs_shell::Driver::default(), false, DisplayMode::Wide)
+    settings(
+        orbs_shell::Driver::default(),
+        false,
+        DisplayMode::Wide,
+        orbs_shell::settings::installs(),
+    )
 }
 
 /// What this build can set, and what each is set to now.
@@ -38,13 +43,15 @@ pub(crate) fn default_settings() -> Vec<orbs_shell::settings::Row> {
 /// tube, no phosphor and no sound, so no rows for them and no pages offering
 /// them, because a control that does nothing is the dead affordance §15 weighs
 /// heaviest (`orbs-shell`'s `settings::values` carries the argument). What is
-/// left is real: `F4`, `F5`, how the orb reads a line, and §4's sticky skip.
+/// left is real: `F4`, `F5`, how the orb reads a line, §4's sticky skip, and
+/// the installation.
 pub(crate) fn settings(
     driver: orbs_shell::Driver,
     linear: bool,
     mode: DisplayMode,
+    installs: bool,
 ) -> Vec<orbs_shell::settings::Row> {
-    use orbs_shell::settings::{Category, Row, SKIP, SWITCH, switched};
+    use orbs_shell::settings::{Category, INSTALL, Row, SKIP, SWITCH, switched};
 
     vec![
         Row::new(
@@ -73,6 +80,7 @@ pub(crate) fn settings(
             switched(orbs_shell::settings::skips_boot()),
             &SWITCH,
         ),
+        Row::new(Category::Habits, INSTALL, switched(installs), &SWITCH),
     ]
 }
 
@@ -296,6 +304,14 @@ struct Session {
     /// one — `crossterm 0.29` where the other build says `bevy 0.19.0`. The
     /// frontend's to know and the shell's to place, as the wizard's name is.
     engine: String,
+    /// The installation, while `sim` is its practice tower.
+    ///
+    /// Set by [`run`] after the session is built, the one place a practice
+    /// tower arrives; a new session for any other tower starts without one.
+    install: Option<orbs_shell::Install>,
+    /// Whether the next new tower is installed first. The player's, so it is
+    /// [`Carried`] across a swap.
+    installs: bool,
 }
 
 /// What a swap carries across, because it is the player's and not the tower's.
@@ -316,6 +332,8 @@ struct Carried {
     /// itself, which owns a scratch `Frame` worth re-allocating per session.
     linear: bool,
     mode: DisplayMode,
+    /// Whether a new tower is installed before it wakes.
+    installs: bool,
 }
 
 impl Carried {
@@ -332,6 +350,7 @@ impl Carried {
             mode: orbs_shell::settings::get(orbs_shell::settings::FOCUS)
                 .and_then(|word| DisplayMode::named(&word))
                 .unwrap_or(DisplayMode::Wide),
+            installs: orbs_shell::install_wanted(orbs_shell::settings::installs()),
         }
     }
 }
@@ -343,6 +362,7 @@ impl Session {
             driver: self.driver,
             linear: self.linear.showing(),
             mode: self.mode,
+            installs: self.installs,
         }
     }
 
@@ -373,6 +393,7 @@ impl Session {
             driver,
             linear: showing,
             mode,
+            installs,
         } = carried;
         let mut linear = Linear::default();
         linear.show(showing);
@@ -417,7 +438,7 @@ impl Session {
                     // let the Access page report `linear [off]` while the pane
                     // drew the linear stream, §14's only visible control
                     // reporting the opposite of what was in effect.
-                    menu.show_settings(settings(driver, showing, mode));
+                    menu.show_settings(settings(driver, showing, mode, installs));
                     menu
                 }),
                 ..Surfaces::default()
@@ -425,6 +446,8 @@ impl Session {
             mode,
             // A sane floor until the first paint measures the real one.
             page: 1,
+            install: None,
+            installs,
         }
     }
 
@@ -436,6 +459,10 @@ impl Session {
     /// loop has no change detection. Returns `false` when the session is over.
     fn tick(&mut self) -> bool {
         self.sim.step();
+        // `attend` is judged by where the player stands, which moves here.
+        if let Some(install) = self.install.as_mut() {
+            install.observe(&self.sim);
+        }
         // §8 permits a save at a tick boundary and nowhere else, and this is one
         // — `step` has returned, so `Pending` is drained and `Skip` is spent.
         if self.sim.tick().get().is_multiple_of(AUTOSAVE_TICKS) {
@@ -478,6 +505,7 @@ impl Session {
             self.driver,
             self.linear.showing(),
             self.mode,
+            self.installs,
             scribing(self.driver, self.scribe.as_deref()),
         );
     }
@@ -498,12 +526,15 @@ impl Session {
         if let Some(driver) = self.surfaces.driving.take() {
             self.driver = driver;
         }
-        // The two settings this build actually holds. `skip` is absent for the
+        // The settings this build actually holds. `skip` is absent for the
         // Bevy build's reason: `Boot::default` reads it at startup and there is
-        // nothing to do to a sequence that has already finished.
+        // nothing to do to a sequence that has already finished. `install`
+        // takes effect at the next `new`, which is the next time it is asked.
         if let Some((setting, value)) = self.surfaces.setting.take() {
             if setting == orbs_shell::LINEAR_SETTING {
                 self.linear.show(orbs_shell::settings::is_on(&value));
+            } else if setting == orbs_shell::settings::INSTALL {
+                self.installs = orbs_shell::settings::is_on(&value);
             } else if setting == "focus"
                 && let Some(mode) = DisplayMode::named(&value)
             {
@@ -523,7 +554,7 @@ impl Session {
             .as_ref()
             .is_some_and(orbs_shell::Menu::showing_settings)
         {
-            let fresh = settings(self.driver, self.linear.showing(), self.mode);
+            let fresh = settings(self.driver, self.linear.showing(), self.mode, self.installs);
             if let Some(menu) = self.surfaces.menuing.as_mut()
                 && menu.settings() != fresh.as_slice()
             {
@@ -543,7 +574,12 @@ impl Session {
             );
             let mut menu = orbs_shell::Menu::at(orbs_shell::Stance::Threshold);
             menu.show_driver(self.driver);
-            menu.show_settings(settings(self.driver, self.linear.showing(), self.mode));
+            menu.show_settings(settings(
+                self.driver,
+                self.linear.showing(),
+                self.mode,
+                self.installs,
+            ));
             self.surfaces.menuing = Some(menu);
         }
 
@@ -717,9 +753,18 @@ impl Session {
                 orbs_shell::Driver::Plain => None,
                 orbs_shell::Driver::Augury => self.augury.as_deref(),
             };
-            match reader {
-                Some(augur) => self.sim.submit_reading(&finished, augur),
-                None => self.sim.submit(&finished),
+            // During an installation the line goes through it, and one that
+            // wakes the tower asks `run` for the real one and reaches no world.
+            if let Some(install) = self.install.as_mut() {
+                if let Some(raise) = install.submit(&mut self.sim, &finished, reader) {
+                    self.surfaces.swapping = Some(Swap::Installed(raise));
+                    return true;
+                }
+            } else {
+                match reader {
+                    Some(augur) => self.sim.submit_reading(&finished, augur),
+                    None => self.sim.submit(&finished),
+                }
             }
             self.scroll.rewind();
             // `unfurl` and `wander` answer on the tick they are typed, so the
@@ -921,6 +966,7 @@ impl Session {
                     // chapter is wrapped to the pane and scrolled within it, and
                     // only the painter knows how wide and how tall it is.
                     reading_manual: self.surfaces.reading.as_mut(),
+                    installing: self.install.as_ref(),
                 },
             );
         } else {
@@ -1024,17 +1070,24 @@ pub(crate) fn run(sim: Sim, threshold: Threshold, engine: String) -> std::io::Re
         // leaves the player where they were rather than in a half-built world.
         // A new game gets a seed of its own (`orbs_shell::new_game_seed`), both
         // when asked for and when a slot turns out empty.
+        let mut installing = None;
         let (raised, kept) = match asked {
-            // The wizard's name, which this build used to drop: `Sim::begun`
-            // takes no name where `Tower::begun` does, so a new game came up as
-            // `orbs $ `. A corner while launching always restored a save; the
-            // threshold makes every new game take this path.
+            // The wizard's name travels in the `Raise`: `Sim::begun` takes none,
+            // and a new game here once came up as `orbs $ `.
             Swap::Begin { keep, length } => {
-                let mut fresh = orbs_sim::Sim::begun(orbs_shell::new_game_seed(), length);
-                if let Some(name) = wizard() {
-                    fresh.rename(&name);
+                let begun = orbs_shell::Raise {
+                    keep,
+                    length,
+                    seed: orbs_shell::new_game_seed(),
+                    wizard: wizard(),
                 }
-                (fresh, keep)
+                .begin(session.installs);
+                installing = begun.install;
+                (begun.sim, begun.keep)
+            }
+            Swap::Installed(raise) => {
+                let woken = raise.wake();
+                (woken.sim, woken.keep)
             }
             Swap::Load(path) => match orbs_shell::read_save_from(&path) {
                 orbs_shell::Opened::Restored(save) => {
@@ -1064,6 +1117,7 @@ pub(crate) fn run(sim: Sim, threshold: Threshold, engine: String) -> std::io::Re
                             session.driver,
                             session.linear.showing(),
                             session.mode,
+                            session.installs,
                         ));
                         menu
                     });
@@ -1114,6 +1168,10 @@ pub(crate) fn run(sim: Sim, threshold: Threshold, engine: String) -> std::io::Re
             narrow,
             engine.clone(),
         );
+        session.install = installing;
+        // The new shadow buffer believes the terminal is blank, which only the
+        // first session's is: unwiped, the menu's words showed through a tower.
+        session.screen.resize(session.grid);
     }
 }
 

@@ -40,7 +40,7 @@ impl Sim {
     /// workspace would silently measure a different curve.
     #[must_use]
     pub fn new(seed: u64) -> Self {
-        Self::build(seed, false, crate::content::Length::Baseline, |_| {})
+        Self::build(seed, false, crate::content::Length::Baseline, |_| {}).reported()
     }
 
     /// Create a simulation that begins as a laboratory and nothing else.
@@ -52,7 +52,7 @@ impl Sim {
     /// submissions diverge at the first `attend archive`.
     #[must_use]
     pub fn sealed(seed: u64) -> Self {
-        Self::build(seed, true, crate::content::Length::Baseline, |_| {})
+        Self::build(seed, true, crate::content::Length::Baseline, |_| {}).reported()
     }
 
     /// An open tower at a chosen length — what the balance harness measures.
@@ -64,7 +64,7 @@ impl Sim {
     /// instrument never sees.
     #[must_use]
     pub fn measured(seed: u64, length: crate::content::Length) -> Self {
-        Self::build(seed, false, length, |_| {})
+        Self::build(seed, false, length, |_| {}).reported()
     }
 
     /// The tower a fresh *game* builds: sealed, and as long as the player asked.
@@ -75,6 +75,16 @@ impl Sim {
     /// none is a game.
     #[must_use]
     pub fn begun(seed: u64, length: crate::content::Length) -> Self {
+        Self::build(seed, true, length, |_| {}).reported()
+    }
+
+    /// A fresh game that has said nothing yet: the installation's practice tower.
+    ///
+    /// [`begun`](Self::begun) without the opening report, so the report arrives
+    /// once, in the tower raised when the installation ends. Never kept. See
+    /// DESIGN.md §19, *The orb is installed before the tower wakes*.
+    #[must_use]
+    pub fn sandbox(seed: u64, length: crate::content::Length) -> Self {
         Self::build(seed, true, length, |_| {})
     }
 
@@ -98,11 +108,18 @@ impl Sim {
     /// `load::builtin` does beats a tower whose work is worth nothing.
     #[must_use]
     pub fn with_schedule(seed: u64, build: impl FnOnce(&mut Schedule)) -> Self {
-        Self::build(seed, false, crate::content::Length::Baseline, build)
+        Self::build(seed, false, crate::content::Length::Baseline, build).reported()
     }
 
-    /// The one construction behind [`new`](Self::new), [`sealed`](Self::sealed)
-    /// and [`with_schedule`](Self::with_schedule).
+    /// The tower's opening report, which every constructor but
+    /// [`sandbox`](Self::sandbox) makes. Last, after `rebuild`, because the
+    /// report lists only what is open.
+    fn reported(mut self) -> Self {
+        tower::report(&mut self.world);
+        self
+    }
+
+    /// The one construction behind every constructor here.
     fn build(
         seed: u64,
         sealed: bool,
@@ -153,7 +170,6 @@ impl Sim {
         // seals last — and two sabotage queries read that component.
         tower::seal(&mut world);
         tower::rebuild(&mut world);
-        tower::report(&mut world);
 
         Self {
             world,
@@ -511,6 +527,22 @@ impl Sim {
             .push(RecordKind::Message)
             .text(orbs_render::FieldName::Message, &message)
             .role(orbs_render::Role::Danger)
+            .finish();
+    }
+
+    /// Say that the tower is kept in slot `slot`, not the one it was raised
+    /// for, because another orb wrote that one first.
+    pub fn say_save_moved(&mut self, slot: usize) {
+        let message = self
+            .world
+            .resource::<Prose>()
+            .line("save_moved", &[("count", &slot.to_string())]);
+        self.world
+            .resource_mut::<Scrollback>()
+            .records_mut()
+            .push(RecordKind::Message)
+            .text(orbs_render::FieldName::Message, &message)
+            .role(orbs_render::Role::Normal)
             .finish();
     }
 

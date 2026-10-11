@@ -1,6 +1,7 @@
 mod commanding;
 mod editing;
 mod input;
+mod installing;
 mod manualling;
 mod menuing;
 mod motion;
@@ -25,6 +26,7 @@ pub(crate) use orbs_shell::{
 };
 
 pub(crate) use editing::Editing;
+pub(crate) use installing::{Installing, Installs};
 pub(crate) use manualling::Reading;
 pub(crate) use menuing::Standing;
 pub use plugin::ShellPlugin;

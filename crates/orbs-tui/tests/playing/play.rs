@@ -63,6 +63,29 @@ pub const GRID: (u16, u16) = (120, 45);
 /// Ten minutes: a backstop for a killed run, not a budget for a slow scenario.
 pub const LIFETIME: std::time::Duration = std::time::Duration::from_secs(600);
 
+/// Whether `new` at the menu installs the orb first.
+#[derive(Debug, Clone, Copy)]
+enum Installs {
+    /// `ORBS_INSTALL=0`.
+    Never,
+    /// `ORBS_INSTALL=1`.
+    Always,
+    /// Blank: the `install` setting decides.
+    BySetting,
+}
+
+impl Installs {
+    /// Blank rather than unset for the setting: unset, a value exported in the
+    /// shell that started the tmux server reaches the game.
+    const fn value(self) -> &'static str {
+        match self {
+            Self::Never => "0",
+            Self::Always => "1",
+            Self::BySetting => "",
+        }
+    }
+}
+
 /// A running game.
 pub struct Game {
     session: String,
@@ -137,7 +160,7 @@ impl Game {
     /// No wait for a prompt: the point is the time before there is one.
     #[must_use]
     pub fn booting() -> Self {
-        Self::spawn_with(QUIET, GRID.0, GRID.1, true, false, false)
+        Self::spawn_with(QUIET, GRID.0, GRID.1, true, false, false, Installs::Never)
     }
 
     /// Start a game **at the orb's menu**, which every other scenario skips.
@@ -147,14 +170,37 @@ impl Game {
     /// one.
     #[must_use]
     pub fn at_the_threshold() -> Self {
-        Self::spawn_with(QUIET, GRID.0, GRID.1, false, false, true)
+        Self::spawn_with(QUIET, GRID.0, GRID.1, false, false, true, Installs::Never)
+    }
+
+    /// Start a game at the orb's menu **with the installation on**, so `new`
+    /// reaches the practice tower rather than a tower.
+    #[must_use]
+    pub fn installing() -> Self {
+        Self::spawn_with(QUIET, GRID.0, GRID.1, false, false, true, Installs::Always)
+    }
+
+    /// Start a game at the orb's menu with **the setting** deciding the
+    /// installation, as a player's game does. `ORBS_SAVE=off` keeps no settings
+    /// file, so it starts on, and the menu can turn it off for the session.
+    #[must_use]
+    pub fn at_the_threshold_by_setting() -> Self {
+        Self::spawn_with(
+            QUIET,
+            GRID.0,
+            GRID.1,
+            false,
+            false,
+            true,
+            Installs::BySetting,
+        )
     }
 
     /// Start a game **as a fresh game starts**: a laboratory and nothing else
     /// (§11.5), which every other scenario skips by opening the whole tower.
     #[must_use]
     pub fn sealed() -> Self {
-        let game = Self::spawn_with(QUIET, GRID.0, GRID.1, false, true, false);
+        let game = Self::spawn_with(QUIET, GRID.0, GRID.1, false, true, false, Installs::Never);
         game.settled();
         game
     }
@@ -166,7 +212,7 @@ impl Game {
     }
 
     fn spawn(seed: u64, cols: u16, rows: u16) -> Self {
-        Self::spawn_with(seed, cols, rows, false, false, false)
+        Self::spawn_with(seed, cols, rows, false, false, false, Installs::Never)
     }
 
     fn spawn_with(
@@ -176,6 +222,7 @@ impl Game {
         boot: bool,
         sealed: bool,
         threshold: bool,
+        installs: Installs,
     ) -> Self {
         let binary = env!("CARGO_BIN_EXE_orbs-tui");
         // Unique per game, so scenarios inside one test binary run concurrently
@@ -253,6 +300,11 @@ impl Game {
             args.push("-e".to_owned());
             args.push("ORBS_THRESHOLD=0".to_owned());
         }
+        // Off unless asked, for the threshold's reason: `new` at the menu would
+        // otherwise reach the practice tower, and the scenarios that type it are
+        // about the tower that follows.
+        args.push("-e".to_owned());
+        args.push(format!("ORBS_INSTALL={}", installs.value()));
         args.push(binary.to_owned());
 
         let borrowed: Vec<&str> = args.iter().map(String::as_str).collect();

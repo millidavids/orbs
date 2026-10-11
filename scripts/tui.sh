@@ -50,10 +50,11 @@ start)
   # progress into the pane, on top of the game.
   cargo build -q -p orbs-tui --manifest-path "$root/Cargo.toml"
   tmux kill-session -t "$session" 2>/dev/null || true
-  # Four defaults off, because this is the scripting tool: §4's boot is nine and
+  # Five defaults off, because this is the scripting tool: §4's boot is nine and
   # a half seconds, a sealed start (§11.5) has no `archive` to attend, a screen
   # part-way through leaving is not the one anyone asked about, and stopping at
-  # the orb's menu puts a screen in front of every See-it line. Set any of them
+  # the orb's menu, or installing at `new`, puts a screen in front of every
+  # See-it line. Set any of them
   # back to watch the real thing — though `ORBS_PASSAGE=1` shows no crossing
   # here, this build holding a settled `Passing` it never advances (no CRT, so
   # no motion switch a player could reach). `cargo run -p orbs` for that.
@@ -61,9 +62,9 @@ start)
   # Passed rather than exported: tmux does not hand the client's environment to
   # a session on an already-running server, and it fails *silently*.
   tmux new-session -d -s "$session" -x "$cols" -y "$rows" \
-    "$(printf 'ORBS_WIZARD=%q ORBS_SEED=%q ORBS_BOOT=%q ORBS_SEALED=%q ORBS_PASSAGE=%q ORBS_THRESHOLD=%q %q/target/debug/orbs-tui' \
+    "$(printf 'ORBS_WIZARD=%q ORBS_SEED=%q ORBS_BOOT=%q ORBS_SEALED=%q ORBS_PASSAGE=%q ORBS_THRESHOLD=%q ORBS_INSTALL=%q %q/target/debug/orbs-tui' \
       "${ORBS_WIZARD:-wizard}" "${ORBS_SEED:-181}" "${ORBS_BOOT-0}" "${ORBS_SEALED-0}" \
-      "${ORBS_PASSAGE-0}" "${ORBS_THRESHOLD-0}" "$root")"
+      "${ORBS_PASSAGE-0}" "${ORBS_THRESHOLD-0}" "${ORBS_INSTALL-0}" "$root")"
   sleep 1
   ;;
 type)

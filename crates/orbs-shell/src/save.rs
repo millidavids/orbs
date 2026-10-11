@@ -557,8 +557,13 @@ pub fn abandon(path: &Path) -> io::Result<()> {
 /// while five slots stand empty.
 #[must_use]
 pub fn free_slot() -> Option<usize> {
-    let base = path()?;
-    (1..=SLOTS).find(|slot| matches!(load(&slot_path(&base, *slot)), Opened::New))
+    free_slot_in(&path()?)
+}
+
+/// [`free_slot`] beside `base`, so the rule can be tested without `ORBS_SAVE`.
+#[must_use]
+pub fn free_slot_in(base: &Path) -> Option<usize> {
+    (1..=SLOTS).find(|slot| matches!(load(&slot_path(base, *slot)), Opened::New))
 }
 
 /// Seconds since the Unix epoch, or nought if the machine will not say.

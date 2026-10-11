@@ -17,7 +17,7 @@
 //! to capture its [`Speech`], and those utterances go on screen.
 
 use bevy_ecs::prelude::*;
-use orbs_render::{Frame, Pos, Rect, Speech, Style, UtteranceKind};
+use orbs_render::{Frame, Pos, Rect, Role, Speech, Style, UtteranceKind};
 use orbs_sim::Sim;
 
 use super::screen::Screen;
@@ -101,10 +101,29 @@ pub fn paint(
     panel: &super::glance::Panel,
     scroll: &super::scrollback::Scroll,
     bench: &super::bench::Bench,
+    installing: Option<&crate::install::Install>,
 ) {
     if pane.is_empty() {
         return;
     }
+
+    // The installation's strip alone first, for its speech, which is pinned:
+    // `help` answers in more rows than the pane has, and the tail would scroll
+    // the lesson and the way out of the one view a reader has.
+    let pinned: Vec<(UtteranceKind, Role, String)> = installing.map_or_else(Vec::new, |install| {
+        linear.scratch.reset(frame.size());
+        {
+            let mut painter = linear.scratch.painter(pane);
+            let strip = crate::install::split(pane.inset(1)).area;
+            crate::install::paint(&mut painter, strip, install);
+        }
+        linear
+            .scratch
+            .speech()
+            .utterances()
+            .map(|said| (said.kind, said.role, said.text.to_owned()))
+            .collect()
+    });
 
     // Paint the pane it is replacing, off screen, purely for its speech.
     //
@@ -125,6 +144,8 @@ pub fn paint(
         bench,
         // Settled: only the speech is kept, and speech is the truth anyway.
         &super::climb::Climb::default(),
+        // The strip in place of the gauges, as the pane draws it.
+        installing,
     );
 
     let mut painter = frame.painter(pane);
@@ -138,30 +159,78 @@ pub fn paint(
         Style::DIM,
     );
 
-    let body = pane.inset(1);
-    let stream: &Speech = linear.scratch.speech();
-    // The tail, as the session pane does: a reader hears the end of a session.
-    let skipped = stream.len().saturating_sub(usize::from(body.rows));
+    let mut body = pane.inset(1);
+    for (kind, role, text) in pinned.iter().take(usize::from(body.rows)) {
+        row(
+            &mut painter,
+            Pos::new(body.col, body.row),
+            *kind,
+            text,
+            *role,
+        );
+        body = Rect::new(
+            body.col,
+            body.row.saturating_add(1),
+            body.cols,
+            body.rows.saturating_sub(1),
+        );
+    }
 
-    for (row, utterance) in stream
+    let stream: &Speech = linear.scratch.speech();
+    // Less the pinned strip. It is painted before the transcript, so its
+    // utterances are the first to match, in order.
+    let mut strip = pinned.iter().peekable();
+    let rest: Vec<_> = stream
         .utterances()
+        .filter(|said| {
+            let shown = strip
+                .peek()
+                .is_some_and(|(kind, _, text)| *kind == said.kind && text == said.text);
+            if shown {
+                strip.next();
+            }
+            !shown
+        })
+        .collect();
+    // The tail, as the session pane does: a reader hears the end of a session.
+    let skipped = rest.len().saturating_sub(usize::from(body.rows));
+
+    for (offset, utterance) in rest
+        .into_iter()
         .skip(skipped)
         .take(usize::from(body.rows))
         .enumerate()
     {
-        let Ok(offset) = u16::try_from(row) else {
+        let Ok(offset) = u16::try_from(offset) else {
             break;
         };
         let at = Pos::new(body.col, body.row.saturating_add(offset));
-
-        // `glyphs` throughout: silent, for the reason above.
-        let written = painter.glyphs(at, kind_label(utterance.kind), Style::DIM);
-        painter.glyphs(
-            Pos::new(at.col.saturating_add(written).saturating_add(1), at.row),
+        row(
+            &mut painter,
+            at,
+            utterance.kind,
             utterance.text,
-            Style::NORMAL.with_role(utterance.role),
+            utterance.role,
         );
     }
+}
+
+/// One utterance as a row: its kind's tag, then its text.
+///
+/// `glyphs` throughout: silent, for the reason the border is.
+fn row(
+    painter: &mut orbs_render::Painter<'_>,
+    at: Pos,
+    kind: UtteranceKind,
+    text: &str,
+    role: orbs_render::Role,
+) {
+    let written = painter.glyphs(at, kind_label(kind), Style::DIM);
+    painter.glyphs(
+        Pos::new(at.col.saturating_add(written).saturating_add(1), at.row),
+        text,
+        Style::NORMAL.with_role(role),
+    );
 }
 
 /// A fixed-width tag, so the text starts in the same column on every row.
@@ -234,6 +303,7 @@ mod tests {
             &crate::Panel::default(),
             &crate::Scroll::default(),
             &crate::Bench::default(),
+            None,
         );
 
         let drawn = frame.to_text();
@@ -259,6 +329,7 @@ mod tests {
             &crate::Panel::default(),
             &crate::Scroll::default(),
             &crate::Bench::default(),
+            None,
         );
 
         assert!(
@@ -266,6 +337,73 @@ mod tests {
             "the mirror spoke: {:?}",
             frame.speech().to_transcript(),
         );
+    }
+
+    /// The mirror of a practice tower after `typed`, with a panel that has
+    /// standings to show, installing or not.
+    fn mirrored(installing: bool, typed: &[&str]) -> (Sim, String) {
+        let begun = crate::Raise {
+            keep: None,
+            length: orbs_sim::content::Length::Baseline,
+            seed: 3,
+            wizard: None,
+        }
+        .begin(true);
+        let (mut sim, mut install) = (begun.sim, begun.install.expect("installing"));
+        for line in typed {
+            install.submit(&mut sim, line, None);
+            sim.step();
+            install.observe(&sim);
+        }
+        let mut panel = crate::Panel::default();
+        panel.refresh(&sim);
+        let (_, screen, mut frame, pane) = session_with(&[]);
+        paint(
+            &mut Linear::default(),
+            &mut frame,
+            &sim,
+            &screen,
+            pane,
+            true,
+            &panel,
+            &crate::Scroll::default(),
+            &crate::Bench::default(),
+            installing.then_some(&install),
+        );
+        (sim, frame.to_text())
+    }
+
+    #[test]
+    fn the_mirror_keeps_the_installation_after_a_long_answer() {
+        // `help` answers in more rows than the pane has. Without the pin, the
+        // tail drops the lesson and `skip`, the one way out it names.
+        let (sim, drawn) = mirrored(true, &["help"]);
+        let first = drawn.lines().nth(1).unwrap_or_default();
+        let title = sim.prose().line("install_title", &[]);
+        let skip = sim.prose().line("install_skip", &[]);
+        assert!(first.contains(&title), "the strip is not first:\n{drawn}");
+        assert!(first.contains(&skip), "`skip` fell off:\n{drawn}");
+        assert_eq!(
+            drawn.matches(&title).count(),
+            1,
+            "the strip twice:\n{drawn}"
+        );
+        let lesson = sim.prose().line("install_sight_1", &[]);
+        assert!(
+            drawn.contains(&lesson),
+            "the step in hand is gone:\n{drawn}"
+        );
+    }
+
+    #[test]
+    fn the_mirror_of_an_installation_reads_no_standings() {
+        // The strip takes the gauges' place in the pane, so the mirror reading
+        // them out described a pane nobody could see. Before any answer, which
+        // would scroll them out of the tail anyway.
+        let (_, open) = mirrored(false, &[]);
+        assert!(open.contains("prog "), "no standings to leave out:\n{open}");
+        let (_, drawn) = mirrored(true, &[]);
+        assert!(!drawn.contains("prog "), "the gauges were read:\n{drawn}");
     }
 
     #[test]

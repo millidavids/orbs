@@ -83,14 +83,14 @@ impl Threshold {
     /// since `cargo test` runs threads and the environment is process-global.
     #[must_use]
     fn from_value(value: Option<&str>, default: Self) -> Self {
-        match value.map(str::trim) {
-            Some("1" | "true" | "yes") => Self::Waiting,
-            Some("0" | "false" | "no") => Self::Playing,
+        match value.and_then(crate::environment::switch) {
+            Some(true) => Self::Waiting,
+            Some(false) => Self::Playing,
             // Blank or unrecognised falls through, for the reason `SEALED`
             // gives: a typo should hand the player the ordinary start rather
             // than a screen nobody asked for, and there is nowhere this early
             // in the boot to say so.
-            _ => default,
+            None => default,
         }
     }
 

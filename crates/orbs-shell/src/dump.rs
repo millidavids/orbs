@@ -306,6 +306,7 @@ pub fn run_script(
     } else {
         crate::save::Opened::New
     };
+    let mut installing = None;
     let mut sim = match waiting {
         crate::save::Opened::Restored(save) => {
             let mut resumed = Sim::restored(&save);
@@ -322,6 +323,12 @@ pub fn run_script(
             }
             fresh.say_save_unreadable();
             fresh
+        }
+        // `ORBS_INSTALL=1`: the practice tower, with the strip over it.
+        crate::save::Opened::New if crate::install::posed() => {
+            let (sandbox, install) = crate::install::pose_for_dump(seed, wizard.as_deref());
+            installing = install;
+            sandbox
         }
         crate::save::Opened::New => {
             // Baseline: all 138 captures read the authored curve, and a default
@@ -381,9 +388,9 @@ pub fn run_script(
             // looking as though it worked — and `ORBS_ROLL_AT` has no number
             // that moved.
             let (head, last) = split_last(request);
-            drive(&mut sim, head);
+            drive(&mut sim, &mut installing, head);
             if posed.is_some() {
-                leaving(&sim, &screen, grid, &mut passing);
+                leaving(&sim, installing.as_ref(), &screen, grid, &mut passing);
             }
             let mut seen = super::glance::Panel::default();
             if rolled.is_some() {
@@ -391,7 +398,7 @@ pub fn run_script(
                 climb.set_enabled(true);
                 climb.observe(&seen);
             }
-            drive(&mut sim, last);
+            drive(&mut sim, &mut installing, last);
             // Observed here, before `ORBS_THEN` and its extra tick: whatever
             // those move belongs to the arriving screen and draws settled.
             if rolled.is_some() {
@@ -399,14 +406,15 @@ pub fn run_script(
                 climb.observe(&seen);
             }
         } else {
-            drive(&mut sim, request);
+            drive(&mut sim, &mut installing, request);
         }
     }
 
     // Written after the script has run, because what a dump is *for* is the
     // world the script reached. There is no `quit` involved: a dump has no
-    // session to leave, and `run_script` never reads `Quitting`.
-    if asked && crate::save::write(&sim.snapshot()).is_err() {
+    // session to leave, and `run_script` never reads `Quitting`. Never a practice
+    // tower: it is kept nowhere, here as in the game.
+    if asked && installing.is_none() && crate::save::write(&sim.snapshot()).is_err() {
         // In voice, not on stderr — this runs before the frame is painted, so
         // it lands on the transcript where §3 says output belongs. A dump is
         // also the one place a person is *looking* for what the orb said.
@@ -459,7 +467,7 @@ pub fn run_script(
         // only way to look at what was just saved.
         if let Ok(after) = std::env::var(THEN) {
             sim.step();
-            drive(&mut sim, &after);
+            drive(&mut sim, &mut installing, &after);
             // A `scribe` in `ORBS_THEN` opens the editor too, the only ordering
             // that shows a spell edited while it runs: the invocation has to be
             // cast before the editor opens on it.
@@ -595,6 +603,7 @@ pub fn run_script(
                 walking,
                 menuing: menuing.as_ref(),
                 reading_manual: reading_manual.as_mut(),
+                installing: installing.as_ref(),
             },
         );
     } else {
@@ -741,6 +750,7 @@ fn split_last(script: &str) -> (&str, &str) {
 /// `ORBS_THEN` and the rest belong to the arriving screen.
 fn leaving(
     sim: &Sim,
+    installing: Option<&crate::install::Install>,
     screen: &Screen,
     grid: orbs_render::GridSize,
     passing: &mut super::passing::Passing,
@@ -776,6 +786,7 @@ fn leaving(
             walking: false,
             menuing: None,
             reading_manual: None,
+            installing,
         },
     );
     passing.pose_kept(&frame);
@@ -919,7 +930,10 @@ fn scrolled(sim: &mut orbs_sim::Sim) -> super::scrollback::Scroll {
 /// One loop rather than two, so the commands before an editing session and
 /// after it are driven identically — a second copy would be a second answer to
 /// what a dump command *is*.
-fn drive(sim: &mut Sim, script: &str) {
+///
+/// While `installing`, a line goes through the installation, which is the path
+/// both frontends give it.
+fn drive(sim: &mut Sim, installing: &mut Option<crate::install::Install>, script: &str) {
     // Read once, for the whole script. `ORBS_AUGURY` is off unless asked for,
     // so an older dump drives as it always did, and one with `stub` set reaches
     // a divined line — the only way `dumps.sh` sees that surface at all.
@@ -929,6 +943,10 @@ fn drive(sim: &mut Sim, script: &str) {
         .map(str::trim)
         .filter(|line| !line.is_empty())
     {
+        if installing.is_some() {
+            crate::install::drive_dump(sim, installing, line, augury.as_deref());
+            continue;
+        }
         match augury.as_deref() {
             Some(augur) => sim.submit_reading(line, augur),
             None => sim.submit(line),

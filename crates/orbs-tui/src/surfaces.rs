@@ -88,7 +88,7 @@ pub(crate) struct Surfaces {
 pub(crate) enum Swap {
     /// Open the tower already in this file.
     Load(std::path::PathBuf),
-    /// Begin a tower at this length.
+    /// Begin a tower at this length — installed first, when the session says.
     Begin {
         /// Where it will be kept, or [`None`] for a session that keeps nothing
         /// (`ORBS_SAVE=off`) — a playable tower that is not remembered, which is
@@ -97,6 +97,8 @@ pub(crate) enum Swap {
         /// How long it is to be.
         length: orbs_sim::content::Length,
     },
+    /// The installation has woken this tower: raise it, never install it.
+    Installed(orbs_shell::Raise),
 }
 
 impl Surfaces {
@@ -130,6 +132,7 @@ impl Surfaces {
         driver: orbs_shell::Driver,
         linear: bool,
         mode: orbs_render::DisplayMode,
+        installs: bool,
         scrivener: &dyn orbs_sim::Scrivener,
     ) {
         if self.editing.is_none()
@@ -170,7 +173,7 @@ impl Surfaces {
             // typed at a prompt: the threshold's menu is `Session::new`'s.
             let mut menu = Menu::at(orbs_shell::Stance::InTower);
             menu.show_driver(driver);
-            menu.show_settings(crate::drive::settings(driver, linear, mode));
+            menu.show_settings(crate::drive::settings(driver, linear, mode, installs));
             self.menuing = Some(menu);
         }
         // The book, assembled here because this is where the `Sim` is: the menu
@@ -610,6 +613,7 @@ mod tests {
             orbs_shell::Driver::default(),
             false,
             orbs_render::DisplayMode::Wide,
+            false,
             &orbs_sim::Verbatim,
         );
         assert_eq!(
@@ -626,6 +630,7 @@ mod tests {
             orbs_shell::Driver::default(),
             false,
             orbs_render::DisplayMode::Wide,
+            false,
             &orbs_sim::Verbatim,
         );
         assert_eq!(
@@ -653,6 +658,7 @@ mod tests {
             orbs_shell::Driver::default(),
             false,
             orbs_render::DisplayMode::Wide,
+            false,
             &orbs_sim::Verbatim,
         );
         assert_eq!(surfaces.owner(&scroll), Owner::Maze);
