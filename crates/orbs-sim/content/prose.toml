@@ -450,6 +450,7 @@ menu_length_long = "long      the long haul"
 menu_settings_lead = "what would you set?"
 menu_settings_sound = "sound     how loud the orb is"
 menu_settings_tube = "tube      the glass, and the colour of it"
+menu_settings_picture = "picture   each effect on the glass, alone"
 menu_settings_access = "access    what the orb does so you can read it"
 menu_settings_habits = "habits    how the orb behaves"
 
@@ -457,8 +458,11 @@ menu_settings_habits = "habits    how the orb behaves"
 # what you *could* pick without saying what is picked is a list of things you
 # might already have done. Typing the word cycles it; the word and a value sets
 # it outright.
-menu_sound_lead = "how loud the orb is"
+menu_sound_lead = "how loud the orb is, and which sounds it makes"
 menu_tube_lead = "the glass"
+# The picture page's rows are ceilings: `crt` chooses the tube, these say how
+# much of each effect it may use.
+menu_picture_lead = "how much of each effect the glass may use"
 menu_access_lead = "what the orb does so you can read it"
 menu_habits_lead = "how the orb behaves"
 menu_setting_row = "{name}  [{state}]"
@@ -466,16 +470,34 @@ menu_setting_how = "type a word to step it, or the word and a value"
 
 # One line per setting, each padded to 27 cells so the `[value]` that follows
 # lines up down the page. The longest is `reading`; the rest are padded to it.
-menu_set_voice = "voice    clicks and chimes "
-menu_set_hum = "hum      the tube itself   "
+menu_set_voice = "voice    how loud it all is"
+menu_set_keys = "keys     typing and Enter  "
+menu_set_chimes = "chimes   good news         "
+menu_set_alarms = "alarms   bad news          "
+menu_set_refusals = "refusals a line not taken  "
 menu_set_crt = "crt      the curved glass  "
 menu_set_theme = "theme    the phosphor      "
+menu_set_scale = "scale    how the glass fits"
+menu_set_curve = "curve    the bulge         "
+menu_set_lines = "lines    the scan lines    "
+menu_set_glow = "glow     phosphor bloom    "
+menu_set_flicker = "flicker  the rolling band  "
+menu_set_mask = "mask     the grille        "
+menu_set_split = "split    colour fringes    "
+menu_set_edge = "edge     the dark corners  "
 menu_set_sight = "sight    hue, or none      "
 menu_set_linear = "linear   the plain stream  "
+menu_set_motion = "motion   anything moving   "
+menu_set_contrast = "contrast how bright text is"
+menu_set_weight = "weight   the stroke width  "
+menu_set_echo = "echo     the line read back"
 menu_set_reading = "reading  how lines are read"
 menu_set_focus = "focus    how the panes sit "
 menu_set_skip = "skip     the boot sequence "
 menu_set_install = "install  setup on a new orb"
+menu_set_pace = "pace     typing speed, baud"
+menu_set_away = "away     a window set aside"
+menu_set_name = "name     the wizard's name "
 
 # The manual, which is a surface of its own rather than a page of the menu: it
 # has paragraphs, it scrolls, and the menu has no scroll at all.
@@ -542,6 +564,38 @@ menu_abandoning = "set the tower in {count} aside? abandon {count} again to do i
 menu_unabandoned = "the tower in {count} would not move. is the folder read-only?"
 menu_full = "the orb keeps no more towers. open one and quit from it"
 menu_unkept = "this orb keeps no saves at all - ORBS_SAVE is off"
+# §14's health warning, said once per machine on the first threshold. Not a
+# refusal either, and short: it shares the complaint row with them.
+menu_warning = "if moving light troubles you: settings, access, motion off"
+# A name refused. Each says what a name can be rather than only that this was
+# not one.
+menu_name_long = "a name is {count} letters at most"
+menu_name_spaced = "a name is one word"
+menu_name_undrawable = "the orb cannot draw letter {count} of that name"
+
+# Words the menu answers and never offers (§3: discovered, never pushed). Each
+# changes nothing, and none is said while the orb speaks in the eldritch
+# register. See `orbs-shell/src/menu/secrets.rs`.
+menu_secret_xyzzy = "nothing happens"
+menu_secret_plugh = "a hollow voice says 'fool'"
+menu_secret_hello_sailor = "nothing happens here"
+menu_secret_sudo = "there is no one above you in this tower"
+menu_secret_sandwich = "make it yourself"
+menu_secret_sudo_sandwich = "very well. there is no bread in a scrying orb"
+# A level that goes past `full`, on the sound page.
+menu_secret_eleven = "it does not go to eleven"
+# A phosphor named by its part number on the tube page: p1, p3, p4, p7, p31.
+menu_secret_phosphor = "the orb knows its phosphors by number"
+# `moon` at the menu, read from the wall clock in UTC. A dump sees no sky unless
+# `ORBS_DATE` names a day.
+moon_unseen = "the orb cannot see the sky from here"
+moon_new = "the moon is new, and the sky is dark"
+moon_full = "the moon is full"
+moon_waxing = "the moon is waxing, {count} nights from full"
+moon_waning = "the moon is waning, {count} nights from new"
+moon_hallows = "it is all hallows' eve"
+moon_unlucky = "it is friday the thirteenth"
+moon_and = "{detail}. {name}"
 # **As short as the `PgDn newest` it replaces.** This rides in the border title
 # beside the location, the tick, the tier and the grid, and at the 80-column
 # floor there is about twenty cells left - the first wording was 39 and drew as

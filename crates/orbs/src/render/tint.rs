@@ -175,7 +175,7 @@ pub(crate) const fn resolve(
 
 #[cfg(test)]
 mod tests {
-    use super::super::palette::{ALL, contrast, luminance};
+    use super::super::palette::{EVERY, contrast, luminance};
     use super::*;
     use orbs_render::Role;
 
@@ -192,7 +192,7 @@ mod tests {
                     tint.name(),
                 );
             }
-            for theme in ALL {
+            for theme in EVERY {
                 for (step, colour) in ramp.iter().enumerate() {
                     let ratio = contrast(*colour, theme.background);
                     assert!(

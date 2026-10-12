@@ -186,9 +186,11 @@ pub(crate) fn forget_held_keys(
 /// Whether a keystroke that produced `text` proves the held chord is a ghost.
 ///
 /// A focus hook was never going to be enough: [`forget_held_keys`] assumes a
-/// stolen window is observable, and Bevy 0.19 drops winit's `ModifiersChanged`
-/// — so a key-up swallowed without a focus event leaves the modifier down for
-/// the rest of the session. `Cmd+Shift+Ctrl+4` does exactly that.
+/// stolen window is observable, and Bevy 0.19 dropped winit's
+/// `ModifiersChanged` — so a key-up swallowed without a focus event left the
+/// modifier down for the rest of the session. `Cmd+Shift+Ctrl+4` did exactly
+/// that. Bevy 0.20 reconciles held modifiers from that event, which mends it
+/// wherever winit reports one; this stays for wherever nothing is reported.
 ///
 /// So the OS decides what is text: under a real chord macOS hands back none at
 /// all, and Windows and X11 a control character [`Line::insert`] already

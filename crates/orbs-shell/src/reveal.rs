@@ -19,11 +19,62 @@
 
 use bevy_ecs::prelude::*;
 
-/// Characters per second once a reveal is under way.
+/// How fast text types itself — `settings` → `habits` → `pace`, in baud.
 ///
-/// A teletype ran ~10 and is unusable; a 9600-baud VT100 managed ~960 and is
-/// indistinguishable from instant. Settled by looking, not by reasoning.
-const RATE: f32 = 420.0;
+/// A teletype ran ~10 characters a second and is unusable; a 9600-baud VT100
+/// managed ~960 and is indistinguishable from instant. The default was settled
+/// by looking at 420, and is 4800 baud now that it has a name.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum Pace {
+    /// 120 characters a second: a line visibly typing.
+    Baud1200,
+    /// 480 characters a second.
+    #[default]
+    Baud4800,
+    /// 960 characters a second, which reads as nearly instant.
+    Baud9600,
+    /// No reveal at all — what stillness forces.
+    Instant,
+}
+
+impl Pace {
+    /// All four, in the order the row cycles them.
+    pub const ALL: [Self; 4] = [
+        Self::Baud1200,
+        Self::Baud4800,
+        Self::Baud9600,
+        Self::Instant,
+    ];
+
+    /// The word for it, on the page and in the file.
+    #[must_use]
+    pub const fn word(self) -> &'static str {
+        match self {
+            Self::Baud1200 => "1200",
+            Self::Baud4800 => "4800",
+            Self::Baud9600 => "9600",
+            Self::Instant => "instant",
+        }
+    }
+
+    /// The pace `word` names, whole.
+    #[must_use]
+    pub fn named(word: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|pace| pace.word() == word)
+    }
+
+    /// Characters a second, or `None` for no reveal.
+    ///
+    /// A baud is a bit a second and a character ten of them on the wire.
+    const fn characters(self) -> Option<f32> {
+        match self {
+            Self::Baud1200 => Some(120.0),
+            Self::Baud4800 => Some(480.0),
+            Self::Baud9600 => Some(960.0),
+            Self::Instant => None,
+        }
+    }
+}
 
 /// The longest one burst of output may take to arrive, in seconds.
 ///
@@ -71,12 +122,21 @@ impl Reveal {
         self.carry = 0.0;
     }
 
-    /// Let `delta` seconds pass.
+    /// Let `delta` seconds pass, at the default pace.
     pub fn advance(&mut self, delta: f32) {
+        self.advance_at(delta, Pace::default());
+    }
+
+    /// Let `delta` seconds pass at `pace`.
+    pub fn advance_at(&mut self, delta: f32, pace: Pace) {
         if self.is_settled() {
             return;
         }
-        self.carry += self.rate() * delta;
+        let Some(characters) = pace.characters() else {
+            self.finish();
+            return;
+        };
+        self.carry += self.rate(characters) * delta;
         while self.carry >= 1.0 && self.shown < self.total {
             self.carry -= 1.0;
             self.shown += 1;
@@ -93,6 +153,15 @@ impl Reveal {
     pub const fn finish(&mut self) {
         self.shown = self.total;
         self.carry = 0.0;
+    }
+
+    /// Take a stream of `records` drawn records as already on screen, whole.
+    ///
+    /// For a change in what is drawn rather than in what was said: echoes put
+    /// back by the `echo` row are not news, and must not type themselves.
+    pub const fn settle_at(&mut self, records: usize) {
+        self.seen = records;
+        self.finish();
     }
 
     /// Whether everything has arrived.
@@ -125,8 +194,8 @@ impl Reveal {
     ///
     /// A rate, not a clamp on elapsed time: a long burst prints uniformly
     /// faster rather than slowly and then snapping.
-    fn rate(&self) -> f32 {
-        RATE.max(f32::from(self.total) / LONGEST)
+    fn rate(&self, characters: f32) -> f32 {
+        characters.max(f32::from(self.total) / LONGEST)
     }
 }
 
@@ -175,6 +244,34 @@ mod tests {
     }
 
     #[test]
+    fn a_slower_pace_has_less_on_screen_and_instant_has_all_of_it() {
+        let shown = |pace| {
+            let mut reveal = burst(200);
+            reveal.advance_at(0.1, pace);
+            reveal.budget(0).map_or(200, |(_, cells)| cells)
+        };
+        assert!(shown(Pace::Baud1200) < shown(Pace::Baud4800));
+        assert!(shown(Pace::Baud4800) < shown(Pace::Baud9600));
+        assert_eq!(shown(Pace::Instant), 200, "instant still typed");
+        // The ceiling holds at every pace: a slow pace never makes a log a wall.
+        let mut reveal = burst(u16::MAX);
+        let mut elapsed = 0.0;
+        while !reveal.is_settled() && elapsed < 10.0 {
+            reveal.advance_at(1.0 / 60.0, Pace::Baud1200);
+            elapsed += 1.0 / 60.0;
+        }
+        assert!(elapsed <= LONGEST + 0.1, "{elapsed}s at 1200 baud");
+    }
+
+    #[test]
+    fn a_pace_is_its_own_word() {
+        for pace in Pace::ALL {
+            assert_eq!(Pace::named(pace.word()), Some(pace));
+        }
+        assert_eq!(Pace::named("300"), None);
+    }
+
+    #[test]
     fn a_short_burst_still_types_itself() {
         // The other end: the ceiling must not make a one-line echo instant.
         let mut reveal = burst(20);
@@ -204,6 +301,16 @@ mod tests {
         assert_eq!(reveal.total, 40, "the new burst inherited the old length");
         assert_eq!(reveal.shown, 0, "the new burst started part-way through");
         assert_eq!(reveal.from, 3, "the first burst's records are not settled");
+    }
+
+    #[test]
+    fn records_put_back_on_screen_do_not_type_themselves() {
+        let mut reveal = Reveal::default();
+        reveal.observe(10, 100);
+        reveal.finish();
+        reveal.settle_at(16);
+        reveal.observe(16, 60);
+        assert!(reveal.is_settled(), "the echoes put back typed again");
     }
 
     #[test]

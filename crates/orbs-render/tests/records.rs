@@ -1011,3 +1011,75 @@ fn a_resumed_stream_keeps_its_place_in_the_sequence() {
     );
     assert_eq!(records.len(), 2);
 }
+
+// ---------------------------------------------------------------------------
+// Echo verbosity
+// ---------------------------------------------------------------------------
+
+/// A typed line and the echo the parser answered it with.
+fn typed(records: &mut Records, line: &str, echo: &str, outcome: Outcome) {
+    records
+        .push(RecordKind::Input)
+        .text(FieldName::Message, line)
+        .finish();
+    records
+        .push(RecordKind::Echo)
+        .outcome(outcome)
+        .text(FieldName::Message, echo)
+        .finish();
+}
+
+/// What the transcript draws, as echo texts.
+fn echoes(records: &Records) -> Vec<String> {
+    records
+        .drawn()
+        .filter(|record| record.kind() == RecordKind::Echo)
+        .filter_map(|record| match record.field(FieldName::Message) {
+            Some(Value::Text(text)) => Some(text.to_owned()),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn a_terse_echo_leaves_out_only_a_line_repeated_word_for_word() {
+    let mut records = Records::new();
+    typed(
+        &mut records,
+        "Brew  clarity",
+        "brew clarity",
+        Outcome::Resolved,
+    );
+    typed(
+        &mut records,
+        "grind some sage",
+        "grind sage",
+        Outcome::Resolved,
+    );
+    typed(
+        &mut records,
+        "frobnicate",
+        "frobnicate",
+        Outcome::Unresolved,
+    );
+    typed(&mut records, "kindle", "kindle", Outcome::Forced);
+
+    assert_eq!(
+        echoes(&records).len(),
+        4,
+        "a stream starts showing every echo"
+    );
+
+    records.set_terse_echo(true);
+    assert_eq!(
+        echoes(&records),
+        ["grind sage", "frobnicate", "kindle"],
+        "only the word-for-word resolution goes: a reading, a refusal and a \
+         best guess are the reason echoes exist",
+    );
+    // One predicate, so every measure of the transcript agrees.
+    assert_eq!(records.drawn().count(), records.drawn_len());
+    assert_eq!(records.since(0).count(), records.drawn_len());
+    // Nothing left the stream: a log still has all of it.
+    assert_eq!(records.len(), 8);
+}

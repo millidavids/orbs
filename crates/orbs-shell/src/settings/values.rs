@@ -21,13 +21,15 @@
 /// 80×22 — the smallest screen the game supports — can host.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Category {
-    /// How loud the orb is, and whether it hums.
+    /// How loud the orb is, and whether a key clicks.
     ///
     /// Arrived with the voice, not before it: a page of volumes for a game that
     /// makes no sound is the dead affordance §15 weighs heaviest.
     Sound,
     /// The glass: the tube, and the colour of the phosphor.
     Tube,
+    /// Each of the tube's effects on its own, as a ceiling on the tube's state.
+    Picture,
     /// §14's accommodations: hue, the linear stream, motion.
     Access,
     /// How the orb behaves: how it reads you, how it divides the screen, and
@@ -37,7 +39,13 @@ pub enum Category {
 
 impl Category {
     /// Every page, in the order the settings page offers them.
-    pub const ALL: [Self; 4] = [Self::Sound, Self::Tube, Self::Access, Self::Habits];
+    pub const ALL: [Self; 5] = [
+        Self::Sound,
+        Self::Tube,
+        Self::Picture,
+        Self::Access,
+        Self::Habits,
+    ];
 
     /// The word a player types for it.
     ///
@@ -48,6 +56,7 @@ impl Category {
         match self {
             Self::Sound => "sound",
             Self::Tube => "tube",
+            Self::Picture => "picture",
             Self::Access => "access",
             Self::Habits => "habits",
         }
@@ -84,6 +93,22 @@ pub struct Row {
     pub value: String,
     /// Every value it will take, in the order cycling visits them.
     pub values: Vec<String>,
+    /// Words it answers to and never offers — §3's *discovered, never pushed*.
+    pub secrets: Vec<Secret>,
+}
+
+/// A word a row answers to that it never lists, cycles or matches by prefix.
+///
+/// Typed whole or not at all, so `theme p` stays a question about the themes
+/// the page shows.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Secret {
+    /// What is typed after the row's word.
+    pub word: String,
+    /// What it sets the row to.
+    pub value: String,
+    /// The prose key of what the menu says back, if anything.
+    pub remark: Option<String>,
 }
 
 impl Row {
@@ -96,7 +121,26 @@ impl Row {
             key: word.to_owned(),
             value: value.to_owned(),
             values: values.iter().map(|value| (*value).to_owned()).collect(),
+            secrets: Vec::new(),
         }
+    }
+
+    /// Answer `word` with `value`, and say `remark` if there is one — without
+    /// ever offering it.
+    #[must_use]
+    pub fn secretly(mut self, word: &str, value: &str, remark: Option<&str>) -> Self {
+        self.secrets.push(Secret {
+            word: word.to_owned(),
+            value: value.to_owned(),
+            remark: remark.map(ToOwned::to_owned),
+        });
+        self
+    }
+
+    /// The secret `typed` is, whole.
+    #[must_use]
+    pub fn secret(&self, typed: &str) -> Option<&Secret> {
+        self.secrets.iter().find(|secret| secret.word == typed)
     }
 
     /// Keep this row under `key` rather than under its word.

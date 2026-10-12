@@ -86,7 +86,7 @@ pub fn strike(world: &mut World) -> Option<Reached> {
     let roll: u32 = {
         let mut rngs = world.resource_mut::<Rngs>();
         // A wide draw, so the quotient below has room to choose a target from.
-        rand::Rng::random_range(rngs.stream(RngStream::Siege), 0..u32::from(u16::MAX))
+        rand::RngExt::random_range(rngs.stream(RngStream::Siege), 0..u32::from(u16::MAX))
     };
 
     if !roll.is_multiple_of(ODDS) {

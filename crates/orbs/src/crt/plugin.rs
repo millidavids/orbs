@@ -29,6 +29,7 @@ impl Plugin for CrtPlugin {
         embedded_asset!(app, "crt.wgsl");
 
         app.add_plugins(ExtractComponentPlugin::<CrtSettings>::default())
+            .init_resource::<super::Picture>()
             // Guarded on boot like every other key: during the sequence, a
             // keystroke means skip. See `boot::plugin::skip`.
             .add_systems(
@@ -48,7 +49,9 @@ impl Plugin for CrtPlugin {
             .add_systems(Render, prepare.in_set(RenderSystems::Prepare))
             // `in_set` is load-bearing, not decoration. `Core2dSystems` chains
             // Prepass -> MainPass -> EarlyPostProcess -> PostProcess, and
-            // `upscaling` runs `.after(PostProcess)`. A system that only says
+            // `upscaling` runs `.after(PostProcess)`. Since 0.20 the chain is
+            // weak — kept only between systems that conflict — and every pass
+            // takes `RenderContext`, whose deferred state always conflicts. A system that only says
             // `.after(tonemapping)` has an edge to tonemapping and to nothing
             // else — it is unordered against `main_pass_2d` and against
             // `upscaling`, so it lands at a different point every frame. That is
@@ -185,6 +188,8 @@ fn chosen(value: Option<&str>) -> CrtSettings {
 /// Copy the settings across to the render world once per frame.
 fn extract(
     settings: Extract<Query<&CrtSettings>>,
+    picture: Extract<Option<Res<super::Picture>>>,
+    stillness: Extract<Option<Res<crate::shell::Stillness>>>,
     time: Extract<Res<Time>>,
     tube: Extract<Res<Tube>>,
     mut commands: Commands,
@@ -192,8 +197,15 @@ fn extract(
     let Some(settings) = settings.iter().next() else {
         return;
     };
+    let still = stillness
+        .as_deref()
+        .is_some_and(|stillness| stillness.still());
     commands.insert_resource(ExtractedCrt(CrtUniform::new(
-        *settings,
+        super::effective::effective(
+            *settings,
+            picture.as_deref().copied().unwrap_or(super::Picture::FULL),
+            still,
+        ),
         time.elapsed_secs(),
         **tube,
     )));
@@ -220,12 +232,14 @@ pub struct Tube {
     /// The picture's share of the window on each axis, in `(0, 1]`.
     ///
     /// One of the two is always 1.0 — the picture fits inside on both axes and
-    /// touches on at least one — and the other is what the bars eat. The picture
-    /// is centred, so the shader derives its origin as `(1 - fill) / 2` rather
-    /// than being told: `ScalingMode::AutoMin` centres on `viewport_origin`,
-    /// which defaults to the middle.
+    /// touches on at least one — and the other is what the bars eat.
     pub fill_x: f32,
     pub fill_y: f32,
+    /// How far the picture's middle sits from the window's, as a share of the
+    /// window, top-down. Zero but for a whole fit on an odd window, which
+    /// `Screen::middle` moves half a pixel onto a whole one.
+    pub shift_x: f32,
+    pub shift_y: f32,
 }
 
 impl Default for Tube {
@@ -236,6 +250,8 @@ impl Default for Tube {
             height: f32::from(orbs_render::CELL_HEIGHT),
             fill_x: 1.0,
             fill_y: 1.0,
+            shift_x: 0.0,
+            shift_y: 0.0,
         }
     }
 }

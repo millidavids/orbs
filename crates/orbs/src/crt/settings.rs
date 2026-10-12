@@ -6,11 +6,13 @@
 //! [`CrtSettings::OFF`] is one value away.
 
 use bevy::prelude::*;
+use bevy::render::RenderApp;
 use bevy::render::extract_component::ExtractComponent;
 use bevy::render::render_resource::ShaderType;
 
 /// Put this on the camera to curve the picture.
 #[derive(Component, ExtractComponent, Debug, Clone, Copy, PartialEq)]
+#[extract_app(RenderApp)]
 pub(crate) struct CrtSettings {
     /// Whether the tube is on at all.
     ///
@@ -169,6 +171,9 @@ pub(crate) struct CrtUniform {
     /// room around it rather than part of the glass.
     pub(crate) fill_x: f32,
     pub(crate) fill_y: f32,
+    /// Where the picture's middle sits from the window's — see `Tube`.
+    pub(crate) shift_x: f32,
+    pub(crate) shift_y: f32,
     pub(crate) enabled: f32,
 }
 
@@ -194,6 +199,8 @@ impl CrtUniform {
             cell_height: tube.height,
             fill_x: tube.fill_x,
             fill_y: tube.fill_y,
+            shift_x: tube.shift_x,
+            shift_y: tube.shift_y,
             enabled: f32::from(u8::from(settings.on)),
         }
     }

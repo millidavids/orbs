@@ -192,7 +192,7 @@ const fn derive_stream_seed(master: u64, index: usize) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::Rng;
+    use rand::RngExt;
 
     const ALL: [RngStream; RngStream::COUNT] = [
         RngStream::Parser,
@@ -284,6 +284,45 @@ mod tests {
             let same: u64 = loaded.stream(s).random();
             assert_eq!(next, same, "{s:?} did not resume where it stood");
         }
+    }
+
+    #[test]
+    fn every_stream_draws_what_it_always_has() {
+        // The values themselves, pinned. Every test above compares streams to
+        // each other, so a `rand` release that changed what a seed draws would
+        // pass them all and move every seed's world. Crosses ChaCha's 64-word
+        // buffer at an odd offset, takes the integer ranges the sim takes, and
+        // resumes from a position, which is what a save stores.
+        let mut rngs = Rngs::from_seed(0x0B5);
+        let mut digest: u64 = 0xCBF2_9CE4_8422_2325;
+        let mut fold = |value: u64| {
+            digest = (digest ^ value).wrapping_mul(0x0100_0000_01B3);
+        };
+        for stream in ALL {
+            let rng = rngs.stream(stream);
+            fold(u64::from(rng.random::<u32>()));
+            for _ in 0..40 {
+                fold(rng.random::<u64>());
+            }
+            fold(rng.random_range(0..7_usize) as u64);
+            fold(u64::from(rng.random_range(1..=20_u32)));
+            fold(rng.random_range(0..1_000_u64));
+            fold(u64::from(rng.random_range(0..100_u8)));
+        }
+        let positions = rngs.positions();
+        for position in positions {
+            fold(u64::try_from(position).expect("a position fits"));
+        }
+        let mut resumed = Rngs::restore(0x0B5, positions);
+        for stream in ALL {
+            fold(resumed.stream(stream).random::<u64>());
+        }
+        assert_eq!(positions[0], 86, "the first stream's position");
+        // Taken under `rand` 0.9; 0.10 draws the same.
+        assert_eq!(
+            digest, 16_102_934_306_893_445_814,
+            "a stream draws something else now"
+        );
     }
 
     #[test]

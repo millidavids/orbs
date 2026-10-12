@@ -14,14 +14,21 @@
 // is off, so a filter living below the guard would be turned off by F3. §19:
 // "a switch inferred from the absence of something is not a switch."
 
-#import bevy_core_pipeline::fullscreen_vertex_shader::FullscreenVertexOutput
+// What Bevy's fullscreen vertex shader hands on, written out: Bevy 0.20 gives a
+// `.wgsl` file to wgpu as it is, with no `#import` to resolve.
+struct FullscreenVertexOutput {
+    @builtin(position) position: vec4<f32>,
+    @location(0) uv: vec2<f32>,
+};
 
 struct Sight {
     // 1.0 for greyscale, 0.0 for none. A float rather than a `u32` because
     // uniform padding rules make a lone `u32` the awkward case, and because the
     // next thing this grows is a strength.
     greyscale: f32,
-    _pad0: f32,
+    // 1.0 as authored; lower while the window is in the background and the
+    // player asked the glass to cloud (`away`).
+    brightness: f32,
     _pad1: f32,
     _pad2: f32,
 }
@@ -47,5 +54,6 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     // the curve twice here.
     let luma = dot(source.rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
 
-    return vec4<f32>(mix(source.rgb, vec3<f32>(luma), sight.greyscale), source.a);
+    let seen = mix(source.rgb, vec3<f32>(luma), sight.greyscale);
+    return vec4<f32>(seen * sight.brightness, source.a);
 }

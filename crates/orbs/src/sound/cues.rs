@@ -69,6 +69,16 @@ impl Voice {
         Self::Baulk,
     ];
 
+    /// The kind of sound it is, which the sound page switches as one.
+    pub(crate) const fn kind(self) -> super::Kind {
+        match self {
+            Self::Key | Self::Enter => super::Kind::Keys,
+            Self::Done | Self::Good => super::Kind::Chimes,
+            Self::Ill | Self::Wrong => super::Kind::Alarms,
+            Self::Baulk => super::Kind::Refusals,
+        }
+    }
+
     /// The word this cue is known by, for a test's failure message.
     pub(crate) const fn name(self) -> &'static str {
         match self {

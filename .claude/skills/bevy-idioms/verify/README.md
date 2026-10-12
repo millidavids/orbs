@@ -32,4 +32,4 @@ Zero errors means the skills' snippets are accurate for the Bevy version in
 | `src/round2.rs` | ParamSet, `Single`, `Local`, exclusive world access, run conditions, 2D setup, gizmos |
 | `src/round3.rs` | game-feel: screen shake, hit-stop, easing, squash & stretch, knockback, damage flash |
 
-Last verified: **bevy 0.19.0**, 2026-08-02.
+Last verified: **bevy 0.20.0**, 2026-10-12.

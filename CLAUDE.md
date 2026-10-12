@@ -110,9 +110,9 @@ such.
 ## Technology Stack
 
 - **Rust**, edition 2024, pinned toolchain
-- **Bevy `=0.19.0`** — exact pin, upgraded deliberately (one window, in *Engine
+- **Bevy `=0.20.0`** — exact pin, upgraded deliberately (one window, in *Engine
   upgrade*)
-- `serde` + `toml` (readable saves), `rand` 0.9 (seeded), `thiserror`, `tracing`,
+- `serde` + `toml` (readable saves), `rand` 0.10 (seeded), `thiserror`, `tracing`,
   `clap` (harness), `bevy-steamworks`
 - **No `bevy_text` / `bevy_ui`.** Every screen is terminal content rendered by our
   own cell-grid renderer. This is a build-level fact, not just an aesthetic.
@@ -237,13 +237,13 @@ duplicated §19 in the margins.
 - **Check for reuse before writing new logic.** Extract shared patterns.
 - `clippy.toml` sets `type-complexity-threshold = 500` (Bevy queries are verbose).
 
-## Bevy 0.19 Specifics
+## Bevy 0.20 Specifics
 
 **Bevy breaks APIs every minor release and most published Bevy code targets
 0.14–0.16.** Do not recall Bevy syntax from memory.
 
 Use the project skill **`bevy-idioms`** (in `.claude/skills/`), which is pinned to
-0.19 and ships a compile-verified harness at
+0.20 and ships a compile-verified harness at
 `.claude/skills/bevy-idioms/verify/` — run `cargo check` there to validate any
 snippet against the pinned version.
 
@@ -413,6 +413,7 @@ has exactly the standing it had here: it is the gate, not supplementary reading.
 | accessibility, colour, or the tube | *Greyscale* |
 | the manual, `recall`, or a room's primer | *`recall apprentice`* |
 | the installation, or what a new game opens on | *The installation* |
+| a settings row, or a word the menu answers | *The orb made yours* |
 
 **Four things from it are worth carrying without looking**, because they are the
 ones a session gets wrong before it thinks to check:
@@ -436,7 +437,7 @@ ones a session gets wrong before it thinks to check:
 
 **The gate can be entirely green while the game prints 250 GPU errors a second.**
 That is not hypothetical: the boot sequence was the first thing to hold a blank
-screen for more than one frame, Bevy 0.19 answers a zero-vertex mesh with
+screen for more than one frame, Bevy 0.19 answered a zero-vertex mesh with
 `use-after-free`, and `cargo test`, `clippy`, `rustdoc` and `cargo build` all
 passed throughout. §15's "work is done when it has been looked at" includes
 looking at stderr.
@@ -452,6 +453,10 @@ a shader on its own and the binary keeps the old one, silently — a change that
 appears to do nothing, and a diagnostic that appears to prove the opposite of
 what is true. Touch a `.rs` file in the same crate, or `touch
 crates/orbs/src/crt/plugin.rs`, to force the re-embed.
+
+**A `.wgsl` reaches wgpu exactly as written** since Bevy 0.20: no `#import`
+is resolved, and a stale one fails at runtime, not in the gate. Write the struct
+out, as `crt.wgsl` and `sight.wgsl` do, or make the file `.wesl`.
 
 ### Other
 

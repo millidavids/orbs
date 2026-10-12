@@ -1881,7 +1881,7 @@ so slippage is measurable rather than discovered in Phase 14.
 |---|---|
 | **Language** | Rust, edition 2024 |
 | **Toolchain** | Pinned via `rust-toolchain.toml`; stable channel |
-| **Engine** | Bevy `=0.19.0` (exact pin — see §16 on version drift) |
+| **Engine** | Bevy `=0.20.0` (exact pin — see §16 on version drift) |
 | **ECS** | `bevy_ecs` — used standalone in `orbs-sim`, and via `bevy` in the frontend |
 | **Rendering** | Custom cell-grid text renderer + ported CRT post-process. **Not** `bevy_text`/`bevy_ui` |
 | **Serialisation** | `serde` + `toml` (readable saves, §7) |
@@ -1990,7 +1990,7 @@ the 2D rendering half out of `bevy_sprite`; without it `Mesh2d`, `ColorMaterial`
 and `MeshMaterial2d` do not exist and nothing 2D draws at all.
 
 ```toml
-bevy = { version = "=0.19.0", default-features = false, features = [
+bevy = { version = "=0.20.0", default-features = false, features = [
     "std", "async_executor", "multi_threaded",
     "bevy_winit", "bevy_window", "bevy_input_focus",
     "bevy_render", "bevy_core_pipeline", "bevy_sprite", "bevy_sprite_render",
@@ -2002,8 +2002,10 @@ bevy = { version = "=0.19.0", default-features = false, features = [
 ] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-bevy = { version = "=0.19.0", default-features = false, features = ["x11", "wayland"] }
+bevy = { version = "=0.20.0", default-features = false, features = ["x11", "wayland"] }
 ```
+
+The same list on 0.20: every feature still exists under its 0.19 name.
 
 ### Build profiles
 
@@ -2068,7 +2070,8 @@ Workflows: `build.yml`, `macos-release.yml`, `release.yml`, `steam-upload.yml`.
 The design has been silent on audio, which is a gap for a game whose entire output
 is text. **A terminal needs a voice**: key clicks, the orb's hum, completion
 chimes, alert tones on aberrations, and a low drone that shifts with the tonal
-register (§3). This is cheap to produce, disproportionately effective at selling
+register (§3). *(⚠ The hum and the drone were removed at `0.17.16` — §19, *The
+hum is gone*. The clicks, chimes and tones remain.)* This is cheap to produce, disproportionately effective at selling
 the CRT fiction, and it is the only sensory channel besides text available.
 
 Audio also carries real accessibility weight — distinct tones for
@@ -2132,6 +2135,11 @@ options, font size and cell scaling, **multiplex display mode — Deep or Wide f
 (including sabotage tells, §8.1), full remapping, echo verbosity toggle, and **no
 mechanic requiring fast typing at base difficulty** — mechanised via one-command
 diagnosis (§5.1), not merely asserted.
+
+*(Built at `0.17.9`–`0.17.15` — §19, *The orb made yours*: the CRT disableable
+per effect and motion on a switch of its own, high contrast and a heavy stroke,
+echo verbosity, and the health warning. Font size — the 80×30 grid — and
+remapping are still owed.)*
 
 **Post-launch: first-class screen-reader support.** A text-only game is one of very
 few genres that can be natively blind-accessible — a real differentiator, a press
@@ -2460,6 +2468,353 @@ they are re-pointed at the phases that now need them rather than quietly dropped
    price-shop — Exapunks is $19.99.
 
 ## 19. Decisions log
+
+### Bevy 0.20, and every library with it (`0.17.17`)
+
+**Rule: an engine upgrade changes no pixel, no draw and no saved byte, and is
+held to that by measurement rather than by reading.** The window the ROADMAP
+kept for it, taken the way `court_wizard` took its own the day before.
+
+| Moved | Why it was safe |
+|---|---|
+| Bevy and `bevy_ecs` `0.19.0` → `0.20.0` | Every feature in the list kept its name. The harness in `bevy-idioms` compiled unchanged on 0.20 |
+| Rust `1.96.0` → `1.98.0` | Bevy 0.20 needs 1.97.1. 1.98 is `court_wizard`'s pin, so one toolchain serves both, and its new lints found nothing here |
+| `rand`/`rand_chacha` 0.9 → 0.10 | The same ChaCha core, the same `seed_from_u64`, the same integer sampling. `rng::every_stream_draws_what_it_always_has` pins literal values under 0.9 — across the 64-word buffer at an odd offset, every range type the sim takes, a position and a restore — and passed unchanged. Only the trait moved: the helpers are `RngExt` now |
+| `toml` 0.9 → 1, `dirs` 6 → 7, `pollster` 0.4 → 1, the rest by `cargo update` | `toml` 1 changed datetimes and borrowed strings, neither of which a save or a settings file holds. `dirs` 7 moved Windows' `preference_dir`; orbs asks `data_dir` |
+
+**What it took**, each found by compiling or by reading the 0.20 source:
+
+- `#[extract_app(RenderApp)]` on `CrtSettings`' `ExtractComponent` derive.
+- **A `.wgsl` reaches wgpu as written.** Both shaders `#import`ed
+  `FullscreenVertexOutput`; 0.20 resolves nothing in `.wgsl`, and the failure is
+  at runtime with the gate green. The two-field struct is written out in each,
+  as `court_wizard` did, rather than moving to `.wesl` for one import.
+- **The 2D camera tonemaps `Linear` by default** where 0.19 required `None`.
+  The palette is solved in sRGB, so the camera asks for `None`.
+- `World::iter_resources` yields the `ComponentId` first.
+- **`Core2dSystems` is weakly chained.** The CRT and sight passes keep their
+  order because each takes `RenderContext`, whose deferred state always counts
+  as a conflict; `crt/plugin.rs` says so where it relies on it.
+- **`bevy_winit` now mends stuck modifiers** from `ModifiersChanged`. The
+  stale-chord fallback in `shell::input` stays for wherever no key-up is
+  reported at all, and `sound::keys` already ignores a modifier on its own, so
+  the new synthetic modifier events click nothing.
+
+**Measured, not assumed:** `ORBS_CAPTURE` stills on 0.19 and 0.20 with the tube
+on and off are **pixel-identical** at 2880×1620; `orbs-balance sweep --ticks
+7200` is byte-identical; `dumps.sh` moves the POST card's `bevy` and `rust` lines
+and nothing else; the played suite passes 149.
+
+**Held: `burn` 0.21 → 0.22.** 0.22 is the only burn on `wgpu 30`, and it is a
+rewrite — no backend generic, a new weight format the shipped `reader.bin` and
+`scribe.bin` must be converted to, and `ndarray` deprecated for a new CPU backend
+whose inference cost would have to be measured again. None of that is an engine
+upgrade. Until it lands, a `train` build compiles `wgpu` 29 and 30 side by side
+and the augury's *"the graphics stack unifies"* no longer holds; a shipped build
+links only Bevy's. **Also held:** `notify` 9 (a release candidate) and
+`signal-hook` 0.4 (`crossterm` 0.29 still pulls 0.3, so it would be two copies).
+
+### The orb made yours — settings chosen from research (`0.17.9`–)
+
+**The owner asked for a researched list of settings** — visual, accessibility and
+playful. About 190 options were gathered from the Game Accessibility Guidelines,
+the Xbox Accessibility Guidelines, APX, terminal emulators (cool-retro-term,
+crt-royale, Windows Terminal, hackmud's `gui.vfx`) and comparable games (Bitburner,
+Cogmind, NetHack, Dwarf Fortress, Antimatter Dimensions, Cookie Clicker, A Dark
+Room, Hypnospace Outlaw, Hacknet, Duskers, Inscryption). Most of the work was the
+cut. The boxes are in ROADMAP's *The orb made yours*; this records the decisions.
+
+#### What was not taken, and why
+
+Recorded so none of it is argued again.
+
+| Option | Why not |
+|---|---|
+| A `degauss` word | The strike was cut because *"an orb is found, not switched on"*; a CRT maintenance beat borrows from the same wrong object. It is also a whole-field hue swirl through saturated red, which WCAG 2.3.1 counts as a flash |
+| The moon or the season on the boot card | Pushed on every launch on the date, against §3's *"discovered, never pushed"*; the card's painters take no prose; and every `boot_*` capture would move. `moon` at the menu does it unpushed |
+| Protan, deutan and tritan correction | Already measured and refused: daltonisation is worse for this palette in eleven of twelve theme × deficiency pairs |
+| A hue slider or custom colours | §4: curated harmonies |
+| Themes unlocked as rewards | §4: none unlockable. Hidden values are found by curiosity, never earned |
+| Game speed, assist timers | Sieges wait for the player (`0.17.0`), and the calm layer has no clock to beat |
+| Captions for sounds | Rule 2 by construction: `voice_of` plays only what the transcript draws in the same instant |
+| Mono audio | Every cue is generated mono |
+| Jitter, tearing, static noise | Legibility is the product (§4), and these are motion that says nothing |
+| A glass frame or a reflection | §4: always inside |
+| A dyslexia font | A TTF's weighted bottoms do not survive an 8×16 bitmap; a heavy weight and the large grid serve the need inside the format |
+| Another base face | The three unscii faces carry presentation |
+| Seasonal palettes or registers | §3: a register moves on world state only |
+| Number notation | The counts are small |
+| A boss key | F9 is deliberately dead |
+| Pause on focus loss | It would pause an idle game; `away` covers the reason |
+| Self-voicing speech | Overlaps the AccessKit route, and a shipped voice model runs against *trained, not downloaded* |
+
+#### `motion` is the row and the tube (`0.17.9`)
+
+**Rule: in the window, motion runs only when the `motion` row is on *and* every
+tube is on. In the terminal it is the row alone.** Either switch saying still is
+enough, and neither can bring motion back while the other says no — the state the
+access page refused to reach at `0.16.5`.
+
+| Decision | Why |
+|---|---|
+| One combiner, `shell::moving` | The fire, the crossing, the rolling numbers, the caret, the reveal and the pane transition all ask it. A second reading is how two clocks come to disagree about what a player asked for |
+| `None` survives | No camera yet and the row allowing motion is *nobody has said*, which `Bench` and `Passing` already read as leaving their own switch alone. The row saying still needs no tube to be believed |
+| No `Passing` refactor | The ROADMAP named *"separating the crossings from `Passing::enabled`'s one input"* as the blocker. Feeding the combined value into that one input does it |
+| The hum band | `crt::effective` zeroes `flicker` when still. It is the only term in the shader that reads the clock |
+| The caret and the reveal | Neither rode the tube before. A blink is motion, and so is text typing itself, so both stop: the caret solid, the text whole |
+| The boot card | `Boot::held_still`, decided by the frontend at launch — `Boot::default` cannot see the tube, and nothing changes either switch while the card is up. A still card has progress `1.0` throughout and no leaving. `paint_booting` still takes no resources |
+| A word this build does not know | Still. §14's rule makes the quieter reading the safe one; `Levels`' fallback to `full` is audio's own argument and does not transfer |
+| The terminal build | It animated the fire and the boot card with no switch at all. It now has the row, and passes it to `Bench` as `Some`. `ORBS_FIRE=0` still wins underneath |
+
+**§14's health warning is said once per machine**, under the threshold's menu,
+in the complaint row: *"if moving light troubles you: settings, access, motion
+off."* It is a `Complaint::Warning`, which is not a refusal — as `Abandoning` is
+not — and is cleared by the first line. `settings::warn_once` writes `warned` as
+it says it, and says nothing where settings are kept nowhere: a dump keeps none,
+and a warning on every capture would move every threshold capture to say a
+thing nobody needs twice. Played with `ORBS_SAVE` at an empty folder: said
+once, then not.
+
+**And the terminal's `skip` row was a dead row in reverse.** It was built from
+the file, so with nowhere to write, the refresh after `skip on` rebuilt it from
+the file and showed `off`. Its rows and its settings are one `Carried` now:
+`settings(&Carried)` builds the page, `Carried::apply` honours a row, and
+`every_row_is_honoured` steps each one in both builds.
+
+#### The `picture` page is ceilings, not a second tube (`0.17.10`)
+
+**Rule: `crt` and `F3` choose the tube's state; the seven `picture` rows say how
+much of each effect that state may use.** `crt::effective(state, picture,
+still)` is the one combiner, and it is what the shader is handed.
+
+| Decision | Why |
+|---|---|
+| Ceilings, not presets | Per-effect values that *replaced* the preset would be a second expression of the tube, and F3 would cycle one while the page showed the other. A ceiling composes with any state, `peak` included |
+| Toward each effect's own off | `vignette_radius` is `1.0` when off and `0.9` on, so scaling toward zero would *widen* the dark corners. Each field moves toward `CrtSettings::OFF`'s value for it, and `off` and `full` return the ends exactly |
+| No threat modulation claimed | Nothing writes `CrtSettings` from world state yet. The ceilings scale the chosen preset, and say nothing more |
+| `curve lines glow flicker mask split edge` | Barrel, scanline, glow, the hum band, grille, aberration, vignette. No two share a letter and none starts with `b`, which `back` takes first. The rounded bezel is not a row: it is the shape of the glass and loses no cell |
+| `off / soft / full` | Three words, like `Levels`' four: a menu with no slider to drag |
+| A word this build does not know | Off, for `motion`'s reason |
+| Window build only | The terminal has no tube, so no page — `values.rs`' rule |
+
+**`Menu::set` took the first row a prefix matched**, which is the defect
+`Row::value_named` was fixed for one level down: on this page `g` would have
+been whichever of two rows came first. A whole word wins, then a prefix only one
+row has; anything else is *unknown*. `every_row_answers_to_its_first_letter`
+holds every page of the window build to it.
+
+#### Legibility: contrast, weight, scale and pace (`0.17.11`)
+
+| Decision | Why |
+|---|---|
+| **`contrast` is a filter, not a theme** | The colour-vision box's argument: an accommodation must not cost a player the phosphor they like. `Phosphor::drawn` applies it where a cell becomes a colour, once per theme rather than per frame |
+| **High is 7:1 for ordinary and spell text** | WCAG AAA. Each weight is lifted toward the theme's own bright weight, so a lifted amber is still amber, by the least that reaches it |
+| **The ramp keeps 1.25:1 steps** | Lifting dim to 7:1 alone would put it on top of normal on muted violet. Dim, then normal above it, then bright above that — §4's *intensity carries ordinary text* survives the lift |
+| **The accents are left alone** | Measured: lifting danger to 7:1 on amber puts it 1.23:1 from cost, under the triad's 1.25 floor. The triad carries meaning and stays as solved, at its 4.5:1 |
+| **Normal is unchanged** | Dim at 3:1 and body at 4.5:1 were already the spec (`even_dim_text_stays_visible`); `normal` is the palette as solved |
+| **The guarantee is before the tube** | The vignette and scanlines cut what reaches the eye. The manual says so and names `edge off` |
+| **The WCAG measures moved out of `#[cfg(test)]`** | They run now. One copy is what keeps the lift and the tests agreeing — `ember`'s tests import the same one |
+| **`weight heavy` is generated** | Each row OR'd with itself a pixel to the right, the VGA's bold. No second font, so no provenance question |
+| **0xB0–0xDF are exempt** | ░▒▓ are distinct states of the fire, the smoke and the sediment, and a smear makes ▒ into █; box drawing keeps a pane's corners meeting. Tested: no two glyphs in any face merge, and plain and tampered stay apart wherever they were (§8.1) |
+| **The atlas is rewritten in place** | `Image::data` on the same handle, so nothing holding it is told. Never on the frame the weight was inserted, which `build_atlas` drew |
+| **`scale` lives on `Screen`** | The tube's cell size is read from `Screen::scale` and the camera must agree with it to the pixel, or the scanlines miss the rows. One field, one scale: `whole` floors it, and a camera told how much world to show draws a cell at exactly that |
+| **`whole` below ×1 is the fill** | There is no whole multiple to keep under the floor |
+| **`pace` names the default 4800** | It was 420 characters a second, settled by looking; 480 is the nearest real line, and a name a player can read beat a number nobody could. `LONGEST` still caps a burst at 1.4 s at every pace |
+| **`pace` is the window's only** | The terminal never advances `Reveal`, so text there already lands whole — a row would be a dead one |
+
+#### Echo verbosity is one predicate in the stream (`0.17.12`)
+
+**Rule: `echo changed` leaves out an echo only when its outcome is `Resolved`
+and its words are the line's, ignoring case and spacing.** §6 made the echo how
+a player learns the vocabulary and §14 asked that it be suppressible. What makes
+an echo worth keeping is that it says something the line did not, so the cut
+is exactly the echoes that do not.
+
+| Decision | Why |
+|---|---|
+| **Never the unresolved echo** | It carries the *typed* text as its message, so a text comparison alone would hide *"the orb does not know"* — and its `Baulk` cue would ring for a line nobody could see |
+| **Never `Forced`** | A best guess invites correction; that is the echo a player most needs |
+| **In `Records::drawn`, and nowhere else** | The pane, `Reveal::observe`, the scroll clamp, the audio cues (`since`) and the plain stream all count through it. Four separate filters were how paging once jumped whole screens |
+| **A view flag on the stream, not a record** | `set_terse_echo` writes nothing, so replay, saves, logs, `sift` and every spell are untouched. It is the stream's because the stream is what every consumer already asks |
+| **Handed over every frame** | A swap brings a new stream that shows every echo. Both frontends set it before painting, and `Sim::set_terse_echo` touches the world only when the answer changes |
+| **A word this build does not know shows every echo** | The opposite of `motion`'s fallback, for the same reason: the safe reading is the one that loses nothing, and here that is showing |
+
+#### The voice: the click, the mains, and looking away (`0.17.13`)
+
+| Decision | Why |
+|---|---|
+| **`keys` and `mains` are a `Tuning`, not more `Levels`** | `Levels` is two volumes and its fallback is `full`. A click that is on or off and a wall that is 50 or 60 are not loudness, and folding them in would have given them a volume's fallback |
+| **`keys off` still drains the keystrokes** | Returning early would leave them in the reader, and turning the click back on would ring the whole backlog at once |
+| **`keys off` keeps Enter** | The click alone: Enter is a line committed, not typing. The first build silenced both, against the manual. *⚠ Superseded at `0.17.18`: `keys` is typing, Enter included (*Each kind of sound is a switch*)* |
+| **`mains` moves the whole bed** | 50, 100, 70 or 60, 120, 84: fundamental, octave and the eldritch tritone at 1.4×. Every one is a whole number of cycles in the 0.5 s lap, and the lap test runs over both |
+| **`away` reads `Window::focused` every frame** | Not `WindowFocused`: `input.rs` records why a focus hook was not enough, and a missed focus-in would leave the orb clouded and silent with the player looking at it |
+| **The cloud is a ramp, in the sight pass** | 0.6 s each way, 45% at its darkest, never a step — a whole-field luminance step on every alt-tab is §19's named hazard. In the sight pass because that is the pass `crt off` does not reach, and it has a spare uniform slot |
+| **`hush` quiets the hum and never the cues** | The cues are §14's ambient channel, and for an idle game in another window a chime is how a finished brew is noticed. The bed arrives at `off` the same way a volume would, so it respawns rather than retunes |
+| **Nothing pauses** | The tower is an idle game. `away` is how the orb looks and sounds, never what it does |
+
+*⚠ `mains`, `hush` and `both` went with the bed at `0.17.16` (*The hum is
+gone*, below). `keys` is all `Tuning` holds, and `away` is `off` or `dim`.*
+
+#### The wizard's name, and the first row that takes free text (`0.17.14`)
+
+`environment::wizard` has said since the threshold that *"the real answer is a
+settings screen"*. Until now the prompt showed the machine's login, which is a
+real name on a streamer's screen.
+
+| Decision | Why |
+|---|---|
+| **New towers only** | A save outranks the machine (`orbs_sim::Wizard`): a choice made on one machine must not rename a tower carried from another. A standing tower keeps its name |
+| **The default stays the login** | The review corrected the first draft's reason for keeping it — a restored tower ignores the login, so changing the default would only move *new* towers' prompts. It stays because it is still the honest first name, and asking for one belongs to the installation (*"the orb learns your voice"*), as its own item. The manual names the privacy trade |
+| **Free text is a row with no list** | `Row::values` empty means *takes what it is given*, so `Row` grew no field. The word alone steps it back to the default, as the word alone steps every row |
+| **Case is kept** | `Menu::enter` lowers the line for matching; the free-text value is read from the line as typed. `Morgana` is not `morgana` |
+| **One word, sixteen letters, drawable** | The prompt reads to the first space and shares a line at the 80-column floor; a glyph the codepage lacks would draw as a hole. Each refusal says what a name can be |
+| **`ORBS_WIZARD`, then the choice, then the login** | The switch outranks the setting as every switch does, so a capture is the same on every machine — the row shows the switch's name too, or `dumps.sh` would capture whoever ran it |
+| **Held, not read from the file at `new`** | `Skipping`'s lesson: a choice the file could not take still counts for the session. Both frontends hand `wizard_named` the choice they hold |
+
+#### Secrets — answered, never offered (`0.17.15`)
+
+§3 asks for sysadmin comedy that is *discovered, never pushed* and *never
+punctures a tense moment*. The threshold recorded *"a choice you cannot see but
+can still type is the worse half of both"* — about `resume`, a word with a
+consequence that would strand a player. These have none worth guarding: each is
+cosmetic and undone by typing the ordinary word.
+
+| Decision | Why |
+|---|---|
+| **A secret is whole or nothing** | `Row::secretly` adds a word a row answers to; it is never listed, cycled or matched by prefix, so `theme p` stays a question about the themes the page shows, and `xyz` at the menu is still unknown |
+| **Phosphor part numbers, not brands** | P1, P3, P4, P7 and P31 are JEDEC designations. A theme named for a home computer would put a trademark on the tube |
+| **`p7` is a theme, the rest are aliases** | `theme p3` sets amber and the row says `[amber]`; `p7` is its own radar palette and the row says `[p7]`. It is held to every floor the offered themes are — the palette, legibility, ember and tint tests walk `palette::EVERY` — and the deficiency test made `success` paler: at the first green it sat 1.21:1 from `cost` under deuteranopia |
+| **One lookup, `palette::named`** | The row, `Theme::default` and the `apply` arm all searched `ALL`, so a hidden theme set by one would have come back amber after a relaunch. `F2` still cycles `ALL`, so from `p7` it steps to amber |
+| **`eleven` sets `full` and says so** | The remark rides `Complaint::Remark`, which is not a refusal, as `Abandoning` is not |
+| **The menu words change nothing** | One line each, on the top page, checked only after the vocabulary has missed |
+| **Silent in the eldritch register** | ⚠ Superseded by *the second review* below: silent in any register but plain, asked with every key. `Menu::show_register`, handed in by the frontend when the menu opens over a tower. At the threshold there is no tower and so no register |
+| **`moon` is read in UTC, from the shell** | The wall clock is never the sim's (rule 3). `std` will not give a local zone without `unsafe`, and a date crate for one joke was not worth a dependency, so the 31st can end early in the evening west of Greenwich. The phase is the mean lunation from a known new moon, named in 1.5-day bands: that names every recent eclipse rightly, which `sky`'s tests hold |
+| **A dump covers the sky** | `sky::cover` alongside the save seal, so no capture depends on when it was taken; `ORBS_DATE` poses a day |
+| **Not on the boot card** | Rejected above: pushed on every launch on the date, and every `boot_*` capture would move |
+
+#### The review — fourteen findings, thirteen fixed
+
+A `/code-review xhigh` over `0.17.9`–`0.17.15`. Each was confirmed against the
+code first. **No version moved**: corrections folded into the boxes they found.
+
+- **`pace` stopped working once echoes were hidden.** `tail_cells` skipped the
+  *whole* stream by a count of *drawn* records, so every hidden echo, spell
+  record and quiet record put older text into the next burst, and a long session
+  hit `LONGEST`'s ceiling on every line. It counts through `drawn()` now.
+- **`echo always` typed the old echoes again.** Putting them back grows the drawn
+  count, which `Reveal` reads as news. `Reveal::settle_at` takes them as already
+  on screen when the *row* changes, and the scroll returns to the newest line,
+  since a place held in drawn records names another line. A swap's new stream
+  still types as it always has.
+- **A row's secrets answered in the eldritch register**, where the menu's words
+  were already silent. `hum eleven` and `theme p7` are unknown there too now.
+- **The undrawable-name refusal drew a `?`.** It quoted the glyph, which the
+  glass cannot draw either. It names the letter by position: *"the orb cannot
+  draw letter 8 of that name"*.
+- **`keys off` silenced Enter**, against the manual's *"the click alone"*. Enter
+  is a line committed, not typing, and still sounds.
+- **The name row put the choice before `ORBS_WIZARD`**, while a new tower put
+  the switch first, and each frontend wrote the chain out itself.
+  `orbs_shell::new_wizard` is the one chain both rows show.
+- **The terminal marked the health warning said when the session was built**,
+  before the boot card. Quit during the card, or start in a terminal too small
+  for the menu, and it was used up unseen. It is marked on the first frame that
+  draws the menu.
+- **`scale whole` put the picture on half pixels in an odd window.** The camera
+  centred it on `W/2`. `Screen::middle` puts it on a whole pixel, the camera's
+  `viewport_origin` reads it, and the tube is told the half-pixel shift so the
+  curve and the scanlines stay on the picture.
+- **`restroke` and the contrast lift's cache were in `render/plugin.rs`**, which
+  is registration only. The system is `atlas::restroke`; the cache is
+  `legibility::Lifted`.
+- **`shell/setting.rs` was 746 lines.** It is `setting/{held,rows,apply,tests}`.
+- **`Contrast`, `Weight` and `Echoing` were one type written three times.**
+  `settings::Pair` is the two-word setting — its key, its words, the first word
+  as the fallback, and its row.
+- **The settings row read the environment every frame** a page was open, three
+  variables a frame. `ORBS_WIZARD` and the login are read once; nothing changes a
+  running process's environment, since `unsafe_code` forbids `set_var`.
+
+**Declined: moving `terse_echo` out of the sim's `Records`.** The flag is
+display state, and a view layer is where it would belong in the abstract. But
+`drawn()` is the one count the pane, `Reveal`, the scroll clamp, the cues and
+the plain stream all ask; a flag outside the stream is a parameter on every one
+of them, which is the four-filter shape `drawn()`'s own comment records paging
+once jumped screens over. The frontends hand it over every frame, and
+`Sim::set_terse_echo` writes only on a change.
+
+#### The hum is gone (`0.17.16`)
+
+**Rule: the orb makes a sound only when something happens.** The owner did not
+like the bed — the mains hum under everything since `0.16` — and asked for it
+removed, not turned down. The cues stay: each still mirrors a record the
+transcript draws, so §14's ambient channel is whole.
+
+| Gone | Because |
+|---|---|
+| `sound::bed`, and `Cue::drone` with it | The bed was the only drone. Every cue is a gesture again, enveloped |
+| The `hum` row, its `eleven` | `voice` is the one level, and keeps its `eleven` |
+| The `mains` row | It chose the hum's frequency, and there is no hum |
+| `away hush` and `away both` | They quieted the hum. `away` is `off` or `dim`, a `Pair` |
+| The eldritch tritone | It was the bed's. The register still shows on the glass, which is where rule 2 says it lives |
+
+**The tube's rolling band stays.** It is light, not sound — `picture`'s
+`flicker`, labelled *"the rolling band"* now rather than *"the rolling hum"*.
+
+**`ORBS_SOUND` says nothing at an idle launch now.** The bed announced itself
+through it so the switch answered something before the first keystroke; a key
+is the first thing it reports.
+
+#### Each kind of sound is a switch (`0.17.18`)
+
+**Rule: `voice` is how loud; whether each kind of sound plays is its own
+switch.** The owner asked for the sounds to be switchable one by one rather than
+only by volume. The seven cues fall into four kinds a player can name:
+
+| Row | Cues | Label |
+|---|---|---|
+| `keys` | `key`, `enter` | typing and Enter |
+| `chimes` | `done`, `good` | good news |
+| `alarms` | `ill`, `wrong` | bad news |
+| `refusals` | `baulk` | a line not taken |
+
+| Decision | Why |
+|---|---|
+| **Decided in `ring`, nowhere else** | `Voice::kind` maps a cue to its row and `ring` asks `Kinds` before it spawns. No writer learns about switches, and `ring_for_keys` reads every keystroke whatever `keys` says, so turning it back on rings no backlog |
+| **`keys` now takes Enter with the click** | ⚠ Supersedes *`keys off` keeps Enter* (`0.17.13`). Offered as one kind, *typing*, and chosen so: a player switching typing off means the keyboard going quiet |
+| **Off still prints under `ORBS_SOUND`**, as `sound: key (off)` | The switch is checkable without speakers, which is the reason `voice off` kept printing too; it is marked now so the two cannot be confused |
+| **Four kinds, not seven switches** | `done` and `good` both say *good news*, `ill` and `wrong` *bad news*. Seven rows would fill the page and ask a player to learn the table, which is the cue design's own reason for keeping it small |
+| **Each starts on; anything but `on` in the file is off** | The switches' reading everywhere else. `voice` keeps the levels' fallback to `full`, so a stranger word can never mute the game whole |
+
+#### The second review — fourteen findings, ten fixed
+
+A `/code-review xhigh` over `0.17.9`–`0.17.18`. **No version moved.**
+
+- **The secrets read the register once, when the menu opened.** F7 works over
+  an open menu, so `xyzzy` answered in the eldritch register. Both builds ask
+  again with every key, and `Tampered` counts as tense: a sabotage tell is the
+  moment §3 means.
+- **The round-trip tests failed with `ORBS_WIZARD` exported**, as `dumps.sh`
+  does. The name row shows what a new tower would take, so they expect
+  `new_wizard`'s answer.
+- **The machine login skipped the name check.** A Windows `John Smith` reached
+  the prompt. A login the menu would refuse is no name, and the default stands.
+- **`ORBS_DATE=2026-02-31` was the 3rd of March.** A date that does not convert
+  back is refused.
+- **`moon` on Friday the 13th read *"the moon is full. and it is…"*.** The
+  occasion is a sentence of its own, as Hallows' is.
+- **`Picture` and `Kinds` read the settings file once per row.** Once each.
+- **`Kind::index` was a hand-written match**; it is `self as usize`, as
+  `Effect::at` is, with a test that `ALL` keeps declaration order.
+- Three stale comments: burn sharing Bevy's device, the terminal having no
+  `motion` row, and a bold lead-in.
+
+| Declined | Why |
+|---|---|
+| The health warning is owed again if the file will not parse | `set` refuses to overwrite a broken file, so the mark is never written and the warning shows each launch. That errs toward warning too often, never too rarely |
+| Six files past 300 lines | Each is under 250 before its tests, which is the code the rule is about |
+| `terse_echo` on `Records` | Declined in the first review above, for the same reason |
+| `Readings` mirrors `Settable` | A field left out of the copy fails `every_row_is_honoured`, which steps every row and reads it back |
 
 ### The orb is installed before the tower wakes (`0.17.7`–`0.17.8`)
 
@@ -3132,6 +3487,9 @@ atmospheric and being unusable.
 the eldritch register (§3). That is rule 2 again: the register is already on
 screen — it is the whole reason the eldritch *rendering* exists.
 
+*⚠ Superseded at `0.17.16`: the bed is gone (*The hum is gone*, above). The
+cues and everything else in this table stand.*
+
 **`ORBS_SOUND=1` names every cue on stderr as it plays.** You cannot diff a
 sound, `dumps.sh` builds no `App` and so is blind to this subsystem entirely, and
 `bevy_log` caps the subscriber at `INFO` so a `trace!` is invisible in an
@@ -3167,6 +3525,8 @@ does not show the page.
 | **`off` spawns nothing at all** | Not an `AudioPlayer` at zero gain, which is an entity, a decode and a mixer slot per keystroke for a sound nobody hears. The message is still *read*, so `ORBS_SOUND` still reports it — which is what makes the switch usable for checking the table rather than the speakers |
 | **The bed's volume is part of *which bed is playing*** | `PlaybackSettings` changes do not reach audio already playing, so turning the hum down means starting a different one. The level belongs in the comparison that decides whether to |
 | **A level this build does not know falls back to `full`** | A settings file from a later build would otherwise give a gain of nought: a silently mute game, and a settings page showing a word that explains it to nobody. `Theme::default` answers a stranger phosphor the same way |
+
+*⚠ `hum` went with the bed at `0.17.16`; `voice` is the one level.*
 
 **§14's third tone is `wrong`**, and finding a distinguisher for it was the only
 part of this that needed thought. A breach and a sabotage tell are both
@@ -4007,6 +4367,10 @@ caught it is the grammar reading its own templates back at 100%.
 | Does `tokio` arrive with it | **No.** It is in `Cargo.lock` and is never compiled: `reqwest`/`hyper`/`tokio` hang off `tracel-llvm-bundler`, a build-time fetcher for cubecl's LLVM backend, which our feature selection does not enable. `cargo tree -i tokio --target all` finds no path, and a real build compiles none of them. **A lockfile entry is not a dependency** |
 | What does it cost | 150 crates and ~80s from cold, against Bevy's ~126. `default-features = false` is doing the work — burn's default pulls a dataset layer, sqlite, a network client and an audio decoder, none of which a sentence reader wants |
 | Can burn use a device somebody else made | **Yes**, and this is what makes it affordable: `init_device` takes a `WgpuSetup` of Bevy's own instance, adapter, device and queue, so the game keeps one Vulkan stack |
+
+*⚠ The first row stopped holding at `0.17.17`: Bevy 0.20 is on `wgpu 30`, and
+the burn on 30 is 0.22, held (§19, *Bevy 0.20*). A `train` build compiles both;
+a shipped build holds only Bevy's, since the reader is `ndarray`.*
 
 **A device built with `DeviceDescriptor::default()` is accepted and then computes
 zeros.** No error, no warning, no panic — `request_device` succeeds, `init_device`

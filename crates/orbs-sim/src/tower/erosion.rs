@@ -201,7 +201,7 @@ pub fn height_for(world: &mut World, deficit: u32) -> usize {
         .min(MOST.saturating_sub(1));
     let roll: u64 = {
         let mut rngs = world.resource_mut::<crate::rng::Rngs>();
-        rand::Rng::random(rngs.stream(crate::rng::RngStream::Battlements))
+        rand::RngExt::random(rngs.stream(crate::rng::RngStream::Battlements))
     };
     base.saturating_add((roll % 2) as usize).clamp(LEAST, MOST)
 }

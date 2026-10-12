@@ -19,6 +19,10 @@ use bevy::prelude::*;
 use super::cues::Voice;
 
 /// Click for anything pressed.
+///
+/// Always asks: `keys off` is decided in `ring`, where every kind is, so this
+/// reads every keystroke whatever the switch says and leaves no backlog to ring
+/// when it comes back on.
 pub(super) fn ring_for_keys(
     mut typed: MessageReader<KeyboardInput>,
     mut ringing: MessageWriter<super::RingMessage>,

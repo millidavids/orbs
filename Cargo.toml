@@ -10,11 +10,12 @@ members = ["crates/*"]
 #
 # It becomes ordinary semver at 1.0, and the switch is one-way: DESIGN.md §19
 # records it so the jump from `0.<phase>` to `1.<minor>` is not read as a phase.
-version = "0.17.8"
+version = "0.17.18"
 edition = "2024"
-# bevy_ecs 0.19 requires 1.95. Declaring it makes the resolver MSRV-aware and
-# turns "too old toolchain" into a clear error instead of a cryptic type failure.
-rust-version = "1.95"
+# Bevy 0.20 requires 1.97.1, so the pinned 1.98. Declaring it makes the resolver
+# MSRV-aware and turns "too old toolchain" into a clear error instead of a
+# cryptic type failure.
+rust-version = "1.98"
 license = "GPL-3.0-or-later"
 repository = "https://github.com/millidavids/orbs"
 authors = ["Blackhearth Studios"]
@@ -109,13 +110,14 @@ map_unwrap_or = "warn"
 
 [workspace.dependencies]
 # ECS — used standalone in orbs-sim. NEVER depend on `bevy` there. See CLAUDE.md.
-bevy_ecs = "0.19"
+bevy_ecs = "0.20"
 
 # Determinism: ChaCha8 is reproducible across platforms and stable across
 # releases, which StdRng explicitly is not. Replay and offline/online parity
-# depend on this.
-rand = { version = "0.9", default-features = false, features = ["std"] }
-rand_chacha = "0.9"
+# depend on this, and `rng::every_stream_draws_what_it_always_has` pins the
+# values: 0.10 draws what 0.9 did.
+rand = { version = "0.10", default-features = false, features = ["std"] }
+rand_chacha = "0.10"
 
 thiserror = "2.0"
 tracing = "0.1"
@@ -124,7 +126,7 @@ tracing = "0.1"
 # TOML, never as string literals in Rust. `serde` is derive-only here — no
 # runtime, no async, nothing that reaches the filesystem from inside the sim.
 serde = { version = "1.0", features = ["derive"] }
-toml = "0.9"
+toml = "1"
 
 # Where a player's towers and settings live (DESIGN.md §13, §19). One crate, one
 # function — `save::chosen` — and it does nothing but name the platform's own
@@ -143,7 +145,7 @@ toml = "0.9"
 # reachable (so is `colored`, via `burn`), and MPL-2.0 is GPL-compatible with no
 # "Incompatible With Secondary Licenses" notice on either — but the table was
 # wrong and now says so. DESIGN.md §19 has the sweep.
-dirs = "6.0"
+dirs = "7"
 
 # The balance harness's CLI, and nowhere else (DESIGN.md §13). `derive` only —
 # it never reaches the sim, which takes its input as command lines exactly as a

@@ -12,7 +12,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-bevy = "0.19"
+bevy = "0.20"
 
 [lints.rust]
 dead_code = "allow"

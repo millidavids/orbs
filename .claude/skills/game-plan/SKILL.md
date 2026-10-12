@@ -13,7 +13,7 @@ description: >
 
 Plan new features by following established codebase patterns exactly. Use Context7 MCP tools for
 Bevy and Rust documentation when needed — and the project's own `bevy-idioms` skill, which is
-pinned to 0.19 and ships a compile-verified harness. **Do not recall Bevy syntax from memory.**
+pinned to 0.20 and ships a compile-verified harness. **Do not recall Bevy syntax from memory.**
 
 ## Read these first, in this order
 

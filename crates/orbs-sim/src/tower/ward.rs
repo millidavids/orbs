@@ -25,7 +25,7 @@
 //! player writes.
 
 use bevy_ecs::prelude::*;
-use rand::Rng as _;
+use rand::RngExt as _;
 
 use crate::rng::{RngStream, Rngs};
 

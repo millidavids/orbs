@@ -161,7 +161,7 @@ impl Ember {
 
 #[cfg(test)]
 mod tests {
-    use super::super::palette::{ALL, contrast, luminance};
+    use super::super::palette::{EVERY, contrast, luminance};
     use super::*;
     use orbs_render::{Role, Style};
 
@@ -202,7 +202,7 @@ mod tests {
         //
         // Smoke is chrome rather than text, so it is held to
         // `even_dim_text_stays_visible`'s 3.0 rather than to body text's 4.5.
-        for theme in ALL {
+        for theme in EVERY {
             for (index, step) in FIRE.flame.iter().enumerate() {
                 let ratio = contrast(*step, theme.background);
                 assert!(
@@ -227,7 +227,7 @@ mod tests {
         // Against `Normal`, not `Bright`: monochrome's `Bright` is pure white
         // and nothing is hotter, so a rule phrased against it is unsatisfiable
         // for the one theme the game most needs to keep.
-        for theme in ALL {
+        for theme in EVERY {
             let body = theme.base_at(orbs_render::Intensity::Normal);
             let ratio = contrast(FIRE.flame[3], body);
             assert!(
@@ -249,7 +249,7 @@ mod tests {
         //
         // What still holds is narrower: monochrome's *text* is grey. A grey
         // aesthetic with a faintly warm body hue would just be a bad amber.
-        let monochrome = ALL
+        let monochrome = EVERY
             .iter()
             .find(|theme| theme.name == "monochrome")
             .expect("the grey theme");
@@ -291,7 +291,7 @@ mod tests {
                 "the roil ramp is not monotonic — a bath would shimmer as noise",
             );
         }
-        for theme in ALL {
+        for theme in EVERY {
             for (index, step) in LIQUID.iter().enumerate() {
                 let ratio = contrast(*step, theme.background);
                 assert!(
@@ -348,7 +348,7 @@ mod tests {
     /// like smoke, and the reading it carries is its length.
     #[test]
     fn every_step_of_the_gauge_is_visible_on_every_tube() {
-        for theme in ALL {
+        for theme in EVERY {
             for (index, step) in GAUGE.iter().enumerate() {
                 let ratio = contrast(*step, theme.background);
                 assert!(
@@ -378,7 +378,7 @@ mod tests {
             .collect();
         assert_eq!(gauges.len(), 6, "the ramp is not six steps");
 
-        for theme in ALL {
+        for theme in EVERY {
             for role in [Role::Danger, Role::Cost, Role::Success] {
                 let accent = Srgba::from(theme.resolve(Style::default().with_role(role)));
                 for depiction in &gauges {

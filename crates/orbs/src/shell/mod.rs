@@ -1,4 +1,6 @@
+mod away;
 mod commanding;
+mod echoing;
 mod editing;
 mod input;
 mod installing;
@@ -25,10 +27,12 @@ pub(crate) use orbs_shell::{
     paint_too_small,
 };
 
+pub(crate) use away::{Absence, Away};
 pub(crate) use editing::Editing;
 pub(crate) use installing::{Installing, Installs};
 pub(crate) use manualling::Reading;
 pub(crate) use menuing::Standing;
+pub(crate) use motion::{Stillness, moving, moving_at_launch};
 pub use plugin::ShellPlugin;
 pub(crate) use plugin::ShellSystems;
 // A function key and the settings page are **one setting seen twice**: the key

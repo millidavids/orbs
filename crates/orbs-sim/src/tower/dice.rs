@@ -28,7 +28,7 @@
 //! `tower::heat`'s `Quickened` is the counter-example, halved at the call site.
 //! It does not generalise: a siege has many sources stacking onto one number.
 
-use rand::Rng;
+use rand::RngExt;
 use serde::{Deserialize, Serialize};
 
 use crate::rng::{RngStream, Rngs};

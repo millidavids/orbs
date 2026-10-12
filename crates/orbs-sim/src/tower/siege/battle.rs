@@ -139,7 +139,7 @@ impl Siege {
     /// old behaviour whole. `most` is clamped into [`FEWEST`]..=[`MOST`].
     #[must_use]
     pub fn begin_against(rngs: &mut Rngs, most: u32) -> Self {
-        use rand::Rng;
+        use rand::RngExt;
         let most = most.clamp(FEWEST, MOST);
         // Drawn before the intent, unconditionally: order is part of the replay
         // contract, and swapping these two changes every existing seed.

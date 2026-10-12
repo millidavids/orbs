@@ -2155,6 +2155,21 @@ impl Sim {
     // write through `run_pending` on a tick boundary or they do not write; a
     // test that must reach past that goes through `Sim::world_mut`.
 
+    /// Leave echoes that only repeat the player's line out of the transcript.
+    ///
+    /// The one view preference the stream carries, and it writes no record:
+    /// the log and every spell still see every echo, so replay is untouched.
+    /// Touches the world only when the answer changes, so a frontend may ask
+    /// every frame without marking the tower changed.
+    pub fn set_terse_echo(&mut self, terse: bool) {
+        if self.scrollback().records().terse_echo() != terse {
+            self.world
+                .resource_mut::<Scrollback>()
+                .records_mut()
+                .set_terse_echo(terse);
+        }
+    }
+
     /// What is in flight, if anything (§5.0).
     ///
     /// One at a time: §11.5 opens at multiplex capacity 1 and §9's fourth
@@ -2362,7 +2377,7 @@ impl Sim {
 mod tests {
     use super::*;
     use crate::rng::RngStream;
-    use rand::Rng;
+    use rand::RngExt;
 
     #[derive(Resource, Debug, Default, PartialEq, Clone)]
     struct Trace {

@@ -36,6 +36,23 @@ pub const INSTALL: &str = "install";
 /// `Screen::default` reads it for both.
 pub const FOCUS: &str = "focus";
 
+/// The key §14's motion switch is kept under.
+pub const MOTION: &str = "motion";
+
+/// The key the picture's fit is kept under. Only a window has a fit, but
+/// `Screen` is the shell's and reads it.
+pub const SCALE: &str = "scale";
+
+/// The key echo verbosity is kept under (§6, §14).
+pub const ECHO: &str = "echo";
+
+/// The two words `echo` takes: every echo, or only one that says something
+/// the line did not.
+pub const ECHOES: [&str; 2] = ["always", "changed"];
+
+/// The key that records §14's health warning has been shown on this machine.
+pub const WARNED: &str = "warned";
+
 /// Which driver the player last chose.
 #[must_use]
 pub fn driver() -> Driver {
@@ -70,6 +87,39 @@ pub fn skips_boot() -> bool {
 #[must_use]
 pub fn installs() -> bool {
     get(INSTALL).is_none_or(|word| is_on(&word))
+}
+
+/// Whether the player wants motion, as far as the file says.
+///
+/// On unless turned off, and a word this build does not know reads as off:
+/// §14's rule is that a player who asked for stillness gets it, so the quieter
+/// reading is the safe one. Read once per frontend, at startup.
+#[must_use]
+pub fn moves() -> bool {
+    get(MOTION).is_none_or(|word| is_on(&word))
+}
+
+/// Whether an echo that only repeats the line is left out, as the file says.
+///
+/// A word this build does not know shows every echo: hiding is the choice
+/// that loses something, so it is never the fallback.
+#[must_use]
+pub fn terse_echo() -> bool {
+    get(ECHO).is_some_and(|word| word == ECHOES[1])
+}
+
+/// Whether §14's health warning is still owed here, marking it paid if so.
+///
+/// Once per machine, and only where settings are kept: a dump or a test keeps
+/// none, and a warning on every capture would move every threshold capture to
+/// say a thing nobody needs twice.
+#[must_use]
+pub fn warn_once() -> bool {
+    if !super::store::is_kept() || get(WARNED).is_some() {
+        return false;
+    }
+    set(WARNED, super::ON);
+    true
 }
 
 #[cfg(test)]
@@ -117,9 +167,9 @@ mod tests {
 
     #[test]
     fn the_keys_are_distinct() {
-        // Three constants, three lines in one file: a collision would make one
-        // setting silently overwrite another.
-        let keys = [DRIVER, SKIP, FOCUS];
+        // Lines in one file: a collision would make one setting silently
+        // overwrite another.
+        let keys = [DRIVER, SKIP, INSTALL, FOCUS, MOTION, SCALE, ECHO, WARNED];
         for (at, key) in keys.iter().enumerate() {
             assert!(
                 !keys[..at].contains(key),

@@ -26,7 +26,7 @@
 
 use std::sync::OnceLock;
 
-use rand::Rng;
+use rand::RngExt;
 
 use super::temper::{OPENING, ROWS, SENSES, Temper, sense_lit};
 use super::{Glyph, Humour};

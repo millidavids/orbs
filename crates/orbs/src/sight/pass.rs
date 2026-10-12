@@ -27,11 +27,19 @@ use super::settings::{SightUniform, Vision};
 
 /// Hand the setting to the render world.
 ///
-/// Reads [`Vision`] and nothing else. There is no path from here to
-/// `CrtSettings`, which makes "the tube cannot switch the accommodation off" a
-/// property of the wiring rather than a promise in a comment.
-pub(super) fn extract(vision: Extract<Res<Vision>>, mut commands: Commands) {
-    commands.insert_resource(ExtractedSight(SightUniform::new(vision.0)));
+/// Reads [`Vision`] and the window's absence, and nothing else. There is no path
+/// from here to `CrtSettings`, which makes "the tube cannot switch the
+/// accommodation off" a property of the wiring rather than a promise in a
+/// comment.
+pub(super) fn extract(
+    vision: Extract<Res<Vision>>,
+    absence: Extract<Option<Res<crate::shell::Absence>>>,
+    mut commands: Commands,
+) {
+    let brightness = absence
+        .as_deref()
+        .map_or(1.0, |absence| absence.brightness());
+    commands.insert_resource(ExtractedSight(SightUniform::new(vision.0, brightness)));
 }
 
 /// Layout, sampler, and the pipelines built for each target format.

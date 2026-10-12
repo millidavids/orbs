@@ -57,7 +57,7 @@ const CROSSTERM: &str = "0.29";
 /// What this binary is built out of, for the POST card's third line.
 ///
 /// The card is a diegetic inventory of the machine (§4), so it must describe
-/// *this* machine: the Bevy build says `bevy 0.19.0` and this one must not.
+/// *this* machine: the Bevy build says `bevy 0.20.0` and this one must not.
 fn engine() -> String {
     format!("crossterm {CROSSTERM}")
 }

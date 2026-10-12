@@ -1,4 +1,4 @@
-# Scheduling in Bevy 0.19
+# Scheduling in Bevy 0.20
 
 Read this when ordering systems, choosing a schedule, or debugging "my system
 ran at the wrong time."
@@ -48,6 +48,12 @@ Every ordering constraint you add removes parallelism, so add the least.
    ```
 4. **`.before()` / `.after()`** — targeted pairwise constraints. Use sparingly;
    they get brittle as the app grows. Prefer sets.
+5. **`.chain_weak()` / `.before_weak()` / `.after_weak()`** (0.20) — the same,
+   kept only between systems whose access conflicts; the rest stay unordered.
+   A system with `Commands` or any deferred state, or an exclusive one, always
+   counts as conflicting. Bevy's `Core2dSystems` and `Core3dSystems` are
+   weakly chained, so a system with no conflicting access placed in one of
+   them is not ordered against its neighbours.
 
 Note that `Commands` are deferred: structural changes apply at the next sync
 point, not immediately. If system B must observe an entity that system A
@@ -105,6 +111,6 @@ at a defined point, not instantly — do not expect the new state to be readable
 the same system that set it.
 
 For entities that should not outlive a state, `DespawnOnExit(State)` handles
-teardown automatically. In 0.19 these can fire when entering and exiting the same
+teardown automatically. Since 0.19 these can fire when entering and exiting the same
 state within one update; do not assume the transition is always to a different
 state.

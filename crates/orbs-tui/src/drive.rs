@@ -12,7 +12,7 @@ use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use orbs_render::{DisplayMode, Frame, GridSize};
 use orbs_shell::{
     Bench, Boot, Key, Line, Linear, Offered, PaneTransition, Panel, Passing, Reveal, Screen,
-    Scroll, Threshold, wizard,
+    Scroll, Threshold,
 };
 use orbs_sim::Sim;
 
@@ -29,12 +29,16 @@ const TICK: Duration = Duration::from_secs(1);
 /// capture, since `scripts/dumps.sh` runs with `ORBS_SAVE=off`.
 #[must_use]
 pub(crate) fn default_settings() -> Vec<orbs_shell::settings::Row> {
-    settings(
-        orbs_shell::Driver::default(),
-        false,
-        DisplayMode::Wide,
-        orbs_shell::settings::installs(),
-    )
+    settings(&Carried {
+        driver: orbs_shell::Driver::default(),
+        linear: false,
+        mode: DisplayMode::Wide,
+        installs: orbs_shell::settings::installs(),
+        skip: orbs_shell::settings::skips_boot(),
+        motion: orbs_shell::settings::moves(),
+        echo: orbs_shell::settings::terse_echo(),
+        name: orbs_shell::settings::chosen_name(),
+    })
 }
 
 /// What this build can set, and what each is set to now.
@@ -45,42 +49,53 @@ pub(crate) fn default_settings() -> Vec<orbs_shell::settings::Row> {
 /// heaviest (`orbs-shell`'s `settings::values` carries the argument). What is
 /// left is real: `F4`, `F5`, how the orb reads a line, §4's sticky skip, and
 /// the installation.
-pub(crate) fn settings(
-    driver: orbs_shell::Driver,
-    linear: bool,
-    mode: DisplayMode,
-    installs: bool,
-) -> Vec<orbs_shell::settings::Row> {
-    use orbs_shell::settings::{Category, INSTALL, Row, SKIP, SWITCH, switched};
+pub(crate) fn settings(held: &Carried) -> Vec<orbs_shell::settings::Row> {
+    use orbs_shell::settings::{
+        Category, ECHO, ECHOES, FOCUS, INSTALL, MOTION, Row, SKIP, SWITCH, switched,
+    };
 
     vec![
         Row::new(
-            orbs_shell::settings::Category::Access,
+            Category::Access,
             orbs_shell::LINEAR_SETTING,
-            switched(linear),
+            switched(held.linear),
             &SWITCH,
+        ),
+        // The row alone, since there is no tube here to be the other switch.
+        Row::new(Category::Access, MOTION, switched(held.motion), &SWITCH),
+        Row::new(
+            Category::Access,
+            ECHO,
+            ECHOES[usize::from(held.echo)],
+            &ECHOES,
         ),
         // `reading` to a player, `driver` in the file — see `Row::key`.
         Row::new(
             Category::Habits,
             "reading",
-            driver.word(),
+            held.driver.word(),
             &orbs_shell::Driver::ALL.map(orbs_shell::Driver::word),
         )
         .keyed(orbs_shell::settings::DRIVER),
         Row::new(
             Category::Habits,
-            "focus",
-            mode.word(),
+            FOCUS,
+            held.mode.word(),
             &DisplayMode::ALL.map(DisplayMode::word),
         ),
+        // From what the session holds, never the file: with nowhere to write,
+        // the refresh in `Session::answered` rebuilt this from the file and
+        // snapped `skip on` straight back to `off`.
+        Row::new(Category::Habits, SKIP, switched(held.skip), &SWITCH),
+        Row::new(Category::Habits, INSTALL, switched(held.installs), &SWITCH),
+        // No list: it takes what it is given, and shows what a new tower would
+        // take.
         Row::new(
             Category::Habits,
-            SKIP,
-            switched(orbs_shell::settings::skips_boot()),
-            &SWITCH,
+            orbs_shell::settings::NAME,
+            &orbs_shell::new_wizard(held.name.as_deref()),
+            &[],
         ),
-        Row::new(Category::Habits, INSTALL, switched(installs), &SWITCH),
     ]
 }
 
@@ -247,12 +262,9 @@ struct Session {
     panes: PaneTransition,
     /// One screen leaving and the next arriving — settled here, always.
     ///
-    /// Not the boundary being ducked. §14 requires motion be disableable and
-    /// this build has no CRT to consult, so it passes `None` for the motion
-    /// switch everywhere. An animating crossing would be the first motion here
-    /// with no switch a player can reach, which `shell::bench` forbids; the
-    /// persisted reduce-motion setting is a later phase's, and this comes back
-    /// with it. The boundary is proven regardless — the shapes live in
+    /// Not the boundary being ducked. The `motion` row is the switch a crossing
+    /// here would need, and it exists now; wiring crossings into a terminal is
+    /// its own item. The boundary is proven regardless — the shapes live in
     /// `orbs-render` and `--example screens` draws them.
     passing: Passing,
     frame: Frame,
@@ -301,7 +313,7 @@ struct Session {
     /// What this binary is built out of, for the card's third line.
     ///
     /// §4's card is a diegetic inventory of the machine, so it describes *this*
-    /// one — `crossterm 0.29` where the other build says `bevy 0.19.0`. The
+    /// one — `crossterm 0.29` where the other build says `bevy 0.20.0`. The
     /// frontend's to know and the shell's to place, as the wizard's name is.
     engine: String,
     /// The installation, while `sim` is its practice tower.
@@ -312,6 +324,19 @@ struct Session {
     /// Whether the next new tower is installed first. The player's, so it is
     /// [`Carried`] across a swap.
     installs: bool,
+    /// Whether the boot sequence is passed over. Nothing this session does
+    /// reads it — `Boot` already has — but the row has to say what was chosen.
+    skip: bool,
+    /// Whether anything may move. The fire reads it every frame.
+    motion: bool,
+    /// Whether an echo that only repeats the line is left out. Handed to the
+    /// stream every frame.
+    echo: bool,
+    /// The name a new tower is raised with, if the player chose one.
+    name: Option<String>,
+    /// Whether §14's health warning is still to be put up — at the threshold,
+    /// on the first frame that draws the menu.
+    warns: bool,
 }
 
 /// What a swap carries across, because it is the player's and not the tower's.
@@ -325,8 +350,13 @@ struct Session {
 /// off with nothing said; `reading plain` reverted the same way.
 ///
 /// Nothing about a new tower is a reason to stop reading the screen aloud.
-#[derive(Debug, Clone, Copy)]
-struct Carried {
+///
+/// Also what the settings rows are built from and what a setting is applied
+/// to, so the page and what is in effect have one source.
+///
+/// `Default` is for tests; a launch starts from [`Carried::remembered`].
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub(crate) struct Carried {
     driver: orbs_shell::Driver,
     /// Whether §14's linear stream is showing. A bool rather than the `Linear`
     /// itself, which owns a scratch `Frame` worth re-allocating per session.
@@ -334,9 +364,49 @@ struct Carried {
     mode: DisplayMode,
     /// Whether a new tower is installed before it wakes.
     installs: bool,
+    /// Whether the boot sequence is passed over.
+    skip: bool,
+    /// Whether anything may move — §14's switch, with no tube beside it here.
+    motion: bool,
+    /// Whether an echo that only repeats the line is left out.
+    echo: bool,
+    /// The name a new tower is raised with, if the player chose one.
+    name: Option<String>,
 }
 
 impl Carried {
+    /// The reader this session consults.
+    pub(crate) const fn driver(&self) -> orbs_shell::Driver {
+        self.driver
+    }
+
+    /// Honour a setting the menu has written down.
+    ///
+    /// The one place this build does. `reading` never arrives here: the menu
+    /// answers it with `MenuOutcome::Drive`, as it does in the Bevy build.
+    fn apply(&mut self, setting: &str, value: &str) {
+        let on = orbs_shell::settings::is_on(value);
+        match setting {
+            orbs_shell::LINEAR_SETTING => self.linear = on,
+            orbs_shell::settings::INSTALL => self.installs = on,
+            orbs_shell::settings::SKIP => self.skip = on,
+            orbs_shell::settings::MOTION => self.motion = on,
+            orbs_shell::settings::ECHO => self.echo = value == orbs_shell::settings::ECHOES[1],
+            // Asked at the next `new`; a tower already standing keeps its name.
+            orbs_shell::settings::NAME => {
+                self.name = orbs_shell::settings::checked_name(value)
+                    .ok()
+                    .filter(|name| !name.is_empty());
+            }
+            orbs_shell::settings::FOCUS => {
+                if let Some(mode) = DisplayMode::named(value) {
+                    self.mode = mode;
+                }
+            }
+            _ => {}
+        }
+    }
+
     /// What a first launch starts from: the file, read once.
     ///
     /// §9 opens Wide when nothing is remembered — the mode the Bevy build takes
@@ -351,18 +421,42 @@ impl Carried {
                 .and_then(|word| DisplayMode::named(&word))
                 .unwrap_or(DisplayMode::Wide),
             installs: orbs_shell::install_wanted(orbs_shell::settings::installs()),
+            skip: orbs_shell::settings::skips_boot(),
+            motion: orbs_shell::settings::moves(),
+            echo: orbs_shell::settings::terse_echo(),
+            name: orbs_shell::settings::chosen_name(),
         }
     }
 }
 
 impl Session {
     /// What this session hands to the next one.
-    const fn carrying(&self) -> Carried {
+    fn carrying(&self) -> Carried {
         Carried {
             driver: self.driver,
             linear: self.linear.showing(),
             mode: self.mode,
             installs: self.installs,
+            skip: self.skip,
+            motion: self.motion,
+            echo: self.echo,
+            name: self.name.clone(),
+        }
+    }
+
+    /// Take on what `held` says is in effect.
+    fn hold(&mut self, held: Carried) {
+        self.driver = held.driver;
+        self.mode = held.mode;
+        self.installs = held.installs;
+        self.skip = held.skip;
+        self.motion = held.motion;
+        self.echo = held.echo;
+        self.name = held.name;
+        // Only on a change: `Linear::show` writes the file, so every other row
+        // would otherwise rewrite this one too.
+        if held.linear != self.linear.showing() {
+            self.linear.show(held.linear);
         }
     }
 
@@ -389,11 +483,17 @@ impl Session {
     ) -> Self {
         let mut panel = Panel::default();
         panel.refresh(&sim);
+        // Built before the fields move out of `carried`.
+        let rows = settings(&carried);
         let Carried {
             driver,
             linear: showing,
             mode,
             installs,
+            skip,
+            motion,
+            echo,
+            name,
         } = carried;
         let mut linear = Linear::default();
         linear.show(showing);
@@ -438,7 +538,7 @@ impl Session {
                     // let the Access page report `linear [off]` while the pane
                     // drew the linear stream, §14's only visible control
                     // reporting the opposite of what was in effect.
-                    menu.show_settings(settings(driver, showing, mode, installs));
+                    menu.show_settings(rows);
                     menu
                 }),
                 ..Surfaces::default()
@@ -448,6 +548,11 @@ impl Session {
             page: 1,
             install: None,
             installs,
+            skip,
+            motion,
+            echo,
+            name,
+            warns: threshold.is_waiting(),
         }
     }
 
@@ -498,14 +603,12 @@ impl Session {
     /// copies of seven arguments, which the settings rows made eight — and how
     /// one came to hand over a different list.
     fn open_surfaces(&mut self) {
+        let held = self.carrying();
         self.surfaces.open(
             &mut self.sim,
             &mut self.scroll,
             self.page,
-            self.driver,
-            self.linear.showing(),
-            self.mode,
-            self.installs,
+            held,
             scribing(self.driver, self.scribe.as_deref()),
         );
     }
@@ -526,20 +629,17 @@ impl Session {
         if let Some(driver) = self.surfaces.driving.take() {
             self.driver = driver;
         }
-        // The settings this build actually holds. `skip` is absent for the
-        // Bevy build's reason: `Boot::default` reads it at startup and there is
-        // nothing to do to a sequence that has already finished. `install`
-        // takes effect at the next `new`, which is the next time it is asked.
+        // The settings this build holds. `install` takes effect at the next
+        // `new`, which is the next time it is asked.
         if let Some((setting, value)) = self.surfaces.setting.take() {
-            if setting == orbs_shell::LINEAR_SETTING {
-                self.linear.show(orbs_shell::settings::is_on(&value));
-            } else if setting == orbs_shell::settings::INSTALL {
-                self.installs = orbs_shell::settings::is_on(&value);
-            } else if setting == "focus"
-                && let Some(mode) = DisplayMode::named(&value)
-            {
-                self.mode = mode;
+            let mut held = self.carrying();
+            held.apply(&setting, &value);
+            // The drawn count moves with the echo row, and a place held in drawn
+            // records would no longer name the same line.
+            if held.echo != self.echo {
+                self.scroll.rewind();
             }
+            self.hold(held);
         }
         // The settings page says what is in effect, and stops the moment a
         // function key changes something behind it: the rows are a snapshot
@@ -554,7 +654,7 @@ impl Session {
             .as_ref()
             .is_some_and(orbs_shell::Menu::showing_settings)
         {
-            let fresh = settings(self.driver, self.linear.showing(), self.mode, self.installs);
+            let fresh = settings(&self.carrying());
             if let Some(menu) = self.surfaces.menuing.as_mut()
                 && menu.settings() != fresh.as_slice()
             {
@@ -574,12 +674,7 @@ impl Session {
             );
             let mut menu = orbs_shell::Menu::at(orbs_shell::Stance::Threshold);
             menu.show_driver(self.driver);
-            menu.show_settings(settings(
-                self.driver,
-                self.linear.showing(),
-                self.mode,
-                self.installs,
-            ));
+            menu.show_settings(settings(&self.carrying()));
             self.surfaces.menuing = Some(menu);
         }
 
@@ -894,6 +989,9 @@ impl Session {
 
     /// Ask the shell for a screen and put it on the terminal.
     fn draw(&mut self, out: &mut impl Write) -> std::io::Result<()> {
+        // Every frame, because a swap brings a stream that shows every echo.
+        // Touches the world only when the answer changes.
+        self.sim.set_terse_echo(self.echo);
         // The card and nothing else until the orb is found. Painted before the
         // layout below rather than over it: `paint_booting` computes its own
         // single-pane layout, and the game's screen has a rail, a prompt and a
@@ -932,6 +1030,15 @@ impl Session {
 
         self.frame.reset(self.grid);
         if screen.is_hostable() {
+            // Kept as said on the first frame that shows it, not when the menu
+            // was built: a boot card quit early, or a terminal too small for
+            // the menu, would have used it up unseen.
+            if self.warns {
+                self.warns = false;
+                if let Some(menu) = self.surfaces.menuing.as_mut() {
+                    menu.warn_once();
+                }
+            }
             orbs_shell::paint(
                 &mut self.frame,
                 &mut self.linear,
@@ -951,9 +1058,9 @@ impl Session {
                     panel: &self.panel,
                     scroll: &self.scroll,
                     bench: &self.bench,
-                    // Settled for ever: a roll is motion, and this build has no
-                    // switch a player can reach to stop it (§14). The crossing's
-                    // rule, held the same way.
+                    // Settled for ever, as the crossing is: rolling a count in a
+                    // terminal is its own item, and the `motion` row is what it
+                    // would answer to.
                     climb: &orbs_shell::Climb::default(),
                     // The editor's viewport follows its caret, and how many
                     // lines fit is a fact only the painter has — which is why
@@ -1036,12 +1143,13 @@ pub(crate) fn run(sim: Sim, threshold: Threshold, engine: String) -> std::io::Re
     // installs the real path with the tower it belongs to.
     let kept = threshold.is_playing().then(orbs_shell::save_path).flatten();
     // The one session that plays the boot sequence: the first.
+    let remembered = Carried::remembered();
     let mut session = Session::new(
         sim,
         kept,
-        Boot::default(),
+        Boot::default().held_still(!remembered.motion),
         threshold,
-        Carried::remembered(),
+        remembered,
         grid,
         narrow,
         engine.clone(),
@@ -1079,7 +1187,9 @@ pub(crate) fn run(sim: Sim, threshold: Threshold, engine: String) -> std::io::Re
                     keep,
                     length,
                     seed: orbs_shell::new_game_seed(),
-                    wizard: wizard(),
+                    // The name the session holds, not the file's: a name chosen
+                    // where nothing can be written still names the tower.
+                    wizard: orbs_shell::wizard_named(session.name.as_deref()),
                 }
                 .begin(session.installs);
                 installing = begun.install;
@@ -1113,12 +1223,7 @@ pub(crate) fn run(sim: Sim, threshold: Threshold, engine: String) -> std::io::Re
                         // at the threshold there is nothing to leave to.
                         // `Surfaces::open` normally supplies these; this path
                         // builds its own menu and has to too.
-                        menu.show_settings(settings(
-                            session.driver,
-                            session.linear.showing(),
-                            session.mode,
-                            session.installs,
-                        ));
+                        menu.show_settings(settings(&session.carrying()));
                         menu
                     });
                     continue;
@@ -1128,7 +1233,7 @@ pub(crate) fn run(sim: Sim, threshold: Threshold, engine: String) -> std::io::Re
                         orbs_shell::new_game_seed(),
                         orbs_sim::content::Length::Medium,
                     );
-                    if let Some(name) = wizard() {
+                    if let Some(name) = orbs_shell::wizard_named(session.name.as_deref()) {
                         fresh.rename(&name);
                     }
                     (fresh, Some(path))
@@ -1302,11 +1407,14 @@ fn play(session: &mut Session) -> std::io::Result<()> {
             // whole stages per call rather than one per frame, so a stall during
             // boot catches up instead of leaving the animation stuck part-way.
             session.boot.advance(elapsed);
-            // `None` leaves whatever `ORBS_FIRE` said: this frontend has no CRT
-            // switch to consult, and a missing switch is not a switch set to off.
-            session
-                .bench
-                .advance(delta, overstep.clamp(0.0, 1.0), None, &session.panel);
+            // The `motion` row is this build's whole switch: there is no tube
+            // beside it. `ORBS_FIRE=0` still wins underneath it.
+            session.bench.advance(
+                delta,
+                overstep.clamp(0.0, 1.0),
+                Some(session.motion),
+                &session.panel,
+            );
             // After the keys, so a keystroke restarts the settle clock before it
             // is advanced — otherwise the frame a player types on counts toward
             // a pause they have not taken yet. §19's *"there is no `save`"*:
@@ -1487,6 +1595,43 @@ mod tests {
             right, wrong,
             "the two orders recorded the same thing, so this test proves nothing",
         );
+    }
+}
+
+#[cfg(test)]
+mod rows {
+    use super::{Carried, settings};
+
+    #[test]
+    fn every_row_is_honoured() {
+        // A row this build writes nowhere is §19's dead row. `skip` was one in
+        // reverse: read back from the file, so with nowhere to write it snapped
+        // to `off`. `reading` is exempt — the menu answers it with `Drive`.
+        let held = Carried::default();
+        for row in settings(&held) {
+            if row.key == orbs_shell::settings::DRIVER {
+                continue;
+            }
+            // A row with no list takes what it is given — the name.
+            let next = row.next().unwrap_or("Morgana");
+            let mut after = held.clone();
+            after.apply(&row.key, next);
+            let shown = settings(&after)
+                .into_iter()
+                .find(|again| again.key == row.key)
+                .expect("the row went away");
+            // The name row shows what a new tower would take, and an exported
+            // `ORBS_WIZARD` outranks the setting there.
+            let named =
+                (row.key == orbs_shell::settings::NAME).then(|| orbs_shell::new_wizard(Some(next)));
+            assert_eq!(
+                shown.value,
+                named.as_deref().unwrap_or(next),
+                "`{}` was set and its row still says `{}`",
+                row.word,
+                shown.value,
+            );
+        }
     }
 }
 

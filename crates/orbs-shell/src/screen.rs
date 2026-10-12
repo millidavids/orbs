@@ -17,6 +17,39 @@
 use bevy_ecs::prelude::Resource;
 use orbs_render::{DisplayMode, GRID, GridSize, MIN_GRID, MIN_SCALE};
 
+/// How the picture is fitted to the window — `settings` → `tube` → `scale`.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Fit {
+    /// As large as the window allows. At some sizes a glyph's pixels come out
+    /// unevenly — ×1.5 draws an 8-pixel letter in 12, some columns twice.
+    #[default]
+    Fill,
+    /// The largest whole multiple of the native picture, so every pixel of a
+    /// glyph is the same size. The letterbox is wider: at 1080 lines this is
+    /// ×1, two-thirds of the height.
+    Whole,
+}
+
+impl Fit {
+    /// Both, in the order the row cycles them.
+    pub const ALL: [Self; 2] = [Self::Fill, Self::Whole];
+
+    /// The word for it, on the page and in the file.
+    #[must_use]
+    pub const fn word(self) -> &'static str {
+        match self {
+            Self::Fill => "fill",
+            Self::Whole => "whole",
+        }
+    }
+
+    /// The fit `word` names, whole.
+    #[must_use]
+    pub fn named(word: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|fit| fit.word() == word)
+    }
+}
+
 /// The window, and the grid drawn on it.
 #[derive(Resource, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Screen {
@@ -35,6 +68,9 @@ pub struct Screen {
     /// A frontend without one passes [`orbs_render::PICTURE`], which is the
     /// 1:1 answer. See the module note.
     pub window: (u32, u32),
+    /// How the picture is fitted to the window. A setting, carried through a
+    /// resize like `mode`.
+    pub fit: Fit,
 }
 
 impl Default for Screen {
@@ -52,6 +88,9 @@ impl Default for Screen {
                 .and_then(|word| DisplayMode::named(&word))
                 .unwrap_or(DisplayMode::Wide),
             window: (0, 0),
+            fit: crate::settings::get(crate::settings::SCALE)
+                .and_then(|word| Fit::named(&word))
+                .unwrap_or_default(),
         }
     }
 }
@@ -61,9 +100,41 @@ impl Screen {
     ///
     /// The same number `ScalingMode::AutoMin` reaches inside the projection; see
     /// [`orbs_render::scale_for`] for why it is computed twice in two units.
+    ///
+    /// Under [`Fit::Whole`] the largest whole number at or under it, so the
+    /// camera and the tube's cell size read one value. Below ×1 there is no
+    /// whole multiple to keep, and the fill's answer stands.
     #[must_use]
     pub fn scale(self) -> f32 {
-        orbs_render::scale_for(self.window)
+        let fill = orbs_render::scale_for(self.window);
+        match self.fit {
+            Fit::Whole if fill >= 1.0 => fill.floor(),
+            Fit::Fill | Fit::Whole => fill,
+        }
+    }
+
+    /// Where the picture's middle falls, in physical pixels from the window's
+    /// top left.
+    ///
+    /// The window's middle, except that a whole fit puts it on a whole pixel:
+    /// an odd window's middle is half a pixel off one, and a cell edge there
+    /// splits every glyph pixel between two.
+    #[must_use]
+    pub fn middle(self) -> (f32, f32) {
+        let x = orbs_render::pixels(self.window.0) / 2.0;
+        let y = orbs_render::pixels(self.window.1) / 2.0;
+        if self.fit == Fit::Whole && orbs_render::scale_for(self.window) >= 1.0 {
+            (x.floor(), y.floor())
+        } else {
+            (x, y)
+        }
+    }
+
+    /// The same screen fitted another way.
+    #[must_use]
+    pub const fn with_fit(mut self, fit: Fit) -> Self {
+        self.fit = fit;
+        self
     }
 
     /// Whether the window can host the game at all.
@@ -90,6 +161,7 @@ impl Screen {
             grid: GRID,
             mode: mode.unwrap_or(DisplayMode::Wide),
             window: pixels,
+            fit: Fit::Fill,
         }
     }
 
@@ -231,6 +303,46 @@ mod tests {
         };
         assert!(cramped.scale() >= MIN_SCALE, "the window is fine");
         assert!(!cramped.is_hostable(), "a 40x10 grid passed");
+    }
+
+    #[test]
+    fn a_whole_fit_is_the_largest_whole_multiple() {
+        let at = |window| {
+            Screen::for_window(window, None)
+                .with_fit(Fit::Whole)
+                .scale()
+        };
+        assert_eq!(at((1920, 1080)), 1.0, "1080 is ×1.5 filled, ×1 whole");
+        assert_eq!(at((2560, 1440)), 2.0);
+        assert_eq!(at((3840, 2160)), 3.0);
+        assert_eq!(at((2880, 1620)), 2.0, "×2.25 floors to two");
+        // Below the floor there is no whole multiple, and the fill's answer stands.
+        assert_eq!(at((640, 480)), Screen::for_window((640, 480), None).scale());
+        // ...and it never draws past the window.
+        for window in [(1366u32, 768u32), (1920, 1200), (5120, 2880)] {
+            let scale = at(window);
+            assert!(f32::from(orbs_render::PICTURE.0) * scale <= orbs_render::pixels(window.0));
+            assert!(f32::from(orbs_render::PICTURE.1) * scale <= orbs_render::pixels(window.1));
+        }
+    }
+
+    #[test]
+    fn a_whole_picture_starts_on_a_whole_pixel_in_an_odd_window() {
+        for window in [(1921u32, 1081u32), (2561, 1440), (1920, 1080)] {
+            let screen = Screen::for_window(window, None).with_fit(Fit::Whole);
+            let (x, y) = screen.middle();
+            let left = x - f32::from(orbs_render::PICTURE.0) * screen.scale() / 2.0;
+            let top = y - f32::from(orbs_render::PICTURE.1) * screen.scale() / 2.0;
+            assert_eq!(
+                left.fract(),
+                0.0,
+                "{window:?}: the picture starts at {left}"
+            );
+            assert_eq!(top.fract(), 0.0, "{window:?}: the picture starts at {top}");
+        }
+        // A filled picture is centred, whole pixel or not.
+        let filled = Screen::for_window((1921, 1081), None);
+        assert_eq!(filled.middle(), (960.5, 540.5));
     }
 
     #[test]

@@ -129,10 +129,7 @@ impl Surfaces {
         sim: &mut Sim,
         scroll: &mut Scroll,
         page: usize,
-        driver: orbs_shell::Driver,
-        linear: bool,
-        mode: orbs_render::DisplayMode,
-        installs: bool,
+        held: crate::drive::Carried,
         scrivener: &dyn orbs_sim::Scrivener,
     ) {
         if self.editing.is_none()
@@ -172,8 +169,8 @@ impl Surfaces {
             // holds — see `Menu::show_driver`. `InTower`, because the word is
             // typed at a prompt: the threshold's menu is `Session::new`'s.
             let mut menu = Menu::at(orbs_shell::Stance::InTower);
-            menu.show_driver(driver);
-            menu.show_settings(crate::drive::settings(driver, linear, mode, installs));
+            menu.show_driver(held.driver());
+            menu.show_settings(crate::drive::settings(&held));
             self.menuing = Some(menu);
         }
         // The book, assembled here because this is where the `Sim` is: the menu
@@ -214,6 +211,11 @@ impl Surfaces {
         }
         if self.walking && sim.stacks().is_none() {
             self.walking = false;
+        }
+        // §3: the menu's secret words are silent while the tower is tense, and
+        // F7 can change that with the menu up.
+        if let Some(menu) = &mut self.menuing {
+            menu.show_register(sim.register());
         }
     }
 
@@ -610,10 +612,7 @@ mod tests {
             &mut sim,
             &mut scroll,
             1,
-            orbs_shell::Driver::default(),
-            false,
-            orbs_render::DisplayMode::Wide,
-            false,
+            crate::drive::Carried::default(),
             &orbs_sim::Verbatim,
         );
         assert_eq!(
@@ -627,10 +626,7 @@ mod tests {
             &mut sim,
             &mut scroll,
             1,
-            orbs_shell::Driver::default(),
-            false,
-            orbs_render::DisplayMode::Wide,
-            false,
+            crate::drive::Carried::default(),
             &orbs_sim::Verbatim,
         );
         assert_eq!(
@@ -655,10 +651,7 @@ mod tests {
             &mut sim,
             &mut scroll,
             1,
-            orbs_shell::Driver::default(),
-            false,
-            orbs_render::DisplayMode::Wide,
-            false,
+            crate::drive::Carried::default(),
             &orbs_sim::Verbatim,
         );
         assert_eq!(surfaces.owner(&scroll), Owner::Maze);

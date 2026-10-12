@@ -469,7 +469,7 @@ mod tests {
     /// The painter is shared and must not care which one it is, so these tests
     /// pass a fixed string rather than reaching for this crate's. The *real*
     /// one is covered where it lives, in each frontend's own `boot::engine`.
-    const ENGINE: &str = "bevy 0.19.0";
+    const ENGINE: &str = "bevy 0.20.0";
 
     #[test]
     fn every_version_it_reports_is_a_real_one() {

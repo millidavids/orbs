@@ -170,7 +170,7 @@ fn glean(world: &mut World, name: &str) -> bool {
         let mut rngs = world.resource_mut::<Rngs>();
         let rng = rngs.stream(RngStream::Archive);
         for _ in 0..SPOILS {
-            let at = rand::Rng::random_range(rng, 0..floor.len());
+            let at = rand::RngExt::random_range(rng, 0..floor.len());
             spoils.push(floor.swap_remove(at));
         }
     }

@@ -76,6 +76,11 @@ pub struct Menu {
     /// offered — so `orbs-tui`, which binds five function keys and has no audio,
     /// shows fewer pages rather than controls that do nothing.
     pub(super) rows: Vec<Row>,
+    /// Whether the tower behind the menu speaks in any register but plain.
+    ///
+    /// §3: comedy never punctures a tense moment, so the menu's secret words
+    /// are silent while it does. Handed in by the frontend, as the driver is.
+    pub(super) tense: bool,
 }
 
 /// Which of the menu's pages is showing.
@@ -254,6 +259,17 @@ pub enum Complaint {
     /// way on purpose, and a `saves` that drew an empty list would say *you have
     /// no towers* to a player who has several.
     Unkept,
+    /// §14's health warning, said once on a machine's first threshold.
+    ///
+    /// Not a refusal either. Here because it is drawn where they are and lasts
+    /// until the first line, which is as long as anyone needs it.
+    Warning,
+    /// A name the prompt could not carry, and why.
+    Unnamed(crate::settings::NameFault),
+    /// Something the orb says back to a word it never offered — a prose key.
+    Remark(String),
+    /// What the sky is doing, for `moon`.
+    Moon(crate::sky::Reading),
 }
 
 impl Default for Menu {
@@ -273,6 +289,16 @@ impl Menu {
         Self {
             stance,
             ..Self::default()
+        }
+    }
+
+    /// Say §14's health warning, if this machine has not heard it.
+    ///
+    /// For a frontend opening the threshold at launch. Asks the settings file,
+    /// which keeps the answer, so it is said once and never again.
+    pub fn warn_once(&mut self) {
+        if crate::settings::warn_once() {
+            self.complaint = Some(Complaint::Warning);
         }
     }
 
@@ -350,7 +376,16 @@ impl Menu {
             asking: None,
             driver: Driver::default(),
             rows: Vec::new(),
+            tense: false,
         }
+    }
+
+    /// Say which register the tower behind the menu speaks in.
+    ///
+    /// Asked again before each key, not once at opening: `F7` works over an open
+    /// menu, so a snapshot let `xyzzy` answer in the eldritch register.
+    pub const fn show_register(&mut self, register: orbs_render::Presentation) {
+        self.tense = !matches!(register, orbs_render::Presentation::Plain);
     }
 
     /// Whether a page of settings is on screen.
@@ -426,8 +461,9 @@ impl Menu {
     /// bare prompt is not a mistake anywhere else in the game and is not one
     /// here.
     pub fn enter(&mut self) -> Option<Outcome> {
-        let typed = std::mem::take(&mut self.command);
-        let typed = typed.trim().to_lowercase();
+        let line = std::mem::take(&mut self.command);
+        let said = line.trim();
+        let typed = said.to_lowercase();
         self.complaint = None;
         if typed.is_empty() {
             // An empty line is still a line, and §19's rule is that any line but
@@ -440,7 +476,7 @@ impl Menu {
         }
         // What a word *means* is [`pages`](super::pages)'; only the shape of the
         // line is here. See that module for why.
-        self.answered(&typed)
+        self.answered(&typed, said)
     }
 
     /// Escape: one page back, and from the top page back to the tower.

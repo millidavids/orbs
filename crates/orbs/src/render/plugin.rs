@@ -41,11 +41,11 @@ impl Default for Theme {
         // settings file written by a later build can name a phosphor this one
         // has never heard of, and a game that refused to start over a colour
         // would be the worst possible answer to it.
+        //
+        // `named`, over every theme: a hidden one chosen last session must come
+        // back, or `theme p7` would quietly be amber after a relaunch.
         if let Some(chosen) = orbs_shell::settings::get(crate::shell::THEME)
-            && let Some(phosphor) = palette::ALL
-                .iter()
-                .find(|phosphor| phosphor.name == chosen)
-                .copied()
+            && let Some(phosphor) = palette::named(&chosen)
         {
             return Self(phosphor);
         }
@@ -63,6 +63,8 @@ impl Plugin for RenderPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Canvas>()
             .init_resource::<Theme>()
+            .init_resource::<super::Contrast>()
+            .init_resource::<super::weight::Weight>()
             .init_resource::<Tube>()
             .init_resource::<Blink>()
             .add_systems(PreStartup, build_atlas)
@@ -81,6 +83,12 @@ impl Plugin for RenderPlugin {
                     auto_capture.run_if(resource_exists::<AutoCapture>),
                     // The background only moves when the theme does.
                     tint_background.run_if(resource_changed::<Theme>),
+                    // ...and the strokes only when the weight does. Never on
+                    // the frame it was inserted: `build_atlas` drew that one.
+                    atlas::restroke
+                        .run_if(atlas_ready)
+                        .run_if(resource_changed::<super::weight::Weight>)
+                        .run_if(not(resource_added::<super::weight::Weight>)),
                     blink::tick,
                     // Typing must not hide what is being typed: a caret caught
                     // mid-blink when a key lands reads as dropped input. Guarded
@@ -117,8 +125,13 @@ impl Plugin for RenderPlugin {
 }
 
 /// Build the atlas before anything can want it.
-fn build_atlas(mut commands: Commands, mut images: ResMut<Assets<Image>>, theme: Res<Theme>) {
-    let atlas = atlas::build(&mut images);
+fn build_atlas(
+    mut commands: Commands,
+    mut images: ResMut<Assets<Image>>,
+    theme: Res<Theme>,
+    weight: Res<super::weight::Weight>,
+) {
+    let atlas = atlas::build(&mut images, *weight);
 
     info!(
         "glyph atlas {}x{} built: 3 faces x 256 glyphs, {} slots filled from the fallback font; \
@@ -337,12 +350,14 @@ fn repaint(
 fn rasterise(
     screen: Res<Screen>,
     theme: Res<Theme>,
+    contrast: Option<Res<super::Contrast>>,
     blink: Res<Blink>,
     canvas: Res<Canvas>,
     mut tube: ResMut<Tube>,
     mut meshes: ResMut<Assets<Mesh>>,
     grid_mesh: Option<Single<&Mesh2d, With<CellGrid>>>,
     mut drew_something: Local<bool>,
+    mut lifted: Local<super::legibility::Lifted>,
 ) {
     let Some(grid_mesh) = grid_mesh else {
         return;
@@ -391,7 +406,13 @@ fn rasterise(
         f32::from(orbs_render::PICTURE.0) * scale,
         f32::from(orbs_render::PICTURE.1) * scale,
     );
+    // Where the camera put the picture's middle, which `fit_projection` reads
+    // from the same `Screen::middle`.
+    let middle = screen.middle();
+    let shift = |at: f32, side: f32| if side >= 1.0 { at / side - 0.5 } else { 0.0 };
     *tube = Tube {
+        shift_x: shift(middle.0, window.0),
+        shift_y: shift(middle.1, window.1),
         width: f32::from(orbs_render::CELL_WIDTH) * scale,
         height: f32::from(orbs_render::CELL_HEIGHT) * scale,
         // `max(1.0, …)` on the divisor, not a clamp on the result: before the
@@ -401,5 +422,6 @@ fn rasterise(
         fill_y: (picture.1 / window.1.max(1.0)).clamp(0.0, 1.0),
     };
 
-    grid::build(&canvas.frame, &theme.0, blink.showing(), &mut mesh);
+    let drawn = contrast.map_or(theme.0, |contrast| lifted.drawn(theme.0, *contrast));
+    grid::build(&canvas.frame, &drawn, blink.showing(), &mut mesh);
 }

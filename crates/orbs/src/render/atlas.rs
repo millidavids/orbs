@@ -93,8 +93,11 @@ pub(crate) const fn band(presentation: Presentation) -> u32 {
     }
 }
 
-/// Build the atlas from the embedded fonts.
-pub(crate) fn build(images: &mut Assets<Image>) -> GlyphAtlas {
+/// The three faces from the embedded fonts, gaps filled, at `weight`, and how
+/// many slots each took from the fallback.
+fn faces_counted(
+    weight: super::weight::Weight,
+) -> ([Face; FACES as usize], [usize; FACES as usize]) {
     let fallback = glyphs::parse_bdf(FALLBACK_BDF);
 
     let mut faces = [
@@ -106,14 +109,46 @@ pub(crate) fn build(images: &mut Assets<Image>) -> GlyphAtlas {
     let mut filled_from_fallback = [0; FACES as usize];
     for (index, face) in faces.iter_mut().enumerate() {
         filled_from_fallback[index] = glyphs::fill_gaps(face, &fallback);
+        if orbs_shell::settings::Pair::raised(weight) {
+            super::weight::embolden(face);
+        }
     }
+    (faces, filled_from_fallback)
+}
 
-    // RGBA: white everywhere, alpha carries coverage.
+/// The three faces, at `weight`.
+#[cfg(test)]
+pub(crate) fn faces(weight: super::weight::Weight) -> [Face; FACES as usize] {
+    faces_counted(weight).0
+}
+
+/// The atlas's pixels: white everywhere, alpha carrying coverage.
+fn pixels(faces: &[Face; FACES as usize]) -> Vec<u8> {
     let mut pixels = vec![0u8; (WIDTH * HEIGHT * 4) as usize];
     for (face_index, face) in faces.iter().enumerate() {
         let band_top = u32::try_from(face_index).unwrap_or(0) * BAND_HEIGHT;
         blit(&mut pixels, face, band_top);
     }
+    pixels
+}
+
+/// Redraw the atlas in place when the stroke weight changes.
+///
+/// The same texture, so nothing holding its handle has to be told.
+pub(super) fn restroke(
+    mut images: ResMut<Assets<Image>>,
+    atlas: Res<GlyphAtlas>,
+    weight: Res<super::weight::Weight>,
+) {
+    if let Some(mut image) = images.get_mut(&atlas.image) {
+        image.data = Some(pixels(&faces_counted(*weight).0));
+    }
+}
+
+/// Build the atlas from the embedded fonts.
+pub(crate) fn build(images: &mut Assets<Image>, weight: super::weight::Weight) -> GlyphAtlas {
+    let (faces, filled_from_fallback) = faces_counted(weight);
+    let pixels = pixels(&faces);
 
     let mut image = Image::new(
         Extent3d {

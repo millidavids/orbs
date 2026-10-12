@@ -32,7 +32,12 @@
 // Legibility is the product, not an aesthetic. Every term here is scaled by a
 // setting that can go to zero, and §14 requires the whole thing be disableable.
 
-#import bevy_core_pipeline::fullscreen_vertex_shader::FullscreenVertexOutput
+// What Bevy's fullscreen vertex shader hands on, written out: Bevy 0.20 gives a
+// `.wgsl` file to wgpu as it is, with no `#import` to resolve.
+struct FullscreenVertexOutput {
+    @builtin(position) position: vec4<f32>,
+    @location(0) uv: vec2<f32>,
+};
 
 @group(0) @binding(0) var screen_texture: texture_2d<f32>;
 @group(0) @binding(1) var texture_sampler: sampler;
@@ -60,6 +65,10 @@ struct CrtUniform {
     // from these. One of the two is always 1.0.
     fill_x: f32,
     fill_y: f32,
+    // Where the picture's middle sits from the window's, in UV. Zero but for a
+    // whole fit on an odd window.
+    shift_x: f32,
+    shift_y: f32,
     enabled: f32,
 }
 @group(0) @binding(2) var<uniform> crt: CrtUniform;
@@ -116,25 +125,26 @@ fn barrel(uv: vec2<f32>, strength: f32) -> vec2<f32> {
     return warp * (1.0 + OVERSCAN) + vec2<f32>(0.5);
 }
 
-/// Where the tube's glass sits in the window, as a rectangle in UV.
-///
-/// The picture is centred by `ScalingMode::AutoMin` — `viewport_origin` defaults
-/// to the middle — so the origin is derived rather than passed.
+/// How much of the window the tube's glass covers, in UV.
 fn tube_fill() -> vec2<f32> {
     return max(vec2<f32>(crt.fill_x, crt.fill_y), vec2<f32>(0.0001));
+}
+
+/// The glass's top-left corner, in UV: centred, then moved by the shift the
+/// camera's whole-pixel origin made.
+fn tube_corner() -> vec2<f32> {
+    return (vec2<f32>(1.0) - tube_fill()) * 0.5 + vec2<f32>(crt.shift_x, crt.shift_y);
 }
 
 /// Window UV to **tube space**: `0..1` spans the 4:3 picture, and the letterbox
 /// bars are the region outside it.
 fn to_tube(uv: vec2<f32>) -> vec2<f32> {
-    let fill = tube_fill();
-    return (uv - (vec2<f32>(1.0) - fill) * 0.5) / fill;
+    return (uv - tube_corner()) / tube_fill();
 }
 
 /// ...and back, to sample the screen texture the tube coordinate names.
 fn to_window(tube: vec2<f32>) -> vec2<f32> {
-    let fill = tube_fill();
-    return tube * fill + (vec2<f32>(1.0) - fill) * 0.5;
+    return tube * tube_fill() + tube_corner();
 }
 
 @fragment

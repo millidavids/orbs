@@ -15,6 +15,54 @@
   at 1.0 (DESIGN.md §19).
 -->
 
+## [v0.17.18] - 2026-10-12
+
+### Description
+In development — a dev log, not patch notes. The settings grew: motion off, the
+tube tuned effect by effect, high contrast, heavier letters, a switch for each
+kind of sound, and a name of your choosing. The background hum is gone.
+
+### Added
+- **Motion can be turned off.** A `motion` row on the access page stops
+  everything that moves: screens sliding, the fire, numbers rolling, the caret
+  blinking, text typing out and the tube's rolling band. In the terminal build
+  too.
+- **A health warning.** The first time the orb starts on a computer, the menu
+  says once where to turn motion off, and the manual says it too.
+- **The tube, effect by effect.** A new `picture` page sets the curve, the scan
+  lines, the glow, the rolling band, the grille, the colour fringes and the dark
+  corners each to off, soft or full.
+- **High contrast.** `contrast high` makes all text brighter against the dark,
+  while keeping bright, normal and dim text apart.
+- **Heavier letters.** `weight heavy` thickens every letter. The shading blocks
+  are left alone, so fire and smoke still read the same.
+- **Crisp pixels.** `scale whole` sizes the picture to a whole multiple so every
+  letter is sharp, at the cost of some of the screen.
+- **Typing speed.** `pace` sets how fast the orb's replies type out, named in
+  baud, from 1200 to instant.
+- **Echoes only when they matter.** `echo changed` stops the orb repeating a
+  command exactly as you typed it. Anything it read differently, or did not
+  understand, still shows. In the terminal build too.
+- **A switch for each kind of sound.** On the sound page, `keys`, `chimes`,
+  `alarms` and `refusals` turn typing, good news, bad news and the "did not
+  understand" tone on or off. `voice` is still the volume.
+- **The orb clouds when you look away.** `away dim` eases the glass dim while
+  the window is in the background, and back when you return.
+- **Your wizard's name.** `name` on the habits page sets the name new towers are
+  raised with, instead of your computer's login. Towers already raised keep
+  theirs.
+- **The menu keeps a few secrets.** It never lists them.
+
+### Changed
+- **The background hum is gone.** The orb makes a sound only when something
+  happens. The key clicks stay.
+
+### Fixed
+- **The manual's settings chapter is right again.** It named a setting that did
+  not exist, and promised colour-vision modes the orb does not have.
+- **In the terminal build, `skip on` stays on.** It snapped back to off when
+  there was no settings file yet.
+
 ## [v0.17.8] - 2026-10-11
 
 ### Description

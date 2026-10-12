@@ -53,6 +53,9 @@ impl Standing {
         rows: Vec<orbs_shell::settings::Row>,
     ) {
         let mut menu = Menu::at(stance);
+        if stance.is_threshold() {
+            menu.warn_once();
+        }
         menu.show_driver(driver);
         // What is in effect, asked of the things that hold it, never read back
         // from the settings file: `ORBS_SAVE=off` has no file and still has a
@@ -160,6 +163,7 @@ pub(crate) fn type_into_menu(
     // shell alone, and a bare `Res` fails parameter validation in one.
     readers: Option<ResMut<crate::sim::Readers>>,
     mut reading: Option<ResMut<super::manualling::Reading>>,
+    tower: Option<Res<crate::sim::Tower>>,
 ) {
     // The manual sits over the menu and owns the keyboard: without the guard,
     // `q` at a chapter prefix-matched the menu's `quit` and left the game.
@@ -194,6 +198,11 @@ pub(crate) fn type_into_menu(
             keys.clear();
             return;
         };
+        // §3: the secret words are silent while the tower is tense. Asked here,
+        // with the keys, because F7 can change it with the menu up.
+        if let Some(tower) = &tower {
+            menu.show_register(tower.sim().register());
+        }
         for event in keys.read() {
             if event.state != ButtonState::Pressed {
                 continue;
@@ -317,7 +326,13 @@ pub(crate) fn swap(world: &mut World) {
     }
 
     let seed = asked.seed;
-    let wizard = orbs_shell::wizard();
+    // The name held in memory rather than read back from the file, so a name
+    // chosen where nothing can be written still names the tower.
+    let wizard = orbs_shell::wizard_named(
+        world
+            .get_resource::<super::setting::Naming>()
+            .and_then(|naming| naming.0.as_deref()),
+    );
     let installs = world
         .get_resource::<super::Installs>()
         .is_some_and(|installs| installs.0);

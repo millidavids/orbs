@@ -84,7 +84,18 @@ impl Blink {
 }
 
 /// Advance the blink. See [`Blink::advance`].
-pub(crate) fn tick(time: Res<Time>, mut blink: ResMut<Blink>) {
+///
+/// Held solid when nothing may move: a blink is motion, small as it is.
+pub(crate) fn tick(
+    time: Res<Time>,
+    tubes: Query<&crate::crt::CrtSettings>,
+    stillness: Option<Res<crate::shell::Stillness>>,
+    mut blink: ResMut<Blink>,
+) {
+    if crate::shell::moving(tubes.iter(), stillness.as_deref()) == Some(false) {
+        blink.wake();
+        return;
+    }
     blink.advance(time.delta_secs());
 }
 

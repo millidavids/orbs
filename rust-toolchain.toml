@@ -6,6 +6,6 @@
 #
 # Bump deliberately, and run the full gate when you do.
 [toolchain]
-channel = "1.96.0"
+channel = "1.98.0"
 profile = "default"
 components = ["rustfmt", "clippy"]

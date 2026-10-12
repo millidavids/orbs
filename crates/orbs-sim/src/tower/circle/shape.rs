@@ -181,7 +181,7 @@ pub fn lessers() -> Vec<Temper> {
 
 #[cfg(test)]
 mod tests {
-    use rand::Rng;
+    use rand::RngExt;
 
     use super::*;
     use crate::rng::RngStream;

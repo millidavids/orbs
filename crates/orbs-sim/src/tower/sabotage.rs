@@ -22,7 +22,7 @@ use orbs_render::{FieldName, Presentation, RecordKind, Records, Role};
 
 use super::node::{Name, NodeId};
 use crate::parser::Verb;
-use rand::Rng as _;
+use rand::RngExt as _;
 
 use crate::rng::{RngStream, Rngs};
 use crate::session::Scrollback;

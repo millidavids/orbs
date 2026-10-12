@@ -12,24 +12,71 @@
 //! `USER` itself would agree with the Bevy build on a developer's machine and
 //! disagree on Windows, in CI, or with `USER` blank.
 
-/// Who the wizard is, if anything on the machine says.
+/// Who the wizard of a new tower is, as the settings file says.
 ///
-/// `ORBS_WIZARD` first, then the platform's own. `USERNAME` is not optional:
-/// §13 ships Windows through Steam, so without it the platform most players are
-/// on always falls back to `orbs $ `.
-///
-/// `ORBS_WIZARD` exists because the alternative was overriding a system
-/// variable, which works by accident rather than by intention. The real answer
-/// is a settings screen, which §15 puts in Phase 13.
-///
-/// A blank value is rejected, so an exported-but-empty `USER` falls through to
-/// the next candidate instead of naming the wizard nothing.
+/// [`wizard_named`] with the file's answer. A frontend holding the choice in
+/// memory asks that instead, so a choice it could not write down still counts.
 #[must_use]
 pub fn wizard() -> Option<String> {
-    ["ORBS_WIZARD", "USER", "USERNAME"]
-        .into_iter()
-        .filter_map(|key| std::env::var(key).ok())
-        .find(|name| !name.trim().is_empty())
+    wizard_named(crate::settings::chosen_name().as_deref())
+}
+
+/// Who the wizard of a new tower is: the switch, then the player's choice,
+/// then the machine's login.
+///
+/// `ORBS_WIZARD` first, so a capture is the same on every machine, as every
+/// other switch outranks its setting. `USERNAME` is not optional: §13 ships
+/// Windows through Steam, so without it the platform most players are on
+/// always falls back to `orbs $ `.
+///
+/// A blank value is rejected, so an exported-but-empty `USER` falls through to
+/// the next candidate instead of naming the wizard nothing. So is a login the
+/// menu would refuse if typed.
+#[must_use]
+pub fn wizard_named(chosen: Option<&str>) -> Option<String> {
+    let (switch, login) = machine_names();
+    switch
+        .clone()
+        .or_else(|| {
+            chosen
+                .filter(|name| !name.trim().is_empty())
+                .map(ToOwned::to_owned)
+        })
+        .or_else(|| login.clone())
+}
+
+/// The name a new tower would take, as the settings row shows it:
+/// [`wizard_named`], or the sim's own default when nothing names one.
+///
+/// Both builds ask this, so the row and the tower cannot disagree on the order.
+#[must_use]
+pub fn new_wizard(chosen: Option<&str>) -> String {
+    wizard_named(chosen).unwrap_or_else(|| orbs_sim::DEFAULT_WIZARD.to_owned())
+}
+
+/// `ORBS_WIZARD`, and the machine's login: read once, since nothing changes a running
+/// process's environment and the settings row asks every frame a page is up.
+fn machine_names() -> &'static (Option<String>, Option<String>) {
+    static READ: std::sync::OnceLock<(Option<String>, Option<String>)> = std::sync::OnceLock::new();
+    READ.get_or_init(|| {
+        (
+            switched("ORBS_WIZARD"),
+            as_name(switched("USER")).or_else(|| as_name(switched("USERNAME"))),
+        )
+    })
+}
+
+/// A login, if it could be a name. A Windows `John Smith`, or a letter the
+/// glass cannot draw, must not reach the prompt by a door the menu guards.
+fn as_name(login: Option<String>) -> Option<String> {
+    login.and_then(|login| crate::settings::checked_name(&login).ok())
+}
+
+/// `key`'s value, unless it is unset or blank.
+fn switched(key: &str) -> Option<String> {
+    std::env::var(key)
+        .ok()
+        .filter(|name| !name.trim().is_empty())
 }
 
 /// The switch that decides whether a fresh tower begins sealed.
@@ -269,5 +316,13 @@ mod tests {
             RUSTC.chars().next().is_some_and(|c| c.is_ascii_digit()),
             "{RUSTC:?} is not a version",
         );
+    }
+
+    #[test]
+    fn a_login_the_menu_would_refuse_is_no_name() {
+        assert_eq!(as_name(Some("david".to_owned())), Some("david".to_owned()));
+        for refused in ["John Smith", "名前", "averyveryverylongname"] {
+            assert_eq!(as_name(Some(refused.to_owned())), None, "{refused:?}");
+        }
     }
 }

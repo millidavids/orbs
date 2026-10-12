@@ -67,6 +67,11 @@ fn path() -> Option<PathBuf> {
     KEPT_AT.get().cloned().flatten()
 }
 
+/// Whether this process keeps settings anywhere at all.
+pub(super) fn is_kept() -> bool {
+    path().is_some()
+}
+
 /// Everything on file, or nothing.
 #[must_use]
 pub fn load() -> Kept {

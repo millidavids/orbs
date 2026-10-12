@@ -3955,6 +3955,123 @@ was 58; a plan written against it said 52; it then said 65 while the answer was
 73. `ls <dir> | wc -l` takes a second and the figure is only ever used to notice
 a screen that stopped being captured.
 
+### The orb made yours — every settings row, and where to see it
+
+**A page dump shows the row; only the running game shows it working.** Every
+row is in a `menu_*` capture. Whether it *does* anything needs the clock, the
+window or the speakers, which a dump has none of.
+
+```bash
+# The rows, per page, as a player sees them.
+for page in sound tube access habits; do
+  ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_THRESHOLD=1 ORBS_DUMP=1 \
+    ORBS_MENU="settings\n$page" cargo run -q -p orbs
+done
+```
+
+**Never play a settings check against your real settings file.** The game keeps
+`orbs-settings.toml` beside the saves, so give it an empty folder:
+
+```bash
+mkdir -p /tmp/orb && ORBS_SAVE=/tmp/orb/orbs-save.toml cargo run -p orbs
+```
+
+**`motion` (access).** With the tube *on*, `settings` → `access` → `motion off`:
+the athanor's fire stops shimmering, `attend` cuts rather than crosses, a gain
+lands without rolling, text arrives whole and the caret stops blinking. Turn the
+tube off and on again, and it stays still: the row and the tube must both allow
+motion. In the terminal build the row is the whole switch:
+
+```bash
+cargo build -p orbs-tui
+tmux -L chk new-session -d -s chk -x 120 -y 45 \
+  "ORBS_SAVE=/tmp/orb/orbs-save.toml ORBS_BOOT=0 ORBS_THRESHOLD=0 ORBS_INSTALL=0 target/debug/orbs-tui"
+# type: attend laboratory, kindle charcoal — then two captures a moment apart.
+# motion on: the fire's colours differ. motion off: only the tick counter does.
+```
+
+**`picture` (window build).** Seven ceilings on the tube. The quickest look is a
+settings file and a screenshot, from a scratch folder:
+
+```bash
+mkdir -p /tmp/orb && cd /tmp/orb
+printf 'curve = "off"\nlines = "off"\nedge = "off"\nwarned = "on"\n' > orbs-settings.toml
+ORBS_SAVE=/tmp/orb/orbs-save.toml ORBS_CAPTURE=1 ORBS_BOOT=0 ORBS_THRESHOLD=0 \
+  ORBS_INSTALL=0 timeout 12 <repo>/target/debug/orbs
+# orbs-screenshot.png: a flat glass, no scan lines, no dark corners, glow intact
+```
+
+`flicker off` needs eyes: the slow band rolling down the glass stops and the
+curve stays. `crt off` still turns all of it off whatever the page says.
+
+**`contrast`, `weight`, `scale` (window build).** The same scratch-folder
+screenshot, twice — once with only `theme = "muted violet"`, once adding
+`contrast = "high"`, `weight = "heavy"` and `scale = "whole"` — and crop the
+top-left corner of each. Lifted, `ley line`, `renown` and the pane title are
+brighter, every letter is a pixel bolder, and `laboratory 9 ok` keeps its green.
+The log says the scale: `window 2880×1620 -> scale 2.000` whole against `2.250`
+filled. The athanor's shaded fill is unchanged at heavy — that range is exempt.
+
+**`pace` (window build).** `settings` → `habits` → `pace 1200`, then any command:
+the echo types itself slowly enough to watch, and a keystroke still finishes it.
+`pace instant` and `motion off` both land text whole.
+
+**The sound switches, `away` (window build).** `keys`, `chimes`, `alarms` and
+`refusals` each switch a kind of sound. `keys off` under `ORBS_SOUND=1`, then
+type: every keystroke prints `sound: key (off)` or `sound: enter (off)`, and a
+finished brew still prints `sound: done`. `away dim`
+needs a person — a launched window takes focus. Alt-tab away and the glass eases
+darker over half a second; come back and it clears.
+
+**`echo` (both builds).** A dump keeps no settings, so this is a played check:
+
+```bash
+mkdir -p /tmp/orb && printf 'echo = "changed"\nwarned = "on"\n' > /tmp/orb/orbs-settings.toml
+tmux -L chk new-session -d -s chk -x 120 -y 45 \
+  "ORBS_SAVE=/tmp/orb/orbs-save.toml ORBS_BOOT=0 ORBS_THRESHOLD=0 ORBS_SEALED=0 ORBS_AUGURY=off target/debug/orbs-tui"
+# type: survey, look around, frobnicate
+# changed: `survey` has no echo; `look around` reads `→ survey`; `frobnicate` reads `! frobnicate`
+# always:  `survey` reads `→ survey` as well
+```
+
+**`name` (both builds).** The row shows `ORBS_WIZARD`'s name when it is set —
+`dumps.sh` pins it — and the login otherwise. Played:
+
+```bash
+tmux -L chk new-session -d -s chk -x 120 -y 45 \
+  "ORBS_SAVE=/tmp/orb/orbs-save.toml ORBS_BOOT=0 ORBS_INSTALL=0 target/debug/orbs-tui"
+# settings, habits, name Morgan le Fay   → "a name is one word"
+# name Morgana, back, back, play, new, medium   → the prompt reads "Morgana $"
+```
+
+A tower already raised keeps its name: load an older slot and it answers to
+what it was called.
+
+**Secrets (both builds, `p7` and `eleven` the window's).** Answered, never
+offered — they are in no listing, completion or manual chapter. A dump reads no
+clock, and `ORBS_DATE=YYYY-MM-DD` is the switch that poses a day:
+
+```bash
+m() { ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="menu" "$@" cargo run -q -p orbs; }
+ORBS_MENU="xyzzy" m                              # nothing happens
+ORBS_MENU="moon" m                               # the orb cannot see the sky from here
+ORBS_DATE=2025-03-14 ORBS_MENU="moon" m          # the moon is full (a lunar eclipse)
+ORBS_DATE=2026-10-31 ORBS_MENU="moon" m          # ...and it is all hallows' eve
+ORBS_DATE=2026-02-13 ORBS_MENU="moon" m          # ...it is friday the thirteenth
+ORBS_DATE=2026-02-31 ORBS_MENU="moon" m          # no such day: the orb cannot see the sky
+ORBS_MENU='settings\ntube\ntheme p7' m           # [p7], the orb knows its phosphors by number
+ORBS_MENU='settings\nsound\nvoice eleven' m      # [full], it does not go to eleven
+```
+
+`theme p7` in a window is a blue-white radar tube; relaunch and it is still
+`p7`. Over a tower in any register but plain (`F7`, even with the menu already
+up), every one of the menu words is *unknown*.
+
+**The health warning** is said once per machine: start either build with
+`ORBS_SAVE` at an empty folder and *"if moving light troubles you"* is under the
+threshold's menu. The settings file gains `warned = "on"`, and the next launch is
+silent. A dump never says it — it keeps no settings — so no capture moves.
+
 ### Hearing it — the one surface with no picture
 
 **`dumps.sh` is blind to the whole of this by construction.** `ORBS_DUMP` builds
@@ -3963,7 +4080,6 @@ audio has a switch of its own, and it is the gate:
 
 ```bash
 ORBS_SOUND=1 cargo run -p orbs 2>&1 | grep '^sound:'
-# sound: hum (plain)     ← the bed, which is what says the audio path opened
 # sound: key             ← a glyph
 # sound: enter           ← a line committed
 # sound: done            ← something finished while you were elsewhere
@@ -4004,23 +4120,19 @@ ORBS_SOUND=1 cargo run -p orbs      # then: attend laboratory, verify <surface>
 ORBS_BOOT=0 ORBS_DUMP=1 ORBS_THRESHOLD=1 ORBS_SAVE=off \
   ORBS_MENU='settings\nsound' cargo run -q -p orbs         # the page
 ORBS_BOOT=0 ORBS_DUMP=1 ORBS_THRESHOLD=1 ORBS_SAVE=off \
-  ORBS_MENU='settings\nsound\nhum\nvoice quiet' cargo run -q -p orbs
-#   hum      cycles to the next level        voice quiet   names one outright
+  ORBS_MENU='settings\nsound\nvoice\nvoice quiet' cargo run -q -p orbs
+#   voice    cycles to the next level        voice quiet   names one outright
 ```
 
-**Two volumes, because the reasons to turn each down are different**: the hum is
-atmosphere and the cues are §14's ambient channel, so *hum off, voice full* has
-to be reachable. Four words rather than a number — the menu is typed and has no
-slider, and `voice 0.35` is a value nobody can guess or cycle to.
+Four words rather than a number — the menu is typed and has no slider, and
+`voice 0.35` is a value nobody can guess or cycle to. There is no hum to turn
+down: it was removed at `0.17.16`, and the orb sounds only when something
+happens.
 
 **A dump keeps no settings**, deliberately (`main.rs` returns before
-`settings::keep`), so the round trip is checked against a real file:
-
-```bash
-printf 'hum = "off"\n' >> ~/.local/share/orbs/orbs-settings.toml
-ORBS_SOUND=1 cargo run -p orbs 2>&1 | grep '^sound: hum'
-# sound: hum (plain, off)
-```
+`settings::keep`), so the round trip is checked against a real file: `voice =
+"off"` in the settings file, and `ORBS_SOUND=1` still names each cue as it is
+read, marked `(off)`, while nothing plays. A kind switched off reads the same.
 
 `off` spawns nothing at all rather than a silent player, and a level this build
 has never heard of falls back to `full` — a settings file from a later build

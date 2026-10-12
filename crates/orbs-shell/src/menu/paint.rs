@@ -323,6 +323,7 @@ const fn return_lead(page: Category) -> &'static str {
     match page {
         Category::Sound => "menu_sound_lead",
         Category::Tube => "menu_tube_lead",
+        Category::Picture => "menu_picture_lead",
         Category::Access => "menu_access_lead",
         Category::Habits => "menu_habits_lead",
     }
@@ -357,7 +358,41 @@ fn said(complaint: &Complaint, prose: &Prose) -> String {
         }
         Complaint::Full => prose.line("menu_full", &[]),
         Complaint::Unkept => prose.line("menu_unkept", &[]),
+        Complaint::Warning => prose.line("menu_warning", &[]),
+        Complaint::Unnamed(fault) => match fault {
+            crate::settings::NameFault::Long => prose.line(
+                "menu_name_long",
+                &[("count", &crate::settings::LONGEST_NAME.to_string())],
+            ),
+            crate::settings::NameFault::Spaced => prose.line("menu_name_spaced", &[]),
+            crate::settings::NameFault::Undrawable(at) => {
+                prose.line("menu_name_undrawable", &[("count", &at.to_string())])
+            }
+        },
+        Complaint::Remark(key) => prose.line(key, &[]),
+        Complaint::Moon(reading) => moon(*reading, prose),
     }
+}
+
+/// What `moon` says: the phase, and the night if it is one worth naming.
+fn moon(reading: crate::sky::Reading, prose: &Prose) -> String {
+    use crate::sky::{Occasion, Phase, Reading};
+
+    let Reading::Seen(phase, occasion) = reading else {
+        return prose.line("moon_unseen", &[]);
+    };
+    let sky = match phase {
+        Phase::New => prose.line("moon_new", &[]),
+        Phase::Full => prose.line("moon_full", &[]),
+        Phase::Waxing(nights) => prose.line("moon_waxing", &[("count", &nights.to_string())]),
+        Phase::Waning(nights) => prose.line("moon_waning", &[("count", &nights.to_string())]),
+    };
+    let night = match occasion {
+        Occasion::Ordinary => return sky,
+        Occasion::Hallows => prose.line("moon_hallows", &[]),
+        Occasion::Unlucky => prose.line("moon_unlucky", &[]),
+    };
+    prose.line("moon_and", &[("detail", &sky), ("name", &night)])
 }
 
 #[cfg(test)]

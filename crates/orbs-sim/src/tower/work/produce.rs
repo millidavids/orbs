@@ -58,7 +58,7 @@ fn draw(world: &mut World, choices: &[String]) -> String {
     let [only] = choices else {
         let mut rngs = world.resource_mut::<crate::rng::Rngs>();
         let rng = rngs.stream(crate::rng::RngStream::Archive);
-        let at = rand::Rng::random_range(rng, 0..choices.len());
+        let at = rand::RngExt::random_range(rng, 0..choices.len());
         return choices[at].clone();
     };
     only.clone()

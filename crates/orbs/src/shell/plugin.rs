@@ -9,7 +9,7 @@ use super::commanding::{cycle_register, export_trace, quit, quit_requested, subm
 use super::input::{SubmittedMessage, type_into_line};
 use super::reading::{scroll_back, scroll_forward, start_reading, stop_reading};
 use super::revealing::{drive_panes, drive_passing, drive_reveal, finish_reveal};
-use super::window::{cycle_mode, spawn_camera, track_window};
+use super::window::{cycle_mode, fit_projection, spawn_camera, track_window};
 /// Registration itself names `Tower` only through `resource_changed::<...>`,
 /// which is fully qualified; the tests below drive it directly.
 #[cfg(test)]
@@ -159,6 +159,16 @@ impl Plugin for ShellPlugin {
         app.init_resource::<super::setting::Skipping>();
         // ...and whether a new tower is installed first, for the same reason.
         app.init_resource::<super::Installs>();
+        // ...and whether the player asked for stillness, and how fast they read.
+        app.init_resource::<super::Stillness>();
+        app.init_resource::<super::revealing::Paced>();
+        // ...and whether a repeated echo is drawn.
+        app.init_resource::<super::echoing::Echoing>();
+        // ...and whether the glass clouds while the window is in the background.
+        app.init_resource::<super::Away>();
+        app.init_resource::<super::Absence>();
+        // ...and the name a new tower is raised with.
+        app.init_resource::<super::setting::Naming>();
 
         app.add_message::<SubmittedMessage>()
             .add_message::<super::menuing::SwapMessage>()
@@ -346,6 +356,18 @@ impl Plugin for ShellPlugin {
                 Update,
                 (
                     track_window.run_if(on_message::<WindowResized>),
+                    // Before the paint, so the frame a setting lands is the
+                    // frame it shows.
+                    super::echoing::keep_echo
+                        .before(ShellSystems::Drive)
+                        .run_if(resource_exists::<crate::sim::Tower>),
+                    // Every frame, for the ramp; it writes only on a change.
+                    super::away::notice.run_if(resource_exists::<super::Away>),
+                    // After the window is known, so a whole fit has a size to
+                    // divide. Only when the screen moved: a resize, a mode, a fit.
+                    fit_projection
+                        .after(track_window)
+                        .run_if(resource_changed::<Screen>),
                     // §9 requires the focus mode be overridable at any time,
                     // including mid-siege, so it is a key rather than a
                     // heuristic the player has to fight.
@@ -678,9 +700,10 @@ mod tests {
     fn a_modifier_stuck_with_no_focus_event_still_lets_you_type() {
         // Recovery *without* a `WindowFocused`, because the reported failure —
         // `Cmd+Shift+Ctrl+4` — leaves no focus event to hang a fix on. Every
-        // recovery path in Bevy 0.19 hangs off that event, and Bevy drops
-        // winit's `ModifiersChanged`, so a silently swallowed key-up leaves the
-        // field dead for the session.
+        // recovery path in Bevy 0.19 hung off that event, and Bevy dropped
+        // winit's `ModifiersChanged`, so a silently swallowed key-up left the
+        // field dead for the session. 0.20 reads that event; this holds the
+        // case where nothing reports the key-up at all.
         //
         // The evidence that breaks the deadlock is the keystroke itself: the OS
         // gave us text, so it is not treating this as a command.

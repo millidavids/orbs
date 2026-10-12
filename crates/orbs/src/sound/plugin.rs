@@ -7,13 +7,12 @@ use bevy::audio::AddAudioSource as _;
 use bevy::input::keyboard::KeyboardInput;
 use bevy::prelude::*;
 
-use super::bed::{self, Humming};
 use super::cues::{self, Heard, Voices};
 use super::keys;
 use super::ringing::{self, RingMessage, Saying};
 use super::synth::Cue;
 
-/// The orb's voice: synthesised cues, and the hum under them.
+/// The orb's voice: synthesised cues.
 pub struct SoundPlugin;
 
 impl Plugin for SoundPlugin {
@@ -21,9 +20,9 @@ impl Plugin for SoundPlugin {
         app.add_audio_source::<Cue>()
             .add_message::<RingMessage>()
             .init_resource::<Heard>()
-            .init_resource::<Humming>()
             .init_resource::<Saying>()
             .init_resource::<super::Levels>()
+            .init_resource::<super::Kinds>()
             .add_systems(Startup, cues::voice_the_orb)
             .add_systems(
                 Update,
@@ -46,16 +45,9 @@ impl Plugin for SoundPlugin {
                         .run_if(on_message::<KeyboardInput>)
                         .run_if(crate::boot::booted),
                     ringing::ring.run_if(resource_exists::<Voices>),
-                    // The bed is not a cue and does not go through `ring`: it
-                    // loops, and it is one entity for the life of a register.
-                    bed::keep_humming.run_if(resource_exists::<crate::sim::Tower>),
                 )
                     .chain(),
-            )
-            // Every way out, the way `keep_on_the_way_out` does it: `F10`, the
-            // verb and the window's close button all end in an `AppExit`, and
-            // a hum still playing while the window tears down is a click.
-            .add_systems(Last, bed::quieten.run_if(on_message::<AppExit>));
+            );
     }
 }
 
@@ -180,8 +172,33 @@ mod tests {
         // `AudioPlayer<Cue>`. The tests above stop at the message, and a message
         // nobody turns into a sound is §15's API with no callers.
         //
-        // No sound card is needed: `AudioPlugin` warns and goes inert without
-        // one, which is what CI is, and the entity is spawned either way.
+        let mut app = sounding();
+        press(&mut app, LogicalKey::Character("a".into()));
+        app.update();
+        app.update();
+        assert!(players(&mut app) > 0, "a keystroke reached no audio player");
+    }
+
+    #[test]
+    fn a_kind_switched_off_plays_nothing_and_the_rest_still_play() {
+        let mut app = sounding();
+        app.world_mut()
+            .resource_mut::<super::super::Kinds>()
+            .set(super::super::Kind::Keys, false);
+        press(&mut app, LogicalKey::Character("a".into()));
+        press(&mut app, LogicalKey::Enter);
+        app.update();
+        assert_eq!(players(&mut app), 0, "typing played with keys off");
+
+        app.world_mut().write_message(RingMessage(Voice::Done));
+        app.update();
+        assert_eq!(players(&mut app), 1, "keys off silenced a chime");
+    }
+
+    /// The real plugin, with no window. No sound card is needed: `AudioPlugin`
+    /// warns and goes inert without one, which is what CI is, and the entity is
+    /// spawned either way.
+    fn sounding() -> App {
         let mut app = App::new();
         app.add_plugins((
             MinimalPlugins,
@@ -194,15 +211,15 @@ mod tests {
             SoundPlugin,
         ));
         app.update();
-        press(&mut app, LogicalKey::Character("a".into()));
-        app.update();
-        app.update();
+        app
+    }
 
-        let mut players = app.world_mut().query::<&AudioPlayer<Cue>>();
-        assert!(
-            players.iter(app.world()).next().is_some(),
-            "a keystroke reached no audio player",
-        );
+    /// Cues spawned and not yet finished.
+    fn players(app: &mut App) -> usize {
+        app.world_mut()
+            .query::<&AudioPlayer<Cue>>()
+            .iter(app.world())
+            .count()
     }
 
     #[test]
@@ -238,22 +255,6 @@ mod tests {
             rung(&app).len() <= super::super::cues::burst(),
             "a tower arriving played {} cues at once",
             rung(&app).len(),
-        );
-    }
-
-    #[test]
-    fn the_bed_stops_when_the_orb_does() {
-        // A looping source that outlives the window is a click on the way out,
-        // and on some backends a warning per frame after it. `quieten` is on
-        // `AppExit` for `keep_on_the_way_out`'s reason: three of the four ways
-        // out never touch the `Quitting` flag.
-        let mut app = App::new();
-        app.add_systems(Update, bed::quieten);
-        let entity = app.world_mut().spawn(super::bed::Bed).id();
-        app.update();
-        assert!(
-            app.world().get_entity(entity).is_err(),
-            "the hum survived the orb being put down",
         );
     }
 }

@@ -99,7 +99,7 @@ pub(in crate::execute) fn imbue(world: &mut World, intent: &Intent) {
     // system can join the schedule without shifting a replay.
     let drawn = {
         let mut rngs = world.resource_mut::<crate::rng::Rngs>();
-        let bits: u64 = rand::Rng::random(rngs.stream(crate::rng::RngStream::Forge));
+        let bits: u64 = rand::RngExt::random(rngs.stream(crate::rng::RngStream::Forge));
         Lattice::from_bits(bits)
     };
     let under_siege = besieged(world);

@@ -1,11 +1,5 @@
 //! How loud the orb is, and where that is remembered.
 //!
-//! Two levels, not one, because the reasons for turning them down differ and a
-//! single volume forces a choice nobody should have to make: the hum is
-//! atmosphere some people find tiring within a minute, where the cues are §14's
-//! ambient channel and the part a screen-reader player is using. *Hum off, voice
-//! full* has to be reachable.
-//!
 //! A word, not a number, because the menu is typed and has no slider — a volume
 //! is one of [`orbs_shell::settings::LEVELS`]. `values.rs` carries that
 //! argument; what belongs here is that the mapping from word to gain lives in
@@ -17,23 +11,19 @@ use orbs_shell::settings::{LEVELS, loudness};
 
 /// The key the cue volume is kept under.
 pub(crate) const VOICE: &str = "voice";
-/// The key the bed volume is kept under.
-pub(crate) const HUM: &str = "hum";
 
 /// The level a setting arrives at when nobody has chosen.
 const DEFAULT: &str = "full";
 
 /// How loud the orb is.
 ///
-/// A resource, read by the settings page like everything else: `setting.rs`'s
+/// A resource, read by the settings page like everything else: `setting`'s
 /// rule is that a row shows what is in effect, asked of the thing that holds it
 /// and never of the file. This is the thing that holds it.
 #[derive(Resource, Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Levels {
     /// The cues.
     pub(crate) voice: &'static str,
-    /// The bed.
-    pub(crate) hum: &'static str,
 }
 
 impl Levels {
@@ -54,26 +44,13 @@ impl Levels {
         loudness(self.voice)
     }
 
-    /// How loud the bed should be.
-    pub(crate) fn hum_gain(&self) -> f32 {
-        loudness(self.hum)
-    }
-
-    /// Set one of the two, if `key` names one.
-    ///
-    /// Returns whether anything changed, which is what tells the bed to start
-    /// again at the new volume.
-    pub(crate) fn set(&mut self, key: &str, value: &str) -> bool {
+    /// Set the voice to `value`, if it is a level, and say whether it moved.
+    pub(crate) fn set(&mut self, value: &str) -> bool {
         let Some(level) = LEVELS.into_iter().find(|level| *level == value) else {
             return false;
         };
-        let slot = match key {
-            VOICE => &mut self.voice,
-            HUM => &mut self.hum,
-            _ => return false,
-        };
-        let moved = *slot != level;
-        *slot = level;
+        let moved = self.voice != level;
+        self.voice = level;
         moved
     }
 }
@@ -82,7 +59,6 @@ impl Default for Levels {
     fn default() -> Self {
         Self {
             voice: Self::chosen(VOICE),
-            hum: Self::chosen(HUM),
         }
     }
 }
@@ -96,11 +72,8 @@ mod tests {
         // A settings file written by a later build. The failure this prevents is
         // the worst kind: a gain of nought, a game with no sound, and a settings
         // page showing a word that explains it to nobody.
-        let mut levels = Levels {
-            voice: DEFAULT,
-            hum: DEFAULT,
-        };
-        assert!(!levels.set(VOICE, "cacophonous"));
+        let mut levels = Levels { voice: DEFAULT };
+        assert!(!levels.set("cacophonous"));
         assert_eq!(levels.voice, DEFAULT);
         assert!(levels.voice_gain() > 0.0);
     }
@@ -110,35 +83,8 @@ mod tests {
         // The two ends have to be exact. A `full` at 0.98 is a rounding error
         // nobody can hear; an `off` at 0.01 is a player who asked for silence
         // and did not get it, which is the one they will notice.
-        let silent = Levels {
-            voice: "off",
-            hum: "off",
-        };
-        assert_eq!(silent.voice_gain(), 0.0);
-        assert_eq!(silent.hum_gain(), 0.0);
-        let loud = Levels {
-            voice: "full",
-            hum: "full",
-        };
-        assert_eq!(loud.voice_gain(), 1.0);
-    }
-
-    #[test]
-    fn the_two_levels_move_independently() {
-        // *Hum off, voice full* is the state this module is split for: the bed
-        // is atmosphere and the cues are §14's ambient channel, and turning one
-        // down must never reach the other.
-        let mut levels = Levels {
-            voice: DEFAULT,
-            hum: DEFAULT,
-        };
-        assert!(levels.set(HUM, "off"));
-        assert_eq!(levels.hum, "off");
-        assert_eq!(levels.voice, DEFAULT, "silencing the hum silenced the cues");
-        assert!(
-            !levels.set(HUM, "off"),
-            "an unchanged level claimed to move"
-        );
+        assert_eq!(Levels { voice: "off" }.voice_gain(), 0.0);
+        assert_eq!(Levels { voice: "full" }.voice_gain(), 1.0);
     }
 
     #[test]

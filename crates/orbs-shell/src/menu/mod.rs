@@ -24,6 +24,7 @@
 mod pages;
 mod paint;
 mod playing;
+mod secrets;
 mod setting;
 mod stance;
 mod state;

@@ -68,18 +68,6 @@ impl Tone {
 pub(crate) struct Cue {
     /// The partials, summed.
     pub(crate) tones: Vec<Tone>,
-    /// Whether this is a drone rather than a gesture.
-    ///
-    /// A cue is a gesture that rises out of silence and is gone, so the raised
-    /// cosine stops both edges clicking. A bed is a *drone* — the sound of a
-    /// machine being on, and being on has no shape.
-    ///
-    /// Shipped without this, the bed ran the cue envelope across its whole
-    /// half-second lap: a 2 Hz tremolo at full depth for the length of the
-    /// session, and no test could hear it. A drone needs no envelope because
-    /// `LAP`'s whole-cycle rule already makes the waveform continuous across
-    /// the loop point.
-    pub(crate) sustained: bool,
 }
 
 impl Cue {
@@ -87,18 +75,6 @@ impl Cue {
     pub(crate) fn of(tones: &[Tone]) -> Self {
         Self {
             tones: tones.to_vec(),
-            sustained: false,
-        }
-    }
-
-    /// A drone of these tones: steady, and meant to be looped.
-    ///
-    /// The caller owes the whole-cycle rule — see [`sustained`](Self::sustained)
-    /// and `bed::LAP`.
-    pub(crate) fn drone(tones: &[Tone]) -> Self {
-        Self {
-            tones: tones.to_vec(),
-            sustained: true,
         }
     }
 
@@ -125,13 +101,8 @@ impl Cue {
                 continue;
             }
             // A raised cosine: nought at both edges, one in the middle. No
-            // click, and nothing to tune. A drone has no envelope at all — see
-            // `sustained`, and the tremolo that shipped without it.
-            let shape = if self.sustained {
-                1.0
-            } else {
-                (1.0 - (core::f32::consts::TAU * into / tone.secs).cos()) * 0.5
-            };
+            // click, and nothing to tune.
+            let shape = (1.0 - (core::f32::consts::TAU * into / tone.secs).cos()) * 0.5;
             sample += (core::f32::consts::TAU * tone.hz * now).sin() * shape * tone.gain;
         }
         sample

@@ -30,16 +30,53 @@ impl Menu {
     /// `crt` cycles it, as `F3` and `F8` do; `crt off` goes straight there
     /// without pressing through the others, which is how a See-it line names a
     /// screen.
-    pub(super) fn set(&mut self, page: Category, typed: &str) -> Option<Outcome> {
+    ///
+    /// `said` is the line as typed, case and all, for a row that takes free
+    /// text: a name is the player's, not a command, and `Morgana` is not
+    /// `morgana`.
+    pub(super) fn set(&mut self, page: Category, typed: &str, said: &str) -> Option<Outcome> {
         let (word, rest) = typed.split_once(' ').unwrap_or((typed, ""));
-        let Some(row) = self
-            .rows(page)
-            .find(|row| row.word.starts_with(word))
-            .cloned()
-        else {
+        // A whole word wins, then a prefix only one row has — `Row::value_named`'s
+        // rule. Taking the first match made a page's order decide which of two
+        // rows a letter meant.
+        let chosen = {
+            let exact = self.rows(page).find(|row| row.word == word);
+            let mut prefixed = self.rows(page).filter(|row| row.word.starts_with(word));
+            let unique = match (prefixed.next(), prefixed.next()) {
+                (Some(only), None) => Some(only),
+                _ => None,
+            };
+            exact.or(unique).cloned()
+        };
+        let Some(row) = chosen else {
             self.complaint = Some(Complaint::Unknown(typed.to_owned()));
             return None;
         };
+        // A row with no list takes what it is given — the name. The word alone
+        // steps it back to its default, as a word alone steps every row.
+        if row.values.is_empty() {
+            let given = said.split_once(' ').map_or("", |(_, rest)| rest).trim();
+            let value = if given.is_empty() {
+                String::new()
+            } else {
+                match crate::settings::checked_name(given) {
+                    Ok(name) => name,
+                    Err(fault) => {
+                        self.complaint = Some(Complaint::Unnamed(fault));
+                        return None;
+                    }
+                }
+            };
+            return Some(self.settled(page, &row, value));
+        }
+        // A secret, whole, before any prefix: it is never offered, so a prefix
+        // could only ever be a coincidence. Silent in a tense register, as the
+        // menu's words are.
+        if let Some(secret) = row.secret(rest.trim()).filter(|_| !self.tense).cloned() {
+            let outcome = self.settled(page, &row, secret.value);
+            self.complaint = secret.remark.map(Complaint::Remark);
+            return Some(outcome);
+        }
         let chosen = if rest.trim().is_empty() {
             row.next().map(ToOwned::to_owned)
         } else {
@@ -52,7 +89,12 @@ impl Menu {
             self.complaint = Some(Complaint::Unknown(typed.to_owned()));
             return None;
         };
+        Some(self.settled(page, &row, value))
+    }
 
+    /// Write `value` down for `row`, show it, and say what the frontend should
+    /// honour.
+    fn settled(&mut self, page: Category, row: &crate::settings::Row, value: String) -> Outcome {
         // Best-effort: a session with nowhere to keep a setting still gets to
         // change it for as long as it lasts, rather than hitting §15's dead end
         // over a preference.
@@ -74,12 +116,12 @@ impl Menu {
             && let Some(driver) = Driver::named(&value)
         {
             self.driver = driver;
-            return Some(Outcome::Drive(driver));
+            return Outcome::Drive(driver);
         }
-        Some(Outcome::Set {
-            setting: row.key,
+        Outcome::Set {
+            setting: row.key.clone(),
             value,
-        })
+        }
     }
 }
 
@@ -213,6 +255,103 @@ mod tests {
             menu.enter(),
             Some(Outcome::Set {
                 setting: "crt".into(),
+                value: "off".into(),
+            }),
+        );
+    }
+
+    /// A habits page with the name on it, the free-text row.
+    fn naming() -> Menu {
+        Menu {
+            page: Page::Setting(Category::Habits),
+            rows: vec![Row::new(Category::Habits, "name", "wizard", &[])],
+            ..Menu::default()
+        }
+    }
+
+    #[test]
+    fn a_name_keeps_its_case_and_the_word_alone_puts_it_back() {
+        let mut menu = naming();
+        menu.type_text("name Morgana");
+        assert_eq!(
+            menu.enter(),
+            Some(Outcome::Set {
+                setting: "name".into(),
+                value: "Morgana".into(),
+            }),
+            "the menu lowered a name, or refused it",
+        );
+
+        menu.type_text("name");
+        assert_eq!(
+            menu.enter(),
+            Some(Outcome::Set {
+                setting: "name".into(),
+                value: String::new(),
+            }),
+            "the word alone did not step the name back to its default",
+        );
+    }
+
+    #[test]
+    fn a_name_the_prompt_cannot_carry_is_refused_and_said_why() {
+        for (typed, fault) in [
+            ("name Morgan le Fay", crate::settings::NameFault::Spaced),
+            ("name Morgana✨", crate::settings::NameFault::Undrawable(8)),
+        ] {
+            let mut menu = naming();
+            menu.type_text(typed);
+            assert_eq!(menu.enter(), None, "`{typed}` was taken");
+            assert_eq!(menu.complaint(), Some(&Complaint::Unnamed(fault)));
+        }
+    }
+
+    #[test]
+    fn a_rows_secret_is_silent_in_the_eldritch_register() {
+        let menu = || Menu {
+            page: Page::Setting(Category::Sound),
+            rows: vec![
+                Row::new(Category::Sound, "voice", "full", &["off", "full"]).secretly(
+                    "eleven",
+                    "full",
+                    Some("menu_secret_eleven"),
+                ),
+            ],
+            ..Menu::default()
+        };
+        let mut calm = menu();
+        calm.type_text("voice eleven");
+        assert!(calm.enter().is_some(), "the secret was not answered");
+
+        // §3: comedy never punctures a tense moment.
+        let mut eldritch = menu();
+        eldritch.show_register(orbs_render::Presentation::Eldritch);
+        eldritch.type_text("voice eleven");
+        assert_eq!(eldritch.enter(), None, "the secret set something");
+        assert!(matches!(eldritch.complaint(), Some(Complaint::Unknown(_))));
+    }
+
+    #[test]
+    fn a_letter_two_rows_share_names_neither() {
+        // `g` was `glow` because `glow` came first on the page, and `grille`
+        // could not be reached by its letter at all.
+        let mut menu = Menu {
+            page: Page::Setting(Category::Picture),
+            rows: vec![
+                Row::new(Category::Picture, "glow", "full", &["off", "full"]),
+                Row::new(Category::Picture, "grille", "full", &["off", "full"]),
+            ],
+            ..Menu::default()
+        };
+        menu.type_text("g off");
+        assert_eq!(menu.enter(), None, "an ambiguous letter set something");
+        assert!(matches!(menu.complaint(), Some(Complaint::Unknown(_))));
+
+        menu.type_text("gr off");
+        assert_eq!(
+            menu.enter(),
+            Some(Outcome::Set {
+                setting: "grille".into(),
                 value: "off".into(),
             }),
         );

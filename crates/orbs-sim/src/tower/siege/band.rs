@@ -153,7 +153,7 @@ impl Intent {
     /// `pub` because a caller outside `siege` drawing an intent would advance
     /// the `Siege` stream and desynchronise every replay.
     pub(super) fn drawn(rngs: &mut Rngs) -> Self {
-        use rand::Rng;
+        use rand::RngExt;
         let roll = rngs
             .stream(RngStream::Siege)
             .random_range(0..Self::ALL.len());

@@ -204,11 +204,57 @@ pub(crate) const MONOCHROME: Phosphor = Phosphor {
     background: rgb(0.020, 0.020, 0.025),
 };
 
+/// A radar tube: blue-white, with a long afterglow nothing here draws.
+///
+/// Hidden — never offered, cycled or reached by a prefix; `theme p7` finds it
+/// (§3: discovered, never pushed). Held to every floor the offered themes are:
+/// the tests walk [`EVERY`]. `cost` is the warm one here, because the base is
+/// already the blue `cost` is elsewhere.
+pub(crate) const P7: Phosphor = Phosphor {
+    name: "p7",
+    base: [
+        rgb(0.30, 0.38, 0.52),
+        rgb(0.60, 0.72, 0.88),
+        rgb(0.88, 0.95, 1.00),
+    ],
+    danger: rgb(0.98, 0.30, 0.26),
+    cost: rgb(0.98, 0.76, 0.32),
+    // Paler than the other themes' greens, and solved, not picked: at
+    // `(0.62, 1.00, 0.50)` it sat 1.21:1 from `cost` under deuteranopia.
+    success: rgb(0.75, 1.00, 0.75),
+    syntax: Some(SPELL),
+    background: rgb(0.015, 0.022, 0.045),
+};
+
 /// Every theme, in the order the settings screen offers them.
 ///
 /// The default comes first, so `F2` starts by showing what the alternatives are
 /// alternatives *to*.
 pub(crate) const ALL: [Phosphor; 4] = [AMBER, GREEN, MUTED_VIOLET, MONOCHROME];
+
+/// Every theme there is, offered or not. What a name is looked up in, and what
+/// the tests hold to their floors.
+pub(crate) const EVERY: [Phosphor; 5] = [AMBER, GREEN, MUTED_VIOLET, MONOCHROME, P7];
+
+/// Phosphor part numbers, as the orb knows them: `theme p3` is amber.
+///
+/// Real JEDEC designations, so no brand. P7 is its own theme; the rest name
+/// the offered ones.
+pub(crate) const NUMBERED: [(&str, &str); 5] = [
+    ("p1", "green"),
+    ("p3", "amber"),
+    ("p4", "monochrome"),
+    ("p7", "p7"),
+    ("p31", "green"),
+];
+
+/// The theme called `name`, offered or not.
+///
+/// The one lookup the settings row, `Theme::default` and `F2` share, so a
+/// hidden theme cannot be set by one and lost by another on relaunch.
+pub(crate) fn named(name: &str) -> Option<Phosphor> {
+    EVERY.into_iter().find(|phosphor| phosphor.name == name)
+}
 
 impl Phosphor {
     /// The colour a cell of this style is drawn in, with no material tint.
@@ -307,33 +353,32 @@ const fn weight(intensity: Intensity) -> usize {
     }
 }
 
+// WCAG's measures, which live with `contrast high` now that it runs on them.
+// Here for the tests below and `ember`'s, which hold their ramps to one formula.
 #[cfg(test)]
-/// Relative luminance, per WCAG.
-///
-/// The cheap proxy for §14's colourblind-safety requirement: two accents that
-/// differ only in hue are the same colour to a substantial minority of players.
-/// `pub(crate)` so [`ember`](super::ember) holds its ramps to the same bar —
-/// two copies of a luminance formula is how one quietly stops matching.
-pub(crate) fn luminance(colour: Srgba) -> f32 {
-    fn channel(value: f32) -> f32 {
-        if value <= 0.039_28 {
-            value / 12.92
-        } else {
-            ((value + 0.055) / 1.055).powf(2.4)
+pub(crate) use super::legibility::{contrast, luminance};
+
+impl Phosphor {
+    /// This theme under `contrast high`: ordinary and spell text lifted to
+    /// 7:1, the ramp's steps kept, the accents untouched. See
+    /// [`legibility::raise`](super::legibility::raise).
+    pub(crate) fn raised(self) -> Self {
+        let (base, syntax) = super::legibility::raise(self.base, self.syntax, self.background);
+        Self {
+            base,
+            syntax,
+            ..self
         }
     }
-    0.2126 * channel(colour.red) + 0.7152 * channel(colour.green) + 0.0722 * channel(colour.blue)
-}
 
-#[cfg(test)]
-/// WCAG contrast ratio, `1.0..=21.0`. `pub(crate)` for the same reason
-/// [`luminance`] is.
-pub(crate) fn contrast(a: Srgba, b: Srgba) -> f32 {
-    let (high, low) = {
-        let (x, y) = (luminance(a), luminance(b));
-        if x > y { (x, y) } else { (y, x) }
-    };
-    (high + 0.05) / (low + 0.05)
+    /// The theme as drawn, with or without the lift.
+    pub(crate) fn drawn(self, contrast: super::legibility::Contrast) -> Self {
+        if orbs_shell::settings::Pair::raised(contrast) {
+            self.raised()
+        } else {
+            self
+        }
+    }
 }
 
 #[cfg(test)]
@@ -395,7 +440,7 @@ mod tests {
     /// drawn in. 4.5:1 is WCAG AA for normal text.
     #[test]
     fn body_text_is_legible_against_its_background() {
-        for theme in ALL {
+        for theme in EVERY {
             let ratio = contrast(theme.base[weight(Intensity::Normal)], theme.background);
             assert!(
                 ratio >= 4.5,
@@ -409,7 +454,7 @@ mod tests {
     /// with it — invisible borders are not a design, they are a bug.
     #[test]
     fn even_dim_text_stays_visible() {
-        for theme in ALL {
+        for theme in EVERY {
             let ratio = contrast(theme.base[weight(Intensity::Dim)], theme.background);
             assert!(
                 ratio >= 3.0,
@@ -450,7 +495,7 @@ mod tests {
     fn intensity_is_monotonic() {
         // The whole point of the base ramp: dim recedes, bright advances. A
         // theme where bright is darker than normal would invert every emphasis.
-        for theme in ALL {
+        for theme in EVERY {
             let [dim, normal, bright] = theme.base;
             assert!(
                 luminance(dim) < luminance(normal) && luminance(normal) < luminance(bright),
@@ -466,7 +511,7 @@ mod tests {
     /// what makes them survive greyscale and most colour vision deficiencies.
     #[test]
     fn the_accent_triad_is_separable_without_hue() {
-        for theme in ALL {
+        for theme in EVERY {
             // The proxy: all the hue gone at once. A real deficiency takes one
             // axis and leaves the others — see
             // `the_accent_triad_survives_every_deficiency`, which found the gap.
@@ -488,7 +533,7 @@ mod tests {
     fn the_accent_triad_survives_every_deficiency() {
         use super::super::deficiency::{Deficiency, simulated};
 
-        for theme in ALL {
+        for theme in EVERY {
             for deficiency in Deficiency::ALL {
                 triad_separates(theme, deficiency.name(), |colour| {
                     simulated(deficiency, colour)
@@ -527,7 +572,7 @@ mod tests {
 
     #[test]
     fn every_accent_is_legible_against_its_own_background() {
-        for theme in ALL {
+        for theme in EVERY {
             for (name, accent) in [
                 ("danger", theme.danger),
                 ("cost", theme.cost),
@@ -546,7 +591,7 @@ mod tests {
     /// An accent that reads as ordinary text is not an accent.
     #[test]
     fn accents_are_distinguishable_from_body_text() {
-        for theme in ALL {
+        for theme in EVERY {
             let body = theme.base[weight(Intensity::Normal)];
             for (name, accent) in [
                 ("danger", theme.danger),
@@ -584,7 +629,7 @@ mod tests {
     fn the_background_is_never_true_black() {
         // An empty screen that is exactly #000000 is indistinguishable from a
         // crashed one.
-        for theme in ALL {
+        for theme in EVERY {
             assert!(luminance(theme.background) > 0.0, "{}", theme.name);
         }
     }

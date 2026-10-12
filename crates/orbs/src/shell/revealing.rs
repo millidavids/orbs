@@ -9,27 +9,61 @@ use bevy::prelude::*;
 
 use super::{PaneTransition, Reveal};
 use crate::sim::Tower;
-use orbs_shell::{Panel, Passing, Showing};
+use orbs_shell::{Pace, Panel, Passing, Showing};
+
+/// The settings-file key, which is also the row's word.
+pub(crate) const PACE: &str = "pace";
+
+/// How fast text types itself — `settings` → `habits` → `pace`.
+///
+/// Its own resource rather than a field on [`Reveal`], which a swap resets: a
+/// new tower is no reason to forget how fast the player reads.
+#[derive(Resource, Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Paced(pub(crate) Pace);
+
+impl Default for Paced {
+    fn default() -> Self {
+        Self(
+            orbs_shell::settings::get(PACE)
+                .and_then(|word| Pace::named(&word))
+                .unwrap_or_default(),
+        )
+    }
+}
 
 /// Let the newest output arrive, a character at a time.
 ///
 /// Reads the scrollback rather than listening for a message: output is produced
 /// by the sim on a tick, and the frontend is a *caller* of the sim rather than
 /// something it can notify (rule 3). The record count growing is the signal.
-pub(super) fn drive_reveal(tower: Res<Tower>, time: Res<Time>, mut reveal: ResMut<Reveal>) {
+pub(super) fn drive_reveal(
+    tower: Res<Tower>,
+    time: Res<Time>,
+    tubes: Query<&crate::crt::CrtSettings>,
+    stillness: Option<Res<super::Stillness>>,
+    paced: Option<Res<Paced>>,
+    mut reveal: ResMut<Reveal>,
+) {
     let records = tower.sim().scrollback().records();
     let cells = tail_cells(records, reveal.settled_len());
     reveal.observe(records.drawn_len(), cells);
-    reveal.advance(time.delta_secs());
+    // Text typing itself is motion: when nothing may move it lands whole.
+    if super::moving(tubes.iter(), stillness.as_deref()) == Some(false) {
+        reveal.finish();
+        return;
+    }
+    let pace = paced.map_or_else(Pace::default, |paced| paced.0);
+    reveal.advance_at(time.delta_secs(), pace);
 }
 
-/// Characters in the records added since `from`.
+/// Characters in the drawn records added since `from`.
 ///
-/// Measured through `to_line`, which is what the view draws, so the budget and
-/// the drawing agree about what a character is.
+/// `from` counts drawn records, as `observe` does, so skipping the whole stream
+/// would land past the burst whenever an echo or a spell's record is hidden.
+/// Measured through `to_line`, which is what the view draws.
 fn tail_cells(records: &orbs_render::Records, from: usize) -> u16 {
     let counted: usize = records
-        .iter()
+        .drawn()
         .skip(from)
         .map(|record| record.to_line().chars().count())
         .sum();
@@ -50,8 +84,20 @@ pub(super) fn finish_reveal(mut reveal: ResMut<Reveal>) {
 /// The pane count was derived inside `paint` every frame, which is why a pane
 /// used to appear between one frame and the next. It is decided here instead so
 /// that a *change* in it is something with a beginning.
-pub(super) fn drive_panes(time: Res<Time>, mut panes: ResMut<PaneTransition>) {
+pub(super) fn drive_panes(
+    time: Res<Time>,
+    tubes: Query<&crate::crt::CrtSettings>,
+    stillness: Option<Res<super::Stillness>>,
+    mut panes: ResMut<PaneTransition>,
+) {
     panes.retarget(PANES);
+    // When nothing may move a change of count cuts, as a crossing does.
+    if super::moving(tubes.iter(), stillness.as_deref()) == Some(false) {
+        if !panes.is_settled() {
+            *panes = PaneTransition::settled(PANES);
+        }
+        return;
+    }
     panes.advance(time.delta_secs());
 }
 
@@ -104,3 +150,73 @@ pub(super) fn drive_passing(
 /// four, and the siege multiplex is what raises it — which is why
 /// `PaneTransition` survives with nothing left to animate here.
 const PANES: u8 = 1;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::crt::CrtSettings;
+    use crate::shell::Stillness;
+
+    /// Whether a fresh tower's output has all arrived after one frame.
+    fn text_lands_whole(still: bool) -> bool {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .insert_resource(Tower::new(1))
+            .init_resource::<Reveal>()
+            .insert_resource(Stillness::asked(still))
+            .add_systems(Update, drive_reveal);
+        app.world_mut().spawn(CrtSettings::DEFAULT);
+        app.update();
+        app.world().resource::<Reveal>().is_settled()
+    }
+
+    /// Whether a change of pane count has arrived after one frame.
+    fn panes_cut(still: bool) -> bool {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .insert_resource(PaneTransition::settled(PANES + 1))
+            .insert_resource(Stillness::asked(still))
+            .add_systems(Update, drive_panes);
+        app.world_mut().spawn(CrtSettings::DEFAULT);
+        app.update();
+        app.world().resource::<PaneTransition>().is_settled()
+    }
+
+    #[test]
+    fn a_burst_counts_only_what_is_drawn_after_it_began() {
+        use orbs_render::{FieldName, Outcome, RecordKind, Records};
+        let mut records = Records::new();
+        records.set_terse_echo(true);
+        for line in ["brew", "kindle", "look"] {
+            records
+                .push(RecordKind::Input)
+                .text(FieldName::Message, line)
+                .finish();
+            records
+                .push(RecordKind::Echo)
+                .outcome(Outcome::Resolved)
+                .text(FieldName::Message, line)
+                .finish();
+        }
+        let from = records.drawn_len();
+        records
+            .push(RecordKind::Entry)
+            .text(FieldName::Name, "athanor")
+            .finish();
+        let new = records.iter().last().expect("pushed").to_line();
+        // Three hidden echoes before the burst must not be counted into it.
+        assert_eq!(usize::from(tail_cells(&records, from)), new.chars().count());
+    }
+
+    #[test]
+    fn a_still_player_gets_text_whole_and_panes_by_a_cut() {
+        // Both halves, so neither can pass by having nothing to animate.
+        assert!(
+            text_lands_whole(true),
+            "text typed itself for a still player"
+        );
+        assert!(!text_lands_whole(false), "nothing was typing to begin with");
+        assert!(panes_cut(true), "the panes moved for a still player");
+        assert!(!panes_cut(false), "the panes had nowhere to move");
+    }
+}

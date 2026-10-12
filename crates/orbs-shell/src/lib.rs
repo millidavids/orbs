@@ -59,6 +59,7 @@ mod seed;
 pub mod settings;
 mod sheet;
 mod shortcuts;
+pub mod sky;
 mod stacks;
 mod stage;
 mod stations;
@@ -73,7 +74,9 @@ pub use dump::{
     PASSAGE as PASSAGE_VAR, requested as dump_requested, run as dump, run_script as dump_script,
 };
 pub use editor::{Editor, Mode as EditorMode, Outcome as EditorOutcome};
-pub use environment::{LENGTH, RUSTC, SEALED, augury, fresh, scrivener, wizard};
+pub use environment::{
+    LENGTH, RUSTC, SEALED, augury, fresh, new_wizard, scrivener, wizard, wizard_named,
+};
 pub use focus::{Focus, Open};
 pub use glance::Panel;
 pub use guide::{Entry, Guide, guide};
@@ -94,13 +97,13 @@ pub use prompt::{View, paint, paint_booting, paint_too_small};
 pub use prose::{
     CONTENT_DIR, DIRECTORY as CONTENT_DIRECTORY, MANUAL, PROSE, load, read, read_manual,
 };
-pub use reveal::Reveal;
+pub use reveal::{Pace, Reveal};
 pub use save::{
     Held, OFF as SAVE_OFF, Opened, SAVE_PATH, SAVE_VAR, SLOTS as SAVE_SLOTS, Slot, abandon,
     app_data, away_for, free_slot, migrate as migrate_saves, path as save_path, read as read_save,
     read_from as read_save_from, saves, slot_path, write as write_save, write_to as write_save_to,
 };
-pub use screen::Screen;
+pub use screen::{Fit, Screen};
 pub use scrollback::{Scroll, page_step};
 pub use seed::{SEED, SEEDS, fresh_seed, new_game_seed, seed};
 pub use shortcuts::{TRACE_PATH, cycle_register, export_trace};

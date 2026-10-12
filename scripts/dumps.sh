@@ -154,7 +154,7 @@ run menu_crt_off ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="menu" ORBS_MENU='settin
 # `[value]` straight after the row's text, so a row one cell short puts one
 # bracket out of line down the whole page — it happened.
 # `every_settings_row_is_padded_to_the_same_width` measures it; this shows it.
-run menu_volumes ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="menu" ORBS_MENU='settings\nsound\nhum\nvoice quiet'
+run menu_volumes ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="menu" ORBS_MENU='settings\nsound\nkeys\nvoice quiet'
 # ...and the choice made, which steps back to the page it was made on. A dump
 # keeps nothing, so it cannot show the choice being remembered.
 #
@@ -165,6 +165,16 @@ run menu_plain   ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="menu" ORBS_MENU='settin
 # there to choose from. Kept as its own capture rather than as a side effect of
 # a stale one.
 run menu_unsettable ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="menu" ORBS_MENU='settings\nzorb'
+# The pages added for *The orb made yours*, and the secrets (§3: discovered,
+# never pushed). A dump reads no clock, so `moon` sees no sky unless
+# `ORBS_DATE` names a day — the 2025-03-14 lunar eclipse is a full moon.
+run menu_picture ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="menu" ORBS_MENU='settings\npicture'
+run menu_xyzzy   ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="menu" ORBS_MENU="xyzzy"
+run menu_moon    ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="menu" ORBS_MENU="moon"
+run menu_moon_full ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DATE=2025-03-14 ORBS_DUMP="menu" ORBS_MENU="moon"
+run menu_p7      ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="menu" ORBS_MENU='settings\ntube\ntheme p7'
+run menu_eleven  ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="menu" ORBS_MENU='settings\nsound\nvoice eleven'
+run menu_name_spaced ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="menu" ORBS_MENU='settings\nhabits\nname Morgan le Fay'
 # ...and the question `quit` asks, which is the whole of what it now does before
 # the second one.
 run quit_asks    ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="quit"

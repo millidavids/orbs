@@ -945,7 +945,7 @@ fn every_resource_the_world_holds_is_one_the_save_knows_about() {
 
     let sim = a_busy_tower(3);
     let mut strangers: Vec<String> = Vec::new();
-    for (info, _) in sim.world().iter_resources() {
+    for (_, info, _) in sim.world().iter_resources() {
         let name = info.name().to_string();
         // Bevy's own bookkeeping is not ours to carry.
         if !name.starts_with("orbs_sim::") {

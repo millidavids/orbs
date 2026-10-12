@@ -7,7 +7,7 @@
 //!
 //! So the engine line cannot live with the painter. The painter is shared —
 //! `orbs-tui` draws the same card — and a terminal build does not link Bevy at
-//! all. A shared painter hard-coding `bevy 0.19.0` would put a component on the
+//! all. A shared painter hard-coding `bevy 0.20.0` would put a component on the
 //! inventory that is not in the machine.
 //!
 //! This is [`crate::wizard`]'s shape: a fact only the frontend can know, handed
@@ -16,15 +16,15 @@
 /// The exact Bevy pin, held to `Cargo.toml` by the test below.
 ///
 /// A const rather than a build script because the version is *pinned* —
-/// CLAUDE.md commits to `=0.19.0` and upgrading it is a deliberate one-window
-/// act in Phase 11c, so a number that can only change when someone edits the
+/// CLAUDE.md commits to an exact pin and upgrading it is a deliberate
+/// one-window act, so a number that can only change when someone edits the
 /// manifest is exactly as live as it needs to be.
 /// A macro so the number is written once, because `concat!` takes literals and
 /// not consts — and two copies of a version is the drift this file exists to
 /// prevent.
 macro_rules! bevy_version {
     () => {
-        "0.19.0"
+        "0.20.0"
     };
 }
 
@@ -60,7 +60,7 @@ mod tests {
         //
         // Every declaration, not merely one. `crates/orbs/Cargo.toml` declares
         // bevy twice — plainly, and under `cfg(target_os = "linux")` — and a
-        // `contains` passes if either still says `0.19.0`. The half most likely
+        // `contains` passes if either still says the old pin. The half most likely
         // to be left behind is the one that decides what a Linux build links.
         let manifest = include_str!("../../Cargo.toml");
         let declared = manifest

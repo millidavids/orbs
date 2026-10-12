@@ -63,6 +63,9 @@ pub struct Records {
     /// it ran emitted, and those are the *same* sites a player's typing reaches,
     /// so stamping them all would mean every future one had to remember.
     attributed: Option<String>,
+    /// Whether [`drawn`](Records::drawn) leaves out an echo that only repeats
+    /// what was typed. A view preference, never part of a record.
+    terse_echo: bool,
 }
 
 impl Records {
@@ -150,9 +153,48 @@ impl Records {
     /// Two reasons to skip, one rule: a record is undrawn because it was a
     /// spell's rather than the player's ([`FieldName::Spell`]), or because the
     /// screen already says it ([`RecordBuilder::quiet`]). Neither is a deletion.
+    ///
+    /// A third, when [`set_terse_echo`](Self::set_terse_echo) asks: an echo
+    /// that only repeats the player's line (§6, §14 — *echo verbosity is a
+    /// setting*).
     pub fn drawn(&self) -> impl Iterator<Item = Record<'_>> + Clone {
-        self.iter()
-            .filter(|record| record.field(FieldName::Spell).is_none() && !record.is_quiet())
+        self.iter().filter(|record| {
+            record.field(FieldName::Spell).is_none()
+                && !record.is_quiet()
+                && !(self.terse_echo && self.repeats_input(*record))
+        })
+    }
+
+    /// Leave out an echo that only repeats what was typed, or show every one.
+    ///
+    /// Nothing leaves the stream: a log, a spell and `sift` see every echo.
+    /// Set by a frontend, which owns the setting; a new stream shows them all.
+    pub const fn set_terse_echo(&mut self, terse: bool) {
+        self.terse_echo = terse;
+    }
+
+    /// Whether repeated echoes are left out of the transcript.
+    #[must_use]
+    pub const fn terse_echo(&self) -> bool {
+        self.terse_echo
+    }
+
+    /// Whether `record` is an echo saying nothing the line before it did not.
+    ///
+    /// Only a clean resolution, and only the same words. An echo that read the
+    /// line differently, acted on a best guess, or names a word the orb does
+    /// not know is the reason echoes exist, and is never left out.
+    fn repeats_input(&self, record: Record<'_>) -> bool {
+        if record.kind() != RecordKind::Echo || record.outcome() != Some(Outcome::Resolved) {
+            return false;
+        }
+        let Some(typed) = record.index.checked_sub(1).and_then(|at| self.get(at)) else {
+            return false;
+        };
+        typed.kind() == RecordKind::Input
+            && said(typed)
+                .zip(said(record))
+                .is_some_and(|(typed, echoed)| same_words(typed, echoed))
     }
 
     /// How many records a transcript would draw.
@@ -693,5 +735,26 @@ impl RecordBuilder<'_> {
             spoken: self.spoken,
             quiet: self.quiet,
         });
+    }
+}
+
+/// A record's message, if it has one in words.
+fn said<'a>(record: Record<'a>) -> Option<&'a str> {
+    match record.field(FieldName::Message) {
+        Some(Value::Text(text)) => Some(text),
+        _ => None,
+    }
+}
+
+/// Whether two lines say the same words, ignoring case and spacing.
+fn same_words(typed: &str, echoed: &str) -> bool {
+    let mut typed = typed.split_whitespace();
+    let mut echoed = echoed.split_whitespace();
+    loop {
+        match (typed.next(), echoed.next()) {
+            (None, None) => return true,
+            (Some(a), Some(b)) if a.eq_ignore_ascii_case(b) => {}
+            _ => return false,
+        }
     }
 }

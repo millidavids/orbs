@@ -40,8 +40,9 @@ pub(super) fn abandoning(typed: &str) -> Option<&str> {
 }
 
 impl Menu {
-    /// Run `typed` against whichever page is showing.
-    pub(super) fn answered(&mut self, typed: &str) -> Option<Outcome> {
+    /// Run `typed` against whichever page is showing. `said` is the same line
+    /// before it was lowered, for the one row that keeps case.
+    pub(super) fn answered(&mut self, typed: &str, said: &str) -> Option<Outcome> {
         // Taken, not read: `abandon` asks once and any other line answers *no*,
         // so the question must be gone by the time anything else looks and only
         // the very next line may see it. `execute::quit` does the same with
@@ -66,7 +67,7 @@ impl Menu {
             Page::Play => self.opened(typed, asked),
             Page::Lengths => self.measured(typed),
             Page::Settings => self.turned(typed),
-            Page::Setting(page) => self.set(page, typed),
+            Page::Setting(page) => self.set(page, typed, said),
         }
     }
 
@@ -90,7 +91,10 @@ impl Menu {
                 None
             }
             None => {
-                self.complaint = Some(Complaint::Unknown(typed.to_owned()));
+                // A word the menu never offers, answered rather than refused.
+                if !self.whispered(typed) {
+                    self.complaint = Some(Complaint::Unknown(typed.to_owned()));
+                }
                 None
             }
         }

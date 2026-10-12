@@ -150,6 +150,8 @@ impl Stage {
 pub struct Boot {
     stage: Stage,
     elapsed: Duration,
+    /// Whether nothing on the card may move — §14's switch.
+    still: bool,
 }
 
 impl Default for Boot {
@@ -176,6 +178,7 @@ impl Boot {
         Self {
             stage: Stage::Dark,
             elapsed: Duration::ZERO,
+            still: false,
         }
     }
 
@@ -185,6 +188,27 @@ impl Boot {
         Self {
             stage: Stage::Live,
             elapsed: Duration::ZERO,
+            still: false,
+        }
+    }
+
+    /// This sequence with nothing on it moving, or not.
+    ///
+    /// The card arrives whole, holds, and leaves by a cut. Decided by the
+    /// frontend, because the tube is one of the two switches and only the
+    /// frontend can see it.
+    #[must_use]
+    pub const fn held_still(mut self, still: bool) -> Self {
+        self.still = still;
+        self
+    }
+
+    /// How long `stage` lasts in this sequence. A still card has no leaving.
+    const fn lasts(self, stage: Stage) -> Duration {
+        if self.still && matches!(stage, Stage::Close) {
+            Duration::ZERO
+        } else {
+            stage.duration()
         }
     }
 
@@ -203,8 +227,8 @@ impl Boot {
     /// How far through the current stage, 0 → 1.
     #[must_use]
     pub fn progress(self) -> f32 {
-        let total = self.stage.duration();
-        if total.is_zero() {
+        let total = self.lasts(self.stage);
+        if total.is_zero() || self.still {
             return 1.0;
         }
         (self.elapsed.as_secs_f32() / total.as_secs_f32()).clamp(0.0, 1.0)
@@ -219,8 +243,8 @@ impl Boot {
             return;
         }
         self.elapsed = self.elapsed.saturating_add(delta);
-        while !self.is_live() && self.elapsed >= self.stage.duration() {
-            self.elapsed -= self.stage.duration();
+        while !self.is_live() && self.elapsed >= self.lasts(self.stage) {
+            self.elapsed -= self.lasts(self.stage);
             self.stage = self.stage.next();
         }
     }
@@ -244,6 +268,28 @@ mod tests {
         let mut boot = Boot::new();
         boot.advance(total());
         assert!(boot.is_live(), "the sequence never finished");
+    }
+
+    #[test]
+    fn a_still_card_arrives_whole_and_leaves_by_a_cut() {
+        // §14: a player who asked for stillness gets none of the card's motion
+        // — no border drawing, no letters arriving, no gather on the way out.
+        let mut boot = Boot::new().held_still(true);
+        let step = Duration::from_millis(50);
+        let mut left = false;
+        let mut spent = Duration::ZERO;
+        while !boot.is_live() {
+            assert!(spent <= total(), "the still sequence never finished");
+            assert!(
+                boot.progress() >= 1.0,
+                "a still card was part way through {:?}",
+                boot.stage(),
+            );
+            left |= boot.stage() == Stage::Close;
+            boot.advance(step);
+            spent = spent.saturating_add(step);
+        }
+        assert!(!left, "a still card spent time leaving");
     }
 
     #[test]

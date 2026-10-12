@@ -15,8 +15,9 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 rustup target add x86_64-apple-darwin      # macOS universal builds
 ```
 
-Verify: `rustc --version` — the project was designed against **1.96** (2024
-edition).
+Verify: `rustc --version` — `rust-toolchain.toml` pins **1.98.0** (2024
+edition), which Bevy 0.20's 1.97.1 floor requires; rustup fetches it on first
+build.
 
 ### Platform build dependencies
 
@@ -42,7 +43,7 @@ automatically on any machine — no install step:
 
 | Skill | Purpose |
 |---|---|
-| `bevy-idioms` | Bevy **0.19**-pinned idioms, with a compile-verified harness |
+| `bevy-idioms` | Bevy **0.20**-pinned idioms, with a compile-verified harness |
 | `ecs-architecture` | Engine-neutral ECS design guidance |
 | `game-feel` | Juice patterns with verified Bevy snippets |
 

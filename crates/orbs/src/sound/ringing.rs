@@ -62,6 +62,7 @@ pub(super) fn ring(
     voices: Res<Voices>,
     saying: Res<Saying>,
     levels: Res<super::Levels>,
+    kinds: Option<Res<super::Kinds>>,
     mut ringing: MessageReader<RingMessage>,
 ) {
     let gain = levels.voice_gain();
@@ -69,18 +70,27 @@ pub(super) fn ring(
         let Some(handle) = voices.handle(voice) else {
             continue;
         };
+        // The one place a kind is switched off, so a writer never has to know.
+        let heard = gain > 0.0
+            && kinds
+                .as_deref()
+                .is_none_or(|kinds| kinds.allows(voice.kind()));
         // The one way to check the audio without a sound card, which is what CI
         // and a headless run both are. See [`SOUND`].
         trace!("sound: {}", voice.name());
         if saying.aloud() {
-            eprintln!("sound: {}", voice.name());
+            eprintln!(
+                "sound: {}{}",
+                voice.name(),
+                if heard { "" } else { " (off)" }
+            );
         }
         // Silence is not spawning. A player who asked for `off` should cost the
         // game nothing, and an `AudioPlayer` at zero gain is an entity, a decode
         // and a mixer slot per keystroke for a sound nobody hears. The message
-        // is still read, so `ORBS_SOUND` still reports it — which is what makes
-        // the switch usable for checking the table rather than the speakers.
-        if gain > 0.0 {
+        // is still read, so `ORBS_SOUND` still reports it, marked `(off)` —
+        // which is what makes the switches checkable without speakers.
+        if heard {
             commands.spawn((
                 AudioPlayer(handle),
                 PlaybackSettings::DESPAWN.with_volume(Volume::Linear(gain)),

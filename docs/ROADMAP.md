@@ -102,6 +102,7 @@ numbers below are not consecutive.
 | [**The threshold**](#the-threshold--closed-at-01613) | `0.16.13` | ✅ every box ticked · the orb's front door |
 | [**Number go up**](#number-go-up) | `0.17.6` | ✅ every box ticked · interleaved with `0.17` |
 | [**The installation**](#the-installation) | `0.17.8` | ✅ every box ticked · interleaved with `0.17` · minute one of the apprenticeship |
+| [**The orb made yours**](#the-orb-made-yours) | `0.17.15` | ✅ every box ticked · interleaved with `0.17` · settings chosen from research |
 
 ### Open — and **this table is not a running order**
 
@@ -6434,6 +6435,152 @@ when `0.17` resumes. **Every box ticked at `0.17.8`.** About 300 words, inside
 
 ---
 
+## The orb made yours
+
+**Settings chosen from research, filtered through the design.** About 190
+options from accessibility guidelines (GAG, Xbox XAGs, APX), terminal emulators
+and comparable games, cut to what §3, §4, §14 and §19 allow. The rejected half
+is in DESIGN.md §19 with its reasons, so it is not argued again.
+
+**Its boxes bump `0.17.x`** and interleave with *the tower as one machine*, for
+*Number go up*'s reason. Several are *Ship* items done early; *Ship* points here.
+**Every box ticked at `0.17.15`.** What research turned up and this does not
+build — the large-text grid, remapping, AccessKit, a light theme, idle
+clouding, Steam toggles, afterglow, in-tower comedy verbs — is catalogued in
+DESIGN.md §19 rather than listed here as work.
+
+- [x] **The manual told the truth again** — a correction, no bump. `yours`
+      said `tube off` (the row is `crt`), colour-vision `sight` modes that do
+      not exist, and a `focus` description backwards against `DisplayMode`;
+      `keys` left out F8 and F12. And the terminal build's `skip` row read the
+      file, so with nowhere to write it snapped `skip on` back to `off`: its
+      rows and its settings are one `Carried` now, with a test that every row
+      is honoured
+- [x] **`motion`, its own switch, and §14's health warning** (`0.17.9`). An
+      access row in both builds. In the window, motion is the row *and* the
+      tube — either saying still is enough, and neither can bring motion back.
+      In the terminal it is the row alone, since there is no tube. Off stills
+      the fire, the flare, the crossings, rolling numbers, the hum band, the
+      caret, text typing itself, pane changes and the boot card, which arrives
+      whole and leaves by a cut. The warning is said once per machine, under
+      the threshold's menu, and only where settings are kept
+      **See it:** `cargo run -p orbs`, `settings` → `access` → `motion off`
+      with the tube on: the athanor's fire is still, `attend` cuts, text lands
+      whole and the caret stops blinking. In a terminal, start `orbs-tui` with
+      `ORBS_SAVE` at an empty folder: the warning is under the menu once, and
+      not on the next launch. `scripts/dumps.sh` moves `menu_access` alone
+- [x] **The `picture` page** (`0.17.10`) — `curve`, `lines`, `glow`,
+      `flicker`, `mask`, `split`, `edge`, each `off`, `soft` or `full`, in the
+      window build only. Ceilings on whatever `crt` chose, never a second tube:
+      `F3` and `crt` still pick the state, and `crt::effective` is the one place
+      the state, the ceilings and stillness meet. The manual's *"the shape
+      without the flicker"* is true now. A letter two rows share names neither
+      — `Menu::set` took the first match
+      **See it:** `cargo run -p orbs`, `settings` → `picture` → `flicker off`:
+      the curve stays and the band stops. With `curve off`, `lines off` and
+      `edge off` in the settings file, `ORBS_CAPTURE=1` draws a flat glass with
+      square corners and the glow intact. `scripts/dumps.sh` moves
+      `menu_settings` and `menu_unsettable`, which list the new page
+- [x] **Legibility** (`0.17.11`), window build only. **`contrast high`**
+      lifts ordinary and spell text to 7:1 on every theme, keeps the ramp's
+      steps at 1.25:1, and leaves the accent triad alone. **`weight heavy`** is
+      the VGA's own bold, generated from the shipped fonts, with the shades and
+      box drawing exempt and no two glyphs merged. **`scale whole`** fits the
+      picture to a whole multiple, with `Screen` holding the fit so the camera
+      and the tube read one scale. **`pace`** is the reveal in baud — `1200`,
+      `4800`, `9600`, `instant` — and stillness still forces instant
+      **See it:** muted violet with `contrast high`, `weight heavy` and `scale
+      whole` in a scratch settings file, under `ORBS_CAPTURE=1`: the dim chrome
+      is brighter, every stroke a pixel bolder, the accents unchanged, and the
+      log says `scale 2.000` where the same window fills at `2.250`. `pace 1200`
+      types an echo slowly enough to watch. `scripts/dumps.sh` moves the four
+      settings pages that gained a row
+- [x] **`echo`** (`0.17.12`), both builds — §6's and §14's *echo verbosity is
+      a setting*, promised since the design and never built. `changed` leaves
+      out an echo only when it resolved cleanly and repeats the line word for
+      word; a different reading, a best guess and an unknown word all still
+      echo. One predicate in `Records::drawn`, so the pane, the reveal, the
+      scroll, the cues and the plain stream cannot disagree, and nothing leaves
+      the stream — a log or a spell sees every echo
+      **See it:** a terminal session with `echo = "changed"` in a scratch
+      settings file: `survey` has no echo, `look around` still reads `→
+      survey`, and `frobnicate` still says the orb does not know it. With
+      `always`, `survey` echoes too. `scripts/dumps.sh` moves `menu_access`
+- [x] **The voice** (`0.17.13`), window build only. **`keys off`** silences
+      the click and nothing else, and leaves no held-over burst for when it
+      comes back on. **`mains 60`** builds the hum on 60, 120 and 84 Hz, each a
+      whole number of cycles in the bed's half-second lap. **`away`** — `off`,
+      `dim`, `hush`, `both` — clouds the glass over 0.6 s through the sight
+      pass, so it holds with the tube off, and quiets the *hum* only: the cues
+      are §14's channel and how a finished brew reaches a player in another
+      window
+      **See it:** `mains = "60"` in a scratch settings file and `ORBS_SOUND=1`
+      prints `sound: hum (plain, full, 60 Hz)`. `keys off`, then type: no
+      `sound: key` lines, and a finished brew still chimes. `away both`, then
+      alt-tab: the glass eases dark and the hum stops; come back and both
+      return. The alt-tab needs a person, since a launched window takes focus.
+      `scripts/dumps.sh` moves the sound and habits pages
+- [x] **The wizard's name** (`0.17.14`), both builds. A habits row that takes
+      free text — the first: one word, sixteen letters, drawable on the glass,
+      case kept. It names *new* towers; a save outranks the machine, so a
+      standing tower keeps its name. The word alone puts it back to the
+      default, which stays the machine's login. A refusal says what a name can
+      be. The order is `ORBS_WIZARD`, then the choice, then the login, and each
+      frontend asks the choice it holds rather than the file, so a name chosen
+      where nothing can be written still counts
+      **See it:** `orbs-tui` with `ORBS_SAVE` at an empty folder: `settings` →
+      `habits` shows `name … [<your login>]`; `name Morgan le Fay` says *a name
+      is one word*; `name Morgana`, then `play` → `new`, and the prompt reads
+      `Morgana $`. `scripts/dumps.sh` moves `menu_habits` and `menu_plain`, which
+      show `ORBS_WIZARD`'s name rather than whoever ran them
+- [x] **Secrets** (`0.17.15`) — §3's sysadmin comedy, discovered and never
+      pushed. A row can answer words it never offers: whole, never by prefix,
+      never cycled. **Phosphor part numbers** on the tube page — `theme p3` is
+      amber, `p1` and `p31` green, `p4` monochrome, and `theme p7` a radar tube
+      no list shows, held to every palette floor the others are and back after
+      a relaunch. **`hum eleven`** and `voice eleven` are `full`, and the orb
+      says it does not go to eleven. At the menu, **`xyzzy`**, `plugh`, `hello
+      sailor`, `sudo`, `make me a sandwich`, `sudo make me a sandwich`, and
+      **`moon`**, which reads the moon's phase from the clock and names all
+      hallows' eve and a Friday the 13th. All silent while the tower speaks
+      eldritch. A dump reads no clock unless `ORBS_DATE` names a day
+      **See it:** `ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DATE=2025-03-14 ORBS_DUMP="menu" ORBS_MENU="moon" cargo run -p orbs`
+      reads *the moon is full*; without `ORBS_DATE`, *the orb cannot see the
+      sky from here*. `ORBS_MENU='settings\ntube\ntheme p7'` reads `[p7]` and
+      *the orb knows its phosphors by number*. `scripts/dumps.sh` gains
+      `menu_picture`, `menu_xyzzy`, `menu_moon`, `menu_moon_full`, `menu_p7`,
+      `menu_eleven` and `menu_name_spaced`, with every earlier capture
+      unchanged
+- [x] **The review's corrections** — no bump. A `/code-review xhigh` found
+      fourteen; thirteen are fixed and one is declined with its reason, all in
+      DESIGN.md §19. The ones a player meets: `pace` held again once echoes were
+      hidden, `echo always` no longer re-typed the old echoes, a row's secrets
+      went silent in the eldritch register, `keys off` kept Enter, the name
+      refusal named the letter instead of drawing `?`, and `scale whole` sat on
+      whole pixels in an odd window
+      **See it:** `scripts/dumps.sh` matches the box's capture but for the
+      version, and `scripts/play.sh` plays all 149. `scale whole` in a window
+      dragged to an odd width, under `ORBS_CAPTURE=1`: every glyph pixel the
+      same size
+- [x] **The hum is gone** (`0.17.16`) — the owner's call. The bed under
+      everything is removed, not turned down, and with it the `hum` and
+      `mains` rows and `away`'s `hush` and `both`. The orb sounds only when
+      something happens; the cues and the click are unchanged. DESIGN.md §19,
+      *The hum is gone*
+      **See it:** `cargo run -p orbs` with the sound up: silence until a key.
+      `settings` → `sound` lists `voice` and `keys`, and `away` takes `off` or
+      `dim`. `scripts/dumps.sh` moves `menu_volumes`, `menu_eleven` and the
+      sound and picture pages
+- [x] **Each kind of sound on or off** (`0.17.18`) — the owner's ask. Under
+      `voice`, which stays the volume: `keys` (typing and Enter), `chimes`,
+      `alarms` and `refusals`, each `on` or `off`. One gate, in `ring`
+      **See it:** `settings` → `sound` lists all five. `keys off` under
+      `ORBS_SOUND=1`, then type: `sound: key (off)` and `sound: enter (off)`,
+      and a finished brew still prints `sound: done`. `scripts/dumps.sh` moves
+      the sound page, `menu_volumes` and `menu_eleven`
+
+---
+
 ## Phase 8 — Siege ✅
 
 **Exit:** sieges are tense and scripts visibly matter.
@@ -6730,8 +6877,20 @@ decision under known risk.
 
 *Was **Phase 13c**.*
 
-- [ ] Bevy version window, isolated from new-system work
-      **See it:** the game boots, draws, and plays identically on the new version
+- [x] Bevy version window, isolated from new-system work (`0.17.17`) — Bevy
+      0.20, `bevy_ecs` 0.20, Rust 1.98, `rand` 0.10, `toml` 1, `dirs` 7, the
+      way `court_wizard` moved the day before. DESIGN.md §19, *Bevy 0.20*
+      **See it:** `ORBS_CAPTURE=1` with `motion = "off"` in a scratch settings
+      file, tube on and off: the stills match 0.19's pixel for pixel.
+      `orbs-balance sweep --ticks 7200` matches byte for byte, and
+      `rng::every_stream_draws_what_it_always_has` holds the values. The POST
+      card reads `bevy 0.20.0` and `rust 1.98.0`, which is all `dumps.sh` moves
+- [ ] **`burn` 0.22**, held out of the window above. The burn on Bevy's `wgpu
+      30`, and a rewrite: no backend generic, the shipped weights converted to
+      its format, and `ndarray` swapped for its new CPU backend with inference
+      measured again. Until then a `train` build compiles two `wgpu`s
+      **See it:** `cargo tree -d | grep -E '^(wgpu|naga)'` empty again, and
+      the augury trials reading what they read before
 - [ ] Green on all three platforms
       **See it:** launch the built artifact on each, not just CI green
 
@@ -6819,7 +6978,9 @@ decision under known risk.
       are one setting seen twice
       **See it:** turn the tube off, relaunch, and it is still off; or
       `settings` → `habits` → `skip on`, relaunch, and the boot sequence is gone
-- [ ] **Reduce-motion as a setting of its own** — split out of the item above,
+- [x] **Reduce-motion as a setting of its own** — done at `0.17.9`, in
+      [*The orb made yours*](#the-orb-made-yours), with the health warning. What
+      follows is the reasoning it was held to. Split out of the item above,
       which shipped without it **deliberately**. Motion is gated on the tube
       today (`motion::advance` stops the crossings, the fire and the flare when
       any tube state is off) and §14 is served by that. A separate row would be

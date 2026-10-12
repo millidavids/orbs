@@ -225,6 +225,13 @@ impl Tower {
         &self.0
     }
 
+    /// Leave echoes that only repeat the line out of the transcript, or not.
+    ///
+    /// A verb-shaped method for `take`'s reason. It writes no record.
+    pub(crate) fn set_terse_echo(&mut self, terse: bool) {
+        self.0.set_terse_echo(terse);
+    }
+
     /// Take the spell `scribe` asked the editor to open, if any.
     ///
     /// Narrow on purpose: a general `sim_mut` would let any system reach the

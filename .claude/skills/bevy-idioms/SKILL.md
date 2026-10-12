@@ -1,7 +1,7 @@
 ---
 name: bevy-idioms
 description: >
-  Idiomatic Bevy 0.19 engine code — App/plugin structure, components, required
+  Idiomatic Bevy 0.20 engine code — App/plugin structure, components, required
   components, resources, systems, queries and filters, Commands, scheduling and
   system sets, fixed timestep, states, messages, and observers. Use this skill
   whenever the user is writing, reviewing, debugging, or refactoring Bevy code,
@@ -10,7 +10,7 @@ description: >
   `#[derive(Resource)]` — even if the user does not say "Bevy". Bevy's API breaks
   every minor release, so ALWAYS consult this skill instead of recalling Bevy
   syntax from memory; most Bevy code on the internet targets 0.14-0.16 and will
-  not compile on 0.19.
+  not compile on 0.20.
 when_to_use: >
   Triggers: "bevy", "ECS system", "spawn an entity", "component", "query",
   "add_systems", "why does my system panic", "B0001", "bundle not found",
@@ -19,14 +19,14 @@ paths:
   - "**/*.rs"
   - "**/Cargo.toml"
 metadata:
-  targets_bevy: "0.19"
-  verified: "All code in this skill compiled against bevy 0.19.0 on 2026-08-02."
+  targets_bevy: "0.20"
+  verified: "All code in this skill compiled against bevy 0.20.0 on 2026-10-12."
   author: davidyurek
 ---
 
-# Idiomatic Bevy (0.19)
+# Idiomatic Bevy (0.20)
 
-Every snippet here was compiled against **bevy 0.19.0**. Bevy breaks APIs every
+Every snippet here was compiled against **bevy 0.20.0**. Bevy breaks APIs every
 minor release, so version accuracy is the whole point of this skill.
 
 ## Step 0 — always check the version first
@@ -34,15 +34,15 @@ minor release, so version accuracy is the whole point of this skill.
 Before writing any Bevy code, read the actual version from `Cargo.toml` or
 `Cargo.lock`.
 
-- **0.19** → this skill applies directly.
+- **0.20** → this skill applies directly.
 - **Anything else** → say so explicitly, then verify each API against the docs
-  for that version. Do not silently emit 0.19 syntax for a 0.17 project.
+  for that version. Do not silently emit 0.20 syntax for a 0.17 project.
 
 Pin the version and upgrade deliberately:
 
 ```toml
 [dependencies]
-bevy = "=0.19.0"
+bevy = "=0.20.0"
 ```
 
 ## Non-negotiables
@@ -292,7 +292,7 @@ Use `dynamic_linking` in dev only; it cuts incremental builds dramatically.
 
 ```toml
 [dependencies]
-bevy = { version = "=0.19.0", default-features = false, features = [
+bevy = { version = "=0.20.0", default-features = false, features = [
     "std", "async_executor", "multi_threaded",
     "bevy_winit", "bevy_window", "bevy_render",
     "bevy_core_pipeline", "bevy_sprite", "bevy_asset", "bevy_log", "png", "x11",
@@ -303,3 +303,5 @@ bevy = { version = "=0.19.0", default-features = false, features = [
 
 - `references/scheduling.md` — ordering, run conditions, Update vs FixedUpdate
 - `references/migration-0-19.md` — how to recognise and fix stale Bevy snippets
+- `references/migration-0-20.md` — what moved from 0.19 to 0.20: shaders,
+  `extract_app`, the 2D camera's tonemapping, weak ordering

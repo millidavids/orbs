@@ -283,6 +283,9 @@ pub fn run_script(
 ) {
     // The instrument's seed, never a game's — see `crate::seed`.
     let seed = crate::seed();
+    // No clock either, unless `ORBS_DATE` names a day: `moon` at the menu
+    // would otherwise make a capture depend on when it was taken.
+    crate::sky::cover();
     // A dump neither loads nor saves unless `ORBS_SAVE` names a path. Loading
     // by default would make every See-it line depend on whether anyone had
     // played there, and `dumps.sh` would stop being a baseline the first time

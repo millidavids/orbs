@@ -11,8 +11,61 @@ use orbs_shell::{Bench, Climb, Panel, Passing};
 
 use crate::crt::CrtSettings;
 
+/// Whether the player has asked for stillness — `settings` → `access` →
+/// `motion`.
+///
+/// Never read alone: [`moving`] puts it with the tube, and either one saying
+/// *still* is enough.
+#[derive(Resource, Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Stillness(bool);
+
+impl Stillness {
+    /// Stillness asked for, or not.
+    pub(crate) const fn asked(still: bool) -> Self {
+        Self(still)
+    }
+
+    /// Whether the player wants nothing to move.
+    pub(crate) const fn still(self) -> bool {
+        self.0
+    }
+}
+
+impl Default for Stillness {
+    fn default() -> Self {
+        Self(!orbs_shell::settings::moves())
+    }
+}
+
+/// Whether anything may move: the `motion` row, and every tube on.
+///
+/// The one combiner, so no two clocks can disagree about whether a player asked
+/// for motion. `None` is *nobody has said* — no tube yet and the row allowing
+/// it — which `Bench` and `Passing` read as leaving their own switch alone.
+///
+/// Any tube off is still: two disagreeing is not a situation the game creates,
+/// and the quieter reading is the only safe one to pick if it ever does.
+pub(crate) fn moving<'a>(
+    tubes: impl IntoIterator<Item = &'a CrtSettings>,
+    stillness: Option<&Stillness>,
+) -> Option<bool> {
+    if stillness.is_some_and(|stillness| stillness.still()) {
+        return Some(false);
+    }
+    let mut tubes = tubes.into_iter();
+    tubes
+        .next()
+        .map(|first| first.on && tubes.all(|other| other.on))
+}
+
+/// What the motion switch will say once the camera exists, for what is decided
+/// before it does — the boot card.
+pub(crate) fn moving_at_launch() -> bool {
+    crate::crt::seeded().on && !Stillness::default().still()
+}
+
 /// Advance the fire, the crossing and the rolling numbers, and stop them when
-/// the tube is off.
+/// the tube is off or the player asked for stillness.
 ///
 /// One system because it is one decision, and the clocks it drives are the
 /// things §14 makes disableable: none of `Bench`, `Passing` or `Climb` has any
@@ -26,30 +79,21 @@ pub(crate) fn advance(
     time: Res<Time>,
     world_tick: Res<Time<Fixed>>,
     tubes: Query<&CrtSettings>,
+    stillness: Option<Res<Stillness>>,
     panel: Res<Panel>,
     mut bench: ResMut<Bench>,
     mut passing: ResMut<Passing>,
     mut climb: ResMut<Climb>,
 ) {
-    // No camera yet, or no CRT component on it: `None`, which leaves whatever
-    // `ORBS_FIRE` said. A missing switch is not the same as a switch set to off,
-    // and defaulting to "off" here would make the fire invisible for the frames
-    // before the camera spawns rather than merely unlit.
+    // No camera yet: `None`, which leaves whatever `ORBS_FIRE` said. A missing
+    // switch is not a switch set to off, and reading it as off would make the
+    // fire invisible for the frames before the camera spawns.
     //
     // A `Query`, not `Option<Single>`: `Single` yields `None` for two or more
-    // matches as readily as for none, so a second camera — a split view, a
-    // capture pass — would land in the "no switch on screen" branch and leave
-    // the motion running for a player who turned it off. `crt::settings` records
-    // that defect once already.
-    //
-    // Any tube off turns the motion off. Two switches disagreeing is not a
-    // situation the game creates today, and the quieter reading is the only safe
-    // one to pick if it ever does: §14's requirement is that a player who asks
-    // for no motion gets none.
-    let mut tubes = tubes.iter();
-    let motion = tubes
-        .next()
-        .map(|first| first.on && tubes.all(|other| other.on));
+    // matches as readily as for none, so a second camera would land in the
+    // "no switch" branch and leave the motion running for a player who turned
+    // it off. `crt::settings` records that defect once already.
+    let motion = moving(tubes.iter(), stillness.as_deref());
 
     // The same `Time<Fixed>` the sim runs on (`sim::plugin` installs it at
     // 1 Hz), so the bench cannot disagree with the sim about when a tick lands —
@@ -195,6 +239,57 @@ mod tests {
         assert!(rolls(&mut app), "a gain did not roll with the tube on");
         app.world_mut().entity_mut(camera).insert(CrtSettings::OFF);
         assert!(!rolls(&mut app), "F3 to OFF left the numbers rolling");
+    }
+
+    #[test]
+    fn asking_for_stillness_stops_everything_with_the_tube_on() {
+        // §14's open box: no motion, and the curve kept. Through the systems,
+        // for `killing_the_tube_kills_the_fire`'s reason.
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .init_resource::<Bench>()
+            .init_resource::<Passing>()
+            .init_resource::<Climb>()
+            .init_resource::<Panel>()
+            .init_resource::<crate::render::blink::Blink>()
+            .insert_resource(Stillness::asked(true))
+            // A fixed step, so a caret that moved is a caret seen moving.
+            .insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
+                core::time::Duration::from_millis(400),
+            ))
+            .add_systems(Update, (advance, crate::render::blink::tick));
+        app.world_mut().spawn(CrtSettings::DEFAULT);
+
+        // 1.2 s is more than a blink: a caret that moved would show.
+        for _ in 0..3 {
+            app.update();
+            assert!(
+                app.world()
+                    .resource::<crate::render::blink::Blink>()
+                    .showing(),
+                "the caret blinked for a still player",
+            );
+        }
+        assert!(
+            !app.world().resource::<Bench>().grind(true, false).working,
+            "the fire moved for a player who asked for stillness",
+        );
+        assert!(!crosses(&mut app), "screens crossed for a still player");
+        assert!(!rolls(&mut app), "numbers rolled for a still player");
+    }
+
+    #[test]
+    fn the_row_cannot_bring_motion_back_with_the_tube_off() {
+        // The state §14 must not reach: motion asked for, the tube saying off.
+        let off = [CrtSettings::OFF];
+        assert_eq!(moving(&off, Some(&Stillness::asked(false))), Some(false));
+        let on = [CrtSettings::DEFAULT];
+        assert_eq!(moving(&on, Some(&Stillness::asked(true))), Some(false));
+        assert_eq!(moving(&on, Some(&Stillness::asked(false))), Some(true));
+        // No tube yet and the row allowing it: nobody has said.
+        assert_eq!(moving(&[], Some(&Stillness::asked(false))), None);
+        // ...but the row saying still needs no tube to be believed.
+        assert_eq!(moving(&[], Some(&Stillness::asked(true))), Some(false));
     }
 
     /// Whether a gain on the ley gauge would be drawn rolling, right now.

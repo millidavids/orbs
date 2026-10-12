@@ -66,24 +66,26 @@ impl Sight {
 pub(crate) struct SightUniform {
     /// 1.0 to take the hue out, 0.0 to leave it.
     pub(crate) greyscale: f32,
-    pub(crate) _pad0: f32,
+    /// How bright the glass is drawn, 1.0 as authored — `away`'s cloud.
+    pub(crate) brightness: f32,
     pub(crate) _pad1: f32,
     pub(crate) _pad2: f32,
 }
 
 impl SightUniform {
-    /// Build the uniform for a setting.
+    /// Build the uniform for a setting, and the glass's brightness.
     ///
-    /// Takes a [`Sight`] and nothing else, so it cannot see `CrtSettings` — an
-    /// accommodation the tube's own off-switch could reach is a defect §19
-    /// already records once.
-    pub(crate) const fn new(sight: Sight) -> Self {
+    /// Takes no `CrtSettings`, so the tube's own off-switch cannot reach it —
+    /// an accommodation the tube could turn off is a defect §19 already
+    /// records once. The cloud is here for the same reason: it must hold with
+    /// the tube off.
+    pub(crate) const fn new(sight: Sight, brightness: f32) -> Self {
         Self {
             greyscale: match sight {
                 Sight::Plain => 0.0,
                 Sight::Greyscale => 1.0,
             },
-            _pad0: 0.0,
+            brightness,
             _pad1: 0.0,
             _pad2: 0.0,
         }
@@ -94,7 +96,7 @@ impl SightUniform {
     /// The pass is skipped when it would not, so the ordinary case costs no
     /// fullscreen ping-pong at all.
     pub(crate) fn wanted(self) -> bool {
-        self.greyscale > 0.0
+        self.greyscale > 0.0 || self.brightness < 1.0
     }
 }
 
@@ -211,7 +213,7 @@ mod tests {
 
     #[test]
     fn plain_is_the_identity_and_costs_nothing() {
-        let uniform = SightUniform::new(Sight::Plain);
+        let uniform = SightUniform::new(Sight::Plain, 1.0);
         assert_eq!(uniform.greyscale, 0.0);
         assert!(
             !uniform.wanted(),
@@ -221,8 +223,15 @@ mod tests {
 
     #[test]
     fn greyscale_takes_all_of_it() {
-        assert_eq!(SightUniform::new(Sight::Greyscale).greyscale, 1.0);
-        assert!(SightUniform::new(Sight::Greyscale).wanted());
+        assert_eq!(SightUniform::new(Sight::Greyscale, 1.0).greyscale, 1.0);
+        assert!(SightUniform::new(Sight::Greyscale, 1.0).wanted());
+    }
+
+    #[test]
+    fn a_clouded_glass_runs_the_pass_on_a_plain_tube() {
+        // `away dim` must hold with no accommodation set, or it would only
+        // ever cloud a greyscale tube.
+        assert!(SightUniform::new(Sight::Plain, 0.6).wanted());
     }
 
     // No test here for "the tube cannot switch the accommodation off". There was

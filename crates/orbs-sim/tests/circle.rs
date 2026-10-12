@@ -11,7 +11,7 @@ use std::collections::BTreeSet;
 use orbs_render::{Circle, FieldName, Value};
 use orbs_sim::Sim;
 use orbs_sim::tower::circle::{Glyph, Humour};
-use rand::{Rng, SeedableRng};
+use rand::{RngExt, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
 fn run(sim: &mut Sim, line: &str) {

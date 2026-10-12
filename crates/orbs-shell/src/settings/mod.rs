@@ -13,10 +13,17 @@
 //! the menu is handed data rather than asking a type.
 
 mod keys;
+mod name;
+mod pair;
 mod store;
 mod values;
 
-pub use keys::{DRIVER, FOCUS, INSTALL, SKIP, driver, installs, set_driver, skips_boot};
+pub use keys::{
+    DRIVER, ECHO, ECHOES, FOCUS, INSTALL, MOTION, SCALE, SKIP, WARNED, driver, installs, moves,
+    set_driver, skips_boot, terse_echo, warn_once,
+};
+pub use name::{LONGEST_NAME, NAME, NameFault, checked_name, chosen_name};
+pub use pair::Pair;
 pub(crate) use store::FILE;
 pub use store::{get, keep, load, set};
-pub use values::{Category, LEVELS, OFF, ON, Row, SWITCH, is_on, loudness, switched};
+pub use values::{Category, LEVELS, OFF, ON, Row, SWITCH, Secret, is_on, loudness, switched};

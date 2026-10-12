@@ -4,7 +4,7 @@ description: >
   Make actions feel satisfying — screen shake, hit-stop/freeze frames, easing and
   tweening, squash & stretch, knockback, damage flash, and layered audio-visual
   feedback. Covers the technique, the tuning numbers that actually work, and
-  Bevy 0.19 implementations. Use this skill whenever the user mentions game feel,
+  Bevy 0.20 implementations. Use this skill whenever the user mentions game feel,
   "juice", "make it feel good/punchy/satisfying", screen shake, hit stop, easing,
   squash and stretch, impact frames, camera kick, or polish and feedback on hits,
   jumps, pickups, and deaths — and proactively when reviewing gameplay code that
@@ -16,8 +16,8 @@ when_to_use: >
 paths:
   - "**/*.rs"
 metadata:
-  targets_bevy: "0.19"
-  verified: "All Bevy code in this skill compiled against bevy 0.19.0 on 2026-08-02."
+  targets_bevy: "0.20"
+  verified: "All Bevy code in this skill compiled against bevy 0.20.0 on 2026-10-12."
   concepts_adapted_from: "gamedev-skills/awesome-gamedev-agent-skills (Apache-2.0); snippets rewritten for Bevy."
   author: davidyurek
 ---

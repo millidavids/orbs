@@ -3,7 +3,7 @@
 
 use std::collections::BTreeSet;
 
-use rand::Rng;
+use rand::RngExt;
 
 use super::super::circuit::{self, Puzzle, Turned, Wiring};
 use super::super::temper::Temper;

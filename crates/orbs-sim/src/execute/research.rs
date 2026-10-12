@@ -407,7 +407,7 @@ fn generate(world: &mut World) -> Maze {
     // began by unwinding the oldest, straightest part of the maze. Decoupling
     // the seed from both endpoints is what makes two mazes with the same start
     // and exit still read differently.
-    let seed = rand::Rng::random_range(rng, 0..cells);
+    let seed = rand::RngExt::random_range(rng, 0..cells);
     let mut seen = vec![false; cells];
     seen[seed] = true;
     // Cells adjacent to the maze but not yet in it, each paired with the cell it
@@ -418,7 +418,7 @@ fn generate(world: &mut World) -> Maze {
         .collect();
 
     while !frontier.is_empty() {
-        let pick = rand::Rng::random_range(rng, 0..frontier.len());
+        let pick = rand::RngExt::random_range(rng, 0..frontier.len());
         let (from, next) = frontier.swap_remove(pick);
         if seen[next] {
             continue;
@@ -443,7 +443,7 @@ fn generate(world: &mut World) -> Maze {
     // The reading starts in one of the four corners, uniformly — it was always
     // the top-left — and the way out is drawn against a weighting that leans on
     // the corner diagonally opposite it.
-    let start = CORNERS[rand::Rng::random_range(rng, 0..CORNERS.len())];
+    let start = CORNERS[rand::RngExt::random_range(rng, 0..CORNERS.len())];
     let exit = drawn_away_from(rng, start);
     Maze::new(grid, SPAN_X, square_of(cell_at(start)), square_of(exit))
 }
@@ -516,7 +516,7 @@ fn drawn_away_from(rng: &mut rand_chacha::ChaCha8Rng, from: (usize, usize)) -> u
 
     let cells = WIDTH * HEIGHT;
     let total: u64 = (0..cells).map(weight).sum();
-    let mut roll = rand::Rng::random_range(rng, 0..total.max(1));
+    let mut roll = rand::RngExt::random_range(rng, 0..total.max(1));
     for cell in 0..cells {
         let share = weight(cell);
         if roll < share {

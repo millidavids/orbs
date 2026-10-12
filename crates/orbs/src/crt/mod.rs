@@ -1,4 +1,6 @@
+mod effective;
 mod pass;
+mod picture;
 mod plugin;
 mod settings;
 
@@ -9,4 +11,7 @@ pub use plugin::CrtPlugin;
 // `crt_pass` itself would mean exporting `CrtPipeline` and `CrtUniformBuffer`
 // with it, which is a lot of the tube's insides for one edge.
 pub(crate) use plugin::{CrtPass, STATES as TUBE_STATES, Tube, named, seeded, state_named};
+
+// The `picture` page's rows, which `shell::setting` builds and applies.
+pub(crate) use picture::{Effect, Picture, Strength};
 pub(crate) use settings::CrtSettings;

@@ -340,7 +340,7 @@ fn stolen(world: &mut World, count: usize) -> Vec<String> {
         let mut rngs = world.resource_mut::<Rngs>();
         let rng = rngs.stream(RngStream::Lens);
         (0..count)
-            .map(|_| rand::Rng::random_range(rng, 0..steps.len()))
+            .map(|_| rand::RngExt::random_range(rng, 0..steps.len()))
             .collect()
     };
 
