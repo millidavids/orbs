@@ -7,6 +7,7 @@ mod brief;
 mod build;
 pub mod charm;
 pub mod circle;
+mod cultivation;
 pub mod dice;
 mod erosion;
 mod experience;
@@ -34,6 +35,8 @@ mod scene;
 pub mod siege;
 mod stock;
 mod stores;
+pub mod supply;
+mod sync;
 mod tally;
 pub mod ward;
 mod work;
@@ -58,19 +61,21 @@ pub use heat::{
     ATHANOR, Ash, Banked, Burning, banked, burn, burning, damp, find as find_athanor, kindle, lit,
     refuse_cold,
 };
-pub use home::home;
+pub use home::{home, kind_of};
 pub use keep::{ARSENAL, admits, keep, keeping, kept};
 pub use learned::{CERTAIN, Learned, discover, learn};
 pub use ley::{Node, Standing, Station, Taken, holds, is_real, ley_line, next, scale};
 // `mastery::Reached` is reached through its module: the siege's `assault::Reached`
 // already holds the bare name here.
+pub use cultivation::Cultivation;
 pub use ledger::{Row as LedgerRow, ledger, ledger_of};
 pub use mastery::{Line, Progress, Stop, Walk, advance, mastery, progress};
 pub use maze::{Maze, Sense, Square, Way};
 pub use node::{
     Cwd, Domain, Fixture, Grouped, HeatSource, Held, Keep, Name, Nameable, NodeId, NodeIds,
     Operation, Protected, Read, Reading, Store, children_of, domain_of, filesystem_root,
-    find_by_path, group_at, groups_at, path_of, path_of_id, readings_at, root, where_at,
+    find_by_path, first_in_tree, group_at, groups_at, path_of, path_of_id, readings_at, root,
+    where_at,
 };
 pub use opened::{
     Key as OpenKey, Known, Opened, Sealed, Sealing, charm_key, domain_key, known, open, recipe_key,
@@ -91,14 +96,18 @@ pub use satchel::{SATCHEL, Satchel};
 pub use scene::{Topics, rebuild, scene_at};
 pub use siege::{Band, Intent, Outcome, Round, Siege, besieged};
 pub use stock::{Stock, give, give_endless, held, holdings, take};
-pub use stores::{FRESH_AT, STORE, Stores, Supply, THIN_AT, WINDOW, made, stocktake, supply_of};
+pub use stores::{
+    FRESH_AT, Freshness, STORE, Stores, THIN_AT, WINDOW, freshness_of, made,
+    readings as store_readings, stocktake,
+};
+pub use sync::sync_readings;
 pub use tally::{
     BOUND, EVENTS, FIGURE, SECRET, SIEGE, SIEGE_WON, SPELL, Tally, Work, by_spell, done, note,
 };
 pub use ward::{SIGILS, SOCKETS, Shift, Ward};
 pub mod spell;
 pub use work::{
-    Bidden, Busy, CAPACITY, DIVINE_TICKS, PURGE_TICKS, Product, QUICKENED_BY, QUICKENED_TICKS,
-    Quickened, Triaging, Working, begin, busy, contents, finish, hurried_from, in_flight, occupied,
-    purge, quickened, refuse_busy, stop,
+    Bidden, Busy, CAPACITY, DIVINE_TICKS, PURGE_TICKS, Product, QUICKENED_BY, Quickened, Triaging,
+    Working, begin, busy, contents, finish, hurried_from, in_flight, occupied, purge, quickened,
+    quickened_by, refuse_busy, stop,
 };

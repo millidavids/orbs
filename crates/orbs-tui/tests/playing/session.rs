@@ -36,7 +36,7 @@ fn a_morning_in_the_laboratory() {
         .does("mix sage-tincture with ground-salt", "to flask_and_rod")
         .does("meditate 12", "yields clarified-draught")
         .does("distil clarified-draught", "to alembic")
-        .does("meditate 60", "yields clarity")
+        .does("meditate 60", "yields 3 clarity")
         .expect("the orb can hold a spell now")
         .does("status", "experience 16")
         .expect("concentration 1")
@@ -100,10 +100,10 @@ fn an_evening_writing_a_spell() {
         .does("kindle charcoal", "fuel for 600 ticks")
         .does("debug_spawn clarified-draught 2", "all along")
         .does("distil clarified-draught", "to alembic")
-        .does("meditate 60", "yields clarity")
+        .does("meditate 60", "yields 3 clarity")
         .does("empty alembic", "clarity")
         .does("distil clarified-draught", "to alembic")
-        .does("meditate 60", "yields clarity")
+        .does("meditate 60", "yields 3 clarity")
         .does("status", "concentration 1");
 
     // Write one that can actually lap: a standing spell is cast again every time

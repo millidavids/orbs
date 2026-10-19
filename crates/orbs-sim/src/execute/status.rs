@@ -30,6 +30,10 @@ pub(super) fn status(world: &mut World) {
     // raise. Nothing else on screen said the pool's size outside a siege board.
     let pool = u64::from(world.resource::<tower::Quintessence>().get());
     let ceiling = u64::from(tower::ceiling(world));
+    // The standing garrison and its most (§19, *Supply*), readable from any
+    // room, a sealed menagerie included. The line on the wall counts.
+    let garrison = u64::from(tower::siege::held(world));
+    let most = u64::from(tower::siege::most_held(world));
 
     // Read before the scrollback is borrowed, and one walk of `Running` rather
     // than a second — `tower::running_spells` is what the rail folds.
@@ -46,6 +50,8 @@ pub(super) fn status(world: &mut World) {
         ("concentration", quantity(held)),
         ("quintessence", pool),
         ("ceiling", ceiling),
+        ("garrison", garrison),
+        ("garrison most", most),
         ("logged", quantity(logged)),
         ("queued", quantity(queued)),
     ] {

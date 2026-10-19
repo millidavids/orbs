@@ -71,6 +71,10 @@ pub struct Rampart {
     pub coffer: Vec<(String, u32)>,
     /// What is left to spend on dice this siege.
     pub quintessence: u32,
+    /// Every supply the arsenal is drawing onto the wall, with the rate it runs
+    /// at — one is the slowest (§19, *Supply*). `survey arsenal` gives the
+    /// same, as each item's `draw`.
+    pub flowing: Vec<(String, u32)>,
     /// The line under the rule, already written — prose built from literals in
     /// a painter cannot be hot-reloaded.
     pub tally: String,
@@ -114,8 +118,27 @@ impl Rampart {
     #[must_use]
     pub const fn rows() -> u16 {
         // intent, blank, four areas, blank, enemy, rule, garrison, blank,
-        // coffer, tally
-        13
+        // coffer, drawing, tally
+        14
+    }
+
+    /// What the arsenal is drawing onto the wall, and how fast.
+    ///
+    /// `drawing   warding 2  vigour 1`, or a dash when nothing flows. The words
+    /// are the items' own and the numbers their `draw`, so it reads as `survey`
+    /// would say it.
+    #[must_use]
+    pub fn flowing_row(&self) -> String {
+        let drawn = if self.flowing.is_empty() {
+            "--".to_owned()
+        } else {
+            self.flowing
+                .iter()
+                .map(|(name, rate)| format!("{name} {rate}"))
+                .collect::<Vec<_>>()
+                .join("  ")
+        };
+        format!("{:<label$}{drawn}", "drawing", label = Self::LABEL as usize)
     }
 
     /// What is still free to pledge, what each costs, and what is left to pay.
@@ -283,9 +306,24 @@ mod tests {
             ],
             coffer: vec![("d8".to_owned(), 2)],
             quintessence: 7,
+            flowing: Vec::new(),
             intent: "volley".to_owned(),
             tally: "round 1".to_owned(),
         }
+    }
+
+    #[test]
+    fn the_drawing_row_says_what_flows_and_how_fast() {
+        let flowing = Rampart {
+            flowing: vec![("warding".to_owned(), 2), ("vigour".to_owned(), 1)],
+            ..board()
+        };
+        let row = flowing.flowing_row();
+        assert!(row.contains("warding 2  vigour 1"), "{row}");
+        assert!(
+            board().flowing_row().contains("--"),
+            "nothing flowing said nothing"
+        );
     }
 
     #[test]

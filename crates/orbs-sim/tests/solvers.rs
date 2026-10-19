@@ -55,7 +55,7 @@ const SOLVERS: &[Solver] = &[
         name: "besieging",
         setup: &[
             "attend bailey",
-            "debug_spawn troop 6",
+            "debug_spawn clarity 6",
             "debug_spawn warding 6",
         ],
         ticks: 900,
@@ -66,7 +66,7 @@ const SOLVERS: &[Solver] = &[
         name: "answering",
         setup: &[
             "attend bailey",
-            "debug_spawn troop 6",
+            "debug_spawn clarity 6",
             "debug_spawn warding 6",
         ],
         ticks: 900,
@@ -80,7 +80,7 @@ const SOLVERS: &[Solver] = &[
         name: "sparingly",
         setup: &[
             "attend bailey",
-            "debug_spawn troop 6",
+            "debug_spawn clarity 6",
             "debug_spawn warding 6",
         ],
         ticks: 900,
@@ -91,7 +91,7 @@ const SOLVERS: &[Solver] = &[
         name: "sparing",
         setup: &[
             "attend bailey",
-            "debug_spawn troop 6",
+            "debug_spawn clarity 6",
             "debug_spawn warding 6",
         ],
         ticks: 900,
@@ -120,7 +120,7 @@ const SOLVERS: &[Solver] = &[
         name: "bulwark",
         setup: &[
             "attend bailey",
-            "debug_spawn troop 6",
+            "debug_spawn clarity 6",
             "debug_spawn warding 6",
         ],
         ticks: 900,

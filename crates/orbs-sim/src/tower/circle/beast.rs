@@ -205,7 +205,8 @@ impl Beast {
         self.calls <= self.shape.par()
     }
 
-    /// How many troops a hold now would bring to the arsenal.
+    /// How many bodies a hold now would bring to the garrison, or demons to
+    /// the arsenal.
     ///
     /// Four within par, three past it — the chant's clean figure and its
     /// scraped one, so the siege's supply is what it was. A first pass:

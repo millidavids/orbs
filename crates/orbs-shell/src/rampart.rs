@@ -118,7 +118,8 @@ fn draw(painter: &mut Painter<'_>, at: Rect, siege: &Rampart, prose: &Prose) {
     );
     band(painter, inside, bands + 2, siege, &siege.garrison);
 
-    // What is left to pledge, and then the tally.
+    // What is left to pledge, what the arsenal is drawing (§19, *Supply*), and
+    // then the tally.
     painter.glyphs(
         Pos::new(inside.col, inside.row + bands + 4),
         &truncate(&siege.coffer_row(), cols),
@@ -126,6 +127,11 @@ fn draw(painter: &mut Painter<'_>, at: Rect, siege: &Rampart, prose: &Prose) {
     );
     painter.glyphs(
         Pos::new(inside.col, inside.row + bands + 5),
+        &truncate(&siege.flowing_row(), cols),
+        Style::NORMAL,
+    );
+    painter.glyphs(
+        Pos::new(inside.col, inside.row + bands + 6),
         &truncate(&siege.tally, cols),
         Style::DIM,
     );
@@ -222,6 +228,7 @@ mod tests {
                 ("d20".to_owned(), 5),
             ],
             quintessence: 24,
+            flowing: Vec::new(),
             intent: "onslaught".to_owned(),
             tally: "round 0, 7 still coming".to_owned(),
         }

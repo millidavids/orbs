@@ -138,6 +138,7 @@ impl Sim {
             let start = tower::Opened::start(
                 world.resource::<Recipes>(),
                 world.resource::<crate::content::Charms>(),
+                world.resource::<crate::content::Spendables>(),
                 world.resource::<crate::content::Progression>(),
             );
             world.insert_resource(start);
@@ -157,6 +158,9 @@ impl Sim {
         // solver's affordability guard compared nought against nought and
         // afforded it on a tower with no pool.
         crate::execute::publish_dice(&mut world);
+        // ...and the standing garrison on the roster, before the first tick so a
+        // fresh tower and one reloaded from its save carry the same nodes.
+        tower::siege::roll_call(&mut world);
         // ...and the forge's, for the same reason: an unpublished charm node
         // answers *nought* rather than *nothing*, so a maintenance spell's `if
         // the hurried has no graced` is true of a tool charmed right now.
@@ -235,6 +239,8 @@ impl Sim {
         // how many troops a scroll is worth changes what a round does, so a
         // mid-session swap would break replay.
         world.init_resource::<crate::content::Spendables>();
+        // What a scroll does in a room, for the same reason.
+        world.init_resource::<crate::content::Scrolls>();
         world.init_resource::<crate::content::Charms>();
         // Materials *are* hot-reloadable in principle: a tint is read by the
         // instrument panel and nothing else, so no verb branches on it. Beside
@@ -274,11 +280,16 @@ impl Sim {
             let outputs = recipes.outputs();
             let gated = recipes.gated();
             let charms: Vec<&str> = charms.names().collect();
+            let demons: Vec<&str> = world
+                .resource::<crate::content::Spendables>()
+                .demons()
+                .collect();
             let catalogue = crate::content::Catalogue {
                 instruments: &instruments,
                 outputs: &outputs,
                 gated: &gated,
                 charms: &charms,
+                demons: &demons,
             };
             if let Err(error) = curve.check(&catalogue) {
                 panic!("the built-in content is authored with the crate: {error}");
@@ -288,12 +299,16 @@ impl Sim {
         world.init_resource::<tower::Experience>();
         world.init_resource::<tower::Renown>();
         world.init_resource::<tower::siege::Petitioned>();
+        world.init_resource::<tower::Cultivation>();
+        world.init_resource::<tower::siege::Garrison>();
+        world.init_resource::<tower::supply::Supplies>();
         world.init_resource::<tower::Stores>();
         // Everything open, the tower every test, dump and policy uses. A fresh
         // *game* starts sealed — see `Sim::sealed`.
         let opened = tower::Opened::all(
             world.resource::<Recipes>(),
             world.resource::<crate::content::Charms>(),
+            world.resource::<crate::content::Spendables>(),
         );
         world.insert_resource(opened);
         world.init_resource::<tower::Sealing>();
@@ -377,6 +392,12 @@ impl Sim {
                 // barrier as the wear left it — the ordering defect §19 records
                 // the sanctum paying for twice.
                 tower::regenerate,
+                // The same licence: a body deserting is a modulo on the tick,
+                // and paused while a siege runs (§19, *Supply*).
+                tower::siege::desert,
+                // The same licence: a calm supply draws on a modulo of the
+                // ticks since its word, and paused in a siege (§19, *Supply*).
+                crate::execute::drain_scrolls,
                 // The same licence, and load-bearing rather than tidy: without
                 // a system saying a charm lapsed, `ebbing` would arrive only
                 // when a forge verb ran, and the maintenance spell is built
@@ -391,6 +412,19 @@ impl Sim {
                 // `NodeId` and §19's *insertion order is the parse* holds
                 // between a watched hour and a `meditate`-collapsed one.
                 tower::stocktake,
+                // `stocktake`'s rule for a supply's `draw` and `drained`, and
+                // for the roster: each writes only on a change, so an idle tick
+                // issues no `NodeId`. Each runs only when what it reads moved:
+                // the supplies or the arsenal's counts, and the garrison or the
+                // grant that raises its most.
+                tower::supply::gauge.run_if(
+                    resource_exists_and_changed::<tower::supply::Supplies>
+                        .or_eager(tower::supply::restocked),
+                ),
+                tower::siege::roll_call.run_if(
+                    resource_exists_and_changed::<tower::siege::Garrison>
+                        .or_eager(resource_exists_and_changed::<tower::ley::Taken>),
+                ),
                 tower::spell::stand,
             )
                 .chain(),
@@ -1233,7 +1267,24 @@ impl Sim {
                 ("name", &siege.enemy.count.to_string()),
             ],
         );
-        Some(siege.view(tally, self.world.resource::<tower::Quintessence>().get()))
+        // What the arsenal is drawing onto this wall, and at which rate.
+        let flowing = self
+            .world
+            .resource::<tower::supply::Supplies>()
+            .iter()
+            .filter(|(_, open)| open.scope == tower::supply::Scope::Siege)
+            .map(|(name, open)| {
+                (
+                    name.to_owned(),
+                    u32::try_from(open.running + 1).unwrap_or(u32::MAX),
+                )
+            })
+            .collect();
+        Some(siege.view(
+            tally,
+            self.world.resource::<tower::Quintessence>().get(),
+            flowing,
+        ))
     }
 
     /// The beast waiting at the menagerie's circle, if the player is looking at it.

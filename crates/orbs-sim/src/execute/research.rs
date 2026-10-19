@@ -75,6 +75,10 @@ pub(super) fn research(intent: &Intent, world: &mut World) {
     world.entity_mut(stacks).insert(maze);
     refresh(world);
     say(world, Verb::Research, "research_opens", &[], Role::Success);
+    // A gleaning supply open sets it gathering before a step is taken.
+    if let Some(spoils) = super::scroll::gathering(world) {
+        super::scroll::gather(world, stacks, spoils);
+    }
 }
 
 /// `follow <way>` — move the reading one cell.
@@ -558,8 +562,12 @@ fn named(word: &str) -> Option<Way> {
 /// map only where the player could `survey` the ways themselves, so the picture
 /// cannot outrun the readings by following the player out of the room.
 pub(crate) fn stacks(world: &World) -> Option<Entity> {
-    let cwd = world.resource::<Cwd>().0;
-    tower::children_of(world, cwd).into_iter().find(|node| {
+    stacks_in(world, world.resource::<Cwd>().0)
+}
+
+/// The stacks in `room`, if it has them.
+pub(crate) fn stacks_in(world: &World, room: Entity) -> Option<Entity> {
+    tower::children_of(world, room).into_iter().find(|node| {
         world
             .get::<tower::Operation>(*node)
             .is_some_and(|operation| operation.0 == Verb::Research)

@@ -18,6 +18,7 @@ use orbs_sim::Sim;
 use orbs_sim::tower::circle::{self, Glyph};
 
 use crate::policy::{Body, Policy};
+use crate::scrolling::{Scrolling, glean_one, quicken_one, shelved};
 
 /// One row of the curve.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -73,6 +74,11 @@ pub struct Run {
     /// the prose the player would have read, so a reason greps straight back to
     /// `prose.toml`.
     pub reasons: BTreeMap<String, usize>,
+    /// What every shelf and the arsenal held when the run ended, by name.
+    pub held: BTreeMap<String, u32>,
+    /// What a policy that spends a supply was handed as it went, by name.
+    /// Less [`held`](Self::held), it is what the run spent (§19, *Supply*).
+    pub given: BTreeMap<String, u32>,
 }
 
 impl Run {
@@ -133,6 +139,7 @@ pub fn run(
     let mut cycle = 0usize;
     let mut sweep = Sweep::default();
     let mut fighting = Fighting::default();
+    let mut scrolling = Scrolling::default();
     let every = every.max(1);
 
     while sim.tick().get() < ticks {
@@ -154,6 +161,14 @@ pub fn run(
                 Body::Taming => tame_one(&mut sim),
                 Body::Besieging => fight_one(&mut sim, &mut fighting),
                 Body::Imbuing => bind_one(&mut sim),
+                Body::Gleaned => glean_one(&mut sim, &mut scrolling),
+                Body::Quickened(lines) => {
+                    if !quicken_one(&mut sim, &mut scrolling) {
+                        let line = lines[cycle % lines.len()];
+                        cycle += 1;
+                        issue(&mut sim, line);
+                    }
+                }
                 Body::Bound {
                     earning,
                     name,
@@ -180,6 +195,8 @@ pub fn run(
     }
 
     let (cost, landed, reasons) = tally(&sim);
+    let held = shelved(&sim);
+    let given = scrolling.given;
     Run {
         policy: policy.name,
         seed,
@@ -187,6 +204,8 @@ pub fn run(
         cost,
         landed,
         reasons,
+        held,
+        given,
     }
 }
 
@@ -262,7 +281,7 @@ fn tally(sim: &Sim) -> (usize, usize, BTreeMap<String, usize>) {
 /// A submitted line is queued and executed at the start of the next tick
 /// (`orbs_sim::session`), so a caller that does not step never sees its effect —
 /// the commonest way to write a sweep that measures nothing.
-fn issue(sim: &mut Sim, line: &str) {
+pub(crate) fn issue(sim: &mut Sim, line: &str) {
     sim.submit(line);
     sim.step();
 }
@@ -351,7 +370,7 @@ fn hand_over(sim: &mut Sim, name: &str, lines: &[&str]) -> bool {
 /// solver"* had none: it solved one seed and cycled for ever on another, because
 /// a fixed compass order sends the reading back where it came from wherever two
 /// ways read alike.
-fn walk_one(sim: &mut Sim) {
+pub(crate) fn walk_one(sim: &mut Sim) {
     let Some(maze) = sim.stacks() else {
         issue(sim, "research");
         return;
@@ -512,9 +531,7 @@ const STATIONS: [&str; 3] = ["wellspring", "conduit", "barrier"];
 /// How often the besieging driver puts more in the arsenal, in rounds.
 ///
 /// Stores are a rate, so an arsenal has to be kept rather than filled. One
-/// restock every four rounds, alternating between the two names it spends, so
-/// each is bought every eight — well inside `tower::WINDOW` at a siege's pace,
-/// and one extra tick per four rather than one per two.
+/// restock every four rounds — well inside `tower::WINDOW` at a siege's pace.
 ///
 /// A player automating this would bind a brewing spell; this is the cheapest
 /// thing that models one without dragging the laboratory into a bailey number.
@@ -619,9 +636,9 @@ fn fight_one(sim: &mut Sim, state: &mut Fighting) {
         return;
     }
 
-    // At most one spend per round, then hold. Without it the policy reaches the
-    // `few` rung, is refused for want of a troop, and asks again every tick —
-    // 6775 refusals in 7200, measured. The shipped spell avoids that because
+    // At most one spend per round, then hold. Without it a refused rung asks
+    // again every tick — 6775 refusals in 7200, measured once for the troop
+    // rung troops no longer have. The shipped spell avoids that because
     // `hold` sits *outside* its ladder. Marking the round whether or not the
     // spend succeeded is the honest part: a refused spell has still spent its
     // instruction.
@@ -643,15 +660,7 @@ fn fight_one(sim: &mut Sim, state: &mut Fighting) {
     // two domains and make the pinned rate meaningless.
     if state.restocked_on != round && round.is_multiple_of(RESTOCK_EVERY) {
         state.restocked_on = round;
-        // Alternating, because the driver issues one command a tick: both names
-        // have to stay inside `tower::WINDOW`, and consecutive rounds would take
-        // two turns out of every cadence instead of one.
-        let name = if (round / RESTOCK_EVERY).is_multiple_of(2) {
-            "debug_spawn troop 2"
-        } else {
-            "debug_spawn warding 2"
-        };
-        issue(sim, name);
+        issue(sim, "debug_spawn warding 6");
         return;
     }
 
@@ -661,14 +670,16 @@ fn fight_one(sim: &mut Sim, state: &mut Fighting) {
     }
     state.spent_on = round;
 
-    // The ladder, short-circuiting exactly as `else if` does in the spell. Each
-    // rung spends a thing there is a finite number of, which is why only the
-    // first one that fires may spend anything.
-    if board.garrison.troops <= 2 {
-        issue(sim, "deploy troop");
-        return;
-    }
-    if board.garrison.vigour * 2 <= board.garrison.full {
+    // The ladder, as the spell runs it. No bodies rung: the tower levies its
+    // standing garrison at `defend`. And a potion is a supply that draws on its
+    // own once open, so the rung opens it only when it is not flowing (§19,
+    // *Supply*).
+    let flowing = sim
+        .world()
+        .resource::<orbs_sim::tower::supply::Supplies>()
+        .get("warding")
+        .is_some();
+    if board.garrison.vigour * 2 <= board.garrison.full && !flowing {
         // `warding`, where the spell writes `mending`: `mending` is a
         // `secret = true` recipe, so naming it would measure a player further
         // through the game than this column is about.

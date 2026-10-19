@@ -227,7 +227,7 @@ mod tests {
 
         // A key with no singular form falls straight through, which is what
         // keeps the other nine as one authored line each.
-        assert_eq!(prose.counted("mastery_laboratory_2", 1), "1 potions brewed");
+        assert_eq!(prose.counted("mastery_laboratory_2", 1), "1 brews finished");
     }
 
     /// One rule for the key, whether or not the count is in the sentence: a line

@@ -30,8 +30,8 @@ fn a_siege_starts_with_the_contingent_the_king_assigns() {
 
 #[test]
 fn the_baseline_is_the_same_every_time_and_the_enemy_is_not() {
-    // *"The wizard's base troops will be static"* — so what a player weighs is
-    // the enemy, the arsenal and the dice, never a contingent that shifted.
+    // `begin` alone assigns the floor; `defend` musters what the tower holds
+    // on top of it (§19, *Supply*). The draw is the enemy's, every time.
     let mut enemies = std::collections::BTreeSet::new();
     for seed in 0..40 {
         let siege = Siege::begin(&mut Rngs::from_seed(seed));
@@ -144,9 +144,36 @@ fn wounding_drops_a_troop_only_when_its_vigour_is_gone() {
 fn mending_never_raises_a_band_above_full() {
     let mut band = Band::new(3);
     band.wound(4);
-    band.mend(100, 3 * VIGOUR);
+    band.mend(100, 3 * VIGOUR, u32::MAX);
     assert_eq!(band.vigour, 3 * VIGOUR, "a potion overfilled a band");
     assert_eq!(band.count, 3, "troops did not come back with the fight");
+}
+
+/// Fight a fortified line takes back never brings more bodies than the
+/// garrison's most (§19, *Supply*).
+#[test]
+fn mending_never_raises_bodies_past_the_most() {
+    let mut band = Band::new(10);
+    band.wound(12);
+    // Room for thirteen bodies' fight, and a most of ten.
+    band.mend(100, 13 * VIGOUR, 10);
+    assert_eq!(band.vigour, 13 * VIGOUR);
+    assert_eq!(band.count, 10, "mending passed the garrison's most");
+}
+
+#[test]
+fn a_siege_musters_what_it_is_given() {
+    let mut siege = Siege::begin(&mut rngs());
+    siege.muster(9, 10);
+    assert_eq!(siege.garrison.count, 9);
+    assert_eq!(siege.garrison.vigour, 9 * VIGOUR);
+    assert_eq!((siege.mustered, siege.levied, siege.room), (9, 9, 10));
+    // A refill joins up to the room and no further.
+    siege.garrison.wound(9);
+    assert_eq!(siege.garrison.count, 6);
+    assert_eq!(siege.reinforce(5), 4);
+    assert_eq!(siege.garrison.count, 10);
+    assert_eq!(siege.reinforce(5), 0, "a line at its most took more");
 }
 
 /// A wounded band can actually be healed, which it could not be.
@@ -162,12 +189,12 @@ fn a_wounded_band_takes_back_what_it_is_given() {
     band.wound(9);
     assert_eq!(band.vigour, 9);
 
-    band.mend(6, ceiling);
+    band.mend(6, ceiling, u32::MAX);
     assert_eq!(band.vigour, 15, "a wounded band could not take back six");
     assert_eq!(band.count, 5, "the troops did not come back with the fight");
 
     // ...and still never past what it was mustered at.
-    band.mend(100, ceiling);
+    band.mend(100, ceiling, u32::MAX);
     assert_eq!(band.vigour, ceiling);
     assert_eq!(band.count, mustered);
 }

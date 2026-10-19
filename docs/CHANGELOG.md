@@ -15,6 +15,55 @@
   at 1.0 (DESIGN.md §19).
 -->
 
+## [v0.18.7] - 2026-10-19
+
+### Description
+In development — a dev log, not patch notes. A single potion no longer wins a
+round: brews make batches, and potions, scrolls and demons are supplies you keep
+flowing. The wall keeps a standing garrison of its own.
+
+### Added
+- **Potions, scrolls and demons are supplies.** `quaff`, `wield` or `deploy`
+  opens one once the arsenal holds enough. Say it again to run it faster, and
+  `stop` closes it. It takes its share every round, slows as stock runs low,
+  and closes when too little is left. A faster rate uses more each round and
+  never gives more per item.
+- **A standing garrison.** The wall has six to ten defenders of its own.
+  `defend` sends them all and the survivors come home. Outside a siege, any
+  above six slowly drift away. The menagerie's new `roster` and `status` show
+  how many stand.
+- **Demons.** `summon golem` binds the next beast as golems in the arsenal
+  rather than bodies for the garrison: four, or three past par. Golems refill
+  the line, familiars heal it, and effigies hold room on it. The golem comes
+  with the circle and the other two later.
+- **Scrolls work between sieges.** An open scroll takes one every 300 ticks,
+  used or not, and pauses during a siege. Quickening speeds the laboratory,
+  gleaning makes the stacks gather, and verdant grows a new herb on the shelf.
+- **The siege board shows what flows.** A `drawing` row names every open supply
+  and how fast it runs.
+- **Spells can read a supply.** `draw` and `drained` on an arsenal item say how
+  fast it runs and whether it ran dry.
+- **Your own words reach the new commands.** Asking for a demon at the circle,
+  or to stop a supply, works without the exact command.
+
+### Changed
+- **A run makes a batch.** A brew makes three potions (two of stillness), the
+  lectern two scrolls. Experience and renown still count the run.
+- **Old stock runs slower.** Stock made long ago runs only at the slowest rate,
+  or not at all. A siege reads it when you `defend`, so taking your time over a
+  round costs nothing.
+- **A bare `summon` adds bodies to the garrison.** A full garrison turns them
+  away, and the hold still counts.
+- **Troops are gone from the arsenal.** `deploy troop` is retired; the garrison
+  replaces it.
+- **Stillness can be brewed while some is held.** It still ends a siege, and
+  only by hand.
+- **One supply per item.** Opening one already open elsewhere in the tower says
+  where.
+- **`move` carries a whole batch** onto the arsenal or a store. An instrument
+  still takes one at a time.
+- **Older saves still load.** Troops you held join the garrison.
+
 ## [v0.17.18] - 2026-10-12
 
 ### Description

@@ -158,6 +158,7 @@ route_leaves = " + {state}"
 # balneum_mariae" is 66 - clipped, in the one line whose whole job is saying
 # where a thing came from and went to.
 move_done = "{name}: {origin} to {path}"
+move_done_all = "{count} {name}: {origin} to {path}"
 
 # The lock. §10.1: it is what makes different recipes need different scripts.
 wield_busy = "the {name} is at work. wait, or stop it"
@@ -172,6 +173,9 @@ wield_done = "the {source} yields {name}, and leaves {detail}  +{count}"
 # hole is exactly how a missing key surfaces (S19), and here it would surface on
 # every scroll the archive ever assembles.
 wield_done_clean = "the {source} yields {name}  +{count}"
+# The same two, for a run that makes a batch. `{quantity}` is how many.
+wield_done_batch = "the {source} yields {quantity} {name}, and leaves {detail}  +{count}"
+wield_done_clean_batch = "the {source} yields {quantity} {name}  +{count}"
 
 # A run that lands on contents matching no recipe. Should not be reachable —
 # the lock sees to that — but `transmute` used to return silently here, which
@@ -198,7 +202,6 @@ damp_idle = "the athanor is already cold"
 wield_cold = "the {name} wants heat, and the athanor is cold"
 wield_short = "the {name} wants {kind} quintessence, and you hold {quantity}"
 wield_beyond = "the {name} wants {kind} quintessence. a worn barrier holds {quantity}"
-wield_most = "one {kind} is all the tower keeps. the {name} will not make another"
 
 # ---------------------------------------------------------------------------
 # Experience and concentration (§11.5, §19). The work is worth something, and
@@ -284,7 +287,8 @@ gauge_spoken_topped = "{name}: nothing more authored"
 # tower's spells have done. No commas: a reader hears a row as
 # `name: ..., qty: ...`, and a comma in the name splits it.
 # ---------------------------------------------------------------------------
-ledger_potions = "potions brewed"
+# Runs, not potions: one brew yields a batch.
+ledger_potions = "brews finished"
 ledger_scrolls = "scrolls copied"
 ledger_walks = "walks of the stacks"
 ledger_wards = "wards broken"
@@ -670,7 +674,7 @@ weave_walk_later = "later"
 # The road under a room's title once every station on its line is reached.
 road_done = "every station reached"
 # The same line as words, at the end of a room's primer. `{detail}` is the next
-# deed's sentence and its count - "five potions brewed, 3 of 5".
+# deed's sentence and its count - "5 brews finished, 3 of 5".
 #
 # **`primer_`, never `recall_`.** Every key under that prefix becomes a manual
 # subject the parser knows (`Prose::topics`), so these two shipped as topics
@@ -740,7 +744,7 @@ weave_node_edge_1 = "one on every answering roll"
 weave_node_edge_2 = "two on every answering roll"
 weave_node_floor_1 = "a worn wall keeps more pool"
 weave_node_floor_2 = "a worn wall keeps most pool"
-weave_node_garrison_1 = "a troop brings one more body"
+weave_node_garrison_1 = "the garrison holds one more"
 weave_node_mend_1 = "every course mends three more"
 weave_node_vigilance_1 = "shelf swaps a quarter rarer"
 # Craft: the orb. `haste` is the orb's speed, never the tool's - a run a spell
@@ -764,11 +768,11 @@ weave_node_steps_3 = "three more steps a second"
 # a reveal gate rather than a grind, and there is nothing in it to stretch.
 mastery_reached = "the {name} line advances: {detail}"
 mastery_laboratory_1 = "a clarity brewed"
-mastery_laboratory_2 = "{count} potions brewed"
+mastery_laboratory_2 = "{count} brews finished"
 mastery_laboratory_3 = "a warding brewed"
-mastery_laboratory_4 = "{count} potions brewed"
+mastery_laboratory_4 = "{count} brews finished"
 mastery_laboratory_5 = "an insight brewed"
-mastery_laboratory_6 = "{count} potions brewed"
+mastery_laboratory_6 = "{count} brews finished"
 mastery_archive_1 = "{count} walks of the stacks"
 mastery_archive_2 = "{count} scrolls assembled"
 mastery_archive_3 = "{count} walks of the stacks"
@@ -822,6 +826,7 @@ forge_charm_unopened = "the forge cannot lay {name} yet"
 opened_domain = "the {name} is yours now. attend it"
 opened_recipe = "the orb knows {name} now. recall it"
 opened_charm = "the forge can lay {name} now"
+opened_demon = "the circle can bind a {name} now. summon {name} to call one"
 opened_siege = "the wall can be held now. defend it"
 # **The moment a player first meets a `~`**, so it is the moment to say what one
 # is: nearly every whole beast arrives with a turned wire.
@@ -1147,12 +1152,20 @@ summon_balks = "the beast balks at {quantity}, on call {count}"
 summon_rows = "{count} rows"
 summon_rows_one = "1 row"
 summon_holds = "the circle holds. {quantity}, on call {count}"
-# One troop is what a lesser hold brings, so the count is written both ways.
-summon_troops = "{count} troops answer"
-summon_troops_one = "1 troop answers"
-# A tower with no arsenal to keep them in. None is raised without one today, and
-# the hold still says what did not arrive rather than counting troops nowhere.
-summon_troops_unkept = "no troops come, for there is no arsenal to keep them"
+# Where a hold's bodies went (§19, Supply). One is what a lesser hold brings, so
+# the count is written both ways. A siege running sends them to the reserve.
+summon_garrison = "{count} join the garrison"
+summon_garrison_one = "1 joins the garrison"
+summon_garrison_some = "{count} join the garrison, and {quantity} are turned away at its most"
+summon_garrison_full = "the garrison is at its most, and they are turned away"
+summon_reserve = "{count} wait in reserve until the wall is quiet"
+summon_reserve_one = "1 waits in reserve until the wall is quiet"
+summon_reserve_some = "{count} wait in reserve, and {quantity} are turned away at its most"
+# The circle's second use: a hold bound as a demon, into the arsenal.
+summon_bound = "{count} {name} bound to the arsenal"
+summon_unkept = "no {name} is bound, with no arsenal to keep it"
+summon_not_a_demon = "the circle cannot bind a {name}. summon a demon it knows, or nothing"
+summon_lesser_binds = "a lesser circle binds bodies only. summon it bare"
 summon_released = "the beast slips away unheld"
 # `debug_circle` with no beast to hand a circle to. A tester's word, and it says
 # so rather than leaving the next `summon` to draw one.
@@ -1246,15 +1259,23 @@ follow_nowhere = "follow which way? north, east, south or west"
 # Each one also says what would work instead: that is S6's rule, and it is why
 # none of these is a bare complaint.
 # ---------------------------------------------------------------------------
-scroll_gleaning = "the {name} unrolls. {count} things in the dark, and no way out"
-scroll_unopened = "the {name} wants open stacks to work on. research first"
-scroll_nowhere = "there are no stacks here to unroll the {name} over"
-scroll_already = "the stacks are already gathering. the {name} stays rolled"
-scroll_no_room = "there is not enough unwalked floor left. the {name} stays rolled"
+scroll_gleaning = "the stacks gather now. {count} things in the dark, and no way out"
+scroll_gleaning_waits = "the next stacks you open will gather {count}"
+scroll_gleaning_gathering = "the open stacks gather already. the next you open will gather {count}"
+scroll_nowhere = "there is no laboratory to unroll the {name} over"
 scroll_inert = "the {name} is written in a hand the orb cannot read yet"
-scroll_quickening = "the {name} burns away. the {source} works quick for {count}"
-scroll_verdant = "the {name} unrolls, and the shelf remembers {detail}"
+scroll_quickening = "the {source} works {count} times quick while the {name} lasts"
+calm_open = "the {name} unrolls, {count} every {quantity} ticks"
+calm_raised = "the {name} unrolls faster, {count} every {quantity} ticks"
+calm_stepped = "the {name} runs low, and slows to {count} every {quantity} ticks"
+calm_drained = "the {name} runs dry and rolls itself up. too few are left"
+calm_stale_drained = "your {name} stores are out, and it rolls itself up. make more"
+calm_stale_stepped = "your {name} stores are thin. it slows to {count} each {quantity}"
+calm_besieged = "the {name} will not unroll while the wall is fighting"
+calm_stopped = "you roll the {name} up. what it drew stands"
+scroll_verdant = "{detail} flowers on the shelf, and stays"
 scroll_already_flowered = "the shelf holds every herb the {name} knows"
+scroll_all_flowered = "every herb has flowered. the {name} rolls itself up"
 
 # ---------------------------------------------------------------------------
 # The arsenal: the one room reachable from every other, and what it will hold.
@@ -1264,7 +1285,7 @@ scroll_already_flowered = "the shelf holds every herb the {name} knows"
 # that - the player has to be told where their sage does belong.
 # ---------------------------------------------------------------------------
 move_unkept = "the {path} keeps finished work. {name} belongs on a shelf"
-recall_arsenal = "finished potions and scrolls, within reach from any room"
+recall_arsenal = "finished potions, scrolls and demons, within reach from any room"
 
 # ---------------------------------------------------------------------------
 # The ported herbs. Every one is a real plant or resin, and the line says what it
@@ -1331,12 +1352,6 @@ recall_stilling-draught = "quiet held still by a gleaning scroll. it distils int
 # page that described a drinking that does not exist would be worse than one that
 # is honest about the wait.
 # ---------------------------------------------------------------------------
-# **The same honesty the potions carry**, and it has to be: a siege is what will
-# spend these, and Phase 8 owes two sinks now rather than one. Saying so is what
-# stops a player hoarding for a use that does not exist yet.
-recall_troop = "a beast the circle held. it waits in the arsenal"
-using_troop = "deploy it on the wall. two more bodies in the line"
-
 recall_clarity = "a potion of clear sight, and the laboratory's flagship work"
 recall_warding = "a potion that turns harm aside"
 recall_haste = "a potion of quickness. the cheapest chain in the tower"
@@ -1345,17 +1360,25 @@ recall_stillness = "a potion of deep quiet, which is valerian's own gift"
 recall_mending = "a potion that knits what is worn. distilled from ash and salt"
 recall_dreaming = "a potion of sleeping sight, out of what a bath leaves"
 recall_vigour = "a potion of hard work, wrung from the dregs of a combination"
-# **These said "a siege will be what spends them" and it stopped being true when
-# the bailey shipped.** Every potion has a `quaff` entry in `siege.toml` now, and
-# a page that has stopped being true is the defect this project keeps finding.
-using_clarity = "quaff it on the wall. it adds four to every answering roll"
-using_warding = "quaff it on the wall. three on every roll, for the whole round"
-using_haste = "quaff it on the wall. you roll twice and keep the better"
-using_insight = "quaff it on the wall. two on every answering roll, for the round"
-using_mending = "quaff it on the wall. six of the garrison's fight, put back"
-using_dreaming = "quaff it on the wall. five on every answering roll, for the round"
-using_stillness = "quaff it on the wall by hand. they leave, and you keep what you won"
-using_vigour = "quaff it on the wall. the line can hold more than it mustered"
+# Supplies, never single potions (§19, Supply). Each page says what its
+# draw buys and roughly how many it takes; `siege.toml` has the exact rates.
+using_clarity = "quaff it on the wall with six held. each round, more on every roll"
+using_warding = "quaff it on the wall with six held. each round, more on every roll"
+using_haste = "quaff it on the wall with eight held. each round you roll twice"
+using_insight = "quaff it on the wall with six held. a little on every roll"
+using_mending = "quaff it on the wall with six held. each round, fight put back"
+using_dreaming = "quaff it on the wall with six held. each round, more on every roll"
+using_stillness = "quaff it on the wall by hand, with three held. they leave"
+using_vigour = "quaff it on the wall with six held. the line holds more while it flows"
+
+# The demons the circle binds (§19, Supply). Never one at a time either: each
+# flows from six held, which is two holds of a whole circle.
+recall_golem = "a demon of clay the circle binds. it fills the gaps in a line"
+using_golem = "summon golem to bind a hold. deploy golem on the wall with six held"
+recall_familiar = "a demon the circle binds that tends the wounded"
+using_familiar = "summon familiar to bind a hold. deploy it with six held"
+recall_effigy = "a demon the circle binds that stands on the wall as more room"
+using_effigy = "summon effigy to bind a hold. deploy it with six held"
 
 # ---------------------------------------------------------------------------
 # Byproducts. S10.1's rule is that every one has a use, so every page names it -
@@ -1373,17 +1396,17 @@ recall_potash = "ash ground down. it fixes a draught the alembic can hold"
 # change was for: a scroll that told you its four fragments and not what
 # unrolling it did was the dead end wearing a manual entry.
 # ---------------------------------------------------------------------------
-recall_fragment = "a scrap won by walking the stacks. four of them make a scroll"
+recall_fragment = "a scrap won by walking the stacks. four of them make two scrolls"
 using_fragment = "move four to the lectern and wield it"
 
-recall_gleaning-scroll = "sets the stacks to gather: five scraps, and no way out"
-using_gleaning-scroll = "wield it in the archive, with the stacks already open"
+recall_gleaning-scroll = "while it unrolls the stacks gather, with no way out. four open it"
+using_gleaning-scroll = "wield it, then research. stop it once the maze is set"
 
-recall_quickening-scroll = "the laboratory works at double speed for a while"
-using_quickening-scroll = "wield it anywhere, before a brew or during one"
+recall_quickening-scroll = "while it unrolls the laboratory works quick. four open it"
+using_quickening-scroll = "wield it outside a siege. it draws one each 300 ticks"
 
-recall_verdant-scroll = "the shelf remembers a herb it has never held, one per scroll"
-using_verdant-scroll = "wield it anywhere. there are three herbs to remember"
+recall_verdant-scroll = "while it unrolls, a new herb grows. three draws flower it for good"
+using_verdant-scroll = "wield it outside a siege. four open it; growth keeps if it runs dry"
 
 # ---------------------------------------------------------------------------
 # The six words a spell is written with, which nothing in the game taught.
@@ -1768,7 +1791,7 @@ man_solve_sanctum = "haul them all to the barrier, never a ward onto a lesser"
 # tower's one clock while it was a chant, and has none now (§19). The primer
 # leads with what the board is, because a player who reads a truth table as a
 # truth table is most of the way to holding one.
-man_here_menagerie = "where troops are called up. a beast's temper is a truth table"
+man_here_menagerie = "where the garrison is filled. a beast's temper is a truth table"
 man_start_menagerie = "summon draws a beast. limn its glyphs, then summon again"
 man_solve_menagerie = "when every row of the answer matches the temper, it is held"
 
@@ -1941,7 +1964,7 @@ man_meditate_also = "status, wield, invoke"
 man_move_use = "move <reagent> to <place>"
 man_move_gloss = "carry something from one place to another"
 man_move_1 = "carries finished work to the arsenal, which every room reaches"
-man_move_2 = "takes a unit, not the pile, so what is left stays"
+man_move_2 = "to the arsenal it takes the whole batch; to a tool, one at a time"
 man_move_3 = "an instrument at work will not be charged or raided"
 man_move_4 = "in the laboratory each stage's own word fetches for you"
 man_move_eg1 = "move clarity to arsenal, once it is brewed"
@@ -1949,10 +1972,11 @@ man_move_eg2 = "grind sage already does the carrying, and the wield"
 man_move_also = "wield, empty, grind"
 
 man_wield_use = "wield <place>"
-man_wield_gloss = "set an instrument working"
+man_wield_gloss = "set an instrument working, or open a scroll's supply"
 man_wield_1 = "runs whatever recipe matches what is inside it"
 man_wield_2 = "the instrument locks until it finishes or is stopped"
-man_wield_3 = "the lectern assembles four fragments into a scroll"
+man_wield_3 = "the lectern assembles four fragments into two scrolls"
+man_wield_4 = "a scroll opens with four held, and draws on its own until stopped"
 man_wield_eg1 = "wield lectern with four fragments in it"
 man_wield_also = "move, stop, empty"
 
@@ -1996,7 +2020,7 @@ man_kindle_also = "digest, distil"
 
 man_stop_use = "stop <place>"
 man_stop_gloss = "halt what is running"
-man_stop_1 = "an instrument mid-run, or a spell mid-flight"
+man_stop_1 = "an instrument mid-run, a spell mid-flight, or a supply"
 man_stop_2 = "at the stacks it closes what research opened"
 man_stop_3 = "what was being made is lost; what was in it is not"
 man_stop_eg1 = "stop threading ends a spell that will not settle"
@@ -2055,13 +2079,13 @@ man_haul_4 = "potency is how great the ward on top of one is"
 man_haul_eg1 = "haul wellspring conduit, if the conduit will take it"
 man_haul_also = "muster, survey, recall sanctum"
 
-man_summon_use = "summon"
+man_summon_use = "summon [demon]"
 man_summon_gloss = "draw a beast to the circle, or call the waiting one in"
 man_summon_1 = "a beast's temper has a row for each way its senses can be"
 man_summon_2 = "lit, and calling it in marks the rows that balk. a balk"
 man_summon_3 = "costs the call. three calls or fewer pay in full, one at"
 man_summon_4 = "a lesser circle, where the keystone stands alone"
-man_summon_eg1 = "summon, limn the glyphs, then summon again"
+man_summon_eg1 = "summon, limn the glyphs, then summon golem to bind it"
 man_summon_also = "limn, survey, recall menagerie"
 
 man_limn_use = "limn <glyph> [<humour>]"
@@ -2190,27 +2214,44 @@ petition_besieged = "they are already at the wall. this is the siege you have"
 # are.
 pledge_wasted = "{name} goes to the {detail} for {kind}, wasted on a {state}"
 spend_useless = "{name} is worth nothing on a wall"
-spend_wrong_word = "{name} is not quaffed or deployed. {detail} it"
+spend_wrong_word = "that is not how {name} is used. {detail} it"
 spend_none = "there is no {name} in the arsenal"
+spend_shelved = "your {name} is in the {source}. move it to the arsenal"
 # ---------------------------------------------------------------------------
 # Stores that have run down (§11.5, §19).
 #
 # **The shelf is not empty — the stores behind it are.** What the arsenal holds
 # is one thing and what your industry can still supply is another, so these
 # never say "there is no {name}": `spend_none` is that sentence and it means
-# something else. The potion is kept, exactly as `spend_whole` keeps one.
+# something else. Nothing is taken.
 #
-# Both name the way out, because the way out is the mechanic: make more.
+# It names the way out, because the way out is the mechanic: make more.
 # ---------------------------------------------------------------------------
-spend_stale = "your {name} stores are out. make one and come back"
-spend_whole = "the line is whole. keep the {name} for when it is not"
-spend_unanswered = "they {state} next, so you will not swing. keep the {name}"
-deploy_sent = "{name} goes down to the line"
-quaff_drunk = "{name}, drunk. it lasts this round"
-quaff_mended = "{name}, drunk. the fight it puts back is kept"
-quaff_fortified = "{name}, drunk. the line can hold more until this siege ends"
+spend_stale = "your {name} stores are out. make more and come back"
+# ---------------------------------------------------------------------------
+# Standing supplies (§19, Supply). No single item does anything: the verb opens
+# a supply when enough is held, the verb again raises it a rate, and `stop`
+# closes it. Each round it draws `{count}` on its own.
+#
+# A refusal names the threshold, because the way out is the mechanic: make more.
+# `supply_drawn` is logged and never drawn, so `peruse bailey.log` says each
+# round's draw while the pane says what the player did.
+# ---------------------------------------------------------------------------
+supply_open = "the {name} flows, {count} a round"
+supply_open_waits = "the {name} flows, {count} a round, from when it is wanted"
+supply_raised = "the {name} flows faster, {count} a round"
+supply_short = "you hold {count} {name}. it flows from {quantity}"
+supply_thin = "your {name} stores are thin. it flows only at its slowest"
+supply_fastest = "the {name} flows as fast as it can"
+supply_elsewhere = "the {name} already flows elsewhere in the tower. stop it first"
+supply_stepped = "the {name} runs low, and slows to {count} a round"
+supply_drained = "the {name} runs dry and stops. too few are left to flow"
+supply_stale_drained = "your {name} stores are out, and it stops. make more"
+supply_stale_stepped = "your {name} stores are thin. it slows to {count} a round"
+supply_stopped = "you stop the {name}. what this round drew stands"
+supply_not_open = "the {name} is not flowing"
+supply_drawn = "{count} {name} drawn for the coming round"
 quaff_stilled = "{name}, drunk. a stillness falls along the wall"
-scroll_spent = "{name} burns away on the wall. it lasts this round"
 hold_round = "they {state}. you lose {quantity} and take {detail}"
 roll_tells = "{name} strikes - {kind} gives {detail} against {state}, and it tells"
 roll_misses = "{name} swings - {kind} gives {detail} against {state}, and misses"
@@ -2226,7 +2267,7 @@ man_solve_bailey = "pledge the dice, spend the arsenal, then hold for a round"
 
 man_defend_use = "defend"
 man_defend_gloss = "stand to the wall and let the enemy arrive"
-man_defend_1 = "the king assigns you the same six troops every time"
+man_defend_1 = "the tower sends every body it holds, never fewer than six"
 man_defend_2 = "what changes is what came, and what you brought"
 man_defend_3 = "nothing moves until you hold, so there is time to read"
 man_defend_4 = "the enemy says what it will do next before it does it"
@@ -2234,10 +2275,10 @@ man_defend_eg1 = "defend, then survey enemy to see what came"
 man_defend_also = "hold, deploy, quaff, recall bailey"
 
 man_deploy_use = "deploy <name>"
-man_deploy_gloss = "send a summoned troop into the line"
-man_deploy_1 = "what the menagerie called up, spent here"
-man_deploy_2 = "it joins the garrison and rolls with it next round"
-man_deploy_eg1 = "deploy troop, when the garrison is few"
+man_deploy_gloss = "open what the circle bound as a supply on the wall"
+man_deploy_1 = "a demon is bound by summon, with its name, at a hold"
+man_deploy_2 = "with six held it flows, every round, like a potion"
+man_deploy_eg1 = "deploy golem, when the line has gaps to fill"
 man_deploy_also = "quaff, hold, summon"
 
 man_petition_use = "petition"
@@ -2248,9 +2289,9 @@ man_petition_eg1 = "petition, when the road is empty and you are dreading it"
 man_petition_also = "defend, weave, status"
 
 man_quaff_use = "quaff <name>"
-man_quaff_gloss = "spend a potion on the coming round"
-man_quaff_1 = "a potion is fight put back, or a better die"
-man_quaff_2 = "it lasts one round. it is bought for the round you hold"
+man_quaff_gloss = "open a potion as a supply on the wall"
+man_quaff_1 = "no one potion does anything. with enough held, it flows"
+man_quaff_2 = "each round it draws on its own. quaff again to flow faster"
 # **`warding`, not `mending`.** `mending` is a `secret = true` recipe, so the
 # manual's only worked example for this verb was one a new player cannot type —
 # the same drift already caught in the shipped spell, the balance driver and the
@@ -2347,6 +2388,16 @@ using_turns = "if the rampart has more than 8 turns. a long siege is a losing on
 
 recall_lifted = "the siege is over, either way"
 using_lifted = "repeat until the rampart has lifted. the guard a solver wants"
+
+# --- an arsenal item's supply (§19, Supply).
+recall_draw = "the rate a supply runs at. one is its slowest"
+using_draw = "if the warding has no draw, quaff warding. a standing order"
+recall_drained = "held, but too few to flow at all. make more"
+using_drained = "for each store, if the store has drained. what to brew next"
+
+# --- the standing garrison, read off the menagerie's roster (§19, Supply).
+recall_full = "the tower holds as many bodies as it may. a hold now is turned away"
+using_full = "if the roster has full, summon golem. a bare summon brings nobody home"
 
 # --- what the enemy announced. §5.1 tells you a round ahead so the turn is
 # prevention rather than reaction, and these three are the whole of that.

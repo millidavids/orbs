@@ -64,158 +64,23 @@ use super::node::NodeSave;
 ///   distilled from `stilling-draught`. An older build would drop the field in
 ///   silence; the migration renames a quiet-draught already in the alembic, or
 ///   a brew in flight would land on no recipe.
-pub const FORMAT: u32 = 16;
+/// - 17, troops leaving the arsenal for a standing garrison (§19, *Supply*).
+///   An older build would drop `garrison` in silence; the migration turns held
+///   troops into bodies, as a deploy would have, and drops the nodes.
+/// - 18, standing supplies (§19, *Supply*). An older build would drop open
+///   supplies and a siege's freshness in silence; absent is none open. A
+///   siege's `fortified` stops lasting the whole siege, so `migrate` keeps a
+///   room an older document already bought.
+/// - 19, `demon:<name>` keys, whose absence means the circle cannot bind one.
+///   An open tower's document lists every key it had and none of these, so the
+///   migration adds them; a sealed one is left to `mastery::caught_up` — 13's
+///   `circle`, again.
+pub const FORMAT: u32 = 19;
 
-/// Bring an older document up to [`FORMAT`], or say why it cannot be.
-///
-/// A save is refused only when the new model cannot state what the old one
-/// meant — the ward rework changed what a *scored reading* means — not merely
-/// because the number went up. Keep the table level with the function: two rows
-/// were once missing for migrations `migrate` had been performing since
-/// `0.8.13`.
-///
-/// | Bump | What changed | Migratable |
-/// |---|---|---|
-/// | 1 → 2 | The lens's scoring model | No — old readings mean nothing now |
-/// | 2 → 3 | `RngStream::COUNT` 8 → 9, and the `battlements/` → `sanctum/` rename in the same commit | No — a format-2 save names a room and four fixtures this build lacks, and `adopt` addresses nodes by path |
-/// | 3 → 4 | `RngStream::COUNT` 9 → 10 (`Menagerie`) | Yes — pad |
-/// | 4 → 5 | `bide until` withdrawn from the language | Yes, with the caveat below |
-/// | 5 → 6 | `RngStream::COUNT` 10 → 11 (`Siege`) | Yes — pad |
-/// | 6 → 7 | `/tower/bailey/host` → `/tower/bailey/enemy`, the first *content* rename | Yes — rewrite the path |
-/// | 7 → 8 | `Siege::quintessence`, a resource a running siege was fought without | Yes — fill the pool |
-/// | 8 → 9 | `RngStream::COUNT` 11 → 12 (`Forge`), and quintessence moving from the siege to the tower | Yes — pad, and lift the pool |
-/// | 9 → 10 | `[progress]` gains `tally`, `reached` and `opened` | Yes — every field defaults to the honest reading; `opened` absent is *everything open* |
-/// | 10 → 11 | `[world]` gains `length`, `[progress]` gains `stores` | Yes — `length` absent is the curve as authored, `stores` absent is *full* |
-/// | 11 → 12 | The menagerie's chant replaced by the circle: four syllable nodes and their readings, gone | Yes — drop the nodes; a figure mid-song loads as a circle with no beast |
-/// | 12 → 13 | `[progress] opened` gains `circle`, whose absence draws lesser beasts | Yes — an open tower gains the key; a sealed one catches up on its own |
-/// | 13 → 14 | A waiting beast gains `turned`, its turned wires | Yes — absent is none turned, which is what it was |
-/// | 14 → 15 | Calm-layer log drift removed | Yes — clear every poisoned log |
-/// | 15 → 16 | A siege gains `fortified` and the `Stilled` outcome; stillness distils from `stilling-draught` | Yes — absent is nought, and a quiet-draught in the alembic is renamed |
-///
-/// Padding a stream is exact: `Rngs::restore` winds a stream forward from the
-/// master seed by the stored position, so nought is precisely a world that
-/// never drew from it.
-///
-/// The language bump's caveat is survivable. A saved `bide until` compiles to a
-/// line the orb cannot read — a fault the player can see and fix, in a file
-/// whose text is theirs (§19) — and §8's taxonomy is *"scripts always log and
-/// never halt"*.
-fn migrate(mut save: Save) -> Result<Save, super::SaveError> {
-    /// The oldest format whose meaning survives into the current model.
-    ///
-    /// 3, not 2: the 2 → 3 bump shipped with the `battlements/` → `sanctum/`
-    /// rename (`de29565`, v0.4.2), and `adopt::apply` addresses nodes by path,
-    /// so accepting a format-2 document dropped the entire sanctum without a
-    /// word. Not a string rewrite like `host` → `enemy` either — the old
-    /// `rampart` is the *bailey's* fixture name now, so a format-2 path would
-    /// have to be disambiguated by its parent.
-    const OLDEST: u32 = 3;
-
-    if save.world.format < OLDEST {
-        return Err(super::SaveError::Behind {
-            found: save.world.format,
-            understood: FORMAT,
-        });
-    }
-
-    // Pad, never truncate: a document with more streams is `Ahead` and was
-    // refused above, so anything here is short or exact.
-    while save.rng.positions.len() < crate::RngStream::COUNT {
-        save.rng.positions.push("0".to_owned());
-    }
-
-    // The bailey's second band was `host` until format 7; a node is addressed
-    // by path, so the rename is a string rewrite and nothing more.
-    if save.world.format < 7 {
-        const WAS: &str = "/tower/bailey/host";
-        const NOW: &str = "/tower/bailey/enemy";
-        for node in &mut save.nodes {
-            if node.path == WAS {
-                node.path = NOW.to_owned();
-            }
-        }
-    }
-
-    // A siege fought before quintessence existed opens with a full pool: nought
-    // is not the fight that was saved, and the world it would be scaled against
-    // is not in the document. Generous is the honest way to be wrong, and it
-    // lasts one siege.
-    if save.world.format < 8 {
-        for node in &mut save.nodes {
-            if let Some(siege) = node.siege.as_mut()
-                && siege.quintessence.is_none_or(|held| held == 0)
-            {
-                siege.quintessence = Some(crate::tower::QUINTESSENCE_BASE);
-            }
-        }
-    }
-
-    // 8 → 9: the pool came up to the tower, the forge spending what a siege
-    // used to spend privately (§19). The largest is lifted — exact in practice,
-    // there being one bailey. A save with no siege gets the ceiling rather than
-    // nought, which would read as an inert forge; the ceiling is not in the
-    // document, so `None` travels and `restore` fills it.
-    if save.world.format < 9 {
-        let carried = save
-            .nodes
-            .iter_mut()
-            .filter_map(|node| node.siege.as_mut())
-            .filter_map(|siege| siege.quintessence.take())
-            .max();
-        save.progress.quintessence = carried;
-    }
-
-    // 11 → 12: the chant's nodes go, by prefix rather than path — a syllable's
-    // readings are children and an orphan would be restored at the root. The
-    // circle's children go too: a leftover `remaining` makes `if the circle is
-    // empty` false for ever, and they are republished on the next `summon`.
-    if save.world.format < 12 {
-        const ROOM: &str = "/tower/menagerie/";
-        const SYLLABLES: [&str; 4] = ["skyward", "earthward", "leftward", "rightward"];
-        let chant = |path: &str| {
-            let Some(rest) = path.strip_prefix(ROOM) else {
-                return false;
-            };
-            let head = rest.split('/').next().unwrap_or(rest);
-            SYLLABLES.contains(&head) || rest.starts_with("circle/")
-        };
-        save.nodes.retain(|node| !chant(&node.path));
-    }
-
-    // 12 → 13: an open tower gains the key it could not have named. A sealed
-    // one is left to `mastery::caught_up`.
-    if save.world.format < 13
-        && !save.world.sealed
-        && let Some(opened) = save.progress.opened.as_mut()
-        && !opened.iter().any(|key| key == crate::tower::opened::CIRCLE)
-    {
-        opened.push(crate::tower::opened::CIRCLE.to_owned());
-    }
-
-    // 14 → 15: before this no round could reach a log, so every lying one is
-    // the calm layer's, siege or no siege (§19).
-    if save.world.format < 15 {
-        for node in save.nodes.iter_mut().filter(|node| node.log) {
-            node.poisoned = false;
-        }
-    }
-
-    // 15 → 16: the alembic distils stillness from `stilling-draught` now, and a
-    // run is matched again when it lands. A quiet-draught already in the
-    // alembic would land on no recipe and foul, so it becomes the draught the
-    // new recipe wants. Generous, once: that brew skips the scroll.
-    if save.world.format < 16 {
-        const WAS: &str = "/alembic/quiet-draught";
-        const NOW: &str = "/alembic/stilling-draught";
-        for node in &mut save.nodes {
-            if let Some(room) = node.path.strip_suffix(WAS) {
-                node.path = format!("{room}{NOW}");
-            }
-        }
-    }
-
-    save.world.format = FORMAT;
-    Ok(save)
+/// Whether a count is nought, so the file stays quiet about it.
+#[allow(clippy::trivially_copy_pass_by_ref)] // serde hands a reference
+const fn is_nought(count: &u32) -> bool {
+    *count == 0
 }
 
 /// One tower, at one tick.
@@ -329,6 +194,22 @@ pub struct ProgressSave {
     /// setting, so a player who paid and then saved keeps what they paid for.
     #[serde(default)]
     pub petitioned: u32,
+    /// How far the next herb has grown toward flowering (§19, *Supply*).
+    ///
+    /// No `FORMAT` bump, on `renown`'s rule: nought is the honest reading of a
+    /// document written while verdant was one scroll a herb.
+    #[serde(default, skip_serializing_if = "is_nought")]
+    pub cultivated: u32,
+    /// The tower's standing garrison, and the reserve a siege is holding back
+    /// (§19, *Supply*).
+    ///
+    /// `Option` for `integrity`'s reason: `None` restores the floor, which is
+    /// what a tower with no garrison of its own always fought with.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub garrison: Option<GarrisonSave>,
+    /// Every supply the arsenal is drawing (§19, *Supply*). Absent is none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty", rename = "supply")]
+    pub supplies: Vec<SupplySave>,
     /// How the tower's walls stand (§11.5's Integrity).
     ///
     /// `Option`, not a bare `u32`: nought would come back as a tower worn to
@@ -411,6 +292,41 @@ pub struct ProgressSave {
     pub marks: Vec<MarkSave>,
 }
 
+/// The standing garrison: bodies at home, and those waiting out a siege.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GarrisonSave {
+    /// Bodies standing at home. Nought while they are on the wall.
+    pub standing: u32,
+    /// Bodies a hold brought mid-siege, joining when it ends.
+    #[serde(default)]
+    pub reserve: u32,
+}
+
+/// One open supply: what it is, where it draws, and how far this draw went.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SupplySave {
+    /// The item.
+    pub name: String,
+    /// `siege` or `calm`.
+    pub scope: String,
+    /// The rate chosen, slowest being nought.
+    pub chosen: usize,
+    /// The rate the last draw ran at.
+    pub running: usize,
+    /// The tick it opened.
+    pub since: u64,
+    /// How many the current draw took.
+    #[serde(default)]
+    pub drawn: u32,
+    /// What the current draw applied.
+    #[serde(default)]
+    pub applied: u32,
+    /// Stopped this round, kept so opening it again draws no second ration.
+    /// No `FORMAT` bump: absent is open, which is all a supply was before.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub stopped: bool,
+}
+
 /// A domain with something the rail should notice.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MarkSave {
@@ -487,8 +403,8 @@ impl Save {
         // not. Refusing only the future is half a version gate — serde drops
         // fields it no longer knows in silence — and refusing every older
         // format is the other half, most bumps being `RngStream::COUNT`
-        // increases a save can simply be padded to. See [`migrate`].
-        let save = migrate(save)?;
+        // increases a save can simply be padded to. See `migrate`.
+        let save = super::migrate::migrate(save)?;
         // Checked rather than clamped: a short list leaves streams at word
         // zero, the silent rewind `Rngs::positions` exists to prevent, and §15
         // invites hand-editing so this is a file a person can really produce.

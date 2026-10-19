@@ -2164,6 +2164,84 @@ holdout = [
     "bid the beast enter",
 ]
 
+# The circle's second use: a hold bound as a demon (§19, Supply). Written out
+# per demon rather than expanded, since an `{essence}` slot would teach a reader
+# to summon a potion. None opens on another verb's word, for the rule above.
+[[entry]]
+canonical = "summon golem"
+say = [
+    "summon golem",
+    "summon a golem",
+    "a golem from the next beast",
+    "make a golem of the beast",
+    "turn the beast into a golem",
+    "i want a golem",
+    "the beast as a golem",
+    "call it in as a golem",
+    "this beast should become a golem",
+    "have the beast become a golem",
+    "we need a golem",
+    "a golem this time",
+    "i'd like a golem please",
+    "the beast into a golem shape",
+    "this one we keep as a golem",
+    "a golem for the wall",
+]
+holdout = [
+    "make this one a golem",
+    "a golem out of this beast",
+]
+
+[[entry]]
+canonical = "summon familiar"
+say = [
+    "summon familiar",
+    "summon a familiar",
+    "a familiar from the next beast",
+    "make a familiar of the beast",
+    "turn the beast into a familiar",
+    "i want a familiar",
+    "the beast as a familiar",
+    "call it in as a familiar",
+    "this beast should become a familiar",
+    "have the beast become a familiar",
+    "we need a familiar",
+    "a familiar this time",
+    "i'd like a familiar please",
+    "the beast into a familiar shape",
+    "this one we keep as a familiar",
+    "a familiar for the wall",
+]
+holdout = [
+    "make this one a familiar",
+    "a familiar out of this beast",
+]
+
+[[entry]]
+canonical = "summon effigy"
+say = [
+    "summon effigy",
+    "summon an effigy",
+    "an effigy from the next beast",
+    "make an effigy of the beast",
+    "turn the beast into an effigy",
+    "i want an effigy",
+    "the beast as an effigy",
+    "call it in as an effigy",
+    "this beast should become an effigy",
+    "have the beast become an effigy",
+    "we need an effigy",
+    "an effigy this time",
+    "i'd like an effigy please",
+    "the beast into an effigy shape",
+    "this one we keep as an effigy",
+    "an effigy for the wall",
+]
+holdout = [
+    "make this one an effigy",
+    "an effigy out of this beast",
+]
+
 [[entry]]
 canonical = "defend"
 say = [
@@ -2753,48 +2831,73 @@ holdout = [
 # The bailey, and the siege turn.
 # ---------------------------------------------------------------------------
 
+# A demon the circle bound, opened on the wall as a supply (§19, Supply). An
+# essence, as a demon is in the arsenal; the troop it used to name is gone.
 [[entry]]
-canonical = "deploy {reagent}"
+canonical = "deploy {essence}"
 say = [
-    "send in the {reagent}",
-    "deploy {reagent}",
-    "put {reagent} on the line",
-    "loose the {reagent}",
-    "send {reagent} out",
-    "let the {reagent} at them",
-    "bring {reagent} up",
-    "commit the {reagent}",
-    "throw {reagent} into it",
-    "field {reagent}",
-    "unleash {reagent}",
-    "set {reagent} against them",
-    "get {reagent} into the fight",
-    "put {reagent} in",
-    "i want {reagent} out there",
-    "send the {reagent} to the wall",
-    "release {reagent}",
-    "march {reagent} out",
-    "order {reagent} forward",
-    "let {reagent} take the field",
-    "bring {reagent} to the line",
-    "spend the {reagent}",
-    "commit {reagent} to the round",
-    "have {reagent} meet them",
-    "put the {reagent} between us and them",
-    "loose {reagent} on them",
-    "range {reagent} against them",
-    "give them the {reagent}",
-    "bring the {reagent} to bear",
-    "array {reagent} on the wall",
-    "dispatch {reagent}",
-    "send forth {reagent}",
+    "send in the {essence}",
+    "deploy {essence}",
+    "put {essence} on the line",
+    "loose the {essence}",
+    "send {essence} out",
+    "let the {essence} at them",
+    "bring {essence} up",
+    "commit the {essence}",
+    "throw {essence} into it",
+    "field {essence}",
+    "unleash {essence}",
+    "set {essence} against them",
+    "get {essence} into the fight",
+    "put {essence} in",
+    "i want {essence} out there",
+    "send the {essence} to the wall",
+    "release {essence}",
+    "march {essence} out",
+    "order {essence} forward",
+    "let {essence} take the field",
+    "bring {essence} to the line",
+    "spend the {essence}",
+    "commit {essence} to the round",
+    "have {essence} meet them",
+    "put the {essence} between us and them",
+    "loose {essence} on them",
+    "range {essence} against them",
+    "give them the {essence}",
+    "bring the {essence} to bear",
+    "array {essence} on the wall",
+    "dispatch {essence}",
+    "send forth {essence}",
 ]
 holdout = [
-    "get the {reagent} out onto the field",
-    "i want {reagent} sent against them",
-    "let us put the {reagent} in this round",
-    "throw the {reagent} at the line",
-    "bring {reagent} out to meet them",
+    "get the {essence} out onto the field",
+    "i want {essence} sent against them",
+    "let us put the {essence} in this round",
+    "throw the {essence} at the line",
+    "bring {essence} out to meet them",
+]
+
+# Closing a supply the arsenal is drawing (§19, Supply).
+[[entry]]
+canonical = "stop {essence}"
+say = [
+    "no more {essence} this siege",
+    "enough {essence}",
+    "enough of the {essence}",
+    "cut off the {essence}",
+    "stop drinking the {essence}",
+    "stop the {essence}",
+    "hold back the {essence}",
+    "save the {essence}",
+    "keep the rest of the {essence}",
+    "the {essence} can stop flowing",
+    "shut off the {essence}",
+    "no {essence} next round",
+]
+holdout = [
+    "that is enough {essence} for now",
+    "stop spending the {essence}",
+    "keep the {essence} back",
 ]
 
 [[entry]]

@@ -96,6 +96,7 @@ pub(super) fn transmute(world: &mut World, place: Entity) {
                 recipe.potion,
                 recipe.scroll,
                 recipe.count,
+                recipe.yields,
             )
         })
     };
@@ -109,7 +110,7 @@ pub(super) fn transmute(world: &mut World, place: Entity) {
     // quietly made `transmute` the one path that can end a `Wield` with no
     // record — the echo, then nothing ever. §14 announces completions, and a run
     // ending is a completion whether or not it produced anything.
-    let Some((choices, leaves, potion, scroll, count)) = made else {
+    let Some((choices, leaves, potion, scroll, count, yields)) = made else {
         let message = world
             .resource::<Prose>()
             .line("wield_nothing", &[("name", &name)]);
@@ -117,6 +118,7 @@ pub(super) fn transmute(world: &mut World, place: Entity) {
         return;
     };
 
+    // One draw a run, however many it yields, so a batch adds no roll.
     let output = draw(world, &choices);
 
     // What the recipe asked for, not everything in the vessel: the instrument is
@@ -163,18 +165,12 @@ pub(super) fn transmute(world: &mut World, place: Entity) {
     // A flat one rather than a chance, deliberately narrower than what was
     // asked: a chance is a draw, and a draw here runs on a path `meditate` can
     // take hundreds of times inside one `step`.
-    //
-    // Never for what the tower may hold only so many of: a second stillness
-    // out of one brew would walk straight past its cap.
-    let over = super::super::charmed(world, place, super::super::charm::Kind::Fruitful)
-        && world
-            .resource::<crate::content::Recipes>()
-            .most_of(&output)
-            .is_none();
+    let over = super::super::charmed(world, place, super::super::charm::Kind::Fruitful);
+    let batch = yields + u32::from(over);
     for (product, kind, wanted) in std::iter::once((&output, kind, true)).chain(byproduct) {
         // Merged into whatever is already there, so a second run adds to the
         // pile rather than standing a second node beside it under the same name.
-        let made = if wanted && over { 2 } else { 1 };
+        let made = if wanted { batch } else { 1 };
         let node = super::super::stock::give(world, place, product, kind, made);
         if wanted {
             world.entity_mut(node).insert(Product);
@@ -191,15 +187,18 @@ pub(super) fn transmute(world: &mut World, place: Entity) {
     // `{detail}` literally, which is how a typo surfaces (§19) — and *"and
     // leaves "* on every scroll the archive assembles is that firing on content
     // that is correct.
+    let key = match (leaves.is_some(), batch > 1) {
+        (true, false) => "wield_done",
+        (false, false) => "wield_done_clean",
+        (true, true) => "wield_done_batch",
+        (false, true) => "wield_done_clean_batch",
+    };
     let message = world.resource::<Prose>().line(
-        if leaves.is_some() {
-            "wield_done"
-        } else {
-            "wield_done_clean"
-        },
+        key,
         &[
             ("source", &name),
             ("name", &output),
+            ("quantity", &batch.to_string()),
             ("detail", leaves.as_deref().unwrap_or_default()),
             ("count", &earned.to_string()),
         ],

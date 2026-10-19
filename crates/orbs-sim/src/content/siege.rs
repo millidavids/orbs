@@ -6,12 +6,16 @@
 //!
 //! Authored rather than hardcoded (rule 6): balancing this domain means moving
 //! these numbers dozens of times, and in Rust that is a recompile per guess.
+//!
+//! Every row is a standing supply (§19, *Supply*): its [`Rates`] say how many
+//! must be held to run, how many each round draws, and what that buys.
 
 use std::collections::BTreeMap;
 
 use bevy_ecs::resource::Resource;
 use serde::Deserialize;
 
+use super::rate::{Rate, Rates};
 use crate::parser::Verb;
 use crate::tower::dice::{Die, Effect};
 
@@ -21,32 +25,90 @@ const BUILTIN: &str = include_str!("../../content/siege.toml");
 /// The file's name, for an error a writer can act on.
 const FILE: &str = "siege.toml";
 
-/// What one arsenal item does when it is spent in a siege.
+/// What a supply's draw does to the siege: see `siege.toml`'s header.
+///
+/// An enum so an unknown word fails at load, rather than falling through a
+/// string match into a roll modifier.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Kind {
+    /// Refills the line.
+    Troops,
+    /// Puts fight back.
+    Vigour,
+    /// Holds room above what was levied.
+    Fortify,
+    /// Ends the siege with both sides standing.
+    Still,
+    /// Adds to every garrison roll.
+    Bonus,
+    /// Draw twice, keep the better.
+    Advantage,
+    /// Draw twice, keep the worse.
+    Disadvantage,
+    /// Roll a bigger die.
+    Upgrade,
+}
+
+impl Kind {
+    /// Whether this edits the round's rolls rather than the band.
+    #[must_use]
+    pub const fn modifies_rolls(self) -> bool {
+        matches!(
+            self,
+            Self::Bonus | Self::Advantage | Self::Disadvantage | Self::Upgrade
+        )
+    }
+}
+
+/// What one arsenal item does as a supply in a siege.
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Spendable {
-    /// Which word spends it — `deploy`, `quaff` or `wield`.
+    /// Which word opens it — `deploy`, `quaff` or `wield`.
     pub verb: String,
-    /// Which of the five shapes this is.
-    pub kind: String,
-    /// Troops, for `kind = "troops"`.
-    #[serde(default)]
-    pub count: u32,
-    /// Fight, for `kind = "vigour"`.
-    #[serde(default)]
-    pub points: u32,
-    /// The adjustment, for `kind = "bonus"`. May be negative.
-    #[serde(default)]
-    pub amount: i32,
+    /// What a draw does.
+    pub kind: Kind,
     /// The die, for `kind = "upgrade"`.
     #[serde(default)]
     pub die: String,
+    /// How fast it can draw, slowest first.
+    pub rates: Rates,
+    /// Set on a demon: what a hold bound as one puts in the arsenal (§19,
+    /// *Supply*). Absent on everything a recipe makes.
+    #[serde(default)]
+    pub summoned: Option<Summoned>,
+}
+
+/// What a beast held at the circle yields when it is bound as this demon.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Summoned {
+    /// How many a hold within par binds.
+    pub yields: u32,
+    /// How many a hold past par binds.
+    pub past_par: u32,
 }
 
 /// Everything the arsenal can spend in a siege, by name.
 #[derive(Debug, Clone, Deserialize, Resource)]
-#[serde(transparent)]
+#[serde(from = "BTreeMap<String, Spendable>")]
 pub struct Spendables {
     by_name: BTreeMap<String, Spendable>,
+    /// The rows a hold can be bound as, listed once at load: the scene asks
+    /// every tick.
+    demons: Vec<String>,
+}
+
+impl From<BTreeMap<String, Spendable>> for Spendables {
+    fn from(by_name: BTreeMap<String, Spendable>) -> Self {
+        let demons = by_name
+            .iter()
+            .filter(|(_, entry)| entry.summoned.is_some())
+            .map(|(name, _)| name.clone())
+            .collect();
+        Self { by_name, demons }
+    }
 }
 
 impl Spendables {
@@ -66,7 +128,8 @@ impl Spendables {
     /// # Errors
     ///
     /// [`ContentError`](super::ContentError) if the text is not valid TOML of the
-    /// expected shape.
+    /// expected shape, or a row's rates break the rule that no single item does
+    /// anything (`content::rate`).
     pub fn parse(text: &str) -> Result<Self, super::ContentError> {
         super::load::parse(FILE, text)
     }
@@ -88,22 +151,36 @@ impl Spendables {
         let word = &self.get(name)?.verb;
         Verb::ALL.into_iter().find(|verb| verb.canonical() == word)
     }
+
+    /// Every demon the circle can bind, alphabetically.
+    pub fn demons(&self) -> impl Iterator<Item = &str> {
+        self.demons.iter().map(String::as_str)
+    }
 }
 
 impl Spendable {
-    /// The [`Effect`] this is, if it is one of the three that edit a roll.
-    ///
-    /// Returns `None` for `troops` and `vigour`, which change the *band*
-    /// rather than the dice.
+    /// Whether this edits the round's rolls rather than the band.
     #[must_use]
-    pub fn effect(&self) -> Option<Effect> {
-        match self.kind.as_str() {
-            "bonus" => Some(Effect::Bonus(self.amount)),
-            "advantage" => Some(Effect::Advantage),
-            "disadvantage" => Some(Effect::Disadvantage),
-            "upgrade" => Die::named(&self.die).map(Effect::Upgrade),
-            _ => None,
+    pub const fn modifies_rolls(&self) -> bool {
+        self.kind.modifies_rolls()
+    }
+
+    /// The [`Effect`] a draw at `rate` stages, if this edits a roll.
+    #[must_use]
+    pub fn effect_at(&self, rate: &Rate) -> Option<Effect> {
+        match self.kind {
+            Kind::Bonus => Some(Effect::Bonus(rate.worth)),
+            Kind::Advantage => Some(Effect::Advantage),
+            Kind::Disadvantage => Some(Effect::Disadvantage),
+            Kind::Upgrade => Die::named(&self.die).map(Effect::Upgrade),
+            Kind::Troops | Kind::Vigour | Kind::Fortify | Kind::Still => None,
         }
+    }
+
+    /// What a draw at `rate` buys, never below nought.
+    #[must_use]
+    pub const fn worth_at(&self, rate: &Rate) -> u32 {
+        rate.worth.unsigned_abs()
     }
 }
 
@@ -121,33 +198,30 @@ mod tests {
     fn the_builtin_file_parses() {
         let spendables = Spendables::builtin();
         assert!(spendables.names().count() >= 8);
-        assert!(spendables.get("troop").is_some());
+        // A hold refills the standing garrison now (§19, *Supply*).
+        assert!(spendables.get("troop").is_none());
     }
 
     #[test]
-    fn every_entry_names_a_kind_the_game_understands() {
-        // An unknown kind fails the build, as an unknown tint does in
-        // `materials.toml`: a silent fallback would leave the item sitting in
-        // the arsenal doing nothing with every test green.
+    fn an_unknown_kind_is_refused_at_load() {
+        // A silent fallback would leave the item in the arsenal doing nothing
+        // with every test green.
+        let text = r#"
+            [warding]
+            verb = "quaff"
+            kind = "fireball"
+            rates = [{ opens = 6, draws = 2, worth = 2 }]
+        "#;
+        assert!(Spendables::parse(text).is_err());
+        assert!(Spendables::parse(&text.replace("fireball", "bonus")).is_ok());
+    }
+
+    #[test]
+    fn every_upgrade_names_one_of_the_seven_dice() {
         let spendables = Spendables::builtin();
         for name in spendables.names() {
             let entry = spendables.get(name).expect("just listed");
-            assert!(
-                matches!(
-                    entry.kind.as_str(),
-                    "troops"
-                        | "vigour"
-                        | "fortify"
-                        | "still"
-                        | "bonus"
-                        | "advantage"
-                        | "disadvantage"
-                        | "upgrade"
-                ),
-                "{name} has an unknown kind {:?}",
-                entry.kind,
-            );
-            if entry.kind == "upgrade" {
+            if entry.kind == Kind::Upgrade {
                 assert!(
                     Die::named(&entry.die).is_some(),
                     "{name} upgrades to {:?}, which is not one of the seven",
@@ -177,24 +251,38 @@ mod tests {
         let spendables = Spendables::builtin();
         for name in spendables.names() {
             let entry = spendables.get(name).expect("just listed");
-            let effect = entry.effect();
-            match entry.kind.as_str() {
-                "troops" | "vigour" | "fortify" | "still" => assert!(
-                    effect.is_none(),
-                    "{name} changes a band and also produced a dice effect",
-                ),
-                _ => assert!(effect.is_some(), "{name} produced no effect"),
+            let effect = entry.effect_at(entry.rates.slowest());
+            assert_eq!(
+                effect.is_some(),
+                entry.modifies_rolls(),
+                "{name} ({:?}) and its effect disagree",
+                entry.kind
+            );
+        }
+    }
+
+    #[test]
+    fn a_magnitude_is_worth_something_at_every_rate() {
+        // A heal of nought or a bonus of nought would draw for nothing.
+        let spendables = Spendables::builtin();
+        for name in spendables.names() {
+            let entry = spendables.get(name).expect("just listed");
+            if matches!(
+                entry.kind,
+                Kind::Bonus | Kind::Vigour | Kind::Fortify | Kind::Troops
+            ) {
+                for rate in entry.rates.iter() {
+                    assert!(rate.worth > 0, "{name} draws {rate:?} for nothing");
+                }
             }
         }
     }
 
     #[test]
-    fn the_troop_is_deployed_and_the_potions_are_quaffed() {
-        // The split §19 records: a scroll keeps `wield`, a troop is deployed,
-        // and drinking is its own word. A table that got this wrong would offer
-        // `quaff troop`.
+    fn the_potions_are_quaffed_and_the_scrolls_wielded() {
+        // The split §19 records: a scroll keeps `wield`, and drinking is its
+        // own word.
         let spendables = Spendables::builtin();
-        assert_eq!(spendables.verb_for("troop"), Some(Verb::Deploy));
         assert_eq!(spendables.verb_for("mending"), Some(Verb::Quaff));
         assert_eq!(spendables.verb_for("quickening-scroll"), Some(Verb::Wield));
     }

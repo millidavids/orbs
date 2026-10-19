@@ -267,8 +267,13 @@ fn readings_of(set: &str) -> Vec<&'static str> {
         "charm" => vec![super::charm::GRACED, super::charm::EBBING],
         // The arsenal's items answer with how well stocked the tower is —
         // `fresh`, `thin`, `spent` — which is what lets a spell keep its own
-        // stores up: walk them, find what has gone thin, go make it.
-        super::stores::STORE => super::stores::readings(),
+        // stores up: walk them, find what has gone thin, go make it. And with
+        // their supply's `draw` and `drained` (§19, *Supply*).
+        super::stores::STORE => {
+            let mut words = super::stores::readings();
+            words.extend(super::supply::readings());
+            words
+        }
         // The bailey's three have no arm, and that is a gap rather than a
         // decision: `siege::readings()` returns all eighteen words as one list,
         // and splitting them across `area`, `die` and `band` is a judgement
@@ -520,10 +525,17 @@ pub fn children_of(world: &World, node: Entity) -> Vec<Entity> {
 /// this is one direction of that translation and [`find_by_path`] the other.
 #[must_use]
 pub fn path_of_id(world: &World, id: NodeId) -> Option<String> {
-    let root = filesystem_root(world, world.resource::<Cwd>().0);
-    walk(world, root, &mut |entity| {
+    first_in_tree(world, |entity| {
         (world.get::<NodeId>(entity) == Some(&id)).then(|| path_of(world, entity))
     })
+}
+
+/// The first answer `seen` gives, walking the whole tree depth-first in
+/// insertion order.
+#[must_use]
+pub fn first_in_tree<T>(world: &World, mut seen: impl FnMut(Entity) -> Option<T>) -> Option<T> {
+    let root = filesystem_root(world, world.resource::<Cwd>().0);
+    walk(world, root, &mut seen)
 }
 
 /// The node at `path`, if there is one.

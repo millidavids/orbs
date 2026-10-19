@@ -39,32 +39,28 @@ use crate::parser::NounKind;
 #[must_use]
 pub fn home(world: &World, named: &str) -> Option<Entity> {
     // 1. Finished work keeps itself.
-    //
-    // A troop is finished work that no recipe makes, the one shape rules 2 and 3
-    // cannot see: `kind_of` derives a kind from the recipes producing a name,
-    // and a held beast is not a recipe — so a troop reads as a `Reagent` that
-    // nothing makes and nothing yet consumes, and the rule answers `None` for a
-    // material the game produces every time a beast is held.
-    //
-    // Named here rather than given a recipe, because inventing a recipe nobody
-    // can fire would put a lie in `recall troop`.
-    //
-    // It also keeps troops out of the verdant unlock: `execute::scroll` derives
-    // a base reagent as one the vocabulary knows and nothing makes, whose home
-    // is the laboratory's shelf. §19 records that defect shipping once, with
-    // dregs and ash on the dispensary.
-    if named == crate::execute::TROOP
-        || matches!(
-            world.resource::<Recipes>().kind_of(named),
-            NounKind::Essence | NounKind::Scroll
-        )
-    {
+    if matches!(kind_of(world, named), NounKind::Essence | NounKind::Scroll) {
         return super::keep(world);
     }
 
     // 2 and 3. The domain that makes it, else the domain that wants it.
     let instrument = making(world, named).or_else(|| wanting(world, named))?;
     store_of(world, &instrument)
+}
+
+/// What kind of noun `named` is when it exists: [`Recipes::kind_of`], and a
+/// demon the circle binds is finished work no recipe makes (§19, *Supply*).
+#[must_use]
+pub fn kind_of(world: &World, named: &str) -> NounKind {
+    let summoned = world
+        .resource::<crate::content::Spendables>()
+        .get(named)
+        .is_some_and(|entry| entry.summoned.is_some());
+    if summoned {
+        NounKind::Essence
+    } else {
+        world.resource::<Recipes>().kind_of(named)
+    }
 }
 
 /// An instrument whose recipes *produce* `named`, as an output or a leaving.

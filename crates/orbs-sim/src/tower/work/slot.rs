@@ -56,6 +56,9 @@ pub struct Working {
     pub started: Tick,
     /// When it lands.
     pub ends: Tick,
+    /// What its time is divided by: one if nothing hurried it. A quickening
+    /// opened later adds only what it has over this.
+    pub hurried_by: u64,
 }
 
 impl Working {
@@ -164,6 +167,7 @@ pub fn begin(world: &mut World, place: Entity, verb: Verb, subject: NodeId, tick
     // an interval set once — what `meditate` idempotence rests on. Per tick it
     // would be the countdown §19 refused, wearing a multiplier.
     let ticks = super::quicken::hastened(world, place, ticks);
+    let hurried_by = super::quicken::quickened_by(world, place).unwrap_or(1);
     // `haste` is the orb's speed, never the tool's (§19): a run a *spell* issued
     // lands sooner by the tiers taken, and a player's own run does not. Read
     // here with the charm, and for its reason — an interval set once.
@@ -179,6 +183,7 @@ pub fn begin(world: &mut World, place: Entity, verb: Verb, subject: NodeId, tick
         subject,
         started: now,
         ends: Tick::new(now.get().saturating_add(ticks)),
+        hurried_by,
     });
     // Who asked for this run, carried on the instrument so the completion can be
     // credited to them ticks later: a spell charges the mortar and the mortar

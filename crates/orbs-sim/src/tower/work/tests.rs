@@ -349,6 +349,7 @@ fn progress_is_a_function_of_the_clock() {
         subject: NodeId::from_raw(0),
         started: Tick::new(10),
         ends: Tick::new(30),
+        hurried_by: 1,
     };
     assert_eq!(working.progress(Tick::new(10)), (0, 20));
     assert_eq!(working.progress(Tick::new(20)), (10, 20));

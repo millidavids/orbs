@@ -80,20 +80,6 @@ fn addressed(world: &World, path: &str) -> Option<(Entity, String)> {
     })
 }
 
-/// Where the thing called `named` is, among everything within reach.
-///
-/// The *place*, not the node: [`tower::take`] is keyed by where a thing stands.
-/// [`reachable`] decides what within reach means, so §10.1's search order and
-/// its lock get no second opinion here.
-pub(super) fn holder(world: &World, cwd: Entity, named: &str) -> Option<Entity> {
-    let node = reachable(world, cwd).into_iter().find(|node| {
-        world
-            .get::<tower::Name>(*node)
-            .is_some_and(|name| name.0 == named)
-    })?;
-    world.get::<ChildOf>(node).map(ChildOf::parent)
-}
-
 /// Carry a reagent from one place to another (§10.1).
 ///
 /// The source slot is optional and disambiguating: with one lot of `sage` in the
@@ -190,14 +176,21 @@ pub(super) fn carry(intent: &Intent, world: &mut World) {
         .and_then(|parent| world.get::<tower::Name>(parent))
         .map_or_else(String::new, |name| name.0.clone());
 
-    hand(world, node, to);
+    let units = carried(world, node, to);
+    hand(world, node, to, units);
 
+    let key = if units > 1 {
+        "move_done_all"
+    } else {
+        "move_done"
+    };
     let message = world.resource::<Prose>().line(
-        "move_done",
+        key,
         &[
             ("name", &thing),
             ("origin", &origin),
             ("path", &destination),
+            ("count", &units.to_string()),
         ],
     );
     let mut scrollback = world.resource_mut::<Scrollback>();
@@ -209,6 +202,7 @@ pub(super) fn carry(intent: &Intent, world: &mut World) {
         // a move carrying `Source = "dispensary"` would claim to happen there.
         .text(FieldName::Origin, &origin)
         .text(FieldName::Path, &destination)
+        .count(FieldName::Quantity, u64::from(units))
         .text(FieldName::Message, &message)
         .role(Role::Success)
         .finish();
@@ -306,16 +300,16 @@ pub(super) fn operate(intent: &Intent, world: &mut World) {
     start(world, at, &name, verb);
 }
 
-/// Move one of whatever `node` is into `to`: one unit if it is stock, the whole
-/// thing if it is not.
+/// Move `units` of whatever `node` is into `to` if it is stock, the whole thing
+/// if it is not.
 ///
-/// An endless pile yields a unit without shrinking, which makes the base
+/// An endless pile yields units without shrinking, which makes the base
 /// reagents a floor. A vessel, a file and a spell simply move.
 ///
 /// One function for `move` and for charging, because the two copies drifted:
 /// `grind sage` re-parented the endless pile into the mortar, where the run
 /// consumed it and the tower's sage was gone for good.
-fn hand(world: &mut World, node: Entity, to: Entity) {
+fn hand(world: &mut World, node: Entity, to: Entity, units: u32) {
     let Some(thing) = world.get::<tower::Name>(node).map(|name| name.0.clone()) else {
         return;
     };
@@ -330,9 +324,24 @@ fn hand(world: &mut World, node: Entity, to: Entity) {
         return;
     }
     if let Some(from) = world.get::<ChildOf>(node).map(ChildOf::parent) {
-        tower::take(world, from, &thing, 1);
+        tower::take(world, from, &thing, units);
     }
-    tower::give(world, to, &thing, kind, 1);
+    tower::give(world, to, &thing, kind, units);
+}
+
+/// How much of `node` a `move` to `to` carries.
+///
+/// The whole batch onto a shelf, the arsenal or a store: a supply opens on how
+/// much the arsenal holds (§19, *Supply*), and six moves to open a warding was
+/// the tedium that rule exists to remove. One unit into an instrument, which
+/// is charged a unit at a time because a run spends one. An endless pile gives
+/// one, as it always did.
+fn carried(world: &World, node: Entity, to: Entity) -> u32 {
+    let shelf = world.get::<tower::Keep>(to).is_some() || world.get::<tower::Store>(to).is_some();
+    match world.get::<tower::Stock>(node) {
+        Some(tower::Stock::Counted(count)) if shelf => *count,
+        _ => 1,
+    }
 }
 
 /// Move one reagent into `at`, saying where it came from.
@@ -347,7 +356,7 @@ fn charge(world: &mut World, node: Entity, at: Entity, destination: &str) {
         .and_then(|parent| world.get::<tower::Name>(parent))
         .map_or_else(String::new, |name| name.0.clone());
 
-    hand(world, node, at);
+    hand(world, node, at, 1);
 
     let message = world.resource::<Prose>().line(
         "move_done",
@@ -381,18 +390,10 @@ fn start(world: &mut World, at: Entity, name: &str, verb: Verb) {
 
     // §10.1: the material's state decides what an instrument can do, so a
     // refusal has to say what is in there.
-    let Some((ticks, heat, cost, most, made)) = world
+    let Some((ticks, heat, cost)) = world
         .resource::<Recipes>()
         .matching(name, &holding, &tower::known(world))
-        .map(|recipe| {
-            (
-                recipe.ticks,
-                recipe.heat,
-                recipe.quintessence,
-                recipe.most,
-                recipe.outputs().first().map(|made| (*made).to_owned()),
-            )
-        })
+        .map(|recipe| (recipe.ticks, recipe.heat, recipe.quintessence))
     else {
         let key = if holding.is_empty() {
             "wield_empty"
@@ -430,7 +431,7 @@ fn start(world: &mut World, at: Entity, name: &str, verb: Verb) {
         missing(verb, name, world);
         return;
     };
-    if let Some((key, fields)) = super::price::refusal(world, cost, most, made.as_deref()) {
+    if let Some((key, fields)) = super::price::refusal(world, cost) {
         let fields: Vec<(&str, &str)> = fields
             .iter()
             .map(|(field, value)| (*field, value.as_str()))
@@ -608,6 +609,11 @@ pub(super) fn stop(intent: &Intent, world: &mut World) {
     // A spell first: `stop` reached instruments only, so an invoked spell was
     // unstoppable. The two can never share a name, so the order is free.
     if tower::spell::stop_spell(world, &name) {
+        return;
+    }
+    // Then a supply, which can never share a name with an instrument either:
+    // `stop warding` shuts what the arsenal is drawing (§19, *Supply*).
+    if super::defend::stop_supply(world, &name) {
         return;
     }
 

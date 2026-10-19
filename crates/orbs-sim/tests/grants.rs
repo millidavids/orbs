@@ -215,25 +215,29 @@ fn edge_rides_on_every_answering_roll_and_escrow_on_what_a_siege_pays() {
 
 #[cfg(debug_assertions)]
 #[test]
-fn garrison_brings_more_bodies_per_troop() {
+fn garrison_raises_the_most() {
+    use orbs_sim::tower::siege::{GARRISON_MOST, Garrison};
     let mut sim = Sim::new(1);
+    run(&mut sim, &["debug_take garrison_1"]);
+    sim.world_mut()
+        .resource_mut::<Garrison>()
+        .restore(GARRISON_MOST, 0);
     run(
         &mut sim,
         &[
-            "debug_take garrison_1",
             "attend menagerie",
-            "debug_spawn troop 1",
+            "summon",
+            "debug_circle",
+            "summon",
             "attend bailey",
             "defend",
         ],
     );
-    let before = siege(&mut sim).expect("a siege").garrison.count;
-    run(&mut sim, &["deploy troop"]);
-    let after = siege(&mut sim).expect("a siege").garrison.count;
+    let line = siege(&mut sim).expect("a siege").garrison.count;
     assert_eq!(
-        after - before,
-        2 + grant::GARRISON_BONUS,
-        "a troop did not bring one more body",
+        line,
+        GARRISON_MOST + grant::GARRISON_BONUS,
+        "the grant did not make room for one more",
     );
 }
 

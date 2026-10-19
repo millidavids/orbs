@@ -140,6 +140,10 @@ pub struct NodeSave {
     /// A quickening window.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub quickened: Option<SpanSave>,
+    /// What the window divides a run by. No `FORMAT` bump, on `renown`'s rule:
+    /// absent is a half, which is all a window was before it said.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quickened_by: Option<u64>,
     /// The forge's enchantments, in the order they were laid.
     ///
     /// A `Vec` rather than an `Option<Vec>`: empty and absent both mean *nothing
@@ -230,6 +234,10 @@ pub struct WorkingSave {
     pub started: u64,
     /// The tick it lands on.
     pub ends: u64,
+    /// What a quickening or a charm divided it by. No `FORMAT` bump, on
+    /// `quickened_by`'s rule: absent is unhurried.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hurried_by: Option<u64>,
 }
 
 /// An interval, as §8 asks for one: a start and a completion tick.

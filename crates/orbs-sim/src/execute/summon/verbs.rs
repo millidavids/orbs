@@ -6,7 +6,7 @@
 //!
 //! Neither word takes the production slot and neither waits, so the menagerie's
 //! faucet is additive; `spell::block::begins_work` carries the exemption (§19).
-//! A hold puts troops into the arsenal and then the orb earns — `muster`'s
+//! A hold refills the standing garrison and then the orb earns — `muster`'s
 //! order. A balk costs only time (§19).
 
 use bevy_ecs::prelude::*;
@@ -25,21 +25,27 @@ use crate::tower::{
 /// `progression.toml` prices a hold under.
 pub(crate) const CIRCLE: &str = "circle";
 
-/// What a troop is called on a shelf.
+/// What a hold is counted under in the tally and the stores. No longer a thing
+/// on a shelf: the bodies join the garrison (§19, *Supply*).
 pub const TROOP: &str = "troop";
 
-/// `summon` — draw a beast up at the circle, or call the waiting one in.
+/// `summon [<demon>]` — draw a beast up at the circle, or call the waiting one
+/// in.
 ///
-/// Two acts in one word, as `probe` is. One circle and one beast at a time, so
-/// there is never anything to name, and the draw is not a call.
+/// Two acts in one word, as `probe` is, and the draw is not a call. Bare, a
+/// hold refills the garrison; naming a demon binds the hold as that demon
+/// instead (§19, *Supply*). The name matters only on the call that holds.
 ///
 /// A call is never spent on a guess: `divined` is the augury having read the
 /// line (§6), and a reader defeated by a sentence falls back to `summon`, so
 /// *"cycle the widdershins"* came back as a call against par with nothing
 /// limned.
-pub(crate) fn summon(world: &mut World, divined: bool) {
+pub(crate) fn summon(intent: &Intent, world: &mut World, divined: bool) {
     let Some(circle) = fixture(world) else {
         say(world, Verb::Summon, "summon_nowhere", &[], Role::Cost);
+        return;
+    };
+    let Ok(demon) = super::binding::named(intent, world) else {
         return;
     };
     if world.get::<Beast>(circle).is_none() {
@@ -50,7 +56,16 @@ pub(crate) fn summon(world: &mut World, divined: bool) {
         say(world, Verb::Summon, "summon_divined", &[], Role::Cost);
         return;
     }
-    call(world, circle);
+    // A lesser circle binds bodies only. Refused before the call, so it costs
+    // no par.
+    let lesser = world
+        .get::<Beast>(circle)
+        .is_some_and(|beast| matches!(beast.shape(), tower::circle::Shape::Lesser(_)));
+    if demon.is_some() && lesser {
+        say(world, Verb::Summon, "summon_lesser_binds", &[], Role::Cost);
+        return;
+    }
+    call(world, circle, demon.as_deref());
 }
 
 /// A beast arrives at the circle.
@@ -86,7 +101,7 @@ fn arrive(world: &mut World, circle: Entity) {
 }
 
 /// Call the waiting beast into the circle as it stands.
-fn call(world: &mut World, circle: Entity) {
+fn call(world: &mut World, circle: Entity, demon: Option<&str>) {
     let Some(mut beast) = world.get_mut::<Beast>(circle) else {
         return;
     };
@@ -108,45 +123,46 @@ fn call(world: &mut World, circle: Entity) {
                 Role::Cost,
             );
         }
-        Call::Held => hold(world, circle, calls, troops),
+        Call::Held => hold(world, circle, calls, troops, demon),
     }
 }
 
 /// Every row agreed: the beast is held, and the circle is clear for the next.
-fn hold(world: &mut World, circle: Entity, calls: u32, troops: u32) {
-    let Some(shape) = world.get::<Beast>(circle).map(Beast::shape) else {
+fn hold(world: &mut World, circle: Entity, calls: u32, troops: u32, demon: Option<&str>) {
+    let Some((shape, within_par)) = world
+        .get::<Beast>(circle)
+        .map(|beast| (beast.shape(), beast.within_par()))
+    else {
         return;
     };
     world.entity_mut(circle).remove::<Beast>();
     publish(world, circle);
 
-    let mut work = tower::Work::event(tower::FIGURE);
-    // Through `tower::home`, never a named room: asking the rule stops a held
-    // troop and a `debug_spawn`ed one landing in different places (§19).
-    let shelf = tower::home(world, TROOP);
-    if let Some(shelf) = shelf {
-        tower::give(
-            world,
-            shelf,
-            TROOP,
-            crate::parser::NounKind::Essence,
-            troops,
-        );
-        // A making, so renown is minted: the stores count makings, and a
-        // producer that forgot would deploy troops the arsenal calls thin.
-        work = work.making(TROOP);
-    }
-    let shelved = shelf.is_some();
     // A lesser hold is a quarter of the price — the lesson, not the faucet. One
     // rule for par either way; the circle's shape says what par is.
     let earned = shape.priced(tower::worth_within_par(world, CIRCLE, calls, shape.par()));
-    // The sentence says what reached a shelf: announcing troops that never
-    // arrived would be the record lying about the world.
-    let answering = if shelved {
-        world.resource::<Prose>().counted("summon_troops", troops)
-    } else {
-        world.resource::<Prose>().line("summon_troops_unkept", &[])
-    };
+
+    // Bound as a demon: into the arsenal, and one making of it. Nothing
+    // shelved is no making: renown and the stores count what reached a shelf.
+    if let Some(demon) = demon {
+        let (answering, shelved) = super::binding::bind(world, demon, within_par);
+        say(
+            world,
+            Verb::Summon,
+            "summon_holds",
+            &[("quantity", &answering), ("count", &calls.to_string())],
+            Role::Success,
+        );
+        let work = tower::Work::event(tower::FIGURE);
+        let work = if shelved { work.making(demon) } else { work };
+        tower::done(world, &work, earned);
+        return;
+    }
+
+    // Still a making, whatever the garrison could take: the hold is a run, and
+    // renown and the tally count runs (§19, *Supply*).
+    let work = tower::Work::event(tower::FIGURE).making(TROOP);
+    let answering = super::enlisting::enlist(world, troops);
     say(
         world,
         Verb::Summon,
@@ -284,7 +300,7 @@ pub(crate) fn fixture(world: &World) -> Option<Entity> {
 }
 
 /// One authored line about the menagerie.
-fn say(world: &mut World, verb: Verb, key: &str, args: &[(&str, &str)], role: Role) {
+pub(super) fn say(world: &mut World, verb: Verb, key: &str, args: &[(&str, &str)], role: Role) {
     let message = world.resource::<Prose>().line(key, args);
     world
         .resource_mut::<Scrollback>()

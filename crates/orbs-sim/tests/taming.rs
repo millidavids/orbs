@@ -195,7 +195,7 @@ fn a_divined_summon_draws_but_never_spends_a_call() {
 
 #[test]
 #[cfg(debug_assertions)]
-fn a_hold_within_par_pays_four_troops_and_the_whole_price() {
+fn a_hold_within_par_pays_four_bodies_and_the_whole_price() {
     let mut sim = at_the_circle(3);
     run(&mut sim, "summon");
     let before = sim.experience();
@@ -204,9 +204,15 @@ fn a_hold_within_par_pays_four_troops_and_the_whole_price() {
 
     assert!(sim.circle().is_none(), "a hold left the beast waiting");
     assert!(
-        ever_said(&sim, "the circle holds. 4 troops answer"),
+        ever_said(&sim, "the circle holds. 4 join the garrison"),
         "{:?}",
         said(&sim),
+    );
+    assert_eq!(
+        sim.world()
+            .resource::<orbs_sim::tower::siege::Garrison>()
+            .home(),
+        orbs_sim::tower::siege::GARRISON_FLOOR + 4,
     );
     assert_eq!(
         sim.experience(),
@@ -214,14 +220,14 @@ fn a_hold_within_par_pays_four_troops_and_the_whole_price() {
         "a hold within par did not pay 8"
     );
     assert_eq!(sim.tally("event:figure"), 1, "the hold was not counted");
-    assert_eq!(sim.tally("made:troop"), 1, "the troops were not a making");
+    assert_eq!(sim.tally("made:troop"), 1, "the hold was not a making");
     // Held means clear: a spell's `if the circle is working` must go false.
     assert!(!sim.holds_reading("menagerie", "circle", "fervour"));
 }
 
 #[test]
 #[cfg(debug_assertions)]
-fn a_hold_past_par_pays_three_troops_and_three_quarters() {
+fn a_hold_past_par_pays_three_bodies_and_three_quarters() {
     let mut sim = at_the_circle(3);
     run(&mut sim, "summon");
     // Four calls on the opening, every one a balk: one past par before the hold.
@@ -233,7 +239,7 @@ fn a_hold_past_par_pays_three_troops_and_three_quarters() {
     run(&mut sim, "summon");
 
     assert!(
-        ever_said(&sim, "the circle holds. 3 troops answer"),
+        ever_said(&sim, "the circle holds. 3 join the garrison"),
         "{:?}",
         said(&sim),
     );
@@ -242,26 +248,6 @@ fn a_hold_past_par_pays_three_troops_and_three_quarters() {
         before + 6,
         "past par did not pay three quarters"
     );
-}
-
-/// A hold says what reached a shelf. With no arsenal the sentence counted four
-/// troops that went nowhere, so the record lied about the world.
-#[test]
-#[cfg(debug_assertions)]
-fn a_hold_with_no_arsenal_does_not_announce_troops() {
-    let mut sim = at_the_circle(3);
-    let Some(arsenal) = orbs_sim::tower::keep(sim.world_mut()) else {
-        panic!("an open tower has no arsenal");
-    };
-    sim.world_mut()
-        .entity_mut(arsenal)
-        .remove::<orbs_sim::tower::Keep>();
-    run(&mut sim, "summon");
-    run(&mut sim, "debug_circle");
-    run(&mut sim, "summon");
-    assert!(ever_said(&sim, "the circle holds"), "{:?}", said(&sim));
-    assert!(ever_said(&sim, "no troops come"), "{:?}", said(&sim));
-    assert!(!ever_said(&sim, "troops answer"), "{:?}", said(&sim));
 }
 
 #[test]

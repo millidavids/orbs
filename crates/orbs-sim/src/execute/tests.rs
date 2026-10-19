@@ -174,7 +174,9 @@ fn sample(verb: Verb) -> (&'static str, &'static str) {
         // with *"defend first"*, which is the world answering.
         Verb::Defend => ("bailey", "defend"),
         Verb::Petition => ("bailey", "petition"),
-        Verb::Deploy => ("bailey", "deploy troop"),
+        // Nothing is deployed until the circle binds demons (§19, *Supply*);
+        // before a siege it refuses with *"defend first"*, the world answering.
+        Verb::Deploy => ("bailey", "deploy clarity"),
         // `clarity`, not `mending`: `mending` is `secret = true` and not in the
         // vocabulary until the lens spills it, so the parser refuses before
         // dispatch and the verb looks dead (§19).

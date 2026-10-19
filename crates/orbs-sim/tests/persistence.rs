@@ -83,8 +83,9 @@ fn commands() -> Vec<&'static str> {
             "empty alembic",
             "distil clarified-draught",
             "meditate 60",
-            // A quickening window.
-            "debug_spawn quickening-scroll",
+            // A quickening window, and its supply open: four is the slowest
+            // rate (§19, *Supply*).
+            "debug_spawn quickening-scroll 4",
             "wield quickening-scroll",
         ]);
     }
@@ -834,7 +835,7 @@ fn show_a_save() {
 #[test]
 fn every_resource_the_world_holds_is_one_the_save_knows_about() {
     // In the document.
-    const CARRIED: [&str; 20] = [
+    const CARRIED: [&str; 23] = [
         "orbs_sim::tick::Tick",
         "orbs_sim::rng::Rngs",
         "orbs_sim::tower::node::NodeIds",
@@ -850,6 +851,14 @@ fn every_resource_the_world_holds_is_one_the_save_knows_about() {
         // the renown; and stores measure a history of makings, which a reload
         // cannot re-derive from anything the world still holds.
         "orbs_sim::tower::siege::standing::Petitioned",
+        // The standing garrison and its reserve (§19, *Supply*): bodies the
+        // menagerie brought home, which nothing else in the world records.
+        "orbs_sim::tower::siege::garrison::Garrison",
+        // Every supply the arsenal is drawing: a siege saved mid-fight comes
+        // back with its potions still flowing.
+        "orbs_sim::tower::supply::open::Supplies",
+        // Growth toward the next herb, which a dry verdant supply keeps.
+        "orbs_sim::tower::cultivation::Cultivation",
         "orbs_sim::tower::stores::Stores",
         "orbs_sim::tower::erosion::Integrity",
         "orbs_sim::tower::ley::Taken",
@@ -881,7 +890,7 @@ fn every_resource_the_world_holds_is_one_the_save_knows_about() {
     ];
 
     // Not in the document. Each line is a decision; none of them is a shrug.
-    const EXCUSED: [(&str, &str); 19] = [
+    const EXCUSED: [(&str, &str); 20] = [
         (
             "orbs_sim::session::Scrollback",
             "a bounded tail travels; the arena does not",
@@ -926,6 +935,10 @@ fn every_resource_the_world_holds_is_one_the_save_knows_about() {
         ("orbs_sim::content::spell::Spells", "content, compiled in"),
         (
             "orbs_sim::content::siege::Spendables",
+            "content, compiled in",
+        ),
+        (
+            "orbs_sim::content::scrolls::Scrolls",
             "content, compiled in",
         ),
         ("orbs_sim::content::forge::Charms", "content, compiled in"),
@@ -1031,6 +1044,38 @@ fn a_renamed_node_keeps_its_place_among_its_siblings() {
             }
         }
     }
+}
+
+/// A fixture a later build added shares no id with a node the save names.
+///
+/// Each saved node keeps its saved id, and one the save never heard of kept the
+/// id its raise gave it. The roster was raised with an older build's bailey id
+/// that way, and a running bailey spell was saved as standing at the roster.
+#[test]
+fn a_fixture_a_later_build_added_shares_no_id_with_a_saved_node() {
+    const ROSTER: &str = "/tower/menagerie/roster";
+    let mut save = Sim::new(1).snapshot();
+    let raised = save
+        .nodes
+        .iter()
+        .find(|node| node.path == ROSTER)
+        .map(|node| node.id)
+        .expect("the tower raises a roster");
+    // An older build's document: no roster, and its id on a node it did name.
+    save.nodes.retain(|node| node.path != ROSTER);
+    let bailey = save
+        .nodes
+        .iter_mut()
+        .find(|node| node.path == "/tower/bailey")
+        .expect("a bailey");
+    bailey.id = raised;
+
+    let loaded = Sim::restored(&save);
+    let mut ids: Vec<u64> = loaded.snapshot().nodes.iter().map(|node| node.id).collect();
+    let all = ids.len();
+    ids.sort_unstable();
+    ids.dedup();
+    assert_eq!(ids.len(), all, "two nodes came back with one id");
 }
 
 /// An open numbered question can still be answered after a reload.

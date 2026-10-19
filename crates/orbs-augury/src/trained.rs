@@ -246,6 +246,30 @@ mod tests {
         assert!(read.is_some(), "the reader refused a corpus phrasing");
     }
 
+    /// Weights on disk that will not load against this build's vocabulary.
+    ///
+    /// Every other test here skips when they will not load, so a content
+    /// change that adds or drops a word left the reader dead with the gate
+    /// green (§19, *Supply*). With no weights at all, as in CI, there is
+    /// nothing to be stale.
+    #[test]
+    fn weights_on_disk_are_this_vocabularys() {
+        for (path, register) in [
+            (WEIGHTS, Register::Verbs),
+            (SCRIBE_WEIGHTS, Register::Spells),
+        ] {
+            if !std::path::Path::new(&format!("{path}.bin")).exists() {
+                continue;
+            }
+            let device = burn::backend::ndarray::NdArrayDevice::default();
+            if let Err(error) =
+                weights::<NdArray<f32>>(path, register, &Vocabulary::builtin(), &device)
+            {
+                panic!("{error}");
+            }
+        }
+    }
+
     #[test]
     fn a_path_that_holds_nothing_is_an_error_rather_than_a_panic() {
         // `load_from` takes whatever path a run wrote, and a seed that never

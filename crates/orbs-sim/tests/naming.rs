@@ -618,6 +618,10 @@ fn readings() -> Vec<&'static str> {
     // The forge's, missed the same way — found while choosing the circle's
     // count, whose first name was the forge's own `lit`.
     out.extend(orbs_sim::tower::charm::readings());
+    // The arsenal's: its stores' freshness and its supplies' flow (§19,
+    // *Supply*). The first three shipped unswept for a phase.
+    out.extend(orbs_sim::tower::store_readings());
+    out.extend(orbs_sim::tower::supply::readings());
     out
 }
 
@@ -743,6 +747,12 @@ fn the_readings_that_score_against_a_typed_word_are_pinned() {
             // `edit` (scribe) vs the maze's way out, at 750. `recall edit` used
             // to answer with the way out of a maze.
             ("exit", "edit"),
+            // The arsenal's store words, unswept from `0.11.14` until *Supply*
+            // added them: `crush` (grind) and `rest` (meditate) against
+            // `fresh`, `open` and `set` against `spent`. All verb words, so the
+            // resolver answers them exactly.
+            ("fresh", "crush"),
+            ("fresh", "rest"),
             // The forge's column bit, which shipped unswept — its readings were
             // missing until the menagerie's count nearly took this word.
             // `light` (kindle) at 600 and `list` (survey) at 750; both verb
@@ -751,6 +761,8 @@ fn the_readings_that_score_against_a_typed_word_are_pinned() {
             ("lit", "list"),
             // `make` (recall) vs a way's walk count, at 600.
             ("marks", "make"),
+            ("spent", "open"),
+            ("spent", "set"),
             // `walk` (follow) vs a way with no way through, at 750 — the worst,
             // because both are words a player uses about the same screen.
             ("wall", "walk"),
@@ -868,10 +880,18 @@ fn no_two_readings_fuzzy_match_each_other() {
     // which is what rejected `warmer`/`even`/`cooler` for the ward's second
     // delta: `cooler` is 667 against `closer` and `even` 600 against `level`, so
     // a spell's author could not tell which channel they had asked.
+    // Pinned, not cleared: the bailey's enemy count and the arsenal's store
+    // word, at 600. They sit on different nodes in different rooms, and `fresh`
+    // shipped unswept from `0.11.14` until *Supply* swept it.
+    const TOLERATED: [(&str, &str); 1] = [("foes", "fresh")];
     let words = readings();
     let mut collisions = Vec::new();
     for (index, reading) in words.iter().enumerate() {
         for other in words.iter().skip(index + 1) {
+            let pair = (*reading, *other);
+            if TOLERATED.contains(&pair) || TOLERATED.contains(&(pair.1, pair.0)) {
+                continue;
+            }
             if similarity(reading, other) >= MIN_SIMILARITY {
                 collisions.push(format!(
                     "{reading} vs {other} at {}",

@@ -1,12 +1,10 @@
-//! A domain working at double speed for a while.
+//! A domain working faster for a while.
 //!
-//! What a `quickening-scroll` sets. A one-shot on the run in hand was the wrong
-//! shape twice over: unusable at the moment a player reaches for one (before
-//! starting a brew), and four walks of the stacks bought a single stage.
-//!
-//! An interval, like the fire. [`Quickened`] stores when it began and how long
-//! it lasts and [`quickened`] compares that against the clock, so nothing ticks
-//! it down and ticks collapsed inside one `step` behave like ticks watched.
+//! What a quickening supply sets, one window a draw (§19, *Supply*). An
+//! interval, like the fire: [`Quickened`] stores when it began, how long it
+//! lasts and by how much, and [`quickened_by`] compares that against the clock,
+//! so nothing ticks it down and ticks collapsed inside one `step` behave like
+//! ticks watched.
 //!
 //! Checked when a run starts, like heat (§10.1): a run that starts inside the
 //! window is short and stays short even if the window closes under it. That
@@ -17,39 +15,25 @@ use bevy_ecs::prelude::*;
 
 use crate::tick::Tick;
 
-/// How long one scroll quickens a domain, in ticks.
+/// How much faster a `hurried` charm works, and what an older save's window
+/// was worth before a window said.
 ///
-/// Five minutes at §5.0's one tick a second, inside §11.5's Production band
-/// (3–10 minutes). A clarity end to end is 94 ticks, so this is three brews'
-/// worth — generous, because a scroll costs four walks of the stacks.
-///
-/// A placeholder, like every duration here. `orbs-balance` can sweep it; this
-/// number has not been through one.
-pub const QUICKENED_TICKS: u64 = 300;
-
-/// How much faster a quickened tool works.
-///
-/// Two, and a `u64` divisor rather than a float: durations are whole ticks and a
-/// fractional rate would need a rounding rule nobody could predict from the
-/// number.
-///
-/// Two call sites floor it in opposite directions, deliberately: `hastened`
-/// takes `max(1)` so a one-tick run does not become a no-tick one, and
-/// [`hurried_from`] refuses to move a run with nothing left, where the same
-/// flooring would land it *later*. Both guards live here so the pair is
-/// readable side by side.
+/// A `u64` divisor rather than a float: durations are whole ticks and a
+/// fractional rate would need a rounding rule nobody could predict.
 pub const QUICKENED_BY: u64 = 2;
 
-/// A place whose tools are working at double speed.
+/// A place whose tools are working faster.
 ///
 /// On the domain, not an instrument: hanging it on one tool would mean choosing
 /// which, a decision the player did not make and could not see.
 #[derive(Component, Debug, Clone, Copy)]
 pub struct Quickened {
-    /// When the scroll was unrolled.
+    /// When the draw unrolled it.
     pub from: Tick,
     /// How long it lasts, in ticks.
     pub ticks: u64,
+    /// What a run's time is divided by: 2 is half, 3 a third.
+    pub by: u64,
 }
 
 impl Quickened {
@@ -61,28 +45,34 @@ impl Quickened {
     }
 }
 
-/// Whether the domain `place` stands in is quickened right now.
+/// How much faster the domain `place` stands in works right now, if at all.
 ///
 /// Takes an instrument and looks up, because that is what callers have: `begin`
 /// knows the tool, and the state belongs to the room it is in.
 ///
-/// Two sources — a `quickening-scroll` sets [`Quickened`] on the room, the
-/// forge lays `Charm(Hurried)` on one tool — and the call site is told about
-/// neither. A third is a line here rather than an edit at `begin`.
-///
-/// Either, not both-stacked: two halvings would be a quartering, and §11.5's
-/// durations are not built for it. A second source is another way to get the
-/// window, not a deeper one.
+/// Two sources — a quickening supply's window on the room, a `hurried` charm on
+/// one tool — and the larger applies. Two halvings would be a quartering, and
+/// §11.5's durations are not built for it.
 #[must_use]
-pub fn quickened(world: &World, place: Entity) -> bool {
+pub fn quickened_by(world: &World, place: Entity) -> Option<u64> {
     let now = *world.resource::<Tick>();
     let domain = super::super::domain_of(world, place);
-    let scroll = [domain, Some(place)].into_iter().flatten().any(|node| {
-        world
-            .get::<Quickened>(node)
-            .is_some_and(|haste| haste.remaining(now) > 0)
-    });
-    scroll || super::super::charmed(world, place, super::super::charm::Kind::Hurried)
+    let scroll = [domain, Some(place)]
+        .into_iter()
+        .flatten()
+        .filter_map(|node| world.get::<Quickened>(node))
+        .filter(|haste| haste.remaining(now) > 0)
+        .map(|haste| haste.by)
+        .max();
+    let charm = super::super::charmed(world, place, super::super::charm::Kind::Hurried)
+        .then_some(QUICKENED_BY);
+    scroll.max(charm).filter(|by| *by > 1)
+}
+
+/// Whether the domain `place` stands in is quickened right now.
+#[must_use]
+pub fn quickened(world: &World, place: Entity) -> bool {
+    quickened_by(world, place).is_some()
 }
 
 /// Shorten `ticks` if `place` is quickened.
@@ -92,36 +82,21 @@ pub fn quickened(world: &World, place: Entity) -> bool {
 /// already in flight is [`hurried_from`], a different guard.
 #[must_use]
 pub fn hastened(world: &World, place: Entity, ticks: u64) -> u64 {
-    if quickened(world, place) {
-        (ticks / QUICKENED_BY).max(1)
-    } else {
-        ticks
-    }
+    quickened_by(world, place).map_or(ticks, |by| (ticks / by).max(1))
 }
 
-/// Where a run already in flight should end, once its room is quickened.
+/// Where a run in flight `already` that quick should end, once its room is
+/// quickened by `by`: from now, and only by what `by` adds, so the larger
+/// applies and never both.
 ///
-/// Not `hastened`, and the difference shipped as a bug once: `commands` runs
-/// before `tower::finish`, so a scroll spent on the tick a run would land sees
-/// nothing left, and `(0 / QUICKENED_BY).max(1)` is 1 — a tick *past* where
-/// `ends` already was. A scroll must never make what it hurries land later.
-///
-/// Halved from now rather than from the start, which would refund time already
-/// spent and, past the half-way point, land the end in the past. `None` when
-/// the run is too close to landing to move, which is what keeps this only ever
-/// earlier.
+/// `None` when that adds nothing or the run is too close to landing to move.
+/// Not `hastened`: a run due this tick has nothing left, and its floor of one
+/// would land it a tick late.
 #[must_use]
-pub const fn hurried_from(now: Tick, ends: Tick) -> Option<Tick> {
+pub fn hurried_from(now: Tick, ends: Tick, by: u64, already: u64) -> Option<Tick> {
     let left = ends.get().saturating_sub(now.get());
-    if left > 1 {
-        // No floor, and there must not be one: `left > 1` makes the quotient at
-        // least one, so a `max(1)` would be dead — and would look like a live
-        // guard, letting a later reader widen the test to `left > 0` and bring
-        // the landing-a-tick-later bug back under cover.
-        Some(Tick::new(now.get() + left / QUICKENED_BY))
-    } else {
-        None
-    }
+    let already = already.max(1);
+    (by > already && left > 1).then(|| Tick::new(now.get() + (left * already / by).max(1)))
 }
 
 #[cfg(test)]
@@ -130,52 +105,73 @@ mod tests {
 
     /// The property the whole guard exists for, swept rather than sampled.
     ///
-    /// A scroll may never make what it hurries land later. The bug it replaces
-    /// was reachable on exactly one tick, so a sampled test would miss it.
+    /// Quickening may never make what it hurries land later. The bug it
+    /// replaces was reachable on exactly one tick, so a sampled test would miss
+    /// it.
     #[test]
     fn hurrying_a_run_never_lands_it_later() {
-        for ends in 0..200u64 {
-            for now in 0..=ends {
-                let Some(moved) = hurried_from(Tick::new(now), Tick::new(ends)) else {
-                    continue;
-                };
-                assert!(
-                    moved.get() <= ends,
-                    "hurrying a run ending at {ends} from {now} moved it to {} — later",
-                    moved.get()
-                );
-                assert!(
-                    moved.get() >= now,
-                    "hurrying a run ending at {ends} from {now} landed it in the past"
-                );
+        for already in 1..=3 {
+            for by in 2..=4 {
+                for ends in 0..200u64 {
+                    for now in 0..=ends {
+                        let Some(moved) =
+                            hurried_from(Tick::new(now), Tick::new(ends), by, already)
+                        else {
+                            continue;
+                        };
+                        assert!(
+                            moved.get() < ends,
+                            "hurrying a run ending at {ends} from {now} by {by} over \
+                             {already} moved it to {}",
+                            moved.get()
+                        );
+                        assert!(
+                            moved.get() > now,
+                            "hurrying a run ending at {ends} from {now} by {by} over \
+                             {already} landed it now"
+                        );
+                    }
+                }
             }
         }
     }
 
-    /// The case the guard is *for*: nothing left to halve.
-    ///
-    /// `commands` runs before `tower::finish`, so a scroll spent on the landing
-    /// tick sees this. Under `hastened`'s flooring it became one tick *later*.
+    /// The case the guard is *for*: nothing left to hurry.
     #[test]
     fn a_run_about_to_land_is_left_alone() {
-        assert_eq!(hurried_from(Tick::new(10), Tick::new(10)), None);
-        assert_eq!(hurried_from(Tick::new(10), Tick::new(11)), None);
-        // ...and one tick further on there is something to take.
+        assert_eq!(hurried_from(Tick::new(10), Tick::new(10), 2, 1), None);
+        assert_eq!(hurried_from(Tick::new(10), Tick::new(11), 2, 1), None);
         assert_eq!(
-            hurried_from(Tick::new(10), Tick::new(12)),
+            hurried_from(Tick::new(10), Tick::new(12), 2, 1),
             Some(Tick::new(11))
         );
     }
 
-    /// Halved from now, never from the start — the other half of the rule.
+    /// Divided from now, never from the start.
     ///
     /// A run that began at 0 and ends at 100, hurried at 80, has 20 left and
-    /// must land at 90. Halving the *interval* would land it at 50, in the past.
+    /// lands at 90 at half, 86 at a third.
     #[test]
-    fn a_run_is_halved_from_now_and_not_from_its_start() {
+    fn a_run_is_hurried_from_now_and_not_from_its_start() {
         assert_eq!(
-            hurried_from(Tick::new(80), Tick::new(100)),
+            hurried_from(Tick::new(80), Tick::new(100), 2, 1),
             Some(Tick::new(90))
+        );
+        assert_eq!(
+            hurried_from(Tick::new(80), Tick::new(100), 3, 1),
+            Some(Tick::new(86))
+        );
+    }
+
+    /// The larger applies and never both: a run started at half is not halved
+    /// again, and a third over a half takes it from 20 left to 13.
+    #[test]
+    fn a_hurried_run_is_hurried_only_by_what_more_adds() {
+        assert_eq!(hurried_from(Tick::new(80), Tick::new(100), 2, 2), None);
+        assert_eq!(hurried_from(Tick::new(80), Tick::new(100), 2, 3), None);
+        assert_eq!(
+            hurried_from(Tick::new(80), Tick::new(100), 3, 2),
+            Some(Tick::new(93))
         );
     }
 }

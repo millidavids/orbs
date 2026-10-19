@@ -73,7 +73,7 @@ fn a_secret_is_unmakeable_unnameable_and_unreadable_until_it_is_found() {
     assert!(
         !said(&sim)
             .iter()
-            .any(|line| line.contains("yields mending")),
+            .any(|line| line.contains("yields") && line.contains("mending")),
         "an unfound recipe fired",
     );
 
@@ -121,13 +121,15 @@ fn a_verdant_scroll_never_offers_a_secret_as_an_endless_herb() {
     // `Recipes::outputs` were filtered by what the player has learned, an
     // undiscovered potion would drop out of "made" and become a candidate for an
     // inexhaustible shelf — §19 records that shipping once, with byproducts.
+    //
+    // Cultivated until every herb has flowered and the supply rolls itself up
+    // (§19, *Supply*): a secret counted as a herb would flower last.
     let mut sim = Sim::new(1);
     run(&mut sim, "attend laboratory");
-    for _ in 0..5 {
-        run(&mut sim, "debug_spawn verdant-scroll");
-        run(&mut sim, "wield verdant-scroll");
-        sim.step_n(2);
-    }
+    run(&mut sim, "debug_spawn verdant-scroll 40");
+    run(&mut sim, "wield verdant-scroll");
+    run(&mut sim, "wield verdant-scroll");
+    run(&mut sim, "meditate 1800");
     run(&mut sim, "survey dispensary");
 
     let listed = sim

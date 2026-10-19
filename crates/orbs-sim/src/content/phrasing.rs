@@ -465,7 +465,9 @@ pub fn corpus_scene() -> crate::parser::Scene {
     for topic in ["brewing", "scripting", "apprentice", "clarity", "warding"] {
         scene = scene.with(NounKind::Topic, topic);
     }
-    for essence in ["clarity", "warding"] {
+    // Two potions and the three demons the circle binds (§19, *Supply*), so
+    // `deploy {essence}` and `summon golem` have their nouns.
+    for essence in ["clarity", "warding", "golem", "familiar", "effigy"] {
         scene = scene.with(NounKind::Essence, essence);
     }
     for script in ["night_watch", "first_light"] {

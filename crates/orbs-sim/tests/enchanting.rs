@@ -117,6 +117,38 @@ fn a_lapsed_charm_stops_changing_the_number() {
     );
 }
 
+/// A charm and a quickening never both apply: the larger does (§19, *Supply*).
+///
+/// A hurried alembic starts a distillation at half, so a quickening opened at
+/// half over it adds nothing. Opening one divided what was left again.
+#[cfg(debug_assertions)]
+#[test]
+fn a_quickening_over_a_hurried_run_does_not_halve_it_again() {
+    let mut sim = laboratory();
+    let alembic = orbs_sim::tower::reach::look(sim.world())
+        .kind(orbs_sim::parser::NounKind::Place)
+        .find("alembic")
+        .expect("the laboratory has an alembic");
+    lay(&mut sim, alembic, Kind::Hurried, 500);
+    for line in [
+        "kindle charcoal",
+        "debug_spawn clarified-draught",
+        "debug_spawn quickening-scroll 4",
+        "distil clarified-draught",
+    ] {
+        sim.submit(line);
+        sim.step();
+    }
+    let started = meter(&sim).expect("the alembic is running").1;
+    assert_eq!(started, 28, "the hurried run did not start at half");
+
+    sim.step_n(10);
+    sim.submit("wield quickening-scroll");
+    sim.step();
+    let after = meter(&sim).expect("the alembic is still running").1;
+    assert_eq!(after, started, "a quickening halved a hurried run again");
+}
+
 /// A charm the tool does not hold changes nothing.
 ///
 /// Absent is nought, this tower's rule everywhere: getting it wrong yields a
@@ -155,7 +187,7 @@ fn a_charm_of_another_kind_changes_nothing() {
 fn a_scroll_and_a_charm_reach_the_same_rate() {
     let by_scroll = {
         let mut sim = laboratory();
-        for line in ["debug_spawn quickening-scroll", "wield quickening-scroll"] {
+        for line in ["debug_spawn quickening-scroll 4", "wield quickening-scroll"] {
             sim.submit(line);
             sim.step();
         }
@@ -185,7 +217,7 @@ fn a_scroll_and_a_charm_reach_the_same_rate() {
         let mut sim = laboratory();
         let at = mortar(&sim);
         lay(&mut sim, at, Kind::Hurried, 500);
-        for line in ["debug_spawn quickening-scroll", "wield quickening-scroll"] {
+        for line in ["debug_spawn quickening-scroll 4", "wield quickening-scroll"] {
             sim.submit(line);
             sim.step();
         }

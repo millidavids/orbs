@@ -1803,6 +1803,9 @@ fn rampart(grid: GridSize) -> Frame {
         // against 2.
         coffer: vec![("d12".to_owned(), 3)],
         quintessence: 2,
+        // Two supplies flowing, one raised (§19, *Supply*): the row has to fit
+        // the box with more than one name on it.
+        flowing: vec![("warding".to_owned(), 2), ("vigour".to_owned(), 1)],
         intent: "onslaught".to_owned(),
         // What `prose.toml`'s `siege_tally` renders to.
         tally: "round 5, 6 still coming".to_owned(),
@@ -1823,7 +1826,7 @@ fn rampart(grid: GridSize) -> Frame {
     painter.border(at, Some("rampart"), Style::DIM);
     let inside = at.inset(1);
 
-    // All thirteen rows `Rampart::rows()` promises, in `orbs_shell`'s order. This
+    // All fourteen rows `Rampart::rows()` promises, in `orbs_shell`'s order. This
     // drew seven of them into a fifteen-row box for two versions — no area rows
     // and no coffer, the *entire* dice mechanic missing from the one screen whose
     // job is to show the board without a sim. It read as a correct picture of the
@@ -1876,6 +1879,11 @@ fn rampart(grid: GridSize) -> Frame {
     );
     painter.glyphs(
         Pos::new(inside.col, inside.row + bands + 5),
+        &siege.flowing_row(),
+        Style::NORMAL,
+    );
+    painter.glyphs(
+        Pos::new(inside.col, inside.row + bands + 6),
         &siege.tally,
         Style::DIM,
     );

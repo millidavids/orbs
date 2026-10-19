@@ -1720,7 +1720,7 @@ sweep against. First-pass targets:
 | Capability unlock (a command, a conditional, a pane) | 3–5 fragments | Sieges, hidden dirs, trickle |
 | A completed siege | — | yields 2–4 fragments |
 | A brewed potion | 2–3 reagents | Reagents from brewing and sieges |
-| A siege consumes | 4–8 potions | — |
+| A siege consumes | 4–8 potions (**amended §19, *Supply***: a ration a round from each open supply, about 14 over seven rounds at the slowest rate plus a held float of 6) | — |
 
 **~64 research events across the game** (≈50 commands + ~10 capabilities + 5
 domain discoveries — **amended §19**: the ~8 concentration steps and 3 multiplex
@@ -1770,7 +1770,7 @@ concurrency**.
 | **Integrity** | Repair, warding | Damaged by sieges, decay, aberrations | Tower health, persistent |
 | **Concentration** | The Ley Line, against experience (**not** pane count) | Shared pool across all bound scripts | Caps total automation |
 | **Renown** | Making things (half a run's experience, doubled when the store is already full); a siege, both ways | `petition`, to buy a smaller siege | **The second number, and the only one that falls.** It also *sets* how big a siege arrives |
-| **Stores** | Making a thing, lately — a **rate**, never a count | Time. Nothing else | What the arsenal is worth: `fresh`, `thin` at half, `spent` and refused |
+| **Stores** | Making a thing, lately — a **rate**, never a count | Time. Nothing else | How fast a supply may run: `fresh` at any rate, `thin` at the slowest, `spent` not at all (**amended §19, *Supply***; `thin` was half strength) |
 
 **Concentration is a shared pool, not a per-script bound.** Draft 5 described
 both; they are different mechanisms with different balance behaviour. A shared
@@ -2469,6 +2469,495 @@ they are re-pointed at the phases that now need them rather than quietly dropped
 
 ## 19. Decisions log
 
+### Supply — no produced item has individual value (`0.18`)
+
+**Rule: a potion, scroll or demon does nothing on its own.** It is a supply. It
+works only while the arsenal holds enough of it, and while it works it drains.
+The owner's reason: the game is about automation and progression, and an
+effect worth having from one hand-made potion makes producing many pointless.
+Two systems were pulling against each other.
+
+Decided with the owner, and built box by box (ROADMAP *Supply*):
+
+| Question | Decision |
+|---|---|
+| The shape | **Rates.** Each item authors one to three. A rate has `opens` (a held count), `draws` (a ration) and `worth`. A faster rate needs more, drains quicker and gives more in total, never more per item |
+| Using one | The item's verb opens it, and each repeat raises one rate. This follows `pledge` and `petition`: one word, one move. `stop <item>` closes it |
+| Running down | **It steps down.** Each draw runs at the fastest rate the held count still meets. Below the slowest threshold it is **drained**, and the item can't be used until restocked |
+| Freshness | **Kept, and it caps the rate.** Fresh allows any rate, thin the slowest only, spent none. Thin no longer halves anything. A siege reads freshness as it stood at `defend` |
+| In a siege | An open supply applies every round on its own and draws every round |
+| Outside one | A scroll supply draws every few hundred world ticks and pauses during a siege. **Verdant cultivates**: drawing grows a herb that flowers for good |
+| Volume | **A run yields a batch.** The tower still counts runs |
+| Troops | **They stop being an arsenal item.** The garrison is the tower's own: it has a fixed most, decays to a floor, and is refilled by the menagerie. `defend` musters all of it. The menagerie can bind **demons** into the arsenal instead, as supplies |
+
+What this supersedes is named in the entry that does it.
+
+#### A run yields a batch, and the tower still counts runs (`0.18.0`)
+
+`yields` on a recipe, default one. A distillation makes three. The byproduct
+stays at one.
+
+- **Nothing that measures progress moves.** `done` and `stores::made` run once
+  per run, as before. So experience, renown, the tally, freshness and every
+  mastery deed are unchanged. The sweep's pins hold, with no number moved.
+- **One output draw per run.** The lectern draws once on `RngStream::Archive`
+  and then makes `yields` copies, so a batch adds no roll.
+- **Fruitful adds one to the batch.** It stops being *"nearly worthless"*
+  (*The tower counts runs, not things*), though one in four is still small.
+- **A recipe with `most` must yield one** while `most` stands. The cap counts a
+  name, and a batch would walk past it. Stillness stays at one until `most` goes.
+- **The ledger says brews.** `potions brewed 1` beside `clarity = 3` read as a
+  miscount. `{ potions = N }` always counted runs, and now the label says so:
+  *brews finished*.
+- **The completion says how many**, *"the alembic yields 3 clarity"*. Two keys
+  are added rather than putting a count in every sentence, because
+  `wield_done` is also every grind and mix.
+
+Interim: until `0.18.3`, single potions still work in a siege, now three a run.
+That stays on `dev`.
+
+#### A standing garrison, and `deploy troop` retired (`0.18.1`)
+
+**Troops are the tower's, not the arsenal's.** `tower::siege::Garrison` holds
+two numbers: the bodies standing, and a reserve.
+
+| Question | Decision |
+|---|---|
+| Most | `GARRISON_MOST` 10, plus one per tier of the Ley `garrison` grant. **Nothing passes it.** A hold over it is turned away, a scroll's refill stops at it (`Siege::room`), and `Band::mend` never brings bodies back past it |
+| Floor | `GARRISON_FLOOR`, which is `ASSIGNED` 6. A new tower starts there, and a fallen garrison is reassigned it. **The floor is what keeps the bailey standing alone** (*"A domain stands alone"*): a sealed game arms the wall at `sanctum_1`, before the lens has opened the menagerie |
+| Decay | One body every `DESERT_EVERY` 240 ticks, down to the floor. Keyed on the global tick, so a `meditate` and a watched clock agree |
+| The siege | `defend` levies everything standing and leaves nought at home. At settle, survivors come home **up to what was levied**, so a refill past the levy disbands. The reserve joins them |
+| Time in a siege | **Neither pays nor costs** (`0.17.0`). Desertion pauses, and a hold mid-siege goes to the reserve rather than the fighting line, so waiting never refills a fight |
+| The menagerie | A bare `summon` that holds enlists +4 within par, +3 past it, +1 at the lesser circle. **A full garrison turns bodies away and the hold still counts**: it is a run, so experience, renown and `made:troop` move exactly as before. `taming`'s pin holds for that reason |
+| Where it is read | **A `roster` fixture in the menagerie**, publishing `spears` and `full`. Not the arsenal, which every room reaches, so every `Any` verb in the tower would trip on it. Not the circle either, whose `is empty` means *no beast waits*. `status` gains `garrison` and `garrison most`, so a sealed tower can see it too |
+| The publisher | `roll_call` is a system that writes only on a change, `stocktake`'s rule, and it runs once in `Sim::build` before `seal` |
+
+**Superseded:**
+- `ASSIGNED`'s *"static by design"*, which is now the floor.
+- `[troop]` in `siege.toml` and `materials.toml`, and the three places that
+  named a troop as finished work no recipe makes (`substances`, `kind_of`,
+  `home`).
+- The `garrison` grant's *"a troop brings one more body"*, which now raises the
+  most.
+- `0.11.12`'s *"twelve is where `outnumbered` turns at the opening"*. That is
+  true only at the floor. A full garrison of ten is never outnumbered at the
+  opening, so the reading now says the menagerie was neglected.
+
+**Renown reads `troop` only as a tally key now.** A hold is still
+`making(TROOP)`, so `made:troop` and the `troop` store's freshness move as
+before, and a hold made while that store is fresh pays double. No troop is
+ever held; the name is a counter.
+
+**`deploy` stays a verb with nothing to deploy until `0.18.4`.** Removing a verb
+changes the augury's head width and stales both readers. The demons need a
+word, and this is already it.
+
+**The dev spells lose their `few` → `deploy troop` rung.** Bodies are the
+menagerie's work before a fight, not a thing spent during it. `sparingly` keeps
+its ratio rung, the shipped worked example for spell arithmetic, and quaffs
+clarity there instead. The `besieging` driver stocks warding only.
+
+**`FORMAT` 17.** An older build would drop `garrison` in silence. The migration
+turns each held troop into two bodies, which is what a deploy gave, and drops
+every `troop` node and its readings.
+- With no siege open, the bodies go to standing, capped at the most.
+- With a siege open, the line is already levied, so they go to the reserve.
+- The Ley bonus is not in the document, so the cap errs low.
+
+**The readers are not stale.** `weights_on_disk_are_this_vocabularys` loads
+the shipped weights against this build's vocabulary and fails if they no longer
+fit. Every other augury test skips when weights will not load, so that is the
+first test to say a content change killed the reader. It passes here: `troop`
+leaving `materials.toml` changed no row count.
+
+#### Freshness renamed, and `most` retired (`0.18.2`)
+
+**`tower::Supply` is `tower::Freshness`**, and `supply_of` is `freshness_of`.
+The supplies `0.18.3` builds need the word. The three states and their
+arithmetic are unchanged in this box.
+
+**`most` is gone.** It meant *"one stillness at a time"* (`0.17.1`), and it
+cannot survive a rule where no single item does anything. Removed with it:
+- the recipe field and its load lint;
+- `Recipes::most_of`;
+- `price.rs`'s refusal, with `held_anywhere`, `brewing` and the `wield_most`
+  key;
+- `produce.rs`'s exemption from fruitful;
+- the spend's exemption from freshness.
+
+**What that changes for stillness:**
+- **It brews three a run** (`yields = 3`), its threshold, so one brew can be
+  drunk. A fruitful alembic makes four. The quintessence and the 600 ticks
+  stand. It was two until a second review found one brew stranded below the
+  threshold of three.
+- **It may be brewed while some is held.** The threshold `0.18.3` gives it is
+  the price now.
+- **It goes stale like anything else.** One brewed against the day reads
+  `spent` past `WINDOW` and is refused and kept, so it is brewed for a siege
+  rather than kept for one. This supersedes `0.17.1`'s *"what `most` limits
+  never goes stale"*. The `keeps = true` row flag the plan named is the way
+  back if play says otherwise.
+
+No `FORMAT` bump: nothing saved names `most`.
+
+#### Items are standing supplies in the siege (`0.18.3`)
+
+**The rule is now code.** A `siege.toml` row carries `rates`, and
+`content::rate` refuses at load any table that breaks it:
+- a slowest rate that opens under two;
+- a draw of nothing, or of the whole threshold;
+- a faster rate that opens no higher, draws fewer or gives less;
+- **a faster rate worth more per item.**
+
+`one_item_never_moves_the_siege` walks every row one short of its threshold and
+asserts the siege is unchanged and nothing taken.
+
+| Question | Decision |
+|---|---|
+| Opening | The row's verb opens the supply and **applies at once** to the coming round. The same word raises it one rate. The raise counts what this round already drew toward the next threshold, and applies only the difference: it restages a modifier, and adds a heal, room or refill delta |
+| Each round | After a resolved round that did not end the siege, every open supply draws in a fixed order — fortify, refill, heal, then roll modifiers, by name within each. Opening order matters only for the opening itself, where a room opened before a heal lets the heal fill it. That is the player's order to choose |
+| Running down | A draw runs at the fastest rate at or below the one chosen that the held count still meets, saying *"slows"* when it steps down. Below the slowest it closes, saying *"runs dry"* |
+| Nothing to do | **A draw that would do nothing is skipped, and the supply stays open.** That covers a heal at full, a refill at the most, and a bonus before a volley. `spend_whole`, `spend_crowded` and `spend_unanswered` were refusals, and they are gone: a supply is a standing order, and refusing to open one because this round does not need it would make the player reopen it each round |
+| Fortify | **A level, not an increment.** `draw_round` takes the room away and the fortify draws hold it again, so closing the supply shrinks the line next round, with `clamp_line` losing fight and bodies past it. This supersedes `0.17.1`'s *"for the rest of the siege"* |
+| Freshness | Thin runs only the slowest rate, and **nothing halves**. `Freshness::scale`, `scale_signed`, `keeps_whole`, `Effect::scales`/`scaled` and `scaled_worth` are deleted. **A siege reads freshness as at `defend` or now, whichever is better** (`Siege::freshness`), so an hour over one round cannot thin a supply, which is `0.17.0`'s rule |
+| Stillness | Opens from three and draws two once, at opening, then ends the siege. `hand_back` returns only this round's **roll-modifier** draws: a heal, room or refill has already acted, and stillness's ration is its price |
+| Closing | `stop <item>`: `NounKind::Stoppable` takes an essence or a scroll, and `pipeline::stop` asks a spell, then a supply, then an instrument. What this round drew stands. `settle` closes every siege supply |
+| One supply an item | Across the tower. A calm supply arrives at `0.18.6`; until then the check has nothing to find |
+| Readings | `draw`, a count of the rate in force, and `drained`, held but below the slowest. Both are published by `supply::gauge`, which writes only on a change. **`draw`, not the plan's `flow`**: that scored 667 against `follow`, the maze's verb |
+| The board | A `drawing` row: `drawing   warding 2  vigour 1`. `Rampart::rows` is 14 |
+| Spells | Standing orders: `if the warding has no draw` then `quaff warding`, opened once and left to draw |
+
+**The sweep could see the arsenal's own words for the first time**, and found
+five collisions that had shipped unswept since `0.11.14`:
+- `fresh` against `crush` and `rest`;
+- `spent` against `open` and `set`;
+- `fresh` against the bailey's `foes`.
+
+All are pinned, not renamed. The verbs are matched exactly by the resolver, and
+`foes`/`fresh` sit on different nodes in different rooms.
+
+**Measured:**
+- `besieging` reads exactly what it read before: 819 experience, 389 renown. Its
+  one warding rung barely moves a siege the dice decide, as it barely did when
+  it spent one potion a round.
+- Every production pin holds.
+
+**`FORMAT` 18.** Open supplies travel in `[progress]` as `supply` tables, and a
+siege's freshness snapshot travels inside it. An older build would drop both in
+silence. Absent means none open, and a siege reads freshness now.
+
+#### The circle's second use: demons, and the readers retrained (`0.18.4`)
+
+**`summon <demon>` binds a hold into the arsenal** instead of refilling the
+garrison. The demon is named on the call that holds, and an arrival ignores
+the name. A batch is four within par, three past it (`summoned` on the
+`siege.toml` row). `deploy` opens one on the wall like any supply.
+
+| Demon | Kind | Rates | Opened at |
+|---|---|---|---|
+| golem | refill | 6/2/1, 12/4/2 | `menagerie_2`, with the whole circle |
+| familiar | heal | 6/2/3, 12/3/4 | `menagerie_3` |
+| effigy | fortify | 6/2/3, 12/3/4 | `menagerie_3` |
+
+**The load lint earned its keep on the first table.** The golem's first draft
+was 6/2/1 then 12/3/2, a second rate worth more per item. `siege.toml` refused
+to load until it read 12/4/2.
+
+**Decided:**
+- **One making, one tally.** A bound hold is `Work::event(FIGURE).making(demon)`,
+  so experience and renown move exactly as for a bare hold. `taming`, which
+  stays bare, holds its pin.
+- **A lesser circle binds bodies only**, refused *before* the call so it costs
+  no par. A lesser beast is the lesson, not the faucet.
+- **`demon:<name>` is a sixth key kind.** `Opened::all`/`start` take the
+  demons, and the progression catalogue checks them. An unopened demon is
+  withheld from the scene, as an unearned gated product is.
+- **`FORMAT` 19** adds the demon keys to an open tower's older document,
+  following 13's `circle` precedent. A sealed one catches up through
+  `mastery::caught_up`.
+- **The slot is an essence, registered at the circle only.** A topic slot read
+  *"summon a beast"* as `summon belt`, because `beast` scores 600 against the
+  manual's `belt`. Registered everywhere, a demon became a fourth answer to
+  `move nonsense` in the laboratory.
+- **A demon is finished work no recipe makes.** `tower::kind_of` answers
+  Essence from the `summoned` row, and `Recipes::substances` names demons so
+  `debug_spawn` and the scene see them. Violet, for the reason a troop was.
+- **`besieging` gains a `few` rung** that deploys a golem, the brief's *"send
+  out menagerie demons"*, now that there is one to send.
+
+**The readers, retrained here rather than at `0.18.8`.** This is the only box
+that changes their vocabulary: three demon names, `deploy {essence}` (was
+`{reagent}`), `stop {essence}`, and a written-out entry per demon for binding
+at the circle. An `{essence}` slot there would have taught *"summon clarity"*.
+A gate cannot be green with the weights on disk stale, and
+`weights_on_disk_are_this_vocabularys` is the test that says so.
+
+Trained three times, five seeds each, and picked each time by the rule fixed
+before reading: the prompt reader best by *the reading it runs*, then every
+spell reader tried through it.
+
+| | First (`supply`) | Second (`demons`) | Shipped (`final`) | Was |
+|---|---|---|---|---|
+| prompt, the reading it runs | 65.0% (seed 4) | 69.2% (seed 181) | **70.6%** (seed 2) | 69.9% |
+| five seeds, the reading it runs | 36.7–65.0 | 54.9–69.2 | 44.7–70.6 | |
+| prompt, correctly refused | 89.0% | 77.0% | 78.1% | |
+| prompt, wrongly refused | 7.7% | 2.2% | 2.3% | |
+| trials, every line | 72.0% (seed 3) | 73.0% (seed 1) | **73.0%** (seed 1) | 73.3% |
+| read as their opposite | 0.0% | 0.0% | 0.0% | 0.0% |
+| unseen demon phrasings read right | 0 of 7 | 4 of 7 | **6 of 7** | |
+
+**The first pass taught a demon in eight phrasings each, and the reader bound
+none it had not seen.** *"make the next one a golem"* read as `purge golem`.
+The second added eight more per demon, none of them the probes, and four of
+seven bound. Six of those sixteen opened on a word the rule parser takes first
+(*"shape…"* became `snap`, *"keep…"* `meditate`), so
+`every_phrasing_the_circle_teaches_reaches_a_reader_or_its_own_command`
+refused them. Reordered with the same words, they changed no vocabulary row.
+The third run trains on that corpus, so the weights match the file. *"I want
+the next beast as a golem"* now binds. *"give me a golem"* reads as a bare
+`summon`, which calls bodies, the safe failure. *"no more warding"* reads
+`purge warding`, and the game refuses it.
+
+**It trades refusals.** The shipped reader refuses fewer sentences it should
+(78.1% against the first pass's 89.0%) and far fewer it should not (2.3%
+against 7.7%). The rule chooses on reading, which is up over five points.
+
+#### The scrolls, measured before they change (`0.18.5`)
+
+**Two policies, against today's one-shot scrolls and a lectern at one.**
+`quickened` runs the flagship lap and wields a quickening scroll as each window
+closes. `gleaned` walks the stacks as `stacks` does, gleaning every maze it
+opens. Both stock a scroll by `debug_spawn` as they want it, so freshness never
+decides the column, and `Run::given` less what is held is what they spent.
+
+| Seed 0, two hours | Experience | Scrolls | Fragments held |
+|---|---|---|---|
+| clarity | 996 | | |
+| quickened | 1792 | 24 | |
+| stacks | 48 | | 12 |
+| gleaned | 36 | 10 | 49 |
+
+**Quickening is worth using.** 796 more experience for 24 scrolls is 33 a
+scroll, against a lectern run of 20 ticks — under 3 experience of the
+laboratory's time. `quickening_pays_more_than_the_archive_spends_on_it` holds
+that over `agrees::SEEDS`.
+
+**What keeps it from being mindless is the archive.** A walker finds 12
+fragments in two hours, so one scroll is about 2,400 ticks of walking.
+Quickening the laboratory without a gap wants 24 scrolls in the same two hours,
+which is eight walkers. The scarcity is the stacks, not the lectern.
+
+**Gleaning loses at a lectern of one.** Ten scrolls cost forty fragments and
+the gleaned mazes held 49: nine to the good, against twelve for walking to the
+exit. At two a run, as `0.18.6` sets, the same ten cost twenty, and gleaning
+nets 29. That is the plan's 2.5× risk, measured: profitable, and capped by walk
+time.
+
+**A sweep must run on the dev profile.** Every `debug_*` word is compiled out
+of a release build, so a policy stocking by `debug_spawn` stocks nothing under
+`--release`, and its scroll falls through to `wield archive`. `besieging` has
+always restocked its warding that way. Its numbers held anyway (819 experience,
+389 renown), which is why `0.18.1`–`0.18.4`'s release sweeps never showed it.
+CLAUDE.md's sweep line has no `--release`, and that is the one to run.
+
+#### Quickening and gleaning as calm supplies (`0.18.6`)
+
+**Rule: outside a siege a scroll is a supply too.** `wield` opens it when the
+arsenal holds the slowest rate's `opens`, and draws at once. The word again
+raises it a rate, and also draws at once. While open it draws every `every` ticks,
+counted from the last word, whether or not anything uses the draw. (**Amended
+by the second review**: a raise pays only the difference and keeps the
+opening word's clock, as on the wall.) Draining
+steps it down, then rolls it up. `stop` rolls it up. It pauses while a siege
+runs, and the draws a siege covers are skipped, not owed. Rates live in
+`scrolls.toml`, checked by `content::rate` as `siege.toml`'s are.
+
+| Scroll | Rates (opens/draws/worth) | A draw |
+|---|---|---|
+| quickening | 4/1/÷2, 8/2/÷3 | a window of 301 ticks on the laboratory |
+| gleaning | 4/1/4, 8/2/6 | upkeep: while open, the stacks gather `worth` |
+
+**Supersedes** the one-shot scroll: *"halves the laboratory for 300 ticks"*,
+*"five spoils, against the four a scroll costs"*, and
+`scroll_unopened`'s *"research first"*.
+
+**Decided:**
+- **A window of `every + 1`.** `commands` runs before the schedule, so a run
+  started on a draw's tick reads the old window. A tick of overlap means none
+  starts in a gap. `no_run_starts_in_the_gap_between_windows` checks every tick
+  across several draws.
+- **`Quickened` gains `by`.** The larger of a window and a `hurried` charm
+  applies, never both. `hurried_from` takes `by`, and floors at one tick so a
+  third of two ticks cannot land the run now. `NodeSave.quickened_by` is new,
+  and absent reads as a half: no `FORMAT` bump, on `renown`'s rule.
+- **Gleaning is a mode, not a window.** The plan had each draw hold a window
+  that `research` reads. Reading the open supply is the same thing with nothing
+  to save. Opening it also sets an open maze gathering. The scatter moved from
+  the scroll's word to `research`, still on `RngStream::Archive`, so an old
+  gleaning replay diverges.
+- **The arsenal only**, as on the wall. The one-shot scroll was spent from
+  wherever the player could reach.
+- **The siege takes `wield` while it runs**, so a calm supply cannot open in
+  one. A scroll open in a room is `supply_elsewhere` on the wall.
+- **The lectern yields two.** `0.18.5` measured gleaning losing at one. The
+  quickening and gleaning bodies now keep a supply open: quickening tops up
+  after every draw, and gleaning opens for a maze and stops after.
+
+**Measured** (seed 0, two hours, dev profile). Every pinned policy reads
+exactly as it did at `0.18.4`.
+
+| | `0.18.5`, one-shot | `0.18.6`, supply |
+|---|---|---|
+| quickened | 0.2489, 24 scrolls | 0.2492, 24 spent and a float of 4 held |
+| gleaned | 49 fragments for 10 scrolls (40 fragments) | 38 fragments for 10 scrolls (20 fragments) |
+| stacks, for both | 12 fragments | 12 fragments |
+
+**Quickening is worth what it was**, at the same cadence and with the float
+held, not spent. **Gleaning goes from a loss to a gain:** nine to the good at
+a lectern of one, eighteen at two, against twelve for walking to the exit.
+That is 1.5×, not the plan's 2.5×, because a draw now scatters four spoils
+where the one-shot scattered five. Still capped by walk time.
+
+#### Verdant is cultivation (`0.18.7`)
+
+**Rule: a verdant supply grows herbs; it does not hand them out.** Each draw
+adds its `worth` to the tower's `Cultivation`. At `flowers_at` (three) the next
+locked herb flowers on the laboratory's shelf, endless like sage, and the
+remainder carries over. Rates are 4/1/1 and 8/2/2, so the slowest rate flowers a
+herb every 600 ticks after the word, and the faster one at once.
+
+**Supersedes** *"one herb per scroll"*. One scroll was a herb, which is exactly
+the individual value the rule forbids.
+
+**Decided:**
+- **Growth is the tower's, not the supply's.** A supply that runs dry keeps what
+  it grew. `ProgressSave.cultivated` carries it, absent reads as nought, and
+  there is no `FORMAT` bump, on `renown`'s rule.
+- **Nothing left to grow is said before a scroll is drawn**, as a lesser circle
+  refuses a demon before the call. The supply rolls itself up once the last
+  herb flowers.
+- **Base reagents stay endless and a flowered herb stays flowered.** Which herb
+  is next is still `locked`'s alphabetical rule, derived from the recipes and
+  never listed.
+- **`every_scroll_the_lectern_makes_has_a_calm_row`** replaces the one-shot
+  `Scroll` arm as the lint, so all three scrolls are now supplies and no scroll
+  is spent one at a time anywhere.
+
+#### What a review of `0.18` found (`0.18.7`, a correction)
+
+A `/code-review xhigh` pass over the whole minor found eight defects and seven
+smaller things. Each defect now has a test that fails without its fix. No
+version bump, because a correction advances nothing.
+
+| Defect | Fix |
+|---|---|
+| The wall takes `wield` only in the bailey, so mid-siege, from any other room, a scroll opened as a *calm* supply | `calm::open` asks `siege::besieged` of the tower, not the room |
+| `stop` forgot what the round had drawn, so stop-and-reopen applied a whole ration again, as often as typed | `Supplies` keeps a stopped siege supply until the round ends, and the reopening starts from it. It is saved too (`SupplySave.stopped`, absent is open, no `FORMAT` bump) |
+| A hold mid-siege filled the reserve to the most, ignoring the levied line, and `disband` clamped the excess away after saying it waited | The reserve fills only what the line leaves room for. The rest is turned away and said |
+| Refill bodies that replaced casualties came home as permanent garrison | ~~`Siege.refilled` counts them, and they leave first at settle~~ **Superseded by the third review below:** a refilled casualty comes home as a healed one does, and only a refill past the levy disbands |
+| An older save's line above today's most lost bodies to any heal | `Band::mend` never lowers the count |
+| A supply stopped by freshness said *"runs dry, too few are left"* with the arsenal full | `supply::slowed` tells stale from short, and the line says *"stores are out… make more"* |
+| Gleaning opened outside the archive missed the open maze (`Cwd`), then drew for nothing | The stacks are found from where a fragment lives, and republished by node |
+| A calm draw took its scrolls before an effect that could still refuse | `unready` is asked before anything is taken |
+
+**And:**
+- `spend_wrong_word` contradicted itself for demons. It now reads *"that is
+  not how {name} is used"*.
+- The rate lint now measures `worth` by size, so a stronger curse at the
+  faster rate can be authored. Every rate points one way.
+- The `screens` example draws the rampart's `drawing` row.
+- `gauge` reads the node's own stock rather than walking the tower per item
+  per tick.
+- One `Raise::refusal` serves the wall and the room.
+- One `tower::sync_readings` serves `stocktake`, `gauge` and `roll_call`,
+  despawning and raising in the same order, so no `NodeId` moves.
+- The scroll policies moved to `orbs-balance/src/scrolling.rs`, and a bare
+  hold's bodies to `summon/enlisting.rs`.
+
+#### What a second review of `0.18` found (`0.18.7`, a correction)
+
+A second `/code-review xhigh` found seven defects and eight smaller things.
+Each defect has a test that was run with its fix undone and failed. No
+version bump.
+
+| Defect | Fix |
+|---|---|
+| A supply shut dry at a round's draw was remembered as stopped with the round before's ration, so the word reopened it below its threshold, for nothing, every round. The shipped standing order did it unprompted | `Supplies::new_round` clears what every open siege supply drew, so a dry one is shut with nothing to remember |
+| Mid-siege the roster dropped `full` and `status` said the garrison was nought, while a hold was turned away as full | `siege::held` counts the levied line, and the roster, `status` and `enlist` all read it |
+| A reopening restarted at the slowest rate and lowered what the round had drawn, so raising again paid a second time | A stopped supply opens again as it stood, and a ration never lowers what was drawn |
+| Stillness handed back only open supplies' modifiers, though a stopped one's still stood | `hand_back` reads the stopped ones too |
+| A format-16 siege's vigour room, sold for the rest of the siege, was lost at the first round | `Siege.kept` holds it, and `reset_room` keeps it. The 17 → 18 migration fills it; absent is nought, so no `FORMAT` bump |
+| Binding a demon with no arsenal said four were bound and paid for a making | It says none was, and counts no making. `a_hold_with_no_arsenal_does_not_announce_troops` had guarded this before `0.18.1` deleted it |
+| A calm `wield` found only the arsenal, where the old one-shot found a scroll within reach, so scrolls `empty lectern` left in the cabinet were "none" | A supply still draws from the arsenal alone, and the refusal names the shelf: *"your {name} is in the cabinet. move it to the arsenal"* |
+
+**And:**
+- **A calm raise pays only the difference and keeps the clock**, as a raise
+  on the wall does. It drew a whole new ration and restarted the cadence,
+  which threw away most of the draw before it. The quickening window it sets
+  runs to the next draw, and verdant grows the difference.
+- `tower::supply::word` is one open-or-raise for the wall and the room, with
+  `barred`, `ration` and `ran_low` beside it. They had already disagreed once.
+- A siege row's `kind` is an enum, `content::SupplyKind`, so an unknown word
+  fails at load and every match is exhaustive.
+- **Stillness brews three**, its threshold. Two left the first brew undrinkable.
+- `supply_elsewhere` says *"stop it first"*: a calm scroll paused by a siege
+  still holds its name.
+- A scroll's calm and wall tables must open at the same count, because
+  `drained` reads one of them (`a_scroll_opens_at_one_count_in_a_room_and_on_the_wall`).
+- Demons are listed once at load. The scene compares the room, not a path
+  string; `roll_call` runs only when the garrison or the grants change; and
+  `draw_round` clones only the open rows.
+- Bolded lead-ins came out of the new comments, and the `besieging` comment
+  that still described an `else if` ladder was rewritten.
+
+#### `move` carries a batch onto a shelf (`0.18.7`, a correction)
+
+**Rule: a move onto a shelf carries the whole batch; a move into an
+instrument carries one.** Decided with the owner after the second review.
+
+`move` carried one unit everywhere. A run makes three and a supply opens on
+six held, so opening a warding meant two brews and then six `move warding to
+arsenal`, which works against *make many*. A shelf is the arsenal (`Keep`) or a
+store (`Store`), so carrying a batch back out of the arsenal is one word too.
+
+An instrument is charged a unit at a time because a run spends one, and the
+mortar holding two sage reads `charged` and fires on one. That stays. An
+endless pile still gives one. The record says how many (`move_done_all`,
+*"3 clarity: dispensary to arsenal"*) and carries the count as `Quantity`.
+
+#### What a third review of `0.18` found (`0.18.7`, a correction)
+
+A third `/code-review xhigh` found ten defects and five smaller things. Each
+defect has a test that was run with its fix undone and failed. No version
+bump.
+
+| Defect | Fix |
+|---|---|
+| The roster was raised inside the menagerie's list, so an older save's nodes kept ids the raise had given the roster too. The bailey's spell was saved as standing at the roster | Restore issues a fresh id, past every saved one, to each node the save never named. The roster is raised last, after the grimoire, the satchels' rule |
+| `disband` took every refilled body off the survivors, so a golem cost bodies a heal would have kept | **The plan's rule:** survivors come home up to what was levied, and the reserve joins them. A refill past the levy disbands. `Siege.refilled` is gone. It supersedes the first review's fix |
+| A calm supply stopped and wielded again before its next draw paid a second ration and restarted its clock | A stopped supply is remembered in a room too, until its next draw would have come, and opens again as it stood |
+| Opening a quickening over a run already hurried, by a charm or a live window, divided it again | `Working.hurried_by` says what a run was divided by, and a quickening divides only by what it adds. Saved as `WorkingSave.hurried_by`, absent is unhurried, no `FORMAT` bump |
+| `draw` and `drained` were kept only at a tick's end, so a spell asking twice in one tick raised a supply it had just opened | Every word and draw that moves a supply regauges at once |
+| After draining stepped a supply down, the word counted from the rate chosen, and a restocked supply said it *"flows as fast as it can"* | A raise counts from the rate running, and never lowers the choice |
+| The short refusal printed the arsenal plus what the round drew, so it said seven were held with five in the arsenal | It speaks of the arsenal: what it holds, and what it must hold with the round's draw counted. *"you hold 5 vigour. it flows from 10"* |
+| Gleaning opened over a maze already gathering promised *"the next stacks you open will gather"*, and a part-walked maze too small to scatter on was left silently | *"the open stacks gather already"*, and a small maze gathers what floor it has |
+| The 16 → 17 migration filled a mid-siege reserve to the most beside the levied line | It fills only what the line leaves room for, as `enlist` does |
+| With its stock carried out, an open supply could not be named, so `stop warding` fuzzed into a spell | The scene names every open supply, wherever its stock went |
+
+**And:**
+- `gauge` runs only when the supplies or the arsenal's counts change, and the
+  calm drain asks whether a siege runs only on a tick something draws.
+- One inert guard for a scroll, not two. The refusal is built by
+  `Refusal::fields`, binding asks `Beast::within_par`, the live-window filter
+  is written once in `capture`, and gleaning finds the stacks through
+  `research::stacks_in`.
+- The quickening record carries the room and the window as fields again (`At`,
+  `Remaining`), as it did before `0.18.6`.
+- `battle.rs` lost the line and the board to `line.rs` and `board.rs`, and the
+  migrations left `document.rs` for `migrate.rs`. The module tables dropped
+  their line counts, which had gone stale.
+- `hurried_from`'s comment is two lines, and `stilling.rs` says three a brew.
+
 ### Bevy 0.20, and every library with it (`0.17.17`)
 
 **Rule: an engine upgrade changes no pixel, no draw and no saved byte, and is
@@ -2975,6 +3464,12 @@ column has none.
 | The rail's percentage | Static. It is awareness, drawn on every branch including the modal ones, and motion there would compete with the pane |
 
 ### Stillness ends a siege, vigour raises the wall, and the tower stays broken (`0.17.1`)
+
+> **Superseded in part by *Supply* (`0.18.2`, `0.18.3`).** `most` is gone, so
+> the tower may hold many stillnesses and they go stale like any store. Vigour
+> holds its room only while its supply draws, not *"for the rest of the
+> siege"*, and a thin store no longer gives half. Stillness ending a siege, the
+> hand-only rule, the cost and the tower staying broken all stand.
 
 `stillness` and `vigour` were the only potions with nowhere to go: no row in
 `siege.toml`, and nothing else reads a potion. Both now have a use, each one
@@ -5991,6 +6486,12 @@ announced nothing. And the three examples' shared command line moved into
 
 ### The arsenal is worth what your industry is worth — supersedes the cap (Phase 11, `0.11.13`)
 
+> **Superseded in part by *Supply* (`0.18.3`).** Freshness now caps a
+> supply's rate rather than scaling its effect: *"`thin` at half"*, *"a boolean
+> effect has no half"*, *"a magnitude that halves to nought"* and *"total stock
+> never enters the arithmetic"* no longer hold. The rate-not-timestamp rule,
+> surplus selling, and offline correctness stand.
+
 **A per-name cap was the box, and it is struck.** Its own text admitted the
 problem was hypothetical — *"if a real player is seen banking a thousand potions,
 which nobody has been"* — and nobody structurally could without deliberate
@@ -6038,7 +6539,7 @@ how big a siege arrives"*; this is both halves.
 | Question | Decision |
 |---|---|
 | How standing sizes a siege | **The floor never moves and the tail lengthens.** `FEWEST` is 5 at every rank; the ceiling runs `BASE_MOST` 9 → `MOST` 12 over ten ranks, one foe per three. A famous tower can still draw a quiet night, an unknown one never meets the worst, and variance stays meaningful at both ends rather than being squeezed against the top |
-| Why twelve | **`outnumbered` is a ratio, not a number** — `enemy >= garrison * 2` — and the garrison opens at six, so twelve is exactly where that reading turns over at the *opening*. A curve running past it would make the rung three shipped solvers branch on true in every fight; one stopping short leaves the reading unreachable until the garrison is thinned. Twelve is what makes it a decision, and it is **written** rather than emergent |
+| Why twelve | **`outnumbered` is a ratio, not a number** — `enemy >= garrison * 2` — and the garrison opens at six, so twelve is exactly where that reading turns over at the *opening*. A curve running past it would make the rung three shipped solvers branch on true in every fight; one stopping short leaves the reading unreachable until the garrison is thinned. Twelve is what makes it a decision, and it is **written** rather than emergent. **Amended by *Supply* (`0.18.1`)**: six is now the garrison's floor, so this holds only for a neglected garrison. A full one of ten is never outnumbered at the opening |
 | What `petition` moves | **The ceiling, before the draw — never a subtraction after it.** At the moment the word is typed no siege exists and nothing has been drawn, so *"already as small as it goes"* is only answerable against the ceiling. Subtracting afterwards lets a player pay four times, draw the floor anyway, and lose the lot in silence |
 | ...and it keeps `arrived` honest for free | Because the reduction lands in the *draw*, `arrived` is simply the smaller number — so `massed` (`enemy.count == arrived`), escrow and the renown stake all stay consistent with no second rule. A draft that decremented `enemy.count` alone would have made `massed` false from round one of every petitioned siege: a published reading quietly lying |
 | The price | `PETITION_PER_FOE = RENOWN_PER_FOE` — what a foe is *worth* when the wall holds. Buying one off hands back exactly what it would have paid, so it is a wash on the night and a real cost across an evening |
@@ -6120,6 +6621,15 @@ to mean strictly *runs*, the fix belongs in its own guard**, not in the shape of
 record that is honestly a completion.
 
 ### The tower counts runs, not things — the dependency web (Phases 9, 12, 13a)
+
+> **Amended by *Supply* (`0.18`).** Every track still counts runs. What
+> changed is goods:
+> - A run yields a batch, so `fruitful` adds one to it and is no longer
+>   *"nearly worthless"* (`0.18.0`).
+> - Troops are not a made good. The garrison is the tower's own (`0.18.1`).
+> - The contested good is a warding **supply**, never one potion (`0.18.3`).
+> - A supply drains the arsenal, so goods are now a bottleneck. That closes
+>   the gap this entry names.
 
 **Every progression track in the game increments once per completed run at an
 instrument, regardless of what that run produced or how much of it.** `worth` is
@@ -11556,6 +12066,9 @@ of the stacks that is noise, and it is exactly the tedium the archive is built t
 automate — `repeat 4 / move fragment to lectern / end` is four lines of a spell.
 If it ever grates, the lever is `move` learning a count, and that is a signature
 change with the optional middle slot to think about rather than a quick fix.
+(**Amended by *Supply*, `0.18.7`**: a move onto a shelf, the arsenal or a store,
+carries the whole batch. A move into an instrument, the lectern included, still
+carries one, so assembling is unchanged.)
 
 Without the cabinet, `empty lectern` would also be a word that can never work in
 the room it is offered in.

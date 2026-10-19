@@ -485,12 +485,16 @@ done = { event = "figure" }
 domain = "menagerie"
 id = "menagerie_2"
 done = { event = "figure", times = 5, fixed = true }
-opens = ["circle"]
+opens = ["circle", "demon:golem"]
 
+# The circle's second use, widened (§19, Supply): a whole circle binds a golem
+# from the second station, and the familiar and the effigy here. Late in a long
+# game, which is the price of the menagerie standing in for a laboratory.
 [[mastery]]
 domain = "menagerie"
 id = "menagerie_3"
 done = { event = "figure", times = 20 }
+opens = ["demon:familiar", "demon:effigy"]
 
 # The forge. Opens at 56 knowing `hurried`, its flagship; the rest of its
 # charms come with its own line, in the order a player would want them.

@@ -107,7 +107,7 @@ run maze_walked ORBS_BOOT=0 ORBS_DUMP="attend archive; research; follow east; fo
 run maze_wander ORBS_BOOT=0 ORBS_DUMP="attend archive; research; wander" ORBS_WALK=$'<right>\n<right>\n<down>\n<down>\n<left>'
 run maze_seed3  ORBS_SEED=3 ORBS_BOOT=0 ORBS_GRID=160x45 ORBS_DUMP="attend archive; research; wander"
 run maze_seed11 ORBS_SEED=11 ORBS_BOOT=0 ORBS_GRID=160x45 ORBS_DUMP="attend archive; research; wander"
-run maze_glean  ORBS_SEED=3 ORBS_BOOT=0 ORBS_DUMP="attend archive; research; debug_spawn gleaning-scroll; wield gleaning-scroll; wander"
+run maze_glean  ORBS_SEED=3 ORBS_BOOT=0 ORBS_DUMP="attend archive; research; debug_spawn gleaning-scroll 4; wield gleaning-scroll; wander"
 run maze_marks  ORBS_SEED=3 ORBS_BOOT=0 ORBS_GRID=160x45 ORBS_DUMP="attend archive; research; follow south; follow south; follow north; survey south"
 run maze_log    ORBS_SEED=3 ORBS_BOOT=0 ORBS_GRID=100x40 ORBS_DUMP="attend archive; research; follow west; follow west; peruse archive.log"
 
@@ -336,8 +336,8 @@ run arsenal ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="attend laboratory; kindle ch
 run arsenal_door ORBS_BOOT=0 ORBS_DUMP="attend laboratory; move sage to arsenal"
 
 # --- scrolls ---------------------------------------------------------------
-run scroll_quick   ORBS_BOOT=0 ORBS_DUMP="attend laboratory; debug_spawn quickening-scroll; wield quickening-scroll; grind sage; meditate 4"
-run scroll_verdant ORBS_BOOT=0 ORBS_DUMP="attend laboratory; debug_spawn verdant-scroll 4; wield verdant-scroll; wield verdant-scroll; wield verdant-scroll; wield verdant-scroll; survey dispensary"
+run scroll_quick   ORBS_BOOT=0 ORBS_DUMP="attend laboratory; debug_spawn quickening-scroll 4; wield quickening-scroll; grind sage; meditate 4"
+run scroll_verdant ORBS_BOOT=0 ORBS_DUMP="attend laboratory; debug_spawn verdant-scroll 6; wield verdant-scroll; meditate 900; survey dispensary"
 
 # --- the sanctum -----------------------------------------------------------
 run pylon_board  ORBS_BOOT=0 ORBS_DUMP="attend sanctum; muster; haul wellspring barrier; haul wellspring conduit; haul barrier conduit"
@@ -355,10 +355,15 @@ run recall_script_sanctum ORBS_BOOT=0 ORBS_GRID=100x40 ORBS_DUMP="attend sanctum
 # also captures the `~` mark.
 run circle_open     ORBS_BOOT=0 ORBS_DUMP="attend menagerie; summon"
 run circle_balk     ORBS_BOOT=0 ORBS_DUMP="attend menagerie; summon; limn keystone heed; limn sunwise oppose; summon"
-run circle_held     ORBS_BOOT=0 ORBS_DUMP="attend menagerie; summon; debug_circle; summon; survey arsenal"
+run circle_held     ORBS_BOOT=0 ORBS_DUMP="attend menagerie; summon; debug_circle; summon; survey roster"
 run circle_refuse   ORBS_BOOT=0 ORBS_DUMP="attend menagerie; limn keystone heed; summon; limn keystone sunwise; stop circle"
 run circle_readings ORBS_BOOT=0 ORBS_DUMP="attend menagerie; summon; limn keystone heed; survey keystone; survey circle"
-run circle_troop    ORBS_BOOT=0 ORBS_DUMP="recall troop; debug_spawn troop 3; survey arsenal"
+# The standing garrison (§19, Supply): a hold fills it, `defend` levies it, and
+# a sealed tower's wall stands on the floor with no menagerie at all.
+run garrison_levied ORBS_BOOT=0 ORBS_DUMP="attend menagerie; summon; debug_circle; summon; survey roster; attend bailey; defend; survey garrison"
+run garrison_status ORBS_SEALED=1 ORBS_BOOT=0 ORBS_DUMP="debug_reach sanctum_1; status"
+# The circle's second use: two holds bound as golems, then deployed on the wall.
+run demon_bound     ORBS_BOOT=0 ORBS_DUMP="attend menagerie; summon; debug_circle; summon golem; summon; debug_circle; summon golem; survey arsenal; attend bailey; defend; deploy golem; survey arsenal"
 # A sealed tower's first beast: the lesser circle, a dark glyph refused, and a
 # call that balks — the board with one line and four columns in the same footprint.
 run circle_lesser   ORBS_SEALED=1 ORBS_BOOT=0 \
@@ -384,6 +389,14 @@ run siege_readings ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend; survey enemy; s
 run siege_round    ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend; pledge d20 buckler; hold; peruse bailey.log"
 run siege_refuse   ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend; pledge d20 buckler; pledge d20 line; pledge buckler d20; deploy sage"
 run siege_over     ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend; debug_siege; hold; survey rampart"
+# Standing supplies (§19, Supply): short of the threshold, opened, raised, a
+# round drawn, and the board's `drawing` row. Then stillness, drawn once.
+run supply_flows   ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend; debug_spawn warding 5; quaff warding; debug_spawn warding 10; quaff warding; quaff warding; hold; survey arsenal; peruse bailey.log"
+run supply_still   ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend; hold; debug_spawn stillness 3; quaff stillness; survey rampart"
+# A scroll's calm supply: opened, a distillation landing in half its time, then
+# drawn down on the clock until it runs dry.
+run calm_quickening ORBS_BOOT=0 ORBS_DUMP="attend laboratory; debug_spawn quickening-scroll 8; wield quickening-scroll; kindle charcoal; debug_spawn clarified-draught; distil clarified-draught; meditate 29; meditate 2400; survey arsenal"
+run calm_gleaning  ORBS_BOOT=0 ORBS_DUMP="attend archive; debug_spawn gleaning-scroll 4; wield gleaning-scroll; research; stop gleaning-scroll"
 run recall_script_bailey ORBS_BOOT=0 ORBS_GRID=100x40 ORBS_DUMP="attend bailey; recall scripting"
 
 # --- the forge -------------------------------------------------------------

@@ -16,8 +16,8 @@ the once you want to see the boot.
 
 ## 0. The one-line version
 
-You are a wizard whose tower is under siege. A king has lent you six troops and
-you have three dice. The enemy tells you what it will do **before it does it**,
+You are a wizard whose tower is under siege. The tower sends every body it holds,
+never fewer than six, and you have three dice. The enemy tells you what it will do **before it does it**,
 you **place your dice** behind the parts of the wall that need them, and you say
 `hold` to let a round happen. Nothing moves until you do.
 
@@ -195,37 +195,42 @@ which one rolled.
 
 ## 3. Spend the arsenal
 
-The arsenal starts empty, so stock it. This is a debug word and it earns nothing:
+**No single potion does anything.** Each is a supply: with enough held, its word
+opens it, and it draws every round on its own until it runs dry. The arsenal
+starts empty, so stock it. This is a debug word and it earns nothing:
 
 ```
-debug_spawn troop 3
-debug_spawn warding 3
-debug_spawn mending 2
-debug_spawn quickening-scroll 2
+debug_spawn warding 12
+debug_spawn mending 6
+debug_spawn quickening-scroll 4
 ```
 
 Then:
 
 ```
-deploy troop      ← bodies into the line
-quaff warding     ← +3 to every roll you make next round
-quaff mending     ← fight put back
+quaff warding     ← flows, 2 a round: a bonus on every roll you make
+quaff warding     ← again: flows faster, 3 a round, a bigger bonus
+quaff mending     ← flows when the line is hurt: fight put back
 wield quickening-scroll   ← scrolls keep `wield`, as everywhere else
+stop warding      ← shuts it; what this round drew stands
 ```
 
-**Three refusals worth triggering deliberately**, because each one is the game
-telling you something rather than an error:
+The board grows a `drawing` row: `drawing   warding 2  mending 1`.
+
+**Refusals worth triggering deliberately**, because each one is the game telling
+you something rather than an error:
 
 | Type this | It should say |
 |---|---|
-| `quaff troop` | `troop is not quaffed or deployed. deploy it` |
+| `quaff warding` with five held | `you hold 5 warding. it flows from 6` |
+| `deploy warding` | `that is not how warding is used. quaff it` |
 | `deploy sage` | `sage is worth nothing on a wall` |
-| `quaff mending` at full strength | `the line is whole. keep the mending for when it is not` |
-| `quaff warding` when they will `volley` | `they volley next, so you will not swing. keep the warding` |
+| `quaff mending` at full strength | `the mending flows, 2 a round, from when it is wanted` |
+| `quaff warding` when they will `volley` | the same: it opens, and draws nothing that round |
 
-The last two are the interesting ones: **the orb refuses to let you waste a
-potion** and keeps it. Check the arsenal afterwards with `survey arsenal` — the
-count should not have gone down.
+The last two are the interesting ones: **a supply never draws for nothing.**
+Check the arsenal with `survey arsenal` — the count should not have gone down
+until the round that needs it.
 
 ---
 
@@ -333,8 +338,8 @@ grimoire's shelf in a debug build, so no setup is needed.
 
 ```
 attend bailey
-debug_spawn troop 6
-debug_spawn warding 6
+debug_spawn clarity 12
+debug_spawn warding 12
 invoke besieging
 meditate 900
 peruse bailey.log

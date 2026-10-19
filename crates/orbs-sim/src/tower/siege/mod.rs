@@ -43,19 +43,23 @@
 //! code spans rather than doc links — a `[`link`]` to a private module is a
 //! rustdoc error under `-D warnings`.
 //!
-//! | File | Lines | What it is |
-//! |---|---|---|
-//! | `allocation` | 164 | Where a die goes. The dice, the four areas, what a round's dice came to |
-//! | `band` | 262 | What is standing, what it intends, and what one round did to it |
-//! | `battle` | 473 | [`Siege`] itself: the state, the readings' arithmetic, and `resolve` |
-//! | `escrow` | 43 | §11.5's economy. Not the siege's combat rules, which is the seam |
-//! | `quintessence` | 145 | What a siege has to spend on its dice, and what the tower's repair buys it |
-//! | `readings` | 109 | The words the domain publishes for a spell to ask about |
+//! | File | What it is |
+//! |---|---|
+//! | `allocation` | Where a die goes. The dice, the four areas, what a round's dice came to |
+//! | `band` | What is standing, what it intends, and what one round did to it |
+//! | `battle` | [`Siege`] itself: the state, the readings' arithmetic, and `resolve` |
+//! | `line` | The line on the wall: the levy, and what a supply does to its room between rounds |
+//! | `board` | What the rampart's board draws |
+//! | `garrison` | The tower's standing garrison, at home and in reserve (§19, *Supply*) |
+//! | `escrow` | §11.5's economy. Not the siege's combat rules, which is the seam |
+//! | `quintessence` | What a siege has to spend on its dice, and what the tower's repair buys it |
+//! | `readings` | The words the domain publishes for a spell to ask about |
+//! | `standing` | How big a siege arrives, and what `petition` buying it down costs |
 //!
-//! `battle` is over the guideline and left that way deliberately: it is one
-//! type's inherent `impl`, and the only cut available — arithmetic here,
-//! `resolve` there — would put `hurt`, `completion` and `coffer` a file away
-//! from the round that changes all three.
+//! `battle` is over the guideline and left that way deliberately: what is left
+//! is one type's state, its readings and `resolve`, and cutting between them
+//! would put `hurt`, `completion` and `coffer` a file away from the round that
+//! changes all three. The line and the board were separable, and went.
 //!
 //! The re-exports below are the whole public surface and it did not change.
 //! Every caller says `siege::SPEARS`, `siege::Area`, `siege::escrow` as before,
@@ -69,7 +73,10 @@
 mod allocation;
 mod band;
 mod battle;
+mod board;
 mod escrow;
+mod garrison;
+mod line;
 mod quintessence;
 mod readings;
 mod standing;
@@ -85,6 +92,10 @@ pub use band::{
 pub use battle::{Pledged, Siege, besieged};
 pub use escrow::{
     COMPLETION_BONUS, ESCROW_FLOOR, ESCROW_PER_FOE, RENOWN_PER_FOE, escrow, renown_stake,
+};
+pub use garrison::{
+    DESERT_EVERY, FULL, GARRISON_FLOOR, GARRISON_MOST, Garrison, ROSTER, desert, disband, enlist,
+    held, levy, most_held, roll_call,
 };
 pub use quintessence::{FACES_PER_POINT, cost_of};
 pub use readings::{

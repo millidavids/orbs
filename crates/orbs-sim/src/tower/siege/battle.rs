@@ -8,11 +8,27 @@ use bevy_ecs::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use super::{
-    AGAINST, ASSIGNED, Area, BASE_MOST, Band, ENEMY, FEWEST, GARRISON, Intent, MOST, Outcome, POOL,
+    AGAINST, ASSIGNED, Area, BASE_MOST, Band, FEWEST, GARRISON_MOST, Intent, MOST, Outcome, POOL,
     Pledge, Round, SORTIE_COST, SORTIE_DEALT, Strengths, THIN, VIGOUR,
 };
 use crate::rng::{RngStream, Rngs};
 use crate::tower::dice::{Die, Effect, Landed, Modifier, Roll};
+
+/// What an older save's siege levied: the king's six, as every siege did.
+const fn assigned() -> u32 {
+    ASSIGNED
+}
+
+/// The line's room in an older save's siege: the garrison's most.
+const fn room() -> u32 {
+    GARRISON_MOST
+}
+
+/// Whether a count is nought, so a save stays quiet about it.
+#[allow(clippy::trivially_copy_pass_by_ref)] // serde hands a reference
+const fn is_nought(count: &u32) -> bool {
+    *count == 0
+}
 
 /// What happened when a die was pledged.
 ///
@@ -79,10 +95,28 @@ pub struct Siege {
     /// them, so the solver's `quaff mending` rung was dead code.
     #[serde(default)]
     pub mustered: u32,
-    /// Fight the garrison can hold above what it mustered — vigour's gift,
-    /// for this siege only (§19).
+    /// Fight the garrison can hold above what it mustered: what a fortify
+    /// supply holds this round, and any [`kept`](Self::kept) room.
     #[serde(default)]
     pub fortified: u32,
+    /// Room an older document's vigour bought for the rest of its siege,
+    /// before a fortify supply held its room a round at a time. Kept, since
+    /// that is what was paid for. Nought in every siege fought since.
+    #[serde(default, skip_serializing_if = "is_nought")]
+    pub kept: u32,
+    /// How many bodies the tower sent to the wall. Survivors come home up to
+    /// this, so a refill past it disbands (§19, *Supply*).
+    #[serde(default = "assigned")]
+    pub levied: u32,
+    /// The most bodies the line may hold: the garrison's most when the siege
+    /// opened. Nothing refills or mends the line past it.
+    #[serde(default = "room")]
+    pub room: u32,
+    /// How fresh each arsenal store was when the enemy arrived (§19,
+    /// *Supply*). A siege reads the better of this and now, so a player who
+    /// takes an hour over a round loses nothing to the clock.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub freshness: std::collections::BTreeMap<String, crate::tower::Freshness>,
     /// Modifiers the player has staged for the coming round.
     ///
     /// Cleared when the round resolves: an advantage that persisted would make
@@ -156,6 +190,10 @@ impl Siege {
             standing: None,
             mustered: ASSIGNED,
             fortified: 0,
+            kept: 0,
+            levied: ASSIGNED,
+            room: GARRISON_MOST,
+            freshness: std::collections::BTreeMap::new(),
             staged: Vec::new(),
             pledges: Vec::new(),
             edge: 0,
@@ -169,14 +207,6 @@ impl Siege {
     #[must_use]
     pub const fn running(&self) -> bool {
         self.outcome.is_none()
-    }
-
-    /// The most fight the garrison can hold: what it mustered, and what vigour
-    /// raised it by. Not what [`hurt`](Self::hurt) measures against, or a
-    /// potion would read as a wound.
-    #[must_use]
-    pub const fn full(&self) -> u32 {
-        self.mustered * VIGOUR + self.fortified
     }
 
     /// The garrison is thin.
@@ -315,25 +345,11 @@ impl Siege {
         });
     }
 
-    /// Add troops to the garrison — what `deploy` does.
-    ///
-    /// `mustered` rises with them, so reinforcing a worn line does not make it
-    /// read as freshly wounded.
-    pub const fn reinforce(&mut self, count: u32) {
-        self.garrison.count += count;
-        self.garrison.vigour += count * VIGOUR;
-        self.mustered += count;
-    }
-
-    /// Put fight back into the garrison — what `quaff` does.
-    pub fn heal(&mut self, points: u32) {
-        self.garrison.mend(points, self.full());
-    }
-
-    /// Raise what the garrison can hold, without healing it — vigour's gift.
-    /// Mending and succour fill the room it makes.
-    pub const fn fortify(&mut self, points: u32) {
-        self.fortified += points;
+    /// Stage `effect` for `source` in place of whatever it staged before — a
+    /// supply raised mid-turn changes its draw rather than adding a second.
+    pub fn restage(&mut self, source: &str, effect: Effect) {
+        self.staged.retain(|modifier| modifier.source != source);
+        self.stage(source, effect);
     }
 
     /// End the siege with both sides standing — stillness.
@@ -372,62 +388,6 @@ impl Siege {
             count: 1,
             vigour: 1,
         };
-    }
-
-    /// What the board draws.
-    ///
-    /// The names and the intent travel with it, so the painter need not know
-    /// what a band is called — `orbs-render` may never depend on `orbs-sim`
-    /// (§19). The odds go too, because §5.1 is *show the odds before the
-    /// commitment*. `pool` is handed in, for the reason `pledge` takes it.
-    #[must_use]
-    pub fn view(&self, tally: String, pool: u32) -> orbs_render::Rampart {
-        orbs_render::Rampart {
-            garrison: orbs_render::SiegeSide {
-                name: GARRISON,
-                troops: self.garrison.count,
-                vigour: self.garrison.vigour,
-                // `mustered`, not the current count: against `count` the bar
-                // never fell below ~89%, so a line cut from six to two drew
-                // full one round before it routed.
-                full: self.full(),
-                chance: self.garrison_roll().chance(),
-            },
-            enemy: orbs_render::SiegeSide {
-                name: ENEMY,
-                troops: self.enemy.count,
-                vigour: self.enemy.vigour,
-                full: self.arrived * VIGOUR,
-                chance: self.enemy_roll().chance(),
-            },
-            turns: self.turns,
-            // The whole allocation. Three dice against four rows, so one is
-            // always empty — which one is the decision the board makes visible.
-            areas: Area::ALL
-                .into_iter()
-                .map(|area| orbs_render::Allocation {
-                    name: area.word(),
-                    dice: self
-                        .pledged(area)
-                        .into_iter()
-                        .map(|die| die.word().to_owned())
-                        .collect(),
-                    range: self.range(area),
-                    moot: !area.answers(self.intent),
-                })
-                .collect(),
-            // Everything held, with its price: a die that vanished when you
-            // could not pay for it would hide the round where the decision is
-            // hardest. `affordable()` is the spell's narrower view.
-            coffer: self
-                .coffer()
-                .into_iter()
-                .map(|die| (die.word().to_owned(), super::cost_of(die)))
-                .collect(),
-            quintessence: pool,
-            intent: self.intent.word().to_owned(),
-            tally,
-        }
     }
 
     /// Compose the roll one attacker makes. Public so the board can show the
@@ -549,7 +509,8 @@ impl Siege {
         // big roll on a nearly-whole line is mostly wasted.
         let before = self.garrison.vigour;
         if strengths.succour > 0 {
-            self.garrison.mend(strengths.succour, self.full());
+            self.garrison
+                .mend(strengths.succour, self.full(), self.room);
         }
         let mended = self.garrison.vigour.saturating_sub(before);
 

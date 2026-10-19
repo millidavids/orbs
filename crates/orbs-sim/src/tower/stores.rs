@@ -3,10 +3,9 @@
 //! A rate, not a timestamp: §19 withdrew a perishable arsenal because a
 //! freshness clock keyed to *when one was last made* keeps a thousand potions
 //! fresh off one restock, cheaper than playing normally. Asking *how many have
-//! you made lately* instead makes one restock a rate of one, and holding a
-//! thousand worth what your current industry is worth. Total stock never enters
-//! the arithmetic, which is what lets this be built on `Stock` untouched — no
-//! per-unit batches, no save migration.
+//! you made lately* instead makes one restock a rate of one. Since *Supply*
+//! (§19) the count held decides whether a supply can run at all, and this
+//! decides how fast: fresh runs any rate, thin the slowest, spent none.
 //!
 //! It does not decay while the game is closed, and that needs no code: a tick is
 //! one real second while the window is open, the counter is restored verbatim,
@@ -38,21 +37,25 @@ pub const THIN_AT: usize = 1;
 /// dropped, which is the right end — the rate is about *lately*.
 const REMEMBERED: usize = FRESH_AT;
 
-/// How well stocked the tower is in one thing.
+/// How well stocked the tower is in one thing, lately.
 ///
 /// Three words, because the domain's readings are words — `few`, `hurt`,
 /// `outnumbered` — and a spell asks for them by name. A fraction is unaskable.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Supply {
-    /// Made often enough to be worth its full authored strength.
+///
+/// `Freshness`, where this was `Supply`: that word is the arsenal's standing
+/// supplies now (§19, *Supply*).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Freshness {
+    /// Made often enough that a supply may run at any rate.
     Fresh,
-    /// Made, but not lately. Worth half, rounded down.
+    /// Made, but not lately. A supply runs only at its slowest.
     Thin,
-    /// Not made in long enough that the stores are out. Worth nothing.
+    /// Not made in long enough that the stores are out. Nothing flows.
     Spent,
 }
 
-impl Supply {
+impl Freshness {
     /// The word the panel prints and a spell asks for.
     #[must_use]
     pub const fn word(self) -> &'static str {
@@ -66,42 +69,15 @@ impl Supply {
     /// Every word, for the lints that walk them.
     pub const ALL: [Self; 3] = [Self::Fresh, Self::Thin, Self::Spent];
 
-    /// What `amount` of an authored effect is worth at this standing.
-    ///
-    /// Half, rounded down, nothing when spent. A magnitude that halves to nought
-    /// meets the existing "would do nothing, so it is refused" guard, so no
-    /// branch is needed here.
+    /// The better stocked of two. A siege reads freshness as at `defend` or
+    /// now, whichever is better, so waiting over a round costs nothing.
     #[must_use]
-    pub const fn scale(self, amount: u32) -> u32 {
-        match self {
-            Self::Fresh => amount,
-            Self::Thin => amount / 2,
-            Self::Spent => 0,
+    pub const fn better(self, other: Self) -> Self {
+        match (self, other) {
+            (Self::Fresh, _) | (_, Self::Fresh) => Self::Fresh,
+            (Self::Thin, _) | (_, Self::Thin) => Self::Thin,
+            _ => Self::Spent,
         }
-    }
-
-    /// What a *signed* magnitude is worth at this standing.
-    ///
-    /// `Effect::Bonus` may be negative, so halving moves it toward nought from
-    /// either side: a thin curse is a weaker curse, not a worse one.
-    #[must_use]
-    pub const fn scale_signed(self, amount: i32) -> i32 {
-        match self {
-            Self::Fresh => amount,
-            Self::Thin => amount / 2,
-            Self::Spent => 0,
-        }
-    }
-
-    /// Whether an effect carrying no magnitude still works at this standing.
-    ///
-    /// A boolean effect has no half — `advantage` is draw-twice, `upgrade` is a
-    /// bigger die — so the only answers are yes and no. They survive `Thin`:
-    /// one making is a rate of one, and dropping there meant a player who brewed
-    /// a single `haste` could never use it.
-    #[must_use]
-    pub const fn keeps_whole(self) -> bool {
-        !matches!(self, Self::Spent)
     }
 }
 
@@ -137,11 +113,11 @@ impl Stores {
 
     /// How well stocked the tower is in `named`.
     #[must_use]
-    pub fn store(&self, named: &str, now: u64) -> Supply {
+    pub fn store(&self, named: &str, now: u64) -> Freshness {
         match self.rate(named, now) {
-            rate if rate >= FRESH_AT => Supply::Fresh,
-            rate if rate >= THIN_AT => Supply::Thin,
-            _ => Supply::Spent,
+            rate if rate >= FRESH_AT => Freshness::Fresh,
+            rate if rate >= THIN_AT => Freshness::Thin,
+            _ => Freshness::Spent,
         }
     }
 
@@ -185,7 +161,7 @@ pub fn made(world: &mut World, named: &str) {
 
 /// How well stocked the tower is in `named`, now.
 #[must_use]
-pub fn supply_of(world: &World, named: &str) -> Supply {
+pub fn freshness_of(world: &World, named: &str) -> Freshness {
     let now = world.resource::<crate::tick::Tick>().get();
     world.resource::<Stores>().store(named, now)
 }
@@ -199,7 +175,7 @@ pub const STORE: &str = "store";
 /// The words an arsenal item answers `has` with.
 #[must_use]
 pub fn readings() -> Vec<&'static str> {
-    Supply::ALL.into_iter().map(Supply::word).collect()
+    Freshness::ALL.into_iter().map(Freshness::word).collect()
 }
 
 /// Keep every arsenal item's group and reading in step with its store.
@@ -233,25 +209,7 @@ pub fn stocktake(world: &mut World) {
             .insert(super::Grouped(STORE.to_owned()));
 
         let want = now.store(&named, tick).word();
-        let said: Vec<Entity> = super::children_of(world, node)
-            .into_iter()
-            .filter(|child| {
-                world
-                    .get::<super::Name>(*child)
-                    .is_some_and(|name| readings().contains(&name.0.as_str()))
-            })
-            .collect();
-        if said.len() == 1
-            && world
-                .get::<super::Name>(said[0])
-                .is_some_and(|name| name.0 == want)
-        {
-            continue;
-        }
-        for stale in said {
-            world.entity_mut(stale).despawn();
-        }
-        super::build::raise_reading(world, node, want);
+        super::sync_readings(world, node, &readings(), &[(want, None)]);
     }
 }
 
@@ -266,8 +224,8 @@ mod tests {
         // rate cannot — one making is one, whatever it stocked.
         let mut stores = Stores::default();
         stores.made("warding", 0);
-        assert_eq!(stores.store("warding", 0), Supply::Thin);
-        assert_eq!(stores.store("warding", 10), Supply::Thin);
+        assert_eq!(stores.store("warding", 0), Freshness::Thin);
+        assert_eq!(stores.store("warding", 10), Freshness::Thin);
     }
 
     #[test]
@@ -278,7 +236,7 @@ mod tests {
         for at in 0..FRESH_AT as u64 {
             stores.made("warding", at);
         }
-        assert_eq!(stores.store("warding", 0), Supply::Fresh);
+        assert_eq!(stores.store("warding", 0), Freshness::Fresh);
     }
 
     #[test]
@@ -287,19 +245,19 @@ mod tests {
         for at in 0..FRESH_AT as u64 {
             stores.made("warding", at);
         }
-        assert_eq!(stores.store("warding", 0), Supply::Fresh);
+        assert_eq!(stores.store("warding", 0), Freshness::Fresh);
         // The oldest makings fall out first, so a store passes through `Thin`
         // on its way and a player gets warning rather than a cliff.
-        assert_eq!(stores.store("warding", WINDOW), Supply::Thin);
+        assert_eq!(stores.store("warding", WINDOW), Freshness::Thin);
         // ...and past the newest making's own window it is out. `WINDOW + 1` is
         // not far enough: the last making was at tick 2, counted until 1,802.
-        assert_eq!(stores.store("warding", WINDOW + 10), Supply::Spent);
+        assert_eq!(stores.store("warding", WINDOW + 10), Freshness::Spent);
     }
 
     #[test]
     fn a_thing_never_made_is_spent() {
         let stores = Stores::default();
-        assert_eq!(stores.store("warding", 0), Supply::Spent);
+        assert_eq!(stores.store("warding", 0), Freshness::Spent);
     }
 
     #[test]
@@ -315,21 +273,14 @@ mod tests {
             "a thousand makings kept {} entries",
             makings.len(),
         );
-        assert_eq!(stores.store("clarity", 1_000), Supply::Fresh);
+        assert_eq!(stores.store("clarity", 1_000), Freshness::Fresh);
     }
 
     #[test]
-    fn a_boolean_effect_has_no_half_so_it_works_until_it_does_not() {
-        // `advantage` is draw-twice; there is no halving it. It survives `Thin`
-        // because one making is a rate of one.
-        assert!(Supply::Fresh.keeps_whole());
-        assert!(Supply::Thin.keeps_whole());
-        assert!(!Supply::Spent.keeps_whole());
-        // ...and a magnitude halves, rounding down into the existing
-        // "would do nothing, so it is refused and kept" guard.
-        assert_eq!(Supply::Fresh.scale(3), 3);
-        assert_eq!(Supply::Thin.scale(3), 1);
-        assert_eq!(Supply::Thin.scale(1), 0);
-        assert_eq!(Supply::Spent.scale(9), 0);
+    fn the_better_store_is_the_one_made_more_lately() {
+        use Freshness::{Fresh, Spent, Thin};
+        assert_eq!(Spent.better(Thin), Thin);
+        assert_eq!(Thin.better(Fresh), Fresh);
+        assert_eq!(Spent.better(Spent), Spent);
     }
 }

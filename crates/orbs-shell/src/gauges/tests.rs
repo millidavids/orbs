@@ -311,7 +311,7 @@ fn a_spells_first_share_moves_no_bar() {
                 .to_text()
                 .lines()
                 .next()
-                .map(|line| line.find("potions"))
+                .map(|line| line.find("brews"))
         };
         assert_eq!(
             column(&alone),
@@ -463,7 +463,7 @@ fn a_room_counts_what_it_made_at_the_strips_edge() {
     let lines: Vec<&str> = text.lines().collect();
     // Two readings, counts in one column, a slot kept after them for a `+N`.
     let end = |line: &str, count: &str| line.find(count).map(|at| at + count.len());
-    assert!(lines[0].contains("potions brewed"), "{text}");
+    assert!(lines[0].contains("brews finished"), "{text}");
     assert!(lines[1].contains("your spells' share"), "{text}");
     assert_eq!(end(lines[0], "42"), end(lines[1], "30"), "{text}");
     assert_eq!(
@@ -537,12 +537,12 @@ fn a_gauges_plus_never_reaches_the_column() {
         .next()
         .unwrap_or_default()
         .to_owned();
-    let column = line.find("potions").unwrap_or(usize::MAX);
+    let column = line.find("brews").unwrap_or(usize::MAX);
     if let Some(plus) = line.find("+80000") {
         assert!(plus + 6 < column, "the +N ran into the column: {line}");
     }
     assert!(
-        line.contains("potions brewed") && line.trim_end().ends_with("42"),
+        line.contains("brews finished") && line.trim_end().ends_with("42"),
         "{line}"
     );
 }

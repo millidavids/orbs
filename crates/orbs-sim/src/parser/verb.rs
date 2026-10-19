@@ -223,7 +223,12 @@ impl NounKind {
             // if it is.
             Self::Any => !matches!(noun, Self::Command),
             Self::Readable => matches!(noun, Self::File | Self::Script),
-            Self::Stoppable => matches!(noun, Self::Place | Self::Script),
+            // An instrument, a spell, or a supply the arsenal is drawing (§19,
+            // *Supply*).
+            Self::Stoppable => matches!(
+                noun,
+                Self::Place | Self::Script | Self::Essence | Self::Scroll
+            ),
             Self::Workable => matches!(noun, Self::Place | Self::Scroll),
             Self::Portable => matches!(noun, Self::Reagent | Self::Essence | Self::Scroll),
             Self::Subject => matches!(noun, Self::Topic | Self::Command),
@@ -270,9 +275,9 @@ const PLACE_OPTIONAL: &[Slot] = &[Slot::optional(NounKind::Place)];
 // `sift` deliberately does **not** yet: its second slot is what it searches, and
 // searching a spell is a different feature from reading one.
 const READABLE: &[Slot] = &[Slot::required(NounKind::Readable)];
-/// `stop` reaches an instrument **or** a running spell.
+/// `stop` reaches an instrument, a running spell **or** an open supply.
 const STOPPABLE: &[Slot] = &[Slot::required(NounKind::Stoppable)];
-/// `wield` reaches an instrument **or** a scroll you spend.
+/// `wield` reaches an instrument **or** a scroll's supply.
 const WORKABLE: &[Slot] = &[Slot::required(NounKind::Workable)];
 const PATTERN_AND_FILE: &[Slot] = &[
     Slot::required(NounKind::Pattern),
@@ -289,6 +294,7 @@ const PATTERN_AND_FILE: &[Slot] = &[
 /// §19 declined the same for bare `follow`, where bare and argumented are
 /// different acts. Here they are the same act at two scopes, like `survey`.
 const TOPIC_OPTIONAL: &[Slot] = &[Slot::optional(NounKind::Subject)];
+const DEMON_OPTIONAL: &[Slot] = &[Slot::optional(NounKind::Essence)];
 const ANYTHING: &[Slot] = &[Slot::required(NounKind::Any)];
 /// `verify`'s, and the second optional slot in the game — see its `signature`
 /// arm for why bare is the audit rather than a refusal.
@@ -474,7 +480,7 @@ pub enum Verb {
     Kindle,
     /// Turn everything an instrument holds out into the store.
     Empty,
-    /// Cancel a working instrument, refunding what it holds.
+    /// Cancel a working instrument, refunding what it holds, or close a supply.
     Stop,
     // `Siphon` was here — *"collect a finished potion"* — and is **retired**
     // (§19). It took the product out of a tool and put it on the laboratory
@@ -588,11 +594,12 @@ pub enum Verb {
     /// was a chant, so the domain keeps that name and the verb does not — `sing`
     /// is gone (§19, `0.15.0`) and the split still stands.
     Defend,
-    /// `deploy <troop>` — send what the menagerie summoned into the line.
+    /// `deploy <demon>` — open or raise a demon's supply on the wall.
     ///
-    /// The arsenal's troops, spent. Swept clean at 500 against `play`.
+    /// Demons the menagerie bound (§19, *Supply*). Swept clean at 500 against
+    /// `play`.
     Deploy,
-    /// `quaff <potion>` — spend a potion on the coming round.
+    /// `quaff <potion>` — open or raise a potion's supply on the wall.
     ///
     /// A potion needed its own word and a scroll did not — spending a scroll is
     /// setting a thing going, which is `wield` (§19). Nothing scores against it.
@@ -1083,11 +1090,14 @@ impl Verb {
             // the third is already at the floor.
             | Self::Probe
             | Self::Anneal
-            | Self::Summon
             | Self::Defend
             | Self::Petition
             | Self::Hold
             | Self::Muster => NOTHING,
+            // Bare, the hold refills the garrison; named, it binds that demon
+            // instead (§19, *Supply*). An essence, what a demon is in the
+            // arsenal: a topic slot fuzzed *"summon a beast"* to `belt`.
+            Self::Summon => DEMON_OPTIONAL,
             // What the arsenal holds — `wield`'s shape, not `limn`'s: a troop is
             // something you *have*, not a reading the board publishes. Refusing
             // free text catches `deploy asdfgh` here, not a round later.

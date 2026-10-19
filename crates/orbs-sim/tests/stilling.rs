@@ -1,10 +1,10 @@
 //! Stillness's price, driven through the real laboratory (§19, `0.17.1`).
 //!
 //! A potion that ends a siege is only fair if it is dear: a scroll from the
-//! archive, ten minutes of the alembic, most of the tower's quintessence, and
-//! never more than one held. Each of the four is asserted here, along with the
-//! two ways a cap could leak — a slot refusal that still charges, and a
-//! `fruitful` alembic that makes two.
+//! archive, ten minutes of the alembic, and most of the tower's quintessence.
+//! Each is asserted here, with a slot refusal that must not charge. Its old
+//! one-held cap is retired (§19, *Supply*): it brews three a run and goes stale
+//! like anything else.
 //!
 //! `debug_spawn` is the door in, so these are debug-only.
 #![cfg(debug_assertions)]
@@ -87,10 +87,30 @@ fn starting_stillness_takes_twenty_quintessence() {
     run(&mut sim, "distil stilling-draught");
     assert_eq!(quintessence(&sim), 0, "{:?}", said(&sim));
 
-    // Ten minutes, and the alembic hands over one stillness.
+    // Ten minutes, and the alembic hands over three.
     run(&mut sim, "meditate 600");
     run(&mut sim, "empty alembic");
-    assert_eq!(stillness_held(&mut sim), 1, "{:?}", said(&sim));
+    assert_eq!(stillness_held(&mut sim), 3, "{:?}", said(&sim));
+}
+
+#[test]
+fn one_brew_of_stillness_can_be_drunk() {
+    // A brew makes what drinking one needs held (§19, *Supply*), so the
+    // dearest thing the laboratory makes is never stranded short of a use.
+    let mut sim = ready(1);
+    hold_quintessence(&mut sim, 20);
+    run(&mut sim, "distil stilling-draught");
+    run(&mut sim, "meditate 600");
+    run(&mut sim, "empty alembic");
+    run(&mut sim, "move stillness to arsenal");
+    run(&mut sim, "attend bailey");
+    run(&mut sim, "defend");
+    run(&mut sim, "quaff stillness");
+    assert!(
+        ever_said(&sim, "a stillness falls along the wall"),
+        "{:?}",
+        said(&sim)
+    );
 }
 
 #[test]
@@ -110,25 +130,17 @@ fn a_slot_refusal_costs_nothing() {
 }
 
 #[test]
-fn a_tower_holding_one_stillness_will_not_brew_another() {
+fn stillness_may_be_brewed_while_some_is_held() {
+    // `most` is retired (§19, *Supply*): the threshold is the price now.
     let mut sim = ready(1);
     run(&mut sim, "debug_spawn stillness 1");
     hold_quintessence(&mut sim, 20);
     run(&mut sim, "distil stilling-draught");
-    assert!(
-        ever_said(&sim, "one stillness is all the tower keeps"),
-        "{:?}",
-        said(&sim)
-    );
-    assert_eq!(
-        quintessence(&sim),
-        20,
-        "the cap's refusal cost quintessence"
-    );
+    assert_eq!(quintessence(&sim), 0, "{:?}", said(&sim));
 }
 
 #[test]
-fn a_fruitful_alembic_still_makes_one_stillness() {
+fn a_fruitful_alembic_yields_one_more_stillness() {
     let mut sim = ready(1);
     hold_quintessence(&mut sim, 20);
     let world = sim.world_mut();
@@ -150,29 +162,32 @@ fn a_fruitful_alembic_still_makes_one_stillness() {
     run(&mut sim, "meditate 600");
     assert_eq!(
         stillness_held(&mut sim),
-        1,
-        "fruitful doubled a capped potion: {:?}",
+        4,
+        "fruitful did not add one to the batch: {:?}",
         said(&sim)
     );
 }
 
 #[test]
-fn a_kept_stillness_never_goes_stale() {
-    // One brewed against the day: past the stores' window it would read `Spent`
-    // and be refused, while its own cap refused a replacement.
+fn a_kept_stillness_goes_stale_like_anything_else() {
+    // Brewed for a siege rather than kept against the day (§19, *Supply*):
+    // past the stores' window it reads `spent` and is refused, and kept.
     let mut sim = Sim::new(11);
     run(&mut sim, "debug_spawn stillness 1");
     sim.step_n(tower::WINDOW + 600);
     run(&mut sim, "attend bailey");
     run(&mut sim, "defend");
     run(&mut sim, "quaff stillness");
-    assert!(ever_said(&sim, "turns for home"), "{:?}", said(&sim));
+    assert!(ever_said(&sim, "stores are out"), "{:?}", said(&sim));
+    assert_eq!(stillness_held(&mut sim), 1, "a stale stillness was drunk");
 }
 
 #[test]
-fn vigour_from_a_thin_store_is_worth_half() {
+fn a_thin_store_runs_only_the_slowest_rate() {
     // Every other test spawns a fresh store; this one is made once, by hand,
-    // which is the shelf a player who brews one actually has.
+    // which is the shelf a player who brews once actually has. Twelve held is
+    // enough for vigour's second rate, and thin allows only the first (§19,
+    // *Supply*): a supply has to be kept up to run fast.
     let mut sim = Sim::new(11);
     run(&mut sim, "attend bailey");
     let arsenal = tower::keep(sim.world()).expect("the tower has an arsenal");
@@ -181,7 +196,7 @@ fn vigour_from_a_thin_store_is_worth_half() {
         arsenal,
         "vigour",
         orbs_sim::parser::NounKind::Essence,
-        1,
+        12,
     );
     tower::made(sim.world_mut(), "vigour");
     run(&mut sim, "defend");
@@ -193,6 +208,7 @@ fn vigour_from_a_thin_store_is_worth_half() {
         .map(tower::Siege::full)
         .expect("a siege");
     run(&mut sim, "quaff vigour");
+    run(&mut sim, "quaff vigour");
     let world = sim.world_mut();
     let after = world
         .query::<&tower::Siege>()
@@ -200,7 +216,8 @@ fn vigour_from_a_thin_store_is_worth_half() {
         .next()
         .map(tower::Siege::full)
         .expect("a siege");
-    assert_eq!(after, full + 4, "{:?}", said(&sim));
+    assert_eq!(after, full + 3, "{:?}", said(&sim));
+    assert!(ever_said(&sim, "stores are thin"), "{:?}", said(&sim));
 }
 
 /// What an instrument is holding, by name.
@@ -248,7 +265,7 @@ fn the_scroll_crosses_into_the_flask_and_the_draught_distils() {
     ] {
         run(&mut sim, line);
     }
-    assert_eq!(stillness_held(&mut sim), 1, "{:?}", said(&sim));
+    assert_eq!(stillness_held(&mut sim), 3, "{:?}", said(&sim));
 }
 
 /// A worn barrier can lower the ceiling under the price, and waiting would

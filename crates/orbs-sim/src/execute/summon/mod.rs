@@ -1,5 +1,7 @@
 //! The menagerie's circle: `summon`, `limn`, and what the circle publishes.
 
+mod binding;
+mod enlisting;
 mod publish;
 mod verbs;
 

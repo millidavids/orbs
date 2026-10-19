@@ -108,7 +108,8 @@ numbers below are not consecutive.
 
 | | Months | Words | |
 |---|---|---|---|
-| [**The tower as one machine**](#the-tower-as-one-machine) — **`0.17`, in hand** | 2 | ~3k | the dependency web, and two defects it cannot open on top of (§19) — the first fixed at `0.17.0` |
+| [**Supply**](#supply) — **`0.18`, in hand** | 1 | ~2k | no produced item has individual value: standing supplies, a standing garrison, demons (§19) |
+| [**The tower as one machine**](#the-tower-as-one-machine) — `0.17` | 2 | ~3k | the dependency web, and two defects it cannot open on top of (§19) — the first fixed at `0.17.0` |
 | [Spellcraft's three](#phase-3--spellcraft) | — | ~1k | the terse register, a typed action at execution, hidden-directory authoring |
 | [Enchanting's two](#phase-9--enchanting) | — | ~1k | the shared-engine extraction, split into a refactor and a behaviour box |
 | [Breadth](#breadth) | 2 | ~4k | all seven domains, research, full drift, offline progression |
@@ -118,7 +119,7 @@ numbers below are not consecutive.
 | [Ship](#ship) | 3 | ~5k | settings, accessibility, store, launch |
 | [**Standing**](#standing--work-that-rides-with-the-content) | — | — | ♾ never closes, and blocks nothing |
 
-**~15 months of open work**, against a whole-plan estimate that reached 41 months
+**~16 months of open work**, against a whole-plan estimate that reached 41 months
 on a 24-month target. The gap was already deliberate and *"the cut line's job to
 close"*; the [cut line](#cut-line--decided-in-advance) below says how. §16 rates
 schedule overrun **Critical**, so the total is carried here rather than dropped
@@ -1937,8 +1938,9 @@ they cannot prove it is the code worth writing"*, and no test can prove this.
         (`debug_spawn fragment 4 lectern`), which `tests/solver.rs` had already
         written down as impossible.
         **See it:** ✅ `ORBS_SEED=3 ORBS_BOOT=0 ORBS_DUMP="attend archive;
-        research; debug_spawn gleaning-scroll; wield gleaning-scroll; wander"`
-        — five `♦` scattered through the maze and
+        research; debug_spawn gleaning-scroll 4; wield gleaning-scroll; wander"`
+        — four `♦` scattered through the maze (five, and one scroll, before
+        `0.18.6`) and
         **no `Ω`**.
         ✅ the same without `wander` plus `survey stacks` — `reading: gleaning`
         on the stacks, which is the word a spell asks for.
@@ -2056,8 +2058,8 @@ they cannot prove it is the code worth writing"*, and no test can prove this.
         **See it:** ✅ an 8-tick grind, twice —
         `ORBS_BOOT=0 ORBS_DUMP="attend laboratory; grind sage; meditate 4"`
         yields nothing, and the same line with
-        `debug_spawn quickening-scroll; wield quickening-scroll` in front of it
-        yields ground-sage.
+        `debug_spawn quickening-scroll 4; wield quickening-scroll` in front of it
+        yields ground-sage (one scroll did, before `0.18.6`).
         ✅ `cargo test -p orbs-sim --test gleaning` — the short run, the run that
         stays short when the window closes, the in-flight halving and its point,
         and the two clocks agreeing.
@@ -2138,8 +2140,8 @@ they cannot prove it is the code worth writing"*, and no test can prove this.
       research; debug_spell threading" ORBS_THEN="invoke threading; meditate
       3600; meditate 3600; survey cabinet"` — seed 11 is the one the old
       documented ladder fails.
-      ✅ the same line with a `gleaning-scroll` wielded first — five fragments,
-      same file.
+      ✅ the same line with a gleaning supply opened first — four fragments
+      since `0.18.6`, same file.
       ✅ `cargo test -p orbs-sim --test gleaning` — one ladder over both errands,
       four seeds; `--test questions` for the counted grammar; `--test debug_spell`
       and `cargo test --release -p orbs-sim --test debug_spell` for the door.
@@ -4370,7 +4372,7 @@ spends on something the arsenal cannot sell.
       which is the proof stock is not what is being measured. Then the refusal,
       which keeps the potion:
       `ORBS_BOOT=0 ORBS_DUMP="debug_spawn warding 1; meditate 3000; attend bailey; defend; quaff warding; survey arsenal" cargo run -p orbs`
-      → `your warding stores are out. make one and come back`, and `qty: 1` still
+      → `your warding stores are out. make more and come back`, and `qty: 1` still
       on the shelf after it.
 - [x] **A spell can ask what has gone thin** (`0.11.14`). The other half of the
       mechanic above: stores run down with time, and a player who cannot ask
@@ -6247,7 +6249,8 @@ be stranded there** by a mechanical renumber.
       - it needs a scroll from the archive;
       - the alembic takes 600 ticks;
       - it costs 20 quintessence;
-      - the tower can hold only one;
+      - ~~the tower can hold only one~~ — **retired at `0.18.2`** (*Supply*):
+        two a run, and it goes stale like anything else;
       - only the player's own hand can drink it, never a spell.
 
       **Vigour raises how much fight the garrison can hold**, and mending fills
@@ -6258,9 +6261,10 @@ be stranded there** by a mechanical renumber.
       found three things before any code: a kept stillness would go stale and
       then block its own replacement, the colour lint would fail, and a spell
       could still every bad siege. §19
-      **See it:** `ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend; hold; hold; debug_spawn stillness 1; quaff stillness; survey rampart" cargo run -p orbs`
-      reads `stilled` and the rampart `lifted`. `…; debug_spawn vigour 1; quaff vigour; survey garrison`
-      grows the garrison bar from 16/18 to 16/27. And
+      **See it:** `ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend; hold; hold; debug_spawn stillness 3; quaff stillness; survey rampart" cargo run -p orbs`
+      reads `stilled` and the rampart `lifted`. `…; debug_spawn vigour 6; quaff vigour; survey garrison`
+      grows the garrison bar from 13/18 to 13/21. Both spawn the slowest rate's
+      threshold since *Supply* (`0.18.3`): one does nothing. And
       `ORBS_BOOT=0 ORBS_DUMP="attend laboratory; kindle charcoal; debug_spawn quiet-draught 1; debug_spawn gleaning-scroll 1; move quiet-draught to flask_and_rod; move gleaning-scroll to flask_and_rod; wield flask_and_rod; meditate 22; recall stillness" cargo run -p orbs`
       makes the draught and reads the 600-tick, 20-quintessence route.
       `every_potion_the_alembic_makes_can_be_spent` keeps it from recurring
@@ -6273,10 +6277,11 @@ be stranded there** by a mechanical renumber.
       **See it:** two rooms working at once, and the sidebar accounting for both
 - [ ] **A made good crosses and another room consumes it.** No new `NounKind`, no
       content file and no save migration — a `warding` essence already reaches the
-      sanctum through the arsenal; what is new is the `pylon` having a recipe that
-      takes it (Phase 9). A ward set in one **holds** after the course ends
-      **See it:** carry a `warding` to the sanctum and set a ward that outlives
-      its course
+      sanctum through the arsenal; what is new is the `pylon` drawing a warding
+      **supply** (*Supply*, `0.18.3`: never one potion) while a ward holds, so a
+      ward set **holds** after the course ends for as long as it is fed
+      **See it:** a warding supply open on the sanctum, and a ward that outlives
+      its course until the supply runs dry
 - [ ] **The player can see a bottleneck.** No surface in the game shows a rate or
       a blocker — but the limiting factor is **already computed and discarded**:
       `Blocked::{Instrument, Slot}` carries the blocker's name and state and is
@@ -6292,8 +6297,9 @@ be stranded there** by a mechanical renumber.
 - [ ] **One good, two consumers, three answers — the phase's real exit.** A
       `warding` potion is worth a siege round *or* a ward that holds, never both,
       and the shortage is answerable three ways: brew more (spend the slot), a
-      `fruitful` alembic (spend quintessence), or garrison the wall with a troop
-      (spend a chant). Quintessence spent on the charm is quintessence not pledged
+      `fruitful` alembic (spend quintessence), or a fuller standing garrison
+      (spend holds at the circle — *Supply* moved troops off the shelf, `0.18.1`).
+      Quintessence spent on the charm is quintessence not pledged
       to dice, so **the new bottleneck plugs into the one the game already has**
       rather than standing beside it
       **See it:** `orbs-balance` reads a policy that routes potions by which of
@@ -6326,6 +6332,103 @@ by *"the economy and the focus system are the same system"*.
 > saves. It returns as texture once made goods have proved the shape, and its rule
 > is **derived** — a good is a material another domain's recipe consumes — never a
 > list of names in a file, which is the judgement `keep::admits` refuses (§19).
+
+---
+
+## Supply
+
+**No produced item has individual value.** A potion, scroll or demon does
+something only while the arsenal holds enough of it, and while it does, it
+drains. Each authors rates — a threshold, a ration, a benefit — and the item's
+verb opens or raises one. Draining steps a supply down; freshness caps it. The
+garrison stops being an arsenal item and becomes the tower's, refilled by the
+menagerie, which can bind demons instead. §19 *Supply* has the rules.
+
+**`0.18`, every box ticked at `0.18.7`.** The one-machine boxes above resume
+under whatever minor is in hand. **The readers were retrained in the box that
+changes their vocabulary**, `0.18.4`; `weights_on_disk_are_this_vocabularys`
+fails the gate whenever they are stale.
+
+- [x] **A run yields a batch, and the tower still counts runs** (`0.18.0`) —
+      `yields` on a recipe; a distillation makes three. Experience, renown, the
+      tally and the stores still count the run, so every pinned rate holds.
+      Fruitful adds one to the batch. The laboratory's ledger and mastery lines
+      say *brews*, since one brew is no longer one potion. §19
+      **See it:** `ORBS_BOOT=0 ORBS_DUMP="attend laboratory; kindle charcoal; debug_spawn clarified-draught; distil clarified-draught; meditate 60; survey alembic; status" cargo run -p orbs`
+      reads `the alembic yields 3 clarity`, `clarity = 3` and
+      `brews finished 1`. `cargo test -p orbs-sim --test batches`
+- [x] **A standing garrison, and `deploy troop` retired** (`0.18.1`) — a most
+      of ten nothing passes, a floor of six the bailey keeps without a
+      menagerie, and desertion between, paused in a siege. `defend` levies all
+      of it; survivors come home up to the levy, and refills past it disband.
+      A bare `summon` refills it, and a hold mid-siege waits in the reserve.
+      Read off the menagerie's `roster` and in `status`. Format 17 turns held
+      troops into bodies. §19
+      **See it:** `ORBS_BOOT=0 ORBS_DUMP="attend menagerie; summon; debug_circle; summon; survey roster; attend bailey; defend; survey garrison" cargo run -p orbs`
+      reads `4 join the garrison`, the roster `full` and `spears = 10`, and the
+      garrison `spears = 10`. `ORBS_SEALED=1 ORBS_BOOT=0 ORBS_DUMP="debug_reach sanctum_1; status" cargo run -p orbs`
+      reads `garrison 6` and `garrison most 10`.
+      `cargo test -p orbs-sim --test garrison`
+- [x] **Freshness renamed, and `most` retired** (`0.18.2`) — `Supply` is
+      `Freshness`. Stillness brews three a run (two until a second review),
+      may be brewed while some is held, and goes stale like anything else. §19
+      **See it:** `ORBS_BOOT=0 ORBS_DUMP="attend laboratory; kindle charcoal; debug_spawn stillness 1; debug_spawn stilling-draught; distil stilling-draught; meditate 600; survey alembic" cargo run -p orbs`
+      reads `the alembic yields 3 stillness` where it read *"one stillness is
+      all the tower keeps"*. `cargo test -p orbs-sim --test stilling`
+- [x] **Items are standing supplies in the siege** (`0.18.3`) — a row's rates
+      are checked at load; the verb opens a supply and raises it; each round it
+      draws, slows as it drains, and runs dry. Thin runs only the slowest rate and
+      nothing halves; a siege reads freshness as at `defend`. Fortify is a level.
+      `stop` closes one. The board's `drawing` row, and `draw`/`drained` for a
+      spell. Format 18. §19
+      **See it:** `ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend; debug_spawn warding 5; quaff warding; debug_spawn warding 10; quaff warding; quaff warding; hold; survey arsenal; stop warding; peruse bailey.log" cargo run -p orbs`
+      reads `you hold 5 warding. it flows from 6`, `the warding flows, 2 a
+      round`, `flows faster, 3 a round`, the draws in the log, `qty: 9`, and
+      `you stop the warding`.
+      `cargo test -p orbs-sim --test supply`
+- [x] **The circle's second function: demons** (`0.18.4`) — `summon <demon>`
+      binds a hold into the arsenal: four within par, three past it. Golem
+      refills the line, familiar heals, effigy fortifies; `deploy <demon>` opens
+      one. A lesser circle binds bodies only and is refused before the call.
+      Format 19. The readers are retrained here. §19
+      **See it:** `ORBS_BOOT=0 ORBS_DUMP="attend menagerie; summon; debug_circle; summon golem; summon; debug_circle; summon golem; survey arsenal; attend bailey; defend; deploy golem; survey arsenal" cargo run -p orbs`
+      reads `4 golem bound to the arsenal`, `golem = 8`, `the golem flows, 2 a
+      round` and `golem = 6`. `ORBS_AUGURY=model ORBS_BOOT=0 ORBS_DUMP="attend menagerie; I want the next beast as a golem; turn this one into an effigy" cargo run -p orbs`
+      reads `summon golem` and `summon effigy`, phrasings the reader never saw;
+      `ORBS_AUGURY=model ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend; debug_spawn warding 6; quaff warding; enough of the warding" cargo run -p orbs`
+      reads `stop warding`. `cargo test -p orbs-sim --test demons`
+- [x] **The scrolls measured first** (`0.18.5`) — `orbs-balance` learns
+      `quickened` and `gleaned`, against today's one-shot scrolls and a lectern
+      at one. Quickening pays 33 experience a scroll; gleaning loses at a
+      lectern of one. §19
+      **See it:** `cargo run -p orbs-balance -- run quickened --ticks 7200 --why`
+      reads about 0.249 against clarity's 0.140 and `quickening-scroll: 24
+      given, 24 spent`; `run gleaned` reads `fragment: 49 held`.
+      `cargo test -p orbs-balance --test agrees quickening`
+- [x] **Quickening and gleaning as calm supplies** (`0.18.6`) — `wield` opens
+      one from four held and draws at once, then every 300 ticks while open,
+      used or not; the word again raises it. A window of 301 ticks quickens the
+      laboratory, by a half or a third. While gleaning is open the stacks
+      gather. Paused in a siege, which takes `wield` while it runs. The lectern
+      yields two. §19
+      **See it:** `ORBS_BOOT=0 ORBS_DUMP="attend laboratory; debug_spawn quickening-scroll 8; wield quickening-scroll; kindle charcoal; debug_spawn clarified-draught; distil clarified-draught; meditate 29; meditate 2400; survey arsenal" cargo run -p orbs`
+      reads `unrolls, 1 every 300 ticks`, `works 2 times quick`, a 56-tick
+      distillation landing inside 29, `runs dry and rolls itself up`, and
+      `qty: 3`. `ORBS_BOOT=0 ORBS_DUMP="attend archive; debug_spawn gleaning-scroll 4; wield gleaning-scroll; research; stop gleaning-scroll" cargo run -p orbs`
+      reads `the next stacks you open will gather 4`, then `the stacks gather
+      now`. `cargo test -p orbs-sim --test calm --test gleaning`
+- [x] **Verdant is cultivation** (`0.18.7`) — each draw grows the next herb;
+      at three it flowers for good, endless like sage. Growth is kept when the
+      supply runs dry and travels in the save; it rolls itself up once every
+      herb has flowered. §19
+      **See it:** `ORBS_BOOT=0 ORBS_DUMP="attend laboratory; debug_spawn verdant-scroll 6; wield verdant-scroll; meditate 900; survey dispensary" cargo run -p orbs`
+      reads `amber flowers on the shelf, and stays`, then `runs dry`, and
+      `amber` on the shelf, endless. `cargo test -p orbs-sim --test gleaning verdant`
+- [x] ~~**The readers, retrained** (`0.18.8`)~~ — **folded into `0.18.4`**, the
+      one box that changes the vocabulary: the demons' names, `deploy
+      {essence}`, `stop {essence}` and binding at the circle. A gate cannot
+      be green with the weights on disk stale, and `0.18.6`–`0.18.7` add no
+      word a reader is taught. §19
 
 ---
 
@@ -6633,10 +6736,13 @@ the table is.
       **See it:** ✅ `cargo run -p orbs-render --example screens` draws it with no
       sim at all; ✅ `ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend"` draws it
       beside the transcript
-- [x] **The arsenal spends, and the ten apology lines retire.** Potions, scrolls
-      and the menagerie's troop are pure mathematical advantages applied on your
-      turn — authored in `content/siege.toml` (rule 6), so a tuning pass is a
-      content edit rather than a recompile per guess
+- [x] **The arsenal spends, and the ten apology lines retire.** ~~Potions,
+      scrolls and the menagerie's troop are pure mathematical advantages applied
+      on your turn~~ — **superseded by *Supply* (`0.18.1`, `0.18.3`)**: troops are
+      the tower's standing garrison, and no single potion or scroll does
+      anything; each is a supply that draws every round. Authored in
+      `content/siege.toml` (rule 6), so a tuning pass is a content edit rather
+      than a recompile per guess
       **See it:** ✅ `ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend;
       debug_spawn troop 2; deploy troop; quaff troop; deploy sage"` — the troop
       joins the line, and both refusals name the way forward
@@ -6646,9 +6752,10 @@ the table is.
       reading the world publishes, because the language has no arithmetic and is
       not getting any — the maze's pattern, where `spoil` is a word rather than a
       sum
-      **See it:** ✅ `ORBS_BOOT=0 ORBS_DUMP="attend bailey; debug_spawn troop 4"
-      ORBS_THEN="invoke besieging; meditate 300; peruse bailey.log"` — it fights
-      and wins unaided
+      **See it:** ✅ `ORBS_BOOT=0 ORBS_DUMP="attend bailey; debug_spawn warding 12;
+      debug_spawn clarity 12; debug_spawn golem 12" ORBS_THEN="invoke besieging;
+      meditate 300; peruse bailey.log"` — it fights and wins unaided. Supplies
+      since *Supply* (`0.18.3`); it spawned four troops before
 - [x] **Escrow economy** (progress-scaled, 20% floor, 50% completion bonus),
       exactly §11.5's table. Losing at 60% keeps 60%; bailing at nought still
       pays the floor — *"effort is never wasted; only cynicism is"*
@@ -6736,10 +6843,12 @@ the table is.
         the language's own route to *at least as many*; the affirmative is
         *wrong*, because a comparison against a place is strict and would refuse
         the die you can exactly afford
-      **See it:** ✅ `ORBS_BOOT=0 ORBS_DUMP="attend bailey; debug_spawn troop 6;
-      debug_spawn warding 6" ORBS_THEN="invoke sparingly; meditate 600; sift
-      pledge bailey.log"` — **nine pledges, three rounds, exactly 24 spent**, and
-      then it fights on without dice rather than being refused
+      **See it:** ✅ `ORBS_BOOT=0 ORBS_DUMP="attend bailey; debug_spawn warding 6"
+      ORBS_THEN="invoke sparingly; meditate 600; sift pledge bailey.log"` —
+      **twelve pledges, four rounds, 32 spent**: the pool of 24 and what it
+      regenerated between rounds. Then it fights on without dice rather than
+      being refused. It read nine and 24 when it spawned six troops, before
+      *Supply* (`0.18.1`)
 - [x] **An `xhigh` review of the whole siege, and the two it found by playing**
       (`0.8.17`). Eleven findings; **seven were a comment, a doc or a count that
       had stopped being true**, and the two that were not working were both found

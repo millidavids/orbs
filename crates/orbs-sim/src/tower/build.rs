@@ -136,9 +136,8 @@ const BRANCHES: &[Branch] = &[
     // because inserting ahead of the arsenal would shift its spawn index.
     //
     // The menagerie is where a beast is held (§10, `tower::circle`), and holds
-    // no materials of its own: a hold yields troops, which keep themselves in
-    // the arsenal as finished work. No endless base reagent, for the sanctum's
-    // reason.
+    // no materials of its own: a hold refills the tower's standing garrison
+    // (§19, *Supply*). No endless base reagent, for the sanctum's reason.
     Branch {
         name: "menagerie",
         holds: &[Holding::new(NounKind::File, &["menagerie.log"])],
@@ -396,8 +395,8 @@ const BAILEY: &[Branch] = &[
     },
 ];
 
-/// The menagerie: the circle a beast is held in, its three glyphs, and the six
-/// humours a glyph can be limned with.
+/// The menagerie: the circle a beast is held in, its three glyphs, the six
+/// humours a glyph can be limned with, and the roster the garrison is read off.
 ///
 /// The circle spends its one `Operation` on `summon`, the pylon's arrangement.
 /// `limn` is anchored to it rather than to each glyph, the forge's shape: a
@@ -425,6 +424,17 @@ const MENAGERIE: &[Branch] = &[
     humour(super::circle::Humour::Oppose),
     humour(super::circle::Humour::Mirror),
 ];
+
+/// The menagerie's roster: the standing garrison, read rather than stood in
+/// (§19, *Supply*). Raised last of everything; see [`raise`].
+const ROSTER: Branch = Branch {
+    name: super::siege::ROSTER,
+    holds: &[],
+    places: &[],
+    role: Some(Role::Reading),
+    operation: None,
+    group: None,
+};
 
 /// One of the circle's glyphs, as a place `limn` names and `for each glyph` walks.
 const fn glyph(glyph: super::circle::Glyph) -> Branch {
@@ -968,6 +978,12 @@ pub fn raise(world: &mut World) {
 
     raise_grimoire(world, filesystem);
 
+    // After the grimoire, the satchels' rule: inside the menagerie's list it
+    // moved the spawn index of every node raised after it.
+    if let Some(menagerie) = room(world, tower, "menagerie") {
+        raise_branch(world, menagerie, &ROSTER, false);
+    }
+
     // The player starts in the tower, not at the root. `Cwd` is where you
     // stand; `tower::root` is where the tree begins, and the two stopped being
     // the same node here.
@@ -985,17 +1001,21 @@ pub fn raise(world: &mut World) {
 ///
 /// `Protected`, on the dispensary's argument: `purge satchel` would scour a
 /// queue a running pipeline is reading (§7). Emptying it is `pull`'s job.
-fn raise_satchel(world: &mut World, tower: Entity, room: &str) {
-    let Some(at) = super::children_of(world, tower)
-        .into_iter()
-        .find(|node| world.get::<Name>(*node).is_some_and(|name| name.0 == room))
-    else {
+fn raise_satchel(world: &mut World, tower: Entity, named: &str) {
+    let Some(at) = room(world, tower, named) else {
         return;
     };
     let node = spawn(world, Some(at), super::SATCHEL, NounKind::Place);
     world
         .entity_mut(node)
         .insert((Fixture, super::Satchel::default(), Protected));
+}
+
+/// The room called `named` directly under the tower.
+fn room(world: &World, tower: Entity, named: &str) -> Option<Entity> {
+    super::children_of(world, tower)
+        .into_iter()
+        .find(|node| world.get::<Name>(*node).is_some_and(|name| name.0 == named))
 }
 
 /// Hang `/grimoire` off the filesystem root and fill it with the shipped spells.

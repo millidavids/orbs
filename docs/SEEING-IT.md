@@ -93,7 +93,7 @@ ORBS_BOOT=0 ORBS_DUMP="attend archive; debug_spawn fragment 8; debug_spell assem
 ```
 
 A grind by hand counts nothing there; brew a clarity by hand (`lab_clarity` in
-`scripts/dumps.sh`) and the row is `potions brewed 1` with no share under it. A
+`scripts/dumps.sh`) and the row is `brews finished 1` with no share under it. A
 tower that has made nothing has no ledger section at all.
 `cargo test -p orbs-sim --test ledger` holds that the player's run straight after
 a spell's is the player's.
@@ -284,10 +284,28 @@ scripts/play.sh auditing::                 # three scenarios, through a real tmu
 ### The bailey — a siege on the seven dice, and the enemy attacks the automation
 
 **`defend` lets an enemy arrive; `hold` ends your turn and resolves one round.**
-Between the two, `deploy <troop>` and `quaff <potion>` spend the arsenal, and
-scrolls keep `wield` because §19 already spends that word on setting a thing
-going. All of it is instant except `hold`, which is **the only thing in the
-domain that advances the world** — §5.0's *"no per-command tick cost"*, kept.
+Between the two, `quaff <potion>` spends the arsenal, and scrolls keep `wield`
+because §19 already spends that word on setting a thing going. All of it is
+instant except `hold`, which is **the only thing in the domain that advances the
+world** — §5.0's *"no per-command tick cost"*, kept.
+
+**`defend` levies the tower's whole standing garrison** (§19, *Supply*): six
+always, ten at most, and whatever the menagerie has brought between. Survivors
+come home up to what was levied, so a refill past the levy does not. A sealed
+tower arms its wall before it opens a menagerie, and stands on the six.
+
+```bash
+ORBS_BOOT=0 ORBS_DUMP="attend menagerie; summon; debug_circle; summon; survey roster; \
+  attend bailey; defend; survey garrison" cargo run -p orbs
+#   4 join the garrison  ->  roster: spears 10, full  ->  garrison: spears 10
+ORBS_SEALED=1 ORBS_BOOT=0 ORBS_DUMP="debug_reach sanctum_1; status" cargo run -p orbs
+#   garrison ......... 6    garrison most .... 10
+cargo test -p orbs-sim --test garrison
+```
+
+The garrison deserts one body every 240 ticks down to its six, and nobody leaves
+while a siege runs. A beast held mid-siege waits in the reserve and joins when
+the wall is quiet, so waiting never refills the fight.
 
 **It is not an eighth domain.** §10 fixes the count at seven and lists them; the
 bailey is the *arsenal's* shape — a real place in the tree, its own log and
@@ -302,7 +320,7 @@ ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend; survey enemy; survey garrison; hol
 ```text
 5 come up the road. they mean to onslaught   ← telegraphed, a round ahead
 foes = 5   massed   troops = 5   vigour = 15
-troops = 6   vigour = 18                     ← the king's contingent. always six
+troops = 6   vigour = 18                     ← the standing garrison: six at its floor
 they onslaught. you lose 2 and take 2
 ```
 
@@ -311,24 +329,31 @@ wears nothing, stakes nothing, and pays escrow on progress. Only a hand can
 drink it. A spell gets *"a spell cannot end a siege"*.
 
 ```bash
-ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend; hold; hold; debug_spawn stillness 1; quaff stillness; survey rampart" cargo run -p orbs
-ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend; hold; debug_spawn vigour 1; quaff vigour; survey garrison" cargo run -p orbs
+ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend; hold; hold; debug_spawn stillness 3; quaff stillness; survey rampart" cargo run -p orbs
+ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend; hold; debug_spawn vigour 6; quaff vigour; survey garrison" cargo run -p orbs
 ```
 ```text
 the enemy turns for home. 20 of the way, and you keep 14   ← state: stilled
 lifted
-garrison  ████████████░░░░░░░░  16/27                      ← was 16/18
+garrison  ████████████░░░░░░░░  16/21                      ← was 16/18
 ```
+
+Both are supplies since `0.18.3` (*Supply*, below): stillness opens from three
+held and draws two once; vigour from six, holding three points of room for as
+long as it flows.
 
 **What it costs is in the laboratory:**
 - a `gleaning-scroll`, carried from the arsenal into the flask;
 - 600 ticks of the alembic;
-- 20 quintessence at the start, gone if the brew is stopped;
-- one held at most, so the alembic refuses a second.
+- 20 quintessence at the start, gone if the brew is stopped.
+
+Two come out of a brew. The one-held cap is retired (`0.18.2`, §19 *Supply*),
+so a stillness goes stale like anything else: brew it for a siege rather than
+keep it for one.
 
 `debug_spawn` stocks a store fresh, so it never shows a thin one.
 `cargo test -p orbs-sim --test stilling` drives each of these costs, including
-a vigour from a thin store being worth 4.
+a thin store running only the slowest rate.
 
 ```bash
 ORBS_BOOT=0 ORBS_DUMP="attend laboratory; kindle charcoal; debug_spawn quiet-draught 1; debug_spawn gleaning-scroll 1; move quiet-draught to flask_and_rod; move gleaning-scroll to flask_and_rod; wield flask_and_rod; meditate 22; recall stillness" cargo run -p orbs
@@ -500,9 +525,11 @@ ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend; hold; peruse bailey.log" cargo run
 
 ### The arsenal is worth what your industry is worth
 
-**How much help a thing gives is matched to the *rate* you make it at**, not to
-how many you hold. Three words: `fresh` at full strength, `thin` at half, `spent`
-and refused.
+**How fast a supply may run is matched to the *rate* you make it at.** Three
+words: `fresh` runs any rate its count meets, `thin` only the slowest, `spent`
+none. *Superseded at `0.18.3`: thin used to halve an effect, and the count held
+used to be irrelevant.* Now the count decides whether a supply runs at all and
+freshness how fast (*Supply*, below).
 
 ```bash
 ORBS_BOOT=0 ORBS_DUMP="debug_spawn warding 5; survey arsenal; \
@@ -519,20 +546,19 @@ test of the Ley Line's garrison grant failed on the arsenal's freshness rule
 instead of on the grant.
 
 **Read the `qty` column, not the state one.** It is 5 the whole way through.
-**Total stock never enters the arithmetic** — that is what makes this buildable
-where a perishable arsenal was not, and it is why hoarding cannot beat it: a
-thousand wardings and five wardings are the same store if you have made the same
-number lately.
+Freshness never counts the pile; the supply's threshold does.
 
-**A spent store is refused, and the potion is kept** — the rule `spend_whole`
-already sets in this room:
+**A spent store is refused, and the potions are kept:**
 
 ```bash
-ORBS_BOOT=0 ORBS_DUMP="debug_spawn warding 1; meditate 3000; attend bailey; \
+ORBS_BOOT=0 ORBS_DUMP="debug_spawn warding 6; meditate 3000; attend bailey; \
   defend; quaff warding; survey arsenal" cargo run -p orbs
-#   your warding stores are out. make one and come back
-#   name: warding, qty: 1, state: spent      ← still on the shelf
+#   your warding stores are out. make more and come back
+#   name: warding, qty: 6, state: spent      ← still on the shelf
 ```
+
+A siege reads freshness as it stood at `defend`, or now if that is better, so a
+player who takes an hour over a round loses nothing to the clock.
 
 **Making something that is already `fresh` mints double renown** — the surplus is
 sold rather than shelved, so there is never a point at which producing stops being
@@ -569,6 +595,60 @@ Cwd-scoped everywhere else: `group_at` (which set does `for each` walk) and
 `watch::find` (what does `has` resolve against). §19's exemption is *"the one room
 reachable from every other"* — a spell that can **say** `warding` anywhere but only
 **ask** about it in one room is that decision half-built.
+
+### Supply — no single item does anything (`0.18`)
+
+**A potion, scroll or demon works only while the arsenal holds enough of it,
+and while it works it drains** (DESIGN.md §19, *Supply*). Each authors rates —
+a threshold, a ration, a benefit — in `siege.toml` for the wall and
+`scrolls.toml` for a room, and a load refuses any table where one item is
+worth something alone. The item's word opens a supply; the word again raises
+it a rate; `stop <item>` closes it. Draining steps it down, then shuts it.
+
+```bash
+# Short, then flowing, then faster; a round draws on its own; then stopped.
+ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend; debug_spawn warding 5; \
+  quaff warding; debug_spawn warding 10; quaff warding; quaff warding; hold; \
+  survey arsenal; stop warding; peruse bailey.log" cargo run -p orbs
+#   you hold 5 warding. it flows from 6
+#   the warding flows, 2 a round · the warding flows faster, 3 a round
+#   qty: 9 · you stop the warding. what this round drew stands
+
+# Stillness opens from three and draws once, ending the siege.
+ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend; hold; debug_spawn stillness 3; \
+  quaff stillness; survey rampart" cargo run -p orbs
+
+# A batch reaches the arsenal in one word; an instrument still takes one.
+ORBS_BOOT=0 ORBS_DUMP="attend laboratory; kindle charcoal; \
+  debug_spawn clarified-draught; distil clarified-draught; meditate 60; \
+  empty alembic; move clarity to arsenal; survey arsenal" cargo run -p orbs
+#   3 clarity: dispensary to arsenal · clarity = 3
+```
+
+**Where the rest of it is seen:**
+- the standing garrison that replaced troops — *The bailey*, above;
+- demons bound at the circle — *The menagerie*, below;
+- scrolls as calm supplies that draw every 300 ticks — *"A scroll is
+  `wield`ed"*, under *The Ley Line*;
+- what a scroll is worth, measured — *`orbs-balance`*.
+
+**A spell asks a supply what it is doing.** An arsenal item answers `draw`, the
+rate it runs at counted from one, and `drained` when it is held but below its
+slowest rate. So a keeping spell restocks on `drained` and stops a heal it no
+longer needs:
+
+```
+if the garrison has hurt
+    if the mending has no draw
+        quaff mending
+    end
+end
+```
+
+```bash
+cargo test -p orbs-sim --test supply --test garrison --test demons \
+  --test calm --test batches
+```
 
 ### Fame draws a crowd, and `petition` is how you are less famous
 
@@ -674,9 +754,9 @@ than inert: `wield quickening-scroll` in the bailey quietly hurried the
 the word that did the wrong thing.
 
 ```bash
-ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend; debug_spawn verdant-scroll; \
+ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend; debug_spawn verdant-scroll 4; \
   survey garrison; wield verdant-scroll; survey garrison" cargo run -p orbs
-#   spears 6 -> verdant-scroll burns away on the wall -> spears 9
+#   spears 6 -> the verdant-scroll flows, 1 a round -> spears 7
 ```
 
 **What the arsenal is worth is authored** in `crates/orbs-sim/content/siege.toml`
@@ -685,10 +765,10 @@ all, which is what stops `quaff sage` resolving and doing nothing quietly — an
 the wrong word names the right one.
 
 ```bash
-ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend; debug_spawn troop 2; \
-  deploy troop; quaff troop; deploy sage" cargo run -p orbs
-#   troop goes down to the line
-#   troop is not quaffed or deployed. deploy it
+ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend; debug_spawn warding 2; \
+  deploy warding; quaff warding; deploy sage" cargo run -p orbs
+#   that is not how warding is used. quaff it
+#   you hold 2 warding. it flows from 6
 #   sage is worth nothing on a wall
 ```
 
@@ -703,16 +783,17 @@ and is not getting any:
 
 ```
 repeat until the enemy has routed
-    if the garrison has few
-        deploy troop
-    else if the garrison has hurt
-        quaff mending
-    else if the enemy has outnumbered
-        quaff warding
+    if the garrison has hurt
+        if the mending has no draw
+            quaff mending
+        end
     end
     hold
 end
 ```
+
+A potion is a standing supply (`0.18.3`), so the rung opens it once and it draws
+every round on its own; `has no draw` stops a second `quaff` raising it.
 
 **`hold` is outside the ladder and runs every lap.** Inside a branch it would end
 the turn only on rounds where something was spent, so a siege where nothing is
@@ -1417,7 +1498,7 @@ three glyphs in drawn wiring — `sunwise` and `widdershins` each take two sense
 the `keystone` takes what they answer — and `limn <glyph> [<humour>]` sets each to
 one of six gates: `yoke` AND, `spurn` NAND, `heed` OR, `eschew` NOR, `oppose` XOR,
 `mirror` XNOR. `summon` again calls the beast in; every row agreeing holds it and
-brings troops. **A balk costs the call and nothing else.** This replaced a rhythm
+fills the garrison, or binds a demon. **A balk costs the call and nothing else.** This replaced a rhythm
 game (§19), so the room is solved by choosing like every other, and there is no
 clock, no keyboard surface and no `F9`.
 
@@ -1463,8 +1544,20 @@ capture that matters; `circle_open` is the one that shows the `~`.
 
 ```bash
 # A hold, and what it brings. `debug_circle` limns a solution without reading the table.
-ORBS_BOOT=0 ORBS_DUMP="attend menagerie; summon; debug_circle; summon; survey arsenal" cargo run -p orbs
-# → "the circle holds. 4 troops answer, on call 1", and `troop = 4` on the shelf
+ORBS_BOOT=0 ORBS_DUMP="attend menagerie; summon; debug_circle; summon; survey roster" cargo run -p orbs
+# → "the circle holds. 4 join the garrison, on call 1", and the roster reads
+#   `spears = 10` and `full`: a fresh tower stands at 6 and holds 10 at most
+
+# The circle's second use (`0.18.4`, §19 Supply): name a demon on the call that
+# holds, and the hold binds a batch of it into the arsenal instead. Two holds
+# make six, enough to flow on the wall.
+ORBS_BOOT=0 ORBS_DUMP="attend menagerie; summon; debug_circle; summon golem; \
+  summon; debug_circle; summon golem; survey arsenal; attend bailey; defend; \
+  deploy golem; survey arsenal" cargo run -p orbs
+# → "4 golem bound to the arsenal", then 8 held, then "the golem flows, 2 a
+#   round": a body a round while the line is under the garrison's most
+# A lesser circle binds bodies only, refused before the call so it costs no par;
+# a demon the line has not opened is not a word at the circle yet.
 
 # What a spell can read: each glyph's humour, and the temper's fervour. Nothing about a call.
 ORBS_BOOT=0 ORBS_DUMP="attend menagerie; summon; limn keystone heed; survey keystone; survey circle" cargo run -p orbs
@@ -1511,7 +1604,7 @@ ORBS_SEALED=1 ORBS_BOOT=0 ORBS_DUMP="debug_reach lens_1; attend menagerie; summo
 → *"a lesser beast gathers, lit on 3 rows. which humour is it?"*, then *"sunwise is
 dark in a lesser circle. only the keystone answers"* — a dark glyph is refused as
 a cost and carries no reading, so `survey sunwise` is empty. A lesser hold brings
-*"1 troop answers"* and a quarter of the price, with a par of one call.
+*"1 joins the garrison"* and a quarter of the price, with a par of one call.
 
 ```bash
 # Five holds, the station, and the sixth beast whole — the lesser circle's whole arc.
@@ -1557,7 +1650,8 @@ circuit.
 ```bash
 # The same beast, both searches. Seed 181's is lit on four rows, the rung with every keystone.
 ORBS_BOOT=0 ORBS_DUMP="attend menagerie; invoke winnowing" ORBS_THEN="meditate 400; peruse menagerie.log" cargo run -p orbs
-# → "the circle holds. 3 troops answer, on call 86"
+# → "the circle holds. the garrison is at its most, and they are turned away,
+#   on call 86" once the first hold has filled it
 ORBS_BOOT=0 ORBS_DUMP="attend menagerie; invoke taming" ORBS_THEN="meditate 900; peruse menagerie.log" cargo run -p orbs
 # → "... on call 170"
 
@@ -1675,7 +1769,17 @@ cargo run -p orbs-balance -- sweep --ticks 7200 --why
 cargo run -p orbs-balance -- run clarity --ticks 1200 --why
 cargo run -p orbs-balance -- sweep --hours 4 --csv /tmp/curves.csv
 cargo test -p orbs-balance          # the pins, as a test rather than a column
+
+# What a scroll is worth (`0.18.5`, §19 Supply): the flagship with quickening
+# kept working, and the stacks with every maze gleaned. `--why` prints what
+# each was handed and spent, and the fragments held.
+cargo run -p orbs-balance -- run quickened --ticks 7200 --why
+cargo run -p orbs-balance -- run gleaned --ticks 7200 --why
 ```
+
+**Never `--release`.** Every `debug_*` word is compiled out of a release
+build, so a policy that stocks by `debug_spawn` stocks nothing and the sweep
+measures a different game (§19, `0.18.5`).
 
 **Two hours is the shortest honest sweep, and an hour was the default.** A policy
 amortises its first lap's setup over the run, and the ambient reagent swap
@@ -2485,8 +2589,8 @@ open room's rail box carries the percentage of that deed on its state row. Both
 read from the same `Line` the weave draws, so the three cannot disagree.
 
 ```bash
-# Three potions in: the road reads `laboratory [•]─[○]─[·]─[·]─[·]─[·]─── five
-# potions brewed · 3 of 5`, and the rail box `burning  60%`. The deep grid, so
+# Three brews in: the road reads `laboratory [•]─[○]─[·]─[·]─[·]─[·]─── 5
+# brews finished · 3 of 5`, and the rail box `burning  60%`. The deep grid, so
 # the rail is drawn at all.
 ORBS_BOOT=0 ORBS_GRID=120x45 ORBS_DUMP="attend laboratory; kindle charcoal; \
   debug_spawn clarified-draught 3; distil clarified-draught; meditate 60; \
@@ -2679,13 +2783,14 @@ change and is the reason the tests ask the rule rather than naming a room.
 somewhere.
 
 ```bash
-# The whole loop: assemble a scroll, open the stacks, spend it on them.
+# The whole loop: open the stacks, then a gleaning supply on them. Four
+# scrolls is the slowest rate; one alone does nothing (§19, Supply).
 ORBS_SEED=3 ORBS_BOOT=0 ORBS_DUMP="attend archive; \
-  research; debug_spawn gleaning-scroll; wield gleaning-scroll; wander" \
+  research; debug_spawn gleaning-scroll 4; wield gleaning-scroll; wander" \
   cargo run -p orbs
 ```
 
-**Five `♦` and no `Ω`, and the missing `Ω` is the point.** A gleaning errand
+**Four `♦` and no `Ω`, and the missing `Ω` is the point.** A gleaning errand
 withdraws the way out rather than leaving one that does nothing: a solver's top
 rung is `if <way> has exit`, so an inert exit would have it walk onto that square
 and take the same rung for ever. **`wander` is how you see the whole maze** — the
@@ -2698,7 +2803,7 @@ chains onto them in `scene_at`), so **one** solver reads which maze it is in and
 swaps its top rung from `exit` to `spoil`:
 
 ```bash
-ORBS_BOOT=0 ORBS_DUMP="attend archive; research; debug_spawn gleaning-scroll; \
+ORBS_BOOT=0 ORBS_DUMP="attend archive; research; debug_spawn gleaning-scroll 4; \
   wield gleaning-scroll; survey stacks" \
   cargo run -p orbs
 ```
@@ -2711,27 +2816,55 @@ A scroll's own draw and the errand-aware solver are both things a dump cannot
 show — one is a distribution, the other is four thousand ticks of walking — so
 they are tests: `cargo test -p orbs-sim --test gleaning`.
 
-**There are three scrolls and the lectern draws between them.** `gleaning` sets
-the errand above; `quickening` sets a **window** in which the laboratory works at
-double speed; and `verdant` puts one base reagent the laboratory has never had on
-its shelf, endlessly.
+**There are three scrolls and the lectern draws between them, two at a time.**
+`gleaning` sets the errand above; `quickening` sets the laboratory working
+faster; and `verdant` grows base reagents the laboratory has never had, each
+flowering on its shelf for good.
 
-**Quickening never refuses for want of something to hurry** — it was a one-shot
-on the run in hand, which made it unusable at exactly the moment a player reaches
-for one. It is an interval like `Burning`, read at `begin` like heat, so a run
-started inside the window stays short when the window closes. What is already
-running is hurried too, halved from *now*.
+**All three are calm supplies** (`0.18.6`–`0.18.7`, §19 *Supply*). `wield`
+opens one when the arsenal holds four, drawing one at once and one every 300
+ticks after, used or not; the word again raises it to two a draw, from eight,
+taking only the difference and keeping the first word's clock. A scroll left in
+the cabinet is named there: a supply draws from the arsenal alone. Draining
+steps it down, then rolls it up, and the last three are held and
+useless. A siege pauses it, and takes `wield` while it runs. `stop` rolls it up.
+
+- **Quickening** lays a window of a draw's interval and one tick on the
+  laboratory, so no run starts in a gap: half time at the slowest rate, a third
+  at the faster. A run started in it stays short when it closes, and a run in
+  flight when the supply opens is hurried from *now*.
+- **Gleaning** is a mode: while it is open, a maze `research` opens gathers, and
+  one already open is set gathering as it opens. Open it for a maze and stop it
+  after — left open, it draws through a walk of thousands of ticks for nothing.
 
 ```bash
-# An 8-tick grind, twice. Without the scroll `meditate 4` yields nothing.
-ORBS_BOOT=0 ORBS_DUMP="attend laboratory; debug_spawn quickening-scroll; \
+# An 8-tick grind, twice. Without the supply `meditate 4` yields nothing.
+ORBS_BOOT=0 ORBS_DUMP="attend laboratory; debug_spawn quickening-scroll 4; \
   wield quickening-scroll; grind sage; meditate 4" cargo run -p orbs
 
-# Three reagents become six, one scroll at a time. The fourth says so.
-ORBS_BOOT=0 ORBS_DUMP="attend laboratory; debug_spawn verdant-scroll 4; \
-  wield verdant-scroll; wield verdant-scroll; wield verdant-scroll; \
-  wield verdant-scroll; survey dispensary" cargo run -p orbs
+# A 56-tick distillation lands inside 29 ticks, then the supply draws down on
+# the clock: 8, 7 … 3, and `runs dry and rolls itself up`.
+ORBS_BOOT=0 ORBS_DUMP="attend laboratory; debug_spawn quickening-scroll 8; \
+  wield quickening-scroll; kindle charcoal; debug_spawn clarified-draught; \
+  distil clarified-draught; meditate 29; meditate 2400; survey arsenal" \
+  cargo run -p orbs
+
+# Opened before the stacks: the next maze gathers four.
+ORBS_BOOT=0 ORBS_DUMP="attend archive; debug_spawn gleaning-scroll 4; \
+  wield gleaning-scroll; research; stop gleaning-scroll" cargo run -p orbs
+
+# Cultivation: three draws flower a herb, in 600 ticks at the slowest rate.
+# Six scrolls draw three times and run dry with three held.
+ORBS_BOOT=0 ORBS_DUMP="attend laboratory; debug_spawn verdant-scroll 6; \
+  wield verdant-scroll; meditate 900; survey dispensary" cargo run -p orbs
+#   amber flowers on the shelf, and stays · the verdant-scroll runs dry
 ```
+
+- **Verdant** grows the next herb by a draw's worth into the tower's
+  `Cultivation`, and at three it flowers, endless like sage. The growth is kept
+  when the supply runs dry and travels in the save. Once every herb has
+  flowered it rolls itself up, and a word with nothing left to grow is refused
+  before a scroll is drawn.
 
 **`recall <thing>` is a page, not a route.** It says what the thing is, then how
 it is used, then how it is made — in that order, because someone holding a potion
@@ -2765,8 +2898,8 @@ another room wants `things()`, not `names()`.
 **What a verdant scroll may unlock is derived, never listed** — a base reagent is
 one the vocabulary knows that *nothing in the tower makes*, whose home is the
 laboratory's shelf. Author a fourth herb in `recipes.toml` and it is unlockable
-the same tick. **Check `survey dispensary` after four scrolls when touching
-this**: the first version asked `Recipes::outputs`, which is a recipe's `output`
+the same tick. **Check `survey dispensary` after every herb has flowered when
+touching this**: the first version asked `Recipes::outputs`, which is a recipe's `output`
 and not its `leaves`, so every byproduct read as a herb and `dregs`, `ash` and a
 `fragment` were shelved as inexhaustible stock. The suite was green throughout.
 
@@ -2863,7 +2996,7 @@ ORBS_SEED=11 ORBS_BOOT=0 ORBS_GRID=160x45 \
 
 # The **same file** on the other errand: no way out, five things to gather.
 ORBS_SEED=17 ORBS_BOOT=0 ORBS_GRID=160x45 \
-  ORBS_DUMP="attend archive; research; debug_spawn gleaning-scroll; \
+  ORBS_DUMP="attend archive; research; debug_spawn gleaning-scroll 4; \
     wield gleaning-scroll; debug_spell threading" \
   ORBS_THEN="invoke threading; meditate 3600; meditate 3600; survey cabinet" cargo run -p orbs
 ```
@@ -4614,7 +4747,7 @@ ORBS_AUGURY=model ORBS_BOOT=0 \
 **Two numbers for the reader, and the second is the one that decides.** `measure`
 prints *the trained reader* — any of its four readings reaching the command — and
 *the reading it runs*, which is what `Sim::submit_reading` takes. The shipped reader
-reads **78.6%** by the first and **69.9%** by the second; a reader that offers four
+(`0.18.4`) reads **79.4%** by the first and **70.6%** by the second; a reader that offers four
 and means none of them scores well on the first alone, and `seeds.sh --compare` used
 to choose weights on it. `--bench` prints the same pair for the grammar — 18.5% and
 **16.7%**. Choose on the second.

@@ -159,7 +159,7 @@ pub(super) fn survey(intent: &Intent, world: &mut World) {
                 // spent`, a warning about a thing that cannot run out.
                 // `stocktake` and the save migration filter the same way.
                 let supply =
-                    (keep && stock.is_some()).then(|| tower::supply_of(world, &name).word());
+                    (keep && stock.is_some()).then(|| tower::freshness_of(world, &name).word());
                 Some((name, kind.label(), stock, supply))
             })
             .collect();

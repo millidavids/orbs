@@ -138,6 +138,15 @@ fn tree(world: &mut World, save: &Save) {
     if let Some(highest) = highest {
         world.resource_mut::<tower::NodeIds>().wind_past(highest);
     }
+    // A node the save never named, a fixture a later build added, kept the id
+    // its raise gave it, which an older build may have given a node the save
+    // did name. Issued afresh, past every saved id.
+    for entity in every_node(world) {
+        if !placed.contains(&entity) && world.get::<tower::NodeId>(entity).is_some() {
+            let id = world.resource_mut::<tower::NodeIds>().issue();
+            world.entity_mut(entity).insert(id);
+        }
+    }
 
     // `Children` order is rebuilt to the document's, and it is not cosmetic: §6
     // resolves noun ties to whichever was registered first, so anything a player
@@ -212,6 +221,46 @@ fn progress(world: &mut World, save: &Save) {
     world
         .resource_mut::<tower::siege::Petitioned>()
         .restore(progress.petitioned);
+    // Growth a verdant supply put in and did not see flower.
+    world
+        .resource_mut::<tower::Cultivation>()
+        .restore(progress.cultivated);
+    // Always overwritten, never left as the raised world had it: `None` is the
+    // floor, which is the garrison every tower without one fought with.
+    let garrison = progress.garrison.unwrap_or(super::document::GarrisonSave {
+        standing: tower::siege::GARRISON_FLOOR,
+        reserve: 0,
+    });
+    world
+        .resource_mut::<tower::siege::Garrison>()
+        .restore(garrison.standing, garrison.reserve);
+    // Every open supply, always overwritten. A scope word this build does not
+    // know drops that supply rather than guessing where it drew.
+    let (stopped, open): (Vec<_>, Vec<_>) = progress
+        .supplies
+        .iter()
+        .filter_map(|saved| {
+            let scope = tower::supply::Scope::named(&saved.scope)?;
+            Some((
+                saved.stopped,
+                (
+                    saved.name.clone(),
+                    tower::supply::Open {
+                        scope,
+                        chosen: saved.chosen,
+                        running: saved.running,
+                        since: saved.since,
+                        drawn: saved.drawn,
+                        applied: saved.applied,
+                    },
+                ),
+            ))
+        })
+        .partition(|(stopped, _)| *stopped);
+    world.resource_mut::<tower::supply::Supplies>().restore(
+        open.into_iter().map(|(_, supply)| supply),
+        stopped.into_iter().map(|(_, supply)| supply),
+    );
     // Absent means whole, not nothing: a save written before the sanctum says
     // nothing about integrity, and nought would hand every returning player a
     // tower worn to the ground (`ProgressSave::integrity`).
@@ -295,6 +344,7 @@ fn progress(world: &mut World, save: &Save) {
         let ungated = tower::Opened::start(
             world.resource::<Recipes>(),
             world.resource::<Charms>(),
+            world.resource::<crate::content::Spendables>(),
             world.resource::<Progression>(),
         );
         let keys: Vec<String> = opened

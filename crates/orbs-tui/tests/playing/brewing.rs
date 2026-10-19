@@ -215,7 +215,7 @@ fn a_whole_clarity_brews_by_hand_and_earns_sixteen() {
         .does("mix sage-tincture with ground-salt", "to flask_and_rod")
         .does("meditate 12", "yields clarified-draught")
         .does("distil clarified-draught", "to alembic")
-        .does("meditate 60", "yields clarity")
+        .does("meditate 60", "yields 3 clarity")
         // The threshold announces itself on the tick the alembic lands, which is
         // the same block — a player learns they can bind at the moment they earn
         // it, not the next time they ask.

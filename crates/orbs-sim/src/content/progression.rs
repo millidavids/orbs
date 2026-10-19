@@ -155,6 +155,8 @@ pub struct Catalogue<'a> {
     pub gated: &'a [&'a str],
     /// Every charm the forge can lay.
     pub charms: &'a [&'a str],
+    /// Every demon the circle can bind (§19, *Supply*).
+    pub demons: &'a [&'a str],
 }
 
 impl Default for Progression {
@@ -500,7 +502,7 @@ impl Progression {
                     return Err(super::ContentError::new(
                         FILE,
                         format!(
-                            "`{who}` opens `{key}`, which is not a room, a recipe, a charm, the wall or the circle"
+                            "`{who}` opens `{key}`, which is not a room, a recipe, a charm, a demon, the wall or the circle"
                         ),
                     ));
                 };
@@ -517,6 +519,9 @@ impl Progression {
                     }
                     crate::tower::opened::Key::Charm(name) => {
                         (catalogue.charms.contains(&name.as_str()), catalogue.charms)
+                    }
+                    crate::tower::opened::Key::Demon(name) => {
+                        (catalogue.demons.contains(&name.as_str()), catalogue.demons)
                     }
                     crate::tower::opened::Key::Siege | crate::tower::opened::Key::Circle => {
                         (true, &[])
@@ -663,6 +668,10 @@ mod tests {
         "circle",
     ];
 
+    /// The demons `siege.toml` binds. `the_shipped_demons_are_these` keeps the
+    /// list honest.
+    const DEMONS: [&str; 3] = ["effigy", "familiar", "golem"];
+
     fn catalogue<'a>(
         outputs: &'a [&'a str],
         gated: &'a [&'a str],
@@ -673,7 +682,18 @@ mod tests {
             outputs,
             gated,
             charms,
+            demons: &DEMONS,
         }
+    }
+
+    #[test]
+    fn the_shipped_demons_are_these() {
+        assert_eq!(
+            super::super::Spendables::builtin()
+                .demons()
+                .collect::<Vec<_>>(),
+            DEMONS
+        );
     }
 
     /// The shipped file, checked against the shipped content — the same call
@@ -754,6 +774,7 @@ mod tests {
             outputs: &outputs,
             gated: &gated,
             charms: &charms,
+            demons: &DEMONS,
         };
         assert!(curve.check(&short).is_err());
     }

@@ -42,7 +42,7 @@ fn the_towers_own_line_opens_the_grimoire() {
         .does("kindle charcoal", "takes light")
         .does("debug_spawn clarified-draught 2", "clarified-draught")
         .does("distil clarified-draught", "alembic")
-        .does("meditate 60", "the alembic yields clarity")
+        .does("meditate 60", "the alembic yields 3 clarity")
         .does("empty alembic", "clarity")
         .does("distil clarified-draught", "alembic")
         .does("meditate 60", "the grimoire is yours now")

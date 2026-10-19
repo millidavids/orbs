@@ -133,6 +133,7 @@ pub(super) fn apply(world: &mut World, entity: Entity, node: &NodeSave) {
         at.insert(tower::Quickened {
             from: Tick::new(quick.started),
             ticks: quick.ends.saturating_sub(quick.started),
+            by: node.quickened_by.unwrap_or(tower::QUICKENED_BY),
         });
     }
     // A word the build no longer knows is dropped, not guessed: `from_word` is
@@ -286,6 +287,7 @@ pub(super) fn references(world: &mut World, save: &Save) {
                     subject,
                     started: Tick::new(work.started),
                     ends: Tick::new(work.ends),
+                    hurried_by: work.hurried_by.unwrap_or(1),
                 });
             }
         }

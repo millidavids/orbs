@@ -82,7 +82,7 @@ const EXPECTED: [(&str, f64); 9] = [
     // Additive as `scrying` is, and the floor of what knowledge buys: a spell
     // pruning the keystone by `fervour` and sunwise by De Morgan averages 38
     // calls. A bound `taming` holds 27 beasts in two hours over four worlds,
-    // about 80 troops, against the ~27 `besieging` spends.
+    // about 80 bodies for the standing garrison (§19, *Supply*).
     ("taming", 0.042),
     // Nearly left unpinned for the wrong reason: the first spread, 0.043–0.085,
     // was not dice variance but `fight_one` keying "already spent this round"
@@ -201,7 +201,7 @@ pub fn csv(runs: &[Run]) -> String {
 pub fn why(runs: &[Run]) -> String {
     let mut out = String::new();
     for run in runs {
-        if run.reasons.is_empty() {
+        if run.reasons.is_empty() && run.given.is_empty() && !run.held.contains_key("fragment") {
             continue;
         }
         let _ = writeln!(out, "\n{} — {} cost", run.policy, run.cost);
@@ -209,6 +209,16 @@ pub fn why(runs: &[Run]) -> String {
         ranked.sort_by(|(a_why, a), (b_why, b)| b.cmp(a).then(a_why.cmp(b_why)));
         for (why, count) in ranked.iter().take(6) {
             let _ = writeln!(out, "  {count:>5}  {why}");
+        }
+        // What a supply-spending policy was handed and what it spent, and
+        // the fragments the archive held, which is gleaning's yield.
+        for (name, given) in &run.given {
+            let left = run.held.get(name).copied().unwrap_or(0);
+            let spent = given.saturating_sub(left);
+            let _ = writeln!(out, "  {name}: {given} given, {spent} spent");
+        }
+        if let Some(fragments) = run.held.get("fragment") {
+            let _ = writeln!(out, "  fragment: {fragments} held");
         }
     }
     out
@@ -278,6 +288,8 @@ mod tests {
             cost: 0,
             landed: 0,
             reasons: std::collections::BTreeMap::new(),
+            held: std::collections::BTreeMap::new(),
+            given: std::collections::BTreeMap::new(),
         }
     }
 

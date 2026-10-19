@@ -18,10 +18,8 @@ pub const GARRISON: &str = "garrison";
 /// Theirs.
 pub const ENEMY: &str = "enemy";
 
-/// How many troops the king assigns. Static by design.
-///
-/// The baseline is the same every time so the variables are legible: what the
-/// enemy brought, what you brought, and how the dice fell.
+/// How many troops the king assigns: the standing garrison's floor (§19,
+/// *Supply*). Above it the tower keeps what the menagerie brings.
 pub const ASSIGNED: u32 = 6;
 
 /// The smallest enemy that ever comes up the road.
@@ -210,10 +208,17 @@ impl Band {
     ///
     /// The count comes back with the vigour, capped at what the band was
     /// mustered at: healing that left troops down would read as thin for ever
-    /// however much fight the band has.
-    pub(super) fn mend(&mut self, points: u32, ceiling: u32) {
+    /// however much fight the band has. Never past `bodies`, the garrison's
+    /// most (§19, *Supply*), and never fewer than it had: an older save's line
+    /// can stand above today's most, and a heal must not kill.
+    pub(super) fn mend(&mut self, points: u32, ceiling: u32, bodies: u32) {
         self.vigour = (self.vigour + points).min(ceiling);
-        self.count = self.vigour.div_ceil(VIGOUR).min(ceiling / VIGOUR);
+        let mended = self
+            .vigour
+            .div_ceil(VIGOUR)
+            .min(ceiling / VIGOUR)
+            .min(bodies);
+        self.count = self.count.max(mended);
     }
 }
 

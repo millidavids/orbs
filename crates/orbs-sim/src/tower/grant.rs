@@ -69,7 +69,7 @@ pub enum Grant {
     Floor(usize),
     /// `escrow_<n>` — a siege pays [`ESCROW_PERCENT`] × n more.
     Escrow(usize),
-    /// `garrison_<n>` — a deployed troop is worth [`GARRISON_BONUS`] × n more.
+    /// `garrison_<n>` — the standing garrison holds [`GARRISON_BONUS`] × n more.
     Garrison(usize),
     /// `mend_<n>` — a finished course mends [`MEND_BONUS`] × n more.
     Mend(usize),
@@ -92,7 +92,7 @@ pub const POOL_BONUS: u32 = 4;
 pub const FLOOR_BONUS: u32 = 10;
 /// Per tier of `escrow`: how much more a siege pays, in percent.
 pub const ESCROW_PERCENT: u64 = 25;
-/// Per tier of `garrison`: extra bodies per troop deployed.
+/// Per tier of `garrison`: bodies on the standing garrison's most.
 pub const GARRISON_BONUS: u32 = 1;
 /// Per tier of `mend`: integrity a finished course puts back on top.
 pub const MEND_BONUS: u32 = 3;
@@ -261,7 +261,7 @@ pub fn escrow_percent(world: &World) -> u64 {
         }) as u64
 }
 
-/// Extra bodies per troop deployed.
+/// Bodies the grant adds to the standing garrison's most (§19, *Supply*).
 #[must_use]
 pub fn garrison_bonus(world: &World) -> u32 {
     GARRISON_BONUS.saturating_mul(

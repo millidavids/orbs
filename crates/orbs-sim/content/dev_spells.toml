@@ -714,16 +714,18 @@ lines = [
 # because the language has no arithmetic and is not getting any — the maze's
 # pattern, where `spoil` and `exit` are words rather than sums.
 #
-# **The ladder is ordered by urgency, and `else if` is what makes that mean
-# something.** A ladder short-circuits, so the first rung that fires is the only
-# one that spends anything — which is right here, because every rung spends a
-# thing you have a finite number of. Written as separate `if`s, one bad round
-# would empty the whole arsenal in a single turn.
+# The rungs are separate `if`s, ordered by urgency. Each opens a standing
+# supply once, guarded by `has no draw`, so several can flow together and none
+# is opened twice; a second word would raise it instead.
 #
-#   few          — the line is thin. Bodies first: nothing else matters if
-#                  there is nobody left to roll
 #   hurt         — standing but worn. Fight back into them
 #   outnumbered  — the ratio the language cannot express, published as a word
+#
+#   few          — the line is thin. A golem the circle bound fills the gaps
+#
+# Bodies are the menagerie's twice over (§19, Supply): the tower levies its
+# standing garrison at `defend`, and the circle can bind golems that refill the
+# line mid-fight, never past the garrison's most.
 #
 # **`hold` is outside the ladder and runs every lap**, which was the menagerie's
 # lesson while it was a chant (§19): a `sing` inside the loop that found it
@@ -752,17 +754,28 @@ lines = [
 # you want to spend"* every time it fires. `execute/tests.rs` chose `clarity`
 # over `mending` for exactly this reason and the balance policy chose `warding`;
 # the shipped spell named the one word a new player cannot say.
+#
+# Standing orders, since a potion is a supply (§19, Supply): quaffing opens it
+# and it draws every round on its own.
 [besieging]
 domain = "bailey"
 lines = [
     "defend",
     "repeat until the rampart has lifted",
     "    if the garrison has few",
-    "        deploy troop",
-    "    else if the garrison has hurt",
-    "        quaff warding",
-    "    else if the enemy has outnumbered",
-    "        quaff clarity",
+    "        if the golem has no draw",
+    "            deploy golem",
+    "        end",
+    "    end",
+    "    if the garrison has hurt",
+    "        if the warding has no draw",
+    "            quaff warding",
+    "        end",
+    "    end",
+    "    if the enemy has outnumbered",
+    "        if the clarity has no draw",
+    "            quaff clarity",
+    "        end",
     "    end",
     "    hold",
     "end",
@@ -777,27 +790,25 @@ lines = [
 #
 #   volley     — fewer attackers, and the garrison does not strike back at all.
 #                **Spend no *bonus*.** `warding` adds to rolls the garrison will
-#                not make, so it is spent on nothing — the orb refuses it now for
-#                the same reason it refuses a heal at full strength
+#                not make, so an open warding skips its draw that round, as a
+#                heal at full strength does
 #   onslaught  — everyone, and they roll at +2. The round to brace for
-#   advance    — ordinary. Reinforce if the line is thin, otherwise ride it out
+#   advance    — ordinary. Ride it out
 #
-# **Bodies always, a bonus only on a round you swing in** — and the first draft
-# had that wrong. It read *spend nothing on a volley*, which is true of `warding`
-# and false of a troop: **a volley still hits you.** What it takes away is your
-# answer, not their attack. Measured, that draft hoarded six troops and five
-# wardings and **lost a siege the other three solvers won** — 27 escrow against
-# 147. Frugality is not the lesson; knowing *what* is wasted is.
+# A bonus only on a round you swing in. A first draft spent nothing on a
+# volley and held bodies back too, but a volley still hits you: it lost a siege
+# the other three solvers won, 27 escrow against 147. Knowing what is wasted is
+# the lesson, not frugality.
 [answering]
 domain = "bailey"
 lines = [
     "defend",
     "repeat until the rampart has lifted",
-    "    if the garrison has few",
-    "        deploy troop",
-    "    else if the rampart has onslaught",
+    "    if the rampart has onslaught",
     "        if the garrison has hurt",
-    "            quaff warding",
+    "            if the warding has no draw",
+    "                quaff warding",
+    "            end",
     "        end",
     "    end",
     "    hold",
@@ -821,8 +832,9 @@ lines = [
     "defend",
     "repeat until the rampart has lifted",
     "    if the garrison has few",
-    "        deploy troop",
-    "        quaff warding",
+    "        if the warding has no draw",
+    "            quaff warding",
+    "        end",
     "    end",
     "    hold",
     "end",
@@ -850,10 +862,10 @@ lines = [
     "    end",
     "end",
     "part answer()",
-    "    if the garrison has few",
-    "        deploy troop",
-    "    else if the garrison has hurt",
-    "        quaff warding",
+    "    if the garrison has hurt",
+    "        if the warding has no draw",
+    "            quaff warding",
+    "        end",
     "    end",
     "end",
     "repeat until the rampart has lifted",
@@ -1000,7 +1012,9 @@ lines = [
     "defend",
     "repeat until the rampart has lifted",
     "    if the enemy has more spears than double the garrison",
-    "        deploy troop",
+    "        if the clarity has no draw",
+    "            quaff clarity",
+    "        end",
     "    end",
     "    for each die",
     "        if not the coffer has fewer quintessence than die",

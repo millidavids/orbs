@@ -132,6 +132,48 @@ fn a_finished_potion_can_be_picked_up_at_all() {
 }
 
 #[test]
+fn a_move_to_the_arsenal_carries_the_whole_batch() {
+    // A supply opens on how much the arsenal holds (§19, *Supply*), and a run
+    // makes three. Carried one at a time, opening a warding took six words.
+    let sim = with_a_potion();
+    assert_eq!(
+        orbs_sim::tower::supply::held_in_arsenal(sim.world(), "clarity"),
+        3
+    );
+    assert!(
+        messages(&sim)
+            .iter()
+            .any(|line| line == "3 clarity: dispensary to arsenal"),
+        "{:?}",
+        messages(&sim)
+    );
+}
+
+#[cfg(debug_assertions)]
+#[test]
+fn a_move_into_an_instrument_still_carries_one() {
+    // An instrument is charged a unit at a time, and a run spends one.
+    let mut sim = Sim::new(1);
+    for line in [
+        "attend archive",
+        "debug_spawn fragment 4",
+        "move fragment to lectern",
+    ] {
+        sim.submit(line);
+        sim.step();
+    }
+    let world = sim.world();
+    let lectern =
+        orbs_sim::tower::find_by_path(world, "/tower/archive/lectern").expect("a lectern");
+    assert_eq!(
+        orbs_sim::tower::held(world, lectern, "fragment"),
+        Some(orbs_sim::tower::Stock::Counted(1)),
+        "{:?}",
+        messages(&sim)
+    );
+}
+
+#[test]
 fn the_arsenal_takes_finished_work_and_refuses_stock() {
     // The rule that stops this becoming a second dispensary. Asked of the kind,
     // never the name: telling finished work from stock by name would mean the

@@ -2,131 +2,187 @@
 #
 # **Rule 6, and this file is the reason it applies here.** Balancing this domain
 # means moving numbers dozens of times; in Rust that is a recompile per guess.
-# Which die a thing rolls, what it adds, and how many troops it is worth are all
+# Which die a thing rolls, what it adds, and how fast it drains are all
 # authored, so a tuning pass is a content edit.
 #
-# Every key is a material the arsenal can hold — a potion, a scroll, or the
-# menagerie's troop. `execute::defend` looks a spent name up here and refuses
-# anything absent, so **an item with no entry cannot be spent**, which is what
-# stops `quaff sage` resolving and doing something quietly.
+# Every key is a material the arsenal can hold — a potion or a scroll.
+# `execute::defend` looks a name up here and refuses anything absent, so **an
+# item with no entry cannot be spent**, which is what stops `quaff sage`
+# resolving and doing something quietly.
+#
+# No single item does anything (§19, Supply). Each row is a standing
+# supply: its verb opens it, the verb again raises it one rate, and `stop`
+# closes it. While open it applies every round and draws every round.
+#
+#   rates = [{ opens, draws, worth }, ...], slowest first
+#     opens  — how many the arsenal must hold to run at this rate
+#     draws  — how many each round takes
+#     worth  — what a draw buys: a bonus, a heal, a room, a refill
+#
+# A draw runs at the fastest rate the held count still meets, and a thin store
+# (made once lately) runs only the slowest. Below the slowest it is drained.
+# `content::rate` refuses, at load, a slowest rate opening under two, a draw as
+# big as its threshold, and a faster rate worth more per item.
 #
 # `kind` is one of:
-#   troops   — joins the garrison. `count` is how many
-#   vigour   — puts fight back. `points` is how much
-#   fortify  — raises how much fight the garrison can hold, for this siege.
-#              `points` is how much; it heals nothing
+#   troops   — refills the line, never past the garrison's most
+#   vigour   — puts fight back
+#   fortify  — room above what was levied, for as long as it flows. A level,
+#              not an increment: closing it takes the room away again
 #   still    — ends the siege with both sides standing. Drunk by hand only
-#   bonus    — adds to every garrison roll next round. `amount` may be negative
+#   bonus    — adds to every garrison roll that round. May be negative
 #   advantage / disadvantage — draw twice, keep the better / worse
 #   upgrade  — roll a bigger die. `die` is one of d4 d6 d8 d10 d12 d20 d100
 #
-# **`verb` is which word spends it**, and it is authored rather than inferred
+# `verb` is which word opens it, and it is authored rather than inferred
 # from the material's kind: §19 keeps `wield` for scrolls because *"spending a
-# scroll is setting a thing going, which is what `wield` already means"*, and a
-# troop is deployed rather than drunk. A mismatch is refused in voice.
+# scroll is setting a thing going, which is what `wield` already means"*. A
+# mismatch is refused in voice.
+#
+# The numbers are a first pass, sized so a run of three is worth what one
+# potion was (§19, Supply). `orbs-balance` decides them.
 
 # ---------------------------------------------------------------------------
-# THE MENAGERIE'S TROOP.
-#
-# The one thing `deploy` takes, and the answer to the decision tree's first
-# rung — *if base troops low, send out menagerie demons*. Two, because one
-# would make a whole beast held worth a single body and the domain is meant to
-# feed this one.
-[troop]
-verb = "deploy"
-kind = "troops"
-count = 2
+# THE POTIONS (§10.1's laboratory).
 
-# ---------------------------------------------------------------------------
-# THE POTIONS (§10.1's laboratory, spent here at last).
-#
-# These retire the ten shipped prose lines that say *"a siege will be what
-# spends them"*. Each is a **pure mathematical advantage**, which is the whole
-# brief: no potion does anything a player has to learn a second system for.
-
-# The flagship, and the one a player has most of. Fight back into the line.
+# The flagship heal. Fight back into the line.
 [mending]
 verb = "quaff"
 kind = "vigour"
-points = 6
+rates = [
+    { opens = 6, draws = 2, worth = 3 },
+    { opens = 12, draws = 3, worth = 4 },
+    { opens = 20, draws = 4, worth = 5 },
+]
 
-# Vigour is hard work, so the line can hold more: three troops' worth of room
+# Vigour is hard work, so the line can hold more for as long as it flows: room
 # that mending and succour then fill. It heals nothing by itself.
 [vigour]
 verb = "quaff"
 kind = "fortify"
-points = 9
+rates = [
+    { opens = 6, draws = 2, worth = 3 },
+    { opens = 12, draws = 3, worth = 4 },
+]
 
 # Stillness ends the fight. No wear, no stake either way, and escrow on what was
-# won so far. Its price is in the brewing, not here.
+# won so far. One rate, drawn once.
 [stillness]
 verb = "quaff"
 kind = "still"
+rates = [{ opens = 3, draws = 2 }]
 
 # Warding is defensive, so it buys a flat edge on every answering roll.
 [warding]
 verb = "quaff"
 kind = "bonus"
-amount = 3
+rates = [
+    { opens = 6, draws = 2, worth = 2 },
+    { opens = 12, draws = 3, worth = 3 },
+    { opens = 20, draws = 4, worth = 4 },
+]
 
-# Haste is the second roll — the most valuable thing in the game and the
-# rarest, because advantage is worth far more than any flat bonus at these
-# thresholds.
+# Haste is the second roll — worth far more than any flat bonus at these
+# thresholds, so it is dear and there is one speed of it.
 [haste]
 verb = "quaff"
 kind = "advantage"
+rates = [{ opens = 8, draws = 3 }]
 
 # Clarity sees the weakness rather than adding force. **It was an upgrade to a
-# `d100` and that made it strictly the best thing in the arsenal** — measured, a
-# 90% hit rate against haste's 75%, dreaming's 75% and warding's 65%. A player
-# holding one would never drink anything else, which collapses the decision this
-# whole file exists to create.
-#
-# **`upgrade` does not mean what its own comment claimed.** *"The ceiling rises
-# rather than the floor"* is true of a damage roll and false of a *threshold*
-# check: against a fixed `AGAINST` of 11, a bigger die changes the share of faces
-# that clear the bar, so a d100 is a hit-rate change of forty points. The variant
-# stays in `tower::dice` — it is a real effect and an enchantment may yet scale
-# the target with it — but **nothing shipped uses it**, deliberately.
-#
-# +4 puts clarity at 70%: the best flat bonus in the arsenal and the flagship's
-# due, between warding's 65% and the two 75s that cost more to reach.
+# `d100` and that made it strictly the best thing in the arsenal** — a 90% hit
+# rate against haste's 75%. `upgrade` changes the share of faces that clear a
+# fixed `AGAINST` of 11, so a d100 is forty points of hit rate; nothing shipped
+# uses it, deliberately. The flagship's due is the best flat bonus.
 [clarity]
 verb = "quaff"
 kind = "bonus"
-amount = 4
+rates = [
+    { opens = 6, draws = 2, worth = 3 },
+    { opens = 12, draws = 3, worth = 4 },
+    { opens = 20, draws = 4, worth = 5 },
+]
 
-# Insight is the small, reliable one — the potion you drink when nothing is
-# wrong yet.
+# Insight is the small, reliable one.
 [insight]
 verb = "quaff"
 kind = "bonus"
-amount = 2
+rates = [
+    { opens = 6, draws = 2, worth = 1 },
+    { opens = 12, draws = 4, worth = 2 },
+]
 
-# Dreaming is a secret recipe and is deliberately the strangest: it is worth
-# more than insight and less than haste, and it is the only potion whose value
-# is easy to misjudge.
+# Dreaming is a secret recipe, worth more than insight and less than haste.
 [dreaming]
 verb = "quaff"
 kind = "bonus"
-amount = 5
+rates = [
+    { opens = 6, draws = 2, worth = 3 },
+    { opens = 12, draws = 3, worth = 4 },
+]
 
 # ---------------------------------------------------------------------------
 # THE SCROLLS.
 #
-# **Spent with `wield`**, which is the word they already answer to everywhere
-# else in the tower — so a player who has used one in the archive uses it here
-# without learning anything new.
+# Opened with `wield`, the word they answer to everywhere else in the
+# tower. Fewer and slower than the potions: a scroll is four fragments and a
+# walk of the stacks.
 [quickening-scroll]
 verb = "wield"
 kind = "advantage"
+rates = [{ opens = 4, draws = 1 }]
 
 [verdant-scroll]
 verb = "wield"
 kind = "troops"
-count = 3
+rates = [
+    { opens = 4, draws = 1, worth = 1 },
+    { opens = 8, draws = 2, worth = 2 },
+]
 
 [gleaning-scroll]
 verb = "wield"
 kind = "bonus"
-amount = 4
+rates = [
+    { opens = 4, draws = 1, worth = 3 },
+    { opens = 8, draws = 2, worth = 4 },
+]
+
+# ---------------------------------------------------------------------------
+# THE DEMONS (§19, Supply). The menagerie's second use: a beast held at the
+# circle refills the garrison, or `summon <demon>` binds it as one of these into
+# the arsenal instead. `summoned` is what a hold binds — four within par, three
+# past it — and `deploy` opens them on the wall like any supply.
+#
+# One for each thing a line needs and a potion also gives, so a menagerie can
+# stand in for a laboratory and the choice between them is a real one.
+
+# Bodies: a golem fills a gap in the line, never past the garrison's most.
+[golem]
+verb = "deploy"
+kind = "troops"
+summoned = { yields = 4, past_par = 3 }
+rates = [
+    { opens = 6, draws = 2, worth = 1 },
+    { opens = 12, draws = 4, worth = 2 },
+]
+
+# Fight: a familiar tends the wounded.
+[familiar]
+verb = "deploy"
+kind = "vigour"
+summoned = { yields = 4, past_par = 3 }
+rates = [
+    { opens = 6, draws = 2, worth = 3 },
+    { opens = 12, draws = 3, worth = 4 },
+]
+
+# Room: an effigy on the wall, so the line can hold more while it stands.
+[effigy]
+verb = "deploy"
+kind = "fortify"
+summoned = { yields = 4, past_par = 3 }
+rates = [
+    { opens = 6, draws = 2, worth = 3 },
+    { opens = 12, draws = 3, worth = 4 },
+]

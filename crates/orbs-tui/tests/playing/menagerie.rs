@@ -75,7 +75,7 @@ fn limning_and_calling_moves_the_board() {
 
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
-fn a_hold_brings_troops_to_the_arsenal() {
+fn a_hold_refills_the_garrison() {
     if !available() {
         return;
     }
@@ -85,8 +85,8 @@ fn a_hold_brings_troops_to_the_arsenal() {
     game.does("attend menagerie", "/tower/menagerie")
         .does("summon", "gathers at the circle")
         .does("debug_circle", "")
-        .does("summon", "the circle holds")
-        .does("survey arsenal", "troop = 4");
+        .does("summon", "4 join the garrison")
+        .does("survey roster", "spears = 10");
 }
 
 #[test]

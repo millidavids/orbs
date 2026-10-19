@@ -19,7 +19,8 @@ use orbs_render::{FieldName, Value};
 use orbs_sim::Sim;
 use orbs_sim::parser::NounKind;
 
-/// Standing in the archive holding the scroll this file is about.
+/// Standing in the archive holding enough of the scroll this file is about to
+/// open its supply: four, the slowest rate (§19, *Supply*).
 ///
 /// Spawned, not assembled: what four fragments become is drawn, so assembling
 /// one would start failing on a coin toss the day a third scroll is authored.
@@ -30,7 +31,7 @@ fn with_a_gleaning_scroll(seed: u64) -> Sim {
     let mut sim = Sim::new(seed);
     sim.submit("attend archive");
     sim.step();
-    sim.submit("debug_spawn gleaning-scroll");
+    sim.submit("debug_spawn gleaning-scroll 4");
     sim.step();
     sim
 }
@@ -133,8 +134,8 @@ fn a_gleaning_errand_scatters_spoils_and_withdraws_the_way_out() {
     );
     assert_eq!(
         after.spoils.len(),
-        5,
-        "five spoils, against a scroll's four"
+        4,
+        "four spoils, the slowest rate's worth"
     );
 
     // On floor nobody has walked, so spending the scroll on a half-explored maze
@@ -255,28 +256,102 @@ fn verified(sim: &Sim) -> (usize, usize) {
 
 #[cfg(debug_assertions)]
 #[test]
-fn a_scroll_with_nothing_to_work_on_is_kept() {
-    // §7's *"destruction is a tool, not a trap"*, applied to a thing four walks
-    // paid for: a refusal that had already spent the scroll would be invisible.
+fn gleaning_opened_before_research_sets_the_next_maze_gathering() {
+    // Open first, then research, is the order a player reaches for, and the
+    // one-shot scroll refused it. The supply is a mode: while it is open, a
+    // maze opened gathers.
     let mut sim = with_a_gleaning_scroll(11);
     sim.submit("wield gleaning-scroll");
     sim.step();
-
     assert!(
         messages(&sim)
             .iter()
-            .any(|line| line.contains("research first")),
-        "the refusal did not name the way forward: {:?}",
+            .any(|line| line.contains("the next stacks you open will gather 4")),
+        "opening with no maze did not say what it will do: {:?}",
         messages(&sim),
     );
 
-    // Still there, and still spendable once the stacks are open.
     sim.submit("research");
+    sim.step();
+    let maze = sim.stacks().expect("the stacks are open");
+    assert_eq!(maze.spoils.len(), 4, "the maze opened walking for its exit");
+    assert!(maze.exit.is_none(), "a gathering maze still has a way out");
+}
+
+#[cfg(debug_assertions)]
+#[test]
+fn gleaning_opened_from_another_room_sets_the_open_maze() {
+    // The open maze was found through `Cwd`, so from the laboratory the supply
+    // missed it and drew a scroll every 300 ticks for nothing.
+    let mut sim = with_a_gleaning_scroll(11);
+    sim.submit("research");
+    sim.step();
+    sim.submit("attend laboratory");
     sim.step();
     sim.submit("wield gleaning-scroll");
     sim.step();
+    sim.submit("attend archive");
+    sim.step();
     let maze = sim.stacks().expect("the stacks are open");
-    assert_eq!(maze.spoils.len(), 5, "the refusal had eaten the scroll");
+    assert_eq!(maze.spoils.len(), 4, "{:?}", messages(&sim));
+    assert!(
+        maze.exit.is_none(),
+        "the open maze still walks for its exit"
+    );
+}
+
+#[cfg(debug_assertions)]
+#[test]
+fn gleaning_opened_over_a_gathering_maze_says_it_gathers_already() {
+    // It promised the next stacks would gather, as if the open ones did not.
+    let mut sim = with_a_gleaning_scroll(11);
+    for line in [
+        "debug_spawn gleaning-scroll 4",
+        "research",
+        "wield gleaning-scroll",
+        "stop gleaning-scroll",
+        // Past where the next draw would have come, so the word opens afresh.
+        "meditate 300",
+        "wield gleaning-scroll",
+    ] {
+        sim.submit(line);
+        sim.step();
+    }
+    assert!(
+        messages(&sim)
+            .iter()
+            .any(|line| line.contains("the open stacks gather already")),
+        "{:?}",
+        messages(&sim),
+    );
+}
+
+#[cfg(debug_assertions)]
+#[test]
+fn one_gleaning_scroll_sets_nothing_gathering() {
+    // The owner's rule: no single item does anything.
+    let mut sim = Sim::new(11);
+    for line in [
+        "attend archive",
+        "debug_spawn gleaning-scroll 3",
+        "research",
+        "wield gleaning-scroll",
+    ] {
+        sim.submit(line);
+        sim.step();
+    }
+    let maze = sim.stacks().expect("the stacks are open");
+    assert!(
+        maze.spoils.is_empty(),
+        "three scrolls set the maze gathering"
+    );
+    assert!(
+        messages(&sim)
+            .iter()
+            .any(|line| line.contains("flows from 4")),
+        "the refusal did not say how many it wants: {:?}",
+        messages(&sim),
+    );
 }
 
 #[cfg(debug_assertions)]
@@ -300,7 +375,7 @@ fn spending_a_scroll_takes_no_production_slot() {
     let maze = sim.stacks().expect("the stacks are open");
     assert_eq!(
         maze.spoils.len(),
-        5,
+        4,
         "the scroll was refused for want of a production slot: {:?}",
         messages(&sim),
     );
@@ -324,8 +399,8 @@ fn gathering_the_last_spoil_ends_the_walk() {
     // Walk the whole maze, taking whatever is nearest. A gleaning maze publishes
     // no exit, so this cannot end early by arriving somewhere.
     //
-    // Five spoils is a much longer walk than one exit: five scattered squares
-    // means crossing the maze five times over, against `tests/solver.rs`'s 6500
+    // Four spoils is a much longer walk than one exit: four scattered squares
+    // means crossing the maze four times over, against `tests/solver.rs`'s 6500
     // ticks for reaching one.
     sim.write_spell("sweeping", &threading());
     sim.step();
@@ -338,11 +413,11 @@ fn gathering_the_last_spoil_ends_the_walk() {
         sim.stacks().is_none(),
         "the walk did not end when the spoils ran out",
     );
-    // Five spoils and the walk's own completion: `finish_walk` pays only
-    // for the last step when that step also gathered, so five is five.
+    // Four spoils and the walk's own completion: `finish_walk` pays only
+    // for the last step when that step also gathered, so four is four.
     assert_eq!(
         fragments(&sim),
-        5,
+        4,
         "a gleaning run paid the wrong number of fragments",
     );
 }
@@ -379,7 +454,7 @@ fn one_ladder_solves_a_maze_walked_for_its_exit_and_one_set_to_gather() {
             "seed {seed}: the ladder never reached the way out",
         );
 
-        // The gathering errand: no way out at all, five things to pick up.
+        // The gathering errand: no way out at all, four things to pick up.
         let mut glean = with_a_gleaning_scroll(seed);
         glean.submit("research");
         glean.step();
@@ -391,7 +466,7 @@ fn one_ladder_solves_a_maze_walked_for_its_exit_and_one_set_to_gather() {
         glean.step_n(GLEAN_TICKS);
         assert_eq!(
             fragments(&glean),
-            5,
+            4,
             "seed {seed}: the same ladder did not gather a maze set to gather",
         );
     }
@@ -449,7 +524,10 @@ fn abandoning_a_gleaning_maze_takes_the_word_with_it() {
         "the word outlived the stacks it described",
     );
 
-    // And the stacks open again for their exit, not still gathering.
+    // And with the supply rolled up, the stacks open again for their exit, not
+    // still gathering. Open, a supply would set the new maze gathering too.
+    sim.submit("stop gleaning-scroll");
+    sim.step();
     sim.submit("research");
     sim.step();
     let maze = sim.stacks().expect("research opens the stacks");
@@ -480,7 +558,8 @@ fn asks_gleaning(sim: &mut Sim) -> bool {
     since(before, verified(sim)).0 > 0
 }
 
-/// Standing in the laboratory with a long distillation running and a scroll.
+/// Standing in the laboratory with a long distillation running and four
+/// quickening scrolls, the slowest rate's float.
 ///
 /// The alembic, because 56 ticks is the longest run in the game and a halving is
 /// unmistakable against it.
@@ -491,7 +570,7 @@ fn distilling(seed: u64) -> Sim {
         "attend laboratory",
         "kindle charcoal",
         "debug_spawn clarified-draught",
-        "debug_spawn quickening-scroll",
+        "debug_spawn quickening-scroll 4",
         "distil clarified-draught",
     ] {
         sim.submit(line);
@@ -586,13 +665,30 @@ fn a_quickened_run_is_the_same_however_the_ticks_are_taken() {
 
 #[cfg(debug_assertions)]
 #[test]
+fn opening_quickening_records_the_room_and_the_window() {
+    // Rule 4: where and for how long are fields a `sift` can find, not only
+    // words in a sentence. Three hundred to the next draw, and one over.
+    let mut sim = distilling(3);
+    sim.submit("wield quickening-scroll");
+    sim.step();
+    let remaining = sim.scrollback().records().iter().find_map(|record| {
+        (record.field(FieldName::Name) == Some(Value::Text("quickening-scroll"))
+            && record.field(FieldName::At) == Some(Value::Text("laboratory")))
+        .then(|| record.field(FieldName::Remaining))
+        .flatten()
+    });
+    assert_eq!(remaining, Some(Value::Count(301)));
+}
+
+#[cfg(debug_assertions)]
+#[test]
 fn quickening_with_nothing_running_makes_the_next_run_short() {
     // Quicken the laboratory, then brew, is the obvious way to spend a scroll —
     // and it refused for want of something to hurry.
     let mut sim = Sim::new(3);
     for line in [
         "attend laboratory",
-        "debug_spawn quickening-scroll",
+        "debug_spawn quickening-scroll 4",
         "wield quickening-scroll",
         "kindle charcoal",
         "debug_spawn clarified-draught",
@@ -620,7 +716,7 @@ fn a_run_started_in_the_window_stays_short_when_it_closes() {
     let mut sim = Sim::new(5);
     for line in [
         "attend laboratory",
-        "debug_spawn quickening-scroll",
+        "debug_spawn quickening-scroll 4",
         "wield quickening-scroll",
         "kindle charcoal",
         "debug_spawn clarified-draught",
@@ -696,7 +792,7 @@ fn scouring(quickened: bool) -> Sim {
     let mut sim = Sim::new(1);
     for line in [
         "attend laboratory",
-        "debug_spawn quickening-scroll",
+        "debug_spawn quickening-scroll 4",
         "grind sage",
     ] {
         sim.submit(line);
@@ -757,7 +853,8 @@ fn a_window_that_has_closed_is_not_written_into_the_save() {
         "an open window is not in the save at all — the case below is vacuous",
     );
 
-    // Past `QUICKENED_TICKS`, which is 300.
+    // Past the window: four scrolls draw once, run dry at the next draw, and
+    // the last window closes a tick later, at 301.
     sim.submit("meditate 400");
     sim.step();
     assert!(
@@ -780,77 +877,204 @@ fn shelved(sim: &Sim) -> Vec<String> {
         .collect()
 }
 
+/// Standing in the laboratory with a verdant supply opened on `count` scrolls,
+/// raised `raises` times.
 #[cfg(debug_assertions)]
-#[test]
-fn a_verdant_scroll_puts_one_herb_on_the_shelf_and_the_fourth_is_refused() {
-    // One each, not all three: a scroll that unlocked everything would leave the
-    // lectern assembling a dud draw for ever.
+fn cultivating(count: u32, raises: usize) -> Sim {
     let mut sim = Sim::new(1);
     sim.submit("attend laboratory");
     sim.step();
-    sim.submit("debug_spawn verdant-scroll 4");
+    sim.submit(&format!("debug_spawn verdant-scroll {count}"));
     sim.step();
-
-    let before = shelved(&sim);
-    assert!(
-        !before.iter().any(|name| name == "mugwort"),
-        "the herbs were on the shelf before anything unlocked them: {before:?}",
-    );
-
-    // Alphabetical, and fixed for every seed: a roll here would be a second draw
-    // stacked on the lectern's.
-    for want in ["amber", "mugwort", "valerian"] {
+    for _ in 0..=raises {
         sim.submit("wield verdant-scroll");
         sim.step();
-        assert!(
-            shelved(&sim).iter().any(|name| name == want),
-            "spending a scroll did not put `{want}` on the shelf: {:?}",
-            shelved(&sim),
-        );
     }
+    sim
+}
+
+/// How far the next herb has grown.
+#[cfg(debug_assertions)]
+fn grown(sim: &Sim) -> u32 {
+    sim.world()
+        .resource::<orbs_sim::tower::Cultivation>()
+        .grown()
+}
+
+/// Whether `herb` is on the laboratory's shelf.
+#[cfg(debug_assertions)]
+fn has(sim: &Sim, herb: &str) -> bool {
+    shelved(sim).iter().any(|name| name == herb)
+}
+
+#[cfg(debug_assertions)]
+#[test]
+fn verdant_flowers_once_enough_is_drawn_and_keeps_its_progress() {
+    // Five scrolls: two draws grow 2, and four are needed to draw a third.
+    let mut sim = cultivating(5, 0);
+    sim.submit("meditate 700");
+    sim.step();
+    assert!(!has(&sim, "amber"), "two draws flowered a herb");
+    assert_eq!(
+        grown(&sim),
+        2,
+        "the growth was lost when the supply ran dry"
+    );
+    assert!(
+        messages(&sim).iter().any(|line| line.contains("runs dry")),
+        "{:?}",
+        messages(&sim),
+    );
+
+    // Restocked, the third draw flowers it.
+    sim.submit("debug_spawn verdant-scroll 4");
+    sim.step();
+    sim.submit("wield verdant-scroll");
+    sim.step();
+    assert!(has(&sim, "amber"), "the kept growth did not count");
+    assert_eq!(grown(&sim), 0);
+}
+
+#[cfg(debug_assertions)]
+#[test]
+fn a_faster_rate_flowers_sooner() {
+    let mut slow = cultivating(9, 0);
+    // Nine: the word draws one, and the raise wants eight still held.
+    let mut fast = cultivating(9, 1);
+    // One at the word, and the raise grows only the difference: two, as the
+    // faster rate's first draw would.
+    assert_eq!(grown(&slow), 1);
+    assert_eq!(grown(&fast), 2);
+    // The next draw, on the first word's clock, grows one more in each: seven
+    // held is short of the faster rate, so it steps down. Three flowers.
+    for sim in [&mut slow, &mut fast] {
+        sim.submit("meditate 298");
+        sim.step();
+    }
+    assert!(!has(&slow, "amber"), "two slow draws flowered a herb");
+    assert!(
+        has(&fast, "amber"),
+        "the faster rate did not flower on its second draw"
+    );
+}
+
+#[cfg(debug_assertions)]
+#[test]
+fn herbs_flower_alphabetically_then_the_supply_rolls_itself_up() {
+    // Fixed for every seed: a roll here would be a second draw stacked on the
+    // lectern's.
+    let mut sim = cultivating(40, 1);
+    sim.submit("meditate 1500");
+    sim.step();
+    let flowered: Vec<String> = messages(&sim)
+        .into_iter()
+        .filter(|line| line.contains("flowers on the shelf"))
+        .collect();
+    assert_eq!(
+        flowered,
+        [
+            "amber flowers on the shelf, and stays",
+            "mugwort flowers on the shelf, and stays",
+            "valerian flowers on the shelf, and stays",
+        ],
+    );
+    assert!(
+        messages(&sim)
+            .iter()
+            .any(|line| line.contains("every herb has flowered")),
+        "{:?}",
+        messages(&sim),
+    );
+    let open = sim
+        .world()
+        .resource::<orbs_sim::tower::supply::Supplies>()
+        .get("verdant-scroll")
+        .is_some();
+    assert!(!open, "the supply went on drawing with nothing to grow");
 
     // Only the herbs. The first version asked `Recipes::outputs`, not `leaves`,
-    // so four scrolls shelved `dregs`, `ash` and a `fragment` as endless stock.
+    // and shelved `dregs`, `ash` and a `fragment` as endless stock.
     for never in ["dregs", "ash", "husks", "phlegm", "fragment", "potash"] {
-        assert!(
-            !shelved(&sim).iter().any(|name| name == never),
-            "`{never}` is not a herb and was unlocked as one",
-        );
+        assert!(!has(&sim, never), "`{never}` is not a herb and flowered");
     }
 
-    let before = messages(&sim).len();
+    // And a word with nothing left to grow draws nothing.
+    let held = orbs_sim::tower::supply::held_in_arsenal(sim.world(), "verdant-scroll");
+    sim.submit("wield verdant-scroll");
+    sim.step();
+    assert_eq!(
+        orbs_sim::tower::supply::held_in_arsenal(sim.world(), "verdant-scroll"),
+        held,
+        "a scroll was drawn with nothing to grow",
+    );
+}
+
+#[cfg(debug_assertions)]
+#[test]
+fn a_herb_the_swap_has_renamed_is_not_grown_again() {
+    // A reagent swap renames sage to `sage-` for a while. Asked by name, the
+    // shelf held no sage, and verdant grew it as a new herb.
+    let mut sim = cultivating(40, 1);
+    sim.submit("meditate 1500");
+    sim.step();
+    let world = sim.world_mut();
+    let shelf = orbs_sim::tower::home(world, "sage").expect("sage has nowhere to live");
+    let sage = orbs_sim::tower::children_of(world, shelf)
+        .into_iter()
+        .find(|node| {
+            world
+                .get::<orbs_sim::tower::Name>(*node)
+                .is_some_and(|name| name.0 == "sage")
+        })
+        .expect("sage is on the shelf");
+    orbs_sim::tower::substitute(world, sage, "sage-");
+
     sim.submit("wield verdant-scroll");
     sim.step();
     assert!(
+        !messages(&sim)
+            .iter()
+            .any(|line| line.contains("sage flowers")),
+        "a swapped sage was grown as a new herb",
+    );
+    assert!(
         messages(&sim)
-            .into_iter()
-            .skip(before)
-            .any(|line| line.contains("every herb")),
-        "the fourth scroll did not say why it did nothing: {:?}",
+            .iter()
+            .any(|line| line.contains("the shelf holds every herb")),
+        "{:?}",
         messages(&sim),
     );
 }
 
 #[cfg(debug_assertions)]
 #[test]
-fn an_unlocked_herb_is_as_endless_as_one_the_tower_opened_with() {
+fn sage_stays_endless_and_a_flowered_herb_stays_flowered() {
     // A base reagent that ran out would make a recipe written against it work
     // for a while and then stop.
-    let mut sim = Sim::new(1);
-    sim.submit("attend laboratory");
+    let mut sim = cultivating(8, 1);
+    sim.submit("meditate 2000");
     sim.step();
-    sim.submit("debug_spawn verdant-scroll");
-    sim.step();
-    sim.submit("wield verdant-scroll");
-    sim.step();
-
     let world = sim.world();
     let shelf = orbs_sim::tower::home(world, "sage").expect("sage has nowhere to live");
-    assert_eq!(
-        orbs_sim::tower::held(world, shelf, "amber"),
-        Some(orbs_sim::tower::Stock::Endless),
-        "an unlocked herb is exhaustible",
-    );
+    for herb in ["sage", "amber"] {
+        assert_eq!(
+            orbs_sim::tower::held(world, shelf, herb),
+            Some(orbs_sim::tower::Stock::Endless),
+            "{herb} is exhaustible",
+        );
+    }
+}
+
+#[cfg(debug_assertions)]
+#[test]
+fn growth_travels_in_the_save() {
+    let mut sim = cultivating(5, 0);
+    sim.submit("meditate 301");
+    sim.step();
+    assert_eq!(grown(&sim), 2);
+    let text = sim.snapshot().to_toml().expect("a save writes");
+    let loaded = Sim::restored(&orbs_sim::Save::from_toml(&text).expect("a save reads"));
+    assert_eq!(grown(&loaded), 2, "growth was lost to a quit");
 }
 
 #[cfg(debug_assertions)]
@@ -858,16 +1082,9 @@ fn an_unlocked_herb_is_as_endless_as_one_the_tower_opened_with() {
 fn the_ported_herbs_reach_a_potion() {
     // Driven the whole way: a route that reads well in `recall` and cannot be
     // walked is a table rather than content, which the `dust` recipe was.
-    let mut sim = Sim::new(1);
-    for line in [
-        "attend laboratory",
-        "debug_spawn verdant-scroll 3",
-        "wield verdant-scroll",
-        "wield verdant-scroll",
-        "wield verdant-scroll",
-        "kindle charcoal",
-        "grind mugwort",
-    ] {
+    // Amber on the first draw after the raise, mugwort on the next.
+    let mut sim = cultivating(20, 1);
+    for line in ["meditate 600", "kindle charcoal", "grind mugwort"] {
         sim.submit(line);
         sim.step();
     }
@@ -887,7 +1104,7 @@ fn the_ported_herbs_reach_a_potion() {
     assert!(
         messages(&sim)
             .iter()
-            .any(|line| line.contains("yields insight")),
+            .any(|line| line.contains("yields") && line.contains("insight")),
         "the ported route does not reach its potion: {:?}",
         messages(&sim),
     );

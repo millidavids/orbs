@@ -41,11 +41,15 @@ mod adopt;
 mod capture;
 mod document;
 mod error;
+mod migrate;
 mod naming;
 mod node;
 mod restore;
 
-pub use document::{Away, FORMAT, MarkSave, ProgressSave, RecordSave, RngSave, Save, WorldSave};
+pub use document::{
+    Away, FORMAT, GarrisonSave, MarkSave, ProgressSave, RecordSave, RngSave, Save, SupplySave,
+    WorldSave,
+};
 // One hash, not two: `adopt` already fingerprints a spell's lines to decide
 // whether a running one survives a load, and `Read` asks the same question per
 // line. A second implementation is the defect §19 records most often.

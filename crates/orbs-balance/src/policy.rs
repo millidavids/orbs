@@ -74,6 +74,22 @@ pub enum Body {
     /// point of the column is what the *loop* is worth, not what a cleverer
     /// player might manage.
     Besieging,
+    /// The flagship cycle, with a quickening supply kept open on the
+    /// laboratory (§19, *Supply*).
+    ///
+    /// The instrument for whether a scroll is worth using: run against
+    /// `clarity`, the difference is what quickening buys, and
+    /// `agrees.rs` sets it against what the lectern spends making one.
+    /// Scrolls arrive by `debug_spawn` as they are wanted, standing for an
+    /// archive walked by a spell — walking takes no slot, so the lectern's run
+    /// is the archive's whole cost to the laboratory.
+    Quickened(&'static [&'static str]),
+    /// [`Body::Stacks`] with a gleaning supply opened for every maze.
+    ///
+    /// What gleaning is worth, as fragments: run against `stacks`, the
+    /// difference in fragments held is what the scrolls bought (§19,
+    /// *Supply*).
+    Gleaned,
     /// Bind charms at the forge, reading the residue the way the table does.
     ///
     /// The sixth policy that must read the world, and it reads exactly what
@@ -108,9 +124,31 @@ pub enum Body {
     },
 }
 
+/// One lap of the flagship brew, shared by every policy that runs it.
+const CLARITY_LAP: &[&str] = &[
+    "kindle charcoal",
+    "grind sage",
+    "empty mortar_and_pestle",
+    // Scour before use, never after fouling: the byproduct blocks the *next*
+    // lap's load (§10.1), so a purge after the stage that dirtied it cleans an
+    // instrument nothing is waiting on and still leaves lap two refused. The
+    // first draft did it the other way and read 0.098.
+    "purge balneum_mariae",
+    "digest ground-sage",
+    "siphon balneum_mariae",
+    "grind rock-salt",
+    "empty mortar_and_pestle",
+    "purge flask_and_rod",
+    "mix sage-tincture with ground-salt",
+    "distil clarified-draught",
+    // `empty` takes the potion *and* the phlegm, so there is nothing left for a
+    // purge to scour — one after this refuses every lap.
+    "empty alembic",
+];
+
 impl Policy {
     /// Every policy the harness knows, in the order `list` prints them.
-    pub const ALL: [Self; 11] = [
+    pub const ALL: [Self; 13] = [
         Self::CLARITY,
         Self::DAMPED,
         Self::HASTE,
@@ -122,6 +160,8 @@ impl Policy {
         Self::BESIEGING,
         Self::IMBUING,
         Self::BOUND,
+        Self::QUICKENED,
+        Self::GLEANED,
     ];
 
     /// Look one up by name.
@@ -149,26 +189,26 @@ impl Policy {
         name: "clarity",
         gloss: "the flagship brew, relit every lap and never damped",
         setup: &["attend laboratory"],
-        body: Body::Cycle(&[
-            "kindle charcoal",
-            "grind sage",
-            "empty mortar_and_pestle",
-            // Scour before use, never after fouling: the byproduct blocks the
-            // *next* lap's load (§10.1), so a purge after the stage that dirtied
-            // it cleans an instrument nothing is waiting on and still leaves lap
-            // two refused. The first draft did it the other way and read 0.098.
-            "purge balneum_mariae",
-            "digest ground-sage",
-            "siphon balneum_mariae",
-            "grind rock-salt",
-            "empty mortar_and_pestle",
-            "purge flask_and_rod",
-            "mix sage-tincture with ground-salt",
-            "distil clarified-draught",
-            // `empty` takes the potion *and* the phlegm, so there is nothing
-            // left for a purge to scour — one after this refuses every lap.
-            "empty alembic",
-        ]),
+        body: Body::Cycle(CLARITY_LAP),
+    };
+
+    /// [`CLARITY`](Self::CLARITY) with a quickening supply kept open.
+    ///
+    /// Stocked as it is wanted, so every scroll is fresh and the run counts
+    /// what it was handed (`Run::given`).
+    const QUICKENED: Self = Self {
+        name: "quickened",
+        gloss: "the flagship brew with a quickening supply kept open on it",
+        setup: &["attend laboratory"],
+        body: Body::Quickened(CLARITY_LAP),
+    };
+
+    /// [`STACKS`](Self::STACKS) with every maze set to gather.
+    const GLEANED: Self = Self {
+        name: "gleaned",
+        gloss: "the archive's maze with a gleaning supply opened for every one",
+        setup: &["attend archive"],
+        body: Body::Gleaned,
     };
 
     /// The same brew, played the way §10.1 says is better.
@@ -340,15 +380,11 @@ impl Policy {
         name: "besieging",
         gloss: "the bailey, fought as the shipped decision tree fights it",
         // Stocked at setup, which is the policy modelling a player: an empty
-        // arsenal reaches the `few` rung, is told *"there is no troop in the
-        // arsenal"*, and asks again every tick — 7195 costs in 7200 ticks and a
-        // rate of nought. `debug_spawn` earns nothing, so it inflates no rate;
-        // it buys the arsenal a player would have brewed.
-        setup: &[
-            "attend bailey",
-            "debug_spawn troop 60",
-            "debug_spawn warding 60",
-        ],
+        // arsenal is refused every tick it asks. `debug_spawn` earns nothing,
+        // so it inflates no rate; it buys the arsenal a player would have
+        // brewed. No troops: the bailey fights at its standing floor, the
+        // menagerie being another column (§19, *Supply*).
+        setup: &["attend bailey", "debug_spawn warding 60"],
         body: Body::Besieging,
     };
 

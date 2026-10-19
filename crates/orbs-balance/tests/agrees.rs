@@ -301,3 +301,44 @@ fn every_pinned_rate_is_one_a_sweep_still_reaches() {
         );
     }
 }
+
+/// The scrolls' question, as a number: a quickening scroll is worth using, so
+/// what it buys the laboratory beats what the archive spends making it (§19,
+/// *Supply*).
+///
+/// The archive's cost to the laboratory is the lectern's run alone: a walk of
+/// the stacks takes no slot. Priced in the flagship's own experience, so the
+/// two sides are one unit. Averaged over [`SEEDS`], as every pin here is.
+#[test]
+fn quickening_pays_more_than_the_archive_spends_on_it() {
+    const SCROLL: &str = "quickening-scroll";
+    let clarity = Policy::named("clarity").expect("the flagship ships");
+    let quickened = Policy::named("quickened").expect("the quickened policy ships");
+    let recipes = orbs_sim::content::Recipes::builtin();
+    let lectern = recipes
+        .for_instrument("lectern")
+        .first()
+        .expect("the lectern has a recipe");
+    #[allow(clippy::cast_precision_loss)]
+    let ticks_a_scroll = lectern.ticks as f64 / f64::from(lectern.yields);
+
+    let mut gained = 0.0;
+    let mut spent = 0.0;
+    for seed in SEEDS {
+        let plain = drive::run(clarity, seed, SPAN, EVERY, MEASURED);
+        let quick = drive::run(quickened, seed, SPAN, EVERY, MEASURED);
+        let given = quick.given.get(SCROLL).copied().unwrap_or(0);
+        let used = given - quick.held.get(SCROLL).copied().unwrap_or(0);
+        assert!(used > 0, "seed {seed}: no scroll was used");
+        #[allow(clippy::cast_precision_loss)]
+        let more = quick.last().experience as f64 - plain.last().experience as f64;
+        gained += more / f64::from(used);
+        spent += ticks_a_scroll * plain.rate();
+    }
+    assert!(
+        gained > spent,
+        "a quickening scroll buys {gained:.2} experience over {} worlds and costs \
+         {spent:.2} to make",
+        SEEDS.len(),
+    );
+}

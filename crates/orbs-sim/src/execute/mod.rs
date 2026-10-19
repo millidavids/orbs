@@ -108,6 +108,7 @@ pub(crate) use settle::settle as settle_puzzles;
 // production slot the typed one is not.
 pub use audit::land_sweep;
 pub use quit::{Menuing, Quitting};
+pub(crate) use scroll::drain as drain_scrolls;
 pub(crate) use scroll::spending;
 pub use scry::land as land_probe;
 pub use unfurl::Unfurling;

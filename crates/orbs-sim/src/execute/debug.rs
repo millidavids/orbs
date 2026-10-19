@@ -349,7 +349,7 @@ fn spawn(world: &mut World, name: &str, count: u32, into: Option<&str>) {
     // The kind the laboratory would have given it. Spawning `clarity` as a
     // reagent puts a node in the tower with the right name and the wrong kind —
     // one no `distil` could have made and no slot will take.
-    let kind = world.resource::<Recipes>().kind_of(&known);
+    let kind = tower::kind_of(world, &known);
 
     // The arsenal's door holds for a tester too: it takes finished work only, so
     // a reagent in it is a state no `move` could produce. A tool that can build

@@ -22,6 +22,9 @@ use super::node::{Cwd, Fixture, Name, Nameable, children_of, path_of};
 use crate::execute::LOG;
 use crate::parser::{NounKind, Scene};
 
+/// The room whose circle binds demons, the one place their names resolve.
+const MENAGERIE: &str = "menagerie";
+
 /// Rebuild the nameable surface of the world.
 ///
 /// You can only name what is where you are. §7 makes the tree the tower and
@@ -102,6 +105,14 @@ pub fn scene_at(world: &World, at: Entity) -> Scene {
                     .into_iter()
                     .filter(|room| !opened.is_open(room)),
             )
+            // A demon the circle cannot bind yet, for a gated product's reason:
+            // its `recall_` page is a topic from tick 0 (§19, *Supply*).
+            .chain(
+                world
+                    .resource::<crate::content::Spendables>()
+                    .demons()
+                    .filter(|demon| !opened.has(&super::opened::demon_key(demon))),
+            )
             .map(str::to_owned)
             .collect()
     };
@@ -151,6 +162,23 @@ pub fn scene_at(world: &World, at: Entity) -> Scene {
                 continue;
             }
             scene = scene.with(NounKind::Topic, topic);
+        }
+    }
+
+    // Every demon the circle can bind, as the essence it is in the arsenal, so
+    // `summon golem` resolves before the first one exists (§19, *Supply*).
+    // At the circle only: registered everywhere, a demon was a fourth answer
+    // to `move nonsense` in the laboratory. After the topics, so no earlier tie
+    // moves.
+    let at_the_circle = super::domain_of(world, cwd.0)
+        .and_then(|domain| world.get::<Name>(domain))
+        .is_some_and(|domain| domain.0 == MENAGERIE);
+    if at_the_circle {
+        for demon in world.resource::<crate::content::Spendables>().demons() {
+            if is_hidden(demon) {
+                continue;
+            }
+            scene = scene.with(NounKind::Essence, demon);
         }
     }
 
@@ -204,12 +232,25 @@ pub fn scene_at(world: &World, at: Entity) -> Scene {
     // `tower::keep` covers. Naming is only half of it: three lookups had to learn
     // this too, or a word resolves at full confidence and then reports "no such
     // thing".
+    let mut kept: Vec<&str> = Vec::new();
     for node in super::keeping(world) {
         let (Some(name), Some(kind)) = (world.get::<Name>(node), world.get::<Nameable>(node))
         else {
             continue;
         };
         scene = scene.with(kind.0, &name.0);
+        kept.push(&name.0);
+    }
+
+    // And every open supply, wherever its stock went: one `move` carries the
+    // whole batch out, and `stop warding` then fuzzed into a spell. After the
+    // arsenal, so no earlier tie moves.
+    if let Some(supplies) = world.get_resource::<super::supply::Supplies>() {
+        for (named, _) in supplies.iter() {
+            if !kept.contains(&named) {
+                scene = scene.with(super::kind_of(world, named), named);
+            }
+        }
     }
 
     // The maze's readings, always, whether or not a maze is open. These are the
@@ -284,6 +325,10 @@ pub fn scene_at(world: &World, at: Entity) -> Scene {
     // up is written once and cast anywhere, and words that only resolved while
     // standing in the bailey would be the defect above.
     for reading in super::stores::readings() {
+        scene = scene.with(NounKind::Sense, reading);
+    }
+    // ...and a supply's, after them, for the same reason (§19, *Supply*).
+    for reading in super::supply::readings() {
         scene = scene.with(NounKind::Sense, reading);
     }
 

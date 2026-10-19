@@ -25,7 +25,7 @@
 //! 4. Odds are testable without a `Sim`: a composed `Roll` is a pure value.
 //! 5. Tuning stays in TOML (rule 6).
 //!
-//! `tower::heat`'s `Quickened` is the counter-example, halved at the call site.
+//! `tower::work`'s `Quickened` is the counter-example, divided at the call site.
 //! It does not generalise: a siege has many sources stacking onto one number.
 
 use rand::RngExt;
@@ -139,30 +139,6 @@ pub enum Effect {
     Disadvantage,
     /// Roll a bigger die instead. Ignored if it is not bigger.
     Upgrade(Die),
-}
-
-impl Effect {
-    /// Whether this carries a magnitude a thin store could halve.
-    ///
-    /// Only [`Bonus`](Self::Bonus) does; the other three are switches with no
-    /// half, so a store that cannot supply one in full supplies none.
-    #[must_use]
-    pub const fn scales(self) -> bool {
-        matches!(self, Self::Bonus(_))
-    }
-
-    /// This effect as a `supply` store can still deliver it.
-    ///
-    /// A magnitude halves toward nought; a switch is handed back whole. Safe
-    /// because `spending` refuses, above this call, anything that would scale
-    /// away to nothing.
-    #[must_use]
-    pub const fn scaled(self, supply: crate::tower::Supply) -> Self {
-        match self {
-            Self::Bonus(amount) => Self::Bonus(supply.scale_signed(amount)),
-            other => other,
-        }
-    }
 }
 
 /// A roll, assembled and not yet drawn.

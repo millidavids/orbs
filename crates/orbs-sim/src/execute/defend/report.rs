@@ -158,6 +158,15 @@ pub(super) fn settle(world: &mut World, rampart: Entity, outcome: Outcome) {
         siege.clear_at = Some(now.saturating_add(siege::CADENCE));
     }
 
+    // The line comes home: survivors up to what was levied, and whatever the
+    // menagerie brought while it fought (§19, *Supply*).
+    if let Some((survivors, levied)) = world
+        .get::<Siege>(rampart)
+        .map(|siege| (siege.garrison.count, siege.levied))
+    {
+        siege::disband(world, survivors, levied);
+    }
+
     // Stilled touches the barrier neither way: no penalty, and no victory.
     let _ = match outcome {
         Outcome::Held => tower::mend_by(world, siege::VICTORY_MEND),
@@ -247,6 +256,8 @@ pub(super) fn settle(world: &mut World, rampart: Entity, outcome: Outcome) {
     if outcome == Outcome::Held {
         tower::note(world, tower::SIEGE_WON);
     }
+    // Every supply the siege had open stops with it (§19, *Supply*).
+    super::spending::close_siege(world);
 
     // No rail mark, because `briefs()` walks `DOMAINS` and the bailey is
     // deliberately absent from it — a `Mark::News` here would be state nothing

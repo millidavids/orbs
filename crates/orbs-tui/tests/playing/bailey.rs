@@ -71,10 +71,10 @@ fn the_arsenal_is_spent_on_the_wall() {
     let game = Game::seeded(QUIET);
     game.does("attend bailey", "/tower/bailey")
         .does("defend", "come up the road")
-        .does("debug_spawn troop 2", "all along")
-        .does("deploy troop", "goes down to the line")
+        .does("debug_spawn verdant-scroll 4", "all along")
+        .does("wield verdant-scroll", "verdant-scroll flows")
         // ...and the wrong word names the right one, which is §6's rule.
-        .does("quaff troop", "deploy it");
+        .does("quaff verdant-scroll", "wield it");
 }
 
 #[test]

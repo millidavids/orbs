@@ -197,6 +197,9 @@ ticks = 8
 
 # ---------------------------------------------------------------------------
 # alembic - distillation. Needs heat. The only instrument that yields a potion.
+#
+# `yields = 3`: a distillation makes a batch. Potions are spent by volume, never
+# one at a time (§19, Supply), and the tower still counts the run, not the batch.
 # ---------------------------------------------------------------------------
 
 # **The long one, and the only stage that is.** Four times what it was: a
@@ -210,6 +213,7 @@ output = "clarity"
 leaves = "phlegm"
 ticks = 56
 potion = true
+yields = 3
 heat = true
 
 # ---------------------------------------------------------------------------
@@ -230,6 +234,7 @@ output = "warding"
 leaves = "phlegm"
 ticks = 14
 potion = true
+yields = 3
 heat = true
 gated = true
 
@@ -239,6 +244,7 @@ output = "haste"
 leaves = "phlegm"
 ticks = 12
 potion = true
+yields = 3
 heat = true
 gated = true
 
@@ -248,6 +254,7 @@ output = "insight"
 leaves = "phlegm"
 ticks = 40
 potion = true
+yields = 3
 heat = true
 gated = true
 
@@ -275,6 +282,7 @@ output = "mending"
 leaves = "phlegm"
 ticks = 30
 potion = true
+yields = 3
 heat = true
 secret = true
 
@@ -284,6 +292,7 @@ output = "dreaming"
 leaves = "phlegm"
 ticks = 34
 potion = true
+yields = 3
 heat = true
 secret = true
 
@@ -293,22 +302,24 @@ output = "vigour"
 leaves = "phlegm"
 ticks = 36
 potion = true
+yields = 3
 heat = true
 secret = true
 
-# The laboratory's last station opens this one — forty potions in. It ends a
-# siege, so it costs: ten minutes of the alembic, most of the tower's
-# quintessence, and never more than one held (§19).
+# The laboratory's last station opens this one — forty brews in. It ends a
+# siege, so it costs: ten minutes of the alembic and most of the tower's
+# quintessence (§19). Three a run, its threshold, so one brew can be drunk:
+# `most`, its one-held cap, is retired, and the brew is the price (§19, Supply).
 [[alembic]]
 input = "stilling-draught"
 output = "stillness"
 leaves = "phlegm"
 ticks = 600
 potion = true
+yields = 3
 heat = true
 gated = true
 quintessence = 20
-most = 1
 
 # ---------------------------------------------------------------------------
 # athanor - fuel, not recipes. Arrives with step 4.
@@ -368,5 +379,7 @@ input = "fragment"
 count = 4
 outputs = ["gleaning-scroll", "quickening-scroll", "verdant-scroll"]
 ticks = 20
+# Two of one draw, since a scroll does nothing alone (§19, Supply, `0.18.6`).
+yields = 2
 scroll = true
 gated = ["quickening-scroll", "verdant-scroll"]

@@ -1,8 +1,8 @@
-//! What the tower has opened: rooms, recipes, charms, and the wall (DESIGN.md
-//! §11.5, §19).
+//! What the tower has opened: rooms, recipes, charms, demons, and the wall
+//! (DESIGN.md §11.5, §19).
 //!
-//! One set, five kinds of key: `domain:archive`, `recipe:warding`,
-//! `charm:whetted`, `siege`, `circle`. Every question of the form *"may the
+//! One set, six kinds of key: `domain:archive`, `recipe:warding`,
+//! `charm:whetted`, `demon:golem`, `siege`, `circle`. Every question of the form *"may the
 //! player do this yet"* is answered here. One holder rather than one per kind,
 //! so a save carries one list and a restore cannot open a room and forget a
 //! recipe.
@@ -32,7 +32,7 @@ use std::fmt;
 use bevy_ecs::prelude::*;
 use orbs_render::{FieldName, RecordKind, Role};
 
-use crate::content::{Charms, Progression, Prose, Recipes};
+use crate::content::{Charms, Progression, Prose, Recipes, Spendables};
 use crate::session::Scrollback;
 
 use super::Learned;
@@ -57,6 +57,8 @@ pub enum Key {
     Recipe(String),
     /// A charm the forge may lay: `charm:<kind>`.
     Charm(String),
+    /// A demon the circle may bind: `demon:<name>` (§19, *Supply*).
+    Demon(String),
     /// The wall: `siege`.
     Siege,
     /// The menagerie's whole circle: `circle`.
@@ -83,6 +85,7 @@ impl Key {
             "domain" => Some(Self::Domain(name.to_owned())),
             "recipe" => Some(Self::Recipe(name.to_owned())),
             "charm" => Some(Self::Charm(name.to_owned())),
+            "demon" => Some(Self::Demon(name.to_owned())),
             _ => None,
         }
     }
@@ -91,7 +94,7 @@ impl Key {
     #[must_use]
     pub fn name(&self) -> &str {
         match self {
-            Self::Domain(name) | Self::Recipe(name) | Self::Charm(name) => name,
+            Self::Domain(name) | Self::Recipe(name) | Self::Charm(name) | Self::Demon(name) => name,
             Self::Siege => SIEGE,
             Self::Circle => CIRCLE,
         }
@@ -104,6 +107,7 @@ impl Key {
             Self::Domain(_) => "domain",
             Self::Recipe(_) => "recipe",
             Self::Charm(_) => "charm",
+            Self::Demon(_) => "demon",
             Self::Siege => SIEGE,
             Self::Circle => CIRCLE,
         }
@@ -167,6 +171,12 @@ pub fn charm_key(kind: &str) -> String {
     format!("charm:{kind}")
 }
 
+/// The key for a demon.
+#[must_use]
+pub fn demon_key(name: &str) -> String {
+    format!("demon:{name}")
+}
+
 /// Everything the tower has opened, by key.
 ///
 /// A `BTreeSet`, so a save's bytes do not depend on the order things were
@@ -175,13 +185,13 @@ pub fn charm_key(kind: &str) -> String {
 pub struct Opened(BTreeSet<String>);
 
 impl Opened {
-    /// Every room, every gated product, every charm, the wall, and the whole
-    /// circle.
+    /// Every room, every gated product, every charm, every demon, the wall, and
+    /// the whole circle.
     ///
     /// The tower `Sim::new` builds, and the one a save from before sealing
     /// existed restores to — see the module header.
     #[must_use]
-    pub fn all(recipes: &Recipes, charms: &Charms) -> Self {
+    pub fn all(recipes: &Recipes, charms: &Charms, spendables: &Spendables) -> Self {
         let mut keys: BTreeSet<String> =
             super::DOMAINS.iter().map(|name| domain_key(name)).collect();
         // The two rooms that are not in `DOMAINS` and can still be shut — see
@@ -190,6 +200,7 @@ impl Opened {
         keys.insert(domain_key(super::GRIMOIRE));
         keys.extend(recipes.gated().into_iter().map(recipe_key));
         keys.extend(charms.names().map(charm_key));
+        keys.extend(spendables.demons().map(demon_key));
         keys.insert(SIEGE.to_owned());
         keys.insert(CIRCLE.to_owned());
         Self(keys)
@@ -202,8 +213,13 @@ impl Opened {
     /// does. A second list of starting keys would be a second expression of the
     /// same rule. The bailey follows the wall.
     #[must_use]
-    pub fn start(recipes: &Recipes, charms: &Charms, curve: &Progression) -> Self {
-        let mut keys = Self::all(recipes, charms).0;
+    pub fn start(
+        recipes: &Recipes,
+        charms: &Charms,
+        spendables: &Spendables,
+        curve: &Progression,
+    ) -> Self {
+        let mut keys = Self::all(recipes, charms, spendables).0;
         let opened_by_a_station: BTreeSet<&str> = curve
             .ley_line()
             .iter()
@@ -442,7 +458,7 @@ mod tests {
     fn an_open_tower_holds_every_room_every_gated_product_and_every_charm() {
         let recipes = Recipes::builtin();
         let charms = Charms::builtin();
-        let opened = Opened::all(&recipes, &charms);
+        let opened = Opened::all(&recipes, &charms, &Spendables::builtin());
         for domain in super::super::DOMAINS {
             assert!(opened.is_open(domain), "{domain} is shut");
         }
@@ -462,7 +478,7 @@ mod tests {
         let recipes = Recipes::builtin();
         let charms = Charms::builtin();
         let curve = Progression::builtin();
-        let start = Opened::start(&recipes, &charms, &curve);
+        let start = Opened::start(&recipes, &charms, &Spendables::builtin(), &curve);
         assert!(start.is_open("laboratory"), "the laboratory is shut");
         for domain in [
             "archive",

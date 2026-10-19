@@ -144,6 +144,18 @@ pub(in crate::execute) fn defend(world: &mut World) {
         let mut rngs = world.resource_mut::<crate::rng::Rngs>();
         Siege::begin_against(&mut rngs, most)
     };
+    // The whole standing garrison goes to the wall (§19, *Supply*), with room
+    // for the tower's most and no more.
+    let room = siege::most_held(world);
+    let levied = siege::levy(world);
+    siege.muster(levied, room);
+    // How fresh every store is as the enemy arrives: the fight reads the better
+    // of this and now, so time spent over a round cannot thin a supply (§19).
+    siege.freshness = world
+        .resource::<crate::content::Spendables>()
+        .names()
+        .map(|named| (named.to_owned(), tower::freshness_of(world, named)))
+        .collect();
     // The Ley Line's `edge`, read once for the whole fight (§11.5).
     siege.edge = tower::grant::edge_bonus(world);
     // ...and what the tower was worth before a blow was struck, so the settling
@@ -163,17 +175,18 @@ pub(in crate::execute) fn defend(world: &mut World) {
     );
 }
 
-/// `deploy <name>` — send a summoned troop into the line.
+/// `deploy <name>` — open what the circle bound as a supply on the wall.
 pub(in crate::execute) fn deploy(intent: &Intent, world: &mut World) {
     spend(intent, world, Verb::Deploy);
 }
 
-/// `quaff <name>` — spend a potion on the coming round.
+/// `quaff <name>` — open a potion as a supply on the wall, or raise it a rate.
 pub(in crate::execute) fn quaff(intent: &Intent, world: &mut World) {
     spend(intent, world, Verb::Quaff);
 }
 
-/// `wield <scroll>` on the wall — spend it on the siege rather than the tower.
+/// `wield <scroll>` on the wall — open it as a supply on the siege rather than
+/// the tower.
 ///
 /// Returns whether it took the command; `pipeline::wield` asks first. §19 keeps
 /// `wield` for scrolls rather than a fourth verb, and this is what that costs.
@@ -423,5 +436,9 @@ pub(in crate::execute) fn hold(world: &mut World) {
 
     if let Some(outcome) = round.outcome {
         settle(world, rampart, outcome);
+    } else {
+        // Every open supply draws for the round to come (§19, *Supply*).
+        super::drawing::draw_round(world, rampart);
+        publish(world, rampart);
     }
 }

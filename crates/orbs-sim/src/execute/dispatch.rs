@@ -96,7 +96,7 @@ fn execute(intent: &Intent, world: &mut World, divined: bool) {
         Verb::Dial => super::scry::dial(intent, world),
         Verb::Muster => super::muster::muster(world),
         Verb::Haul => super::muster::haul(intent, world),
-        Verb::Summon => super::summon::summon(world, divined),
+        Verb::Summon => super::summon::summon(intent, world, divined),
         Verb::Limn => super::summon::limn(intent, world),
         Verb::Queue => super::queue::queue(intent, world),
         Verb::Defend => super::defend::defend(world),

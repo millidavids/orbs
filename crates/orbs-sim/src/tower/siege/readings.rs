@@ -127,5 +127,8 @@ pub fn readings() -> Vec<&'static str> {
     // `POOL`, not `Die::ALL`: all seven made four words nameable that nothing
     // can publish, and they collide — `d10` against `d100` scores 962.
     out.extend(POOL.into_iter().map(Die::word));
+    // The roster's, appended for the reason above: the standing garrison at its
+    // most (§19, *Supply*). Its count is `spears`, already here.
+    out.push(super::FULL);
     out
 }

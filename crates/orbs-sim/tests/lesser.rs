@@ -182,18 +182,18 @@ fn a_lesser_circle_refuses_a_dark_glyph_and_publishes_only_the_keystone() {
     assert!(sim.holds_reading("menagerie", "keystone", "spurn"));
 }
 
-/// One troop and a quarter of the price within par, which is one call, and the
+/// One body and a quarter of the price within par, which is one call, and the
 /// quarter of three quarters past it.
 #[cfg(debug_assertions)]
 #[test]
-fn a_lesser_hold_pays_one_troop_and_a_quarter_of_the_price() {
+fn a_lesser_hold_pays_one_body_and_a_quarter_of_the_price() {
     let mut sim = sealed_at_the_circle(3);
     run(&mut sim, "summon");
     let before = sim.experience();
     run(&mut sim, "debug_circle");
     run(&mut sim, "summon");
     assert!(
-        ever_said(&sim, "the circle holds. 1 troop answers, on call 1"),
+        ever_said(&sim, "the circle holds. 1 joins the garrison, on call 1"),
         "{:?}",
         said(&sim),
     );

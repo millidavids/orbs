@@ -153,47 +153,39 @@ fn a_gleaning_scroll_swaps_the_way_out_for_things_to_gather() {
     let game = Game::start();
     game.does("attend archive", "/tower/archive")
         .does("research", "a way out is in them")
-        .does("debug_spawn gleaning-scroll", "all along")
+        .does("debug_spawn gleaning-scroll 4", "all along")
         .does("wield gleaning-scroll", "and no way out")
         .does("survey stacks", "gleaning");
 }
 
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
-fn a_quickening_scroll_halves_the_work_in_hand() {
+fn a_quickening_supply_halves_the_work_in_hand() {
     if !available() {
         return;
     }
-    // It never refuses for want of something to hurry; as a one-shot on the run
-    // in hand it was useless the moment a player reached for it. An 8-tick
-    // grind lands in 4.
+    // Four scrolls open it, and an 8-tick grind lands in 4 (§19, *Supply*).
     let game = Game::start();
     game.does("attend laboratory", "/tower/laboratory")
-        .does("debug_spawn quickening-scroll", "all along")
-        .does("wield quickening-scroll", "works quick for")
+        .does("debug_spawn quickening-scroll 4", "all along")
+        .does("wield quickening-scroll", "2 times quick")
         .does("grind sage", "to mortar_and_pestle")
         .does("meditate 4", "yields ground-sage");
 }
 
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
-fn a_verdant_scroll_puts_a_new_herb_on_the_shelf_and_then_runs_out() {
+fn a_verdant_supply_flowers_a_new_herb_on_the_shelf() {
     if !available() {
         return;
     }
-    // What may be unlocked is derived, never listed: a base reagent is one the
-    // vocabulary knows that nothing makes. Asking `Recipes::outputs` shelved
-    // every byproduct instead, so the fourth scroll refusing is as much the
-    // assertion as the first three working.
+    // Cultivation: one at the word, one more at the raise (it grows only the
+    // difference), and the next draw flowers the first herb (§19, *Supply*).
     let game = Game::start();
     game.does("attend laboratory", "/tower/laboratory")
-        .does("debug_spawn verdant-scroll 4", "all along")
-        .does("wield verdant-scroll", "the shelf remembers")
-        .does("wield verdant-scroll", "the shelf remembers")
-        .does("wield verdant-scroll", "the shelf remembers")
-        .does(
-            "wield verdant-scroll",
-            "every herb the verdant-scroll knows",
-        );
+        .does("debug_spawn verdant-scroll 8", "all along")
+        .does("wield verdant-scroll", "unrolls")
+        .does("wield verdant-scroll", "unrolls faster")
+        .does("meditate 300", "amber flowers on the shelf");
     game.does("survey dispensary", "∞");
 }

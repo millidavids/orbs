@@ -12,6 +12,7 @@
 //! thirty-two that need no door run in either profile.
 
 use orbs_render::{FieldName, Value};
+use orbs_sim::content::SupplyKind;
 use orbs_sim::{Save, Sim, tower};
 
 fn run(sim: &mut Sim, line: &str) {
@@ -227,34 +228,36 @@ fn a_band_that_is_standing_is_never_empty_and_a_routed_one_is() {
 #[cfg(debug_assertions)]
 #[test]
 fn spending_the_arsenal_reaches_the_line() {
-    // Potions, scrolls and troops are mathematical advantages applied on your
-    // turn — the ten shipped prose lines promising it are now true.
+    // What the arsenal holds reaches the line on your turn, once there is
+    // enough of it to flow. The verdant scroll is bodies now that troops are
+    // the tower's own (§19, *Supply*).
     let mut sim = at_the_wall(11);
     run(&mut sim, "defend");
-    run(&mut sim, "debug_spawn troop 1");
+    run(&mut sim, "debug_spawn verdant-scroll 4");
     run(&mut sim, "survey garrison");
     let before = last(&sim, tower::siege::SPEARS).expect("a garrison was published");
 
-    run(&mut sim, "deploy troop");
+    run(&mut sim, "wield verdant-scroll");
     run(&mut sim, "survey garrison");
     let after = last(&sim, tower::siege::SPEARS).expect("a garrison was published");
 
     assert!(
         after > before,
-        "deploying a troop did not reinforce the line: {before} -> {after}",
+        "a verdant scroll did not reinforce the line: {before} -> {after}",
     );
 }
 
+#[cfg(debug_assertions)]
 #[test]
 fn the_wrong_word_is_refused_and_names_the_right_one() {
-    // §6 forbids a bare error, and `quaff troop` is one word from correct. §19's
-    // split: a scroll keeps `wield`, a troop is deployed, drinking has its own.
+    // §6 forbids a bare error, and `wield warding` is one word from correct.
+    // §19's split: a scroll keeps `wield`, drinking has its own.
     let mut sim = at_the_wall(11);
     run(&mut sim, "defend");
-    run(&mut sim, "debug_spawn troop 1");
-    run(&mut sim, "quaff troop");
+    run(&mut sim, "debug_spawn warding 1");
+    run(&mut sim, "deploy warding");
     assert!(
-        ever_said(&sim, "deploy it"),
+        ever_said(&sim, "quaff it"),
         "the refusal did not name the right word: {:?}",
         said(&sim),
     );
@@ -278,10 +281,10 @@ fn something_the_wall_has_no_use_for_is_refused_rather_than_spent() {
 fn spending_something_you_do_not_have_is_refused() {
     let mut sim = at_the_wall(11);
     run(&mut sim, "defend");
-    run(&mut sim, "deploy troop");
+    run(&mut sim, "quaff warding");
     assert!(
-        ever_said(&sim, "no troop in the arsenal"),
-        "a troop nobody had was deployed: {:?}",
+        ever_said(&sim, "no warding in the arsenal"),
+        "a warding nobody had was drunk: {:?}",
         said(&sim),
     );
 }
@@ -331,18 +334,19 @@ fn a_siege_ends_and_pays() {
 #[cfg(debug_assertions)]
 #[test]
 fn a_store_runs_down_and_the_shelf_keeps_what_it_will_not_spend() {
-    // Stores are a rate, and the shelf is not what is measured: the count never
-    // moves, only whether the tower has made one lately.
+    // Stores are a rate as well as a count: a shelf of six nobody has made
+    // lately is stores that have run out. Aged before `defend`, because a
+    // siege reads freshness as it stood when the enemy arrived (§19, *Supply*).
     let mut sim = at_the_wall(11);
-    run(&mut sim, "debug_spawn warding 1");
-    run(&mut sim, "defend");
+    run(&mut sim, "debug_spawn warding 6");
     run(&mut sim, "meditate 3000");
+    run(&mut sim, "defend");
 
     // Surveyed first: `last` reads what `survey` published, so with no survey
     // behind it the count is `None` rather than the shelf being empty.
     run(&mut sim, "survey arsenal");
     let held = last(&sim, "warding");
-    assert_eq!(held, Some(1), "the shelf did not have the warding");
+    assert_eq!(held, Some(6), "the shelf did not have the warding");
     run(&mut sim, "quaff warding");
     assert!(
         ever_said(&sim, "stores are out"),
@@ -360,13 +364,13 @@ fn a_store_runs_down_and_the_shelf_keeps_what_it_will_not_spend() {
 #[cfg(debug_assertions)]
 #[test]
 fn an_empty_shelf_says_so_rather_than_blaming_the_stores() {
-    // Two facts, two sentences: the supply check answered *"your troop stores
-    // are out"* for a shelf that is simply bare, which a player cannot act on.
+    // Two facts, two sentences: the supply check answered *"your stores are
+    // out"* for a shelf that is simply bare, which a player cannot act on.
     let mut sim = at_the_wall(11);
     run(&mut sim, "defend");
-    run(&mut sim, "deploy troop");
+    run(&mut sim, "quaff clarity");
     assert!(
-        ever_said(&sim, "there is no troop"),
+        ever_said(&sim, "there is no clarity"),
         "a bare shelf blamed the stores: {:?}",
         said(&sim),
     );
@@ -930,7 +934,7 @@ fn stillness_ends_a_siege_and_keeps_what_was_earned() {
     let before = the_siege(&mut sim);
     assert!(before.running(), "the siege ended before stillness could");
 
-    run(&mut sim, "debug_spawn stillness 1");
+    run(&mut sim, "debug_spawn stillness 3");
     run(&mut sim, "quaff stillness");
     let after = the_siege(&mut sim);
     assert_eq!(after.outcome, Some(tower::Outcome::Stilled));
@@ -979,7 +983,7 @@ fn a_spell_cannot_quaff_stillness() {
 }
 
 /// Vigour raises what the line can hold without healing it; mending fills the
-/// room it makes.
+/// room it makes. Both flow from six held (§19, *Supply*).
 #[cfg(debug_assertions)]
 #[test]
 fn vigour_raises_the_ceiling_and_mending_fills_it() {
@@ -988,17 +992,16 @@ fn vigour_raises_the_ceiling_and_mending_fills_it() {
     let full = garrison_full(&mut sim);
     let vigour = the_siege(&mut sim).garrison.vigour;
 
-    run(&mut sim, "debug_spawn vigour 1");
+    run(&mut sim, "debug_spawn vigour 6");
     run(&mut sim, "quaff vigour");
-    assert_eq!(garrison_full(&mut sim), full + 9, "{:?}", said(&sim));
+    assert_eq!(garrison_full(&mut sim), full + 3, "{:?}", said(&sim));
     assert_eq!(
         the_siege(&mut sim).garrison.vigour,
         vigour,
         "vigour healed the line"
     );
 
-    run(&mut sim, "debug_spawn mending 2");
-    run(&mut sim, "quaff mending");
+    run(&mut sim, "debug_spawn mending 6");
     run(&mut sim, "quaff mending");
     assert!(
         the_siege(&mut sim).garrison.vigour > full,
@@ -1013,7 +1016,7 @@ fn vigour_raises_the_ceiling_and_mending_fills_it() {
 fn a_fortified_line_comes_back_fortified() {
     let mut sim = at_the_wall(11);
     run(&mut sim, "defend");
-    run(&mut sim, "debug_spawn vigour 1");
+    run(&mut sim, "debug_spawn vigour 6");
     run(&mut sim, "quaff vigour");
     let full = garrison_full(&mut sim);
 
@@ -1036,11 +1039,11 @@ fn a_fortified_line_comes_back_fortified() {
         .join("\n");
     assert_ne!(older.len(), text.len(), "the save never wrote `fortified`");
     let mut old = Sim::restored(&Save::from_toml(&older).expect("a format-15 save opens"));
-    assert_eq!(garrison_full(&mut old), full - 9);
+    assert_eq!(garrison_full(&mut old), full - 3);
 }
 
 /// No penalty means the round stillness cancels costs nothing either: a die
-/// pledged and a potion staged for it both come back.
+/// pledged and what a roll supply drew for it both come back.
 #[cfg(debug_assertions)]
 #[test]
 fn stillness_hands_back_what_the_cancelled_round_was_given() {
@@ -1055,7 +1058,7 @@ fn stillness_hands_back_what_the_cancelled_round_was_given() {
         "the pledge cost nothing, so this asks nothing: {:?}",
         said(&sim),
     );
-    run(&mut sim, "debug_spawn warding 1");
+    run(&mut sim, "debug_spawn warding 6");
     run(&mut sim, "quaff warding");
     assert_eq!(
         the_siege(&mut sim).staged.len(),
@@ -1064,7 +1067,7 @@ fn stillness_hands_back_what_the_cancelled_round_was_given() {
         said(&sim),
     );
 
-    run(&mut sim, "debug_spawn stillness 1");
+    run(&mut sim, "debug_spawn stillness 3");
     run(&mut sim, "quaff stillness");
     assert_eq!(
         sim.world().resource::<tower::Quintessence>().get(),
@@ -1072,9 +1075,10 @@ fn stillness_hands_back_what_the_cancelled_round_was_given() {
         "the pledged quintessence did not come back",
     );
     let arsenal = tower::keep(sim.world()).expect("the tower has an arsenal");
-    assert!(
-        tower::held(sim.world(), arsenal, "warding").is_some(),
-        "the staged warding did not come back",
+    assert_eq!(
+        tower::held(sim.world(), arsenal, "warding"),
+        Some(tower::Stock::Counted(6)),
+        "what the warding drew for the cancelled round did not come back",
     );
 }
 
@@ -1348,7 +1352,7 @@ fn loading_a_save_from_before_a_siege_ends_the_one_in_progress() {
 fn a_scroll_is_spent_on_the_siege_when_one_is_running() {
     let mut sim = at_the_wall(11);
     run(&mut sim, "defend");
-    run(&mut sim, "debug_spawn verdant-scroll 1");
+    run(&mut sim, "debug_spawn verdant-scroll 4");
     run(&mut sim, "survey garrison");
     let before = last(&sim, tower::siege::SPEARS).expect("a garrison was published");
 
@@ -1361,7 +1365,7 @@ fn a_scroll_is_spent_on_the_siege_when_one_is_running() {
         "a scroll wielded on the wall did nothing for the line: {before} -> {after}",
     );
     assert!(
-        ever_said(&sim, "burns away on the wall"),
+        ever_said(&sim, "verdant-scroll flows"),
         "the scroll took its laboratory effect instead: {:?}",
         said(&sim),
     );
@@ -1372,11 +1376,12 @@ fn a_scroll_is_spent_on_the_siege_when_one_is_running() {
 #[cfg(debug_assertions)]
 #[test]
 fn a_scroll_keeps_its_ordinary_effect_when_no_siege_is_running() {
+    // Four, the calm supply's slowest rate (§19, *Supply*).
     let mut sim = at_the_wall(11);
-    run(&mut sim, "debug_spawn quickening-scroll 1");
+    run(&mut sim, "debug_spawn quickening-scroll 4");
     run(&mut sim, "wield quickening-scroll");
     assert!(
-        ever_said(&sim, "works quick"),
+        ever_said(&sim, "times quick"),
         "a scroll lost its ordinary effect outside a siege: {:?}",
         said(&sim),
     );
@@ -1385,7 +1390,7 @@ fn a_scroll_keeps_its_ordinary_effect_when_no_siege_is_running() {
     let mut archive = Sim::new(3);
     run(&mut archive, "attend archive");
     run(&mut archive, "research");
-    run(&mut archive, "debug_spawn gleaning-scroll 1");
+    run(&mut archive, "debug_spawn gleaning-scroll 4");
     run(&mut archive, "wield gleaning-scroll");
     assert!(
         ever_said(&archive, "things in the dark"),
@@ -1410,23 +1415,25 @@ fn every_authored_arsenal_row_can_actually_be_spent() {
             .verb_for(name)
             .expect("content::siege pins every row to a verb");
 
-        // A worn line, not a fresh one: a heal spent at full strength is
-        // refused, so drinking immediately measures the refusal.
+        // A worn line, not a fresh one: a heal at full strength waits rather
+        // than draws, so drinking immediately measures the wait. Exactly the
+        // slowest rate's threshold, the least that flows (§19, *Supply*).
+        let opens = spendables
+            .get(name)
+            .map_or(0, |entry| entry.rates.slowest().opens);
         let mut sim = at_the_wall(11);
         run(&mut sim, "defend");
         run(&mut sim, "hold");
         run(&mut sim, "hold");
-        run(&mut sim, &format!("debug_spawn {name} 1"));
+        run(&mut sim, &format!("debug_spawn {name} {opens}"));
         // Messages before and after, never record indices: `said` filters to
         // records carrying a message, so a record count does not index into it.
         let before = said(&sim).len();
         run(&mut sim, &format!("{} {name}", verb.canonical()));
         let answered: Vec<String> = said(&sim).into_iter().skip(before).collect();
-        let spent = answered.iter().any(|line| {
-            line.contains("goes down to the line")
-                || line.contains("drunk")
-                || line.contains("burns away on the wall")
-        });
+        let spent = answered
+            .iter()
+            .any(|line| line.contains(&format!("{name} flows")) || line.contains("drunk"));
         if !spent {
             dead.push(format!("{name} via {}: {answered:?}", verb.canonical()));
         }
@@ -1454,7 +1461,8 @@ fn every_authored_arsenal_row_changes_the_siege() {
         run(&mut sim, "defend");
         run(&mut sim, "hold");
         run(&mut sim, "hold");
-        run(&mut sim, &format!("debug_spawn {name} 1"));
+        let opens = entry.rates.slowest().opens;
+        run(&mut sim, &format!("debug_spawn {name} {opens}"));
         run(&mut sim, "survey garrison");
         let spears = last(&sim, tower::siege::SPEARS);
         let mettle = last(&sim, tower::siege::METTLE);
@@ -1464,19 +1472,22 @@ fn every_authored_arsenal_row_changes_the_siege() {
         run(&mut sim, "survey garrison");
         let after = the_siege(&mut sim);
 
-        let moved = match entry.kind.as_str() {
+        let moved = match entry.kind {
             // Bodies and fight are visible on the board directly.
-            "troops" => last(&sim, tower::siege::SPEARS) != spears,
-            "vigour" => last(&sim, tower::siege::METTLE) != mettle,
-            "fortify" => after.full() > before.full(),
-            "still" => !after.running(),
+            SupplyKind::Troops => last(&sim, tower::siege::SPEARS) != spears,
+            SupplyKind::Vigour => last(&sim, tower::siege::METTLE) != mettle,
+            SupplyKind::Fortify => after.full() > before.full(),
+            SupplyKind::Still => !after.running(),
             // A dice modifier is staged for the round, and the odds show it.
             // Asked of the staging, not of the board existing — that passed for
             // a row that did nothing at all.
-            _ => after.staged.len() > before.staged.len(),
+            SupplyKind::Bonus
+            | SupplyKind::Advantage
+            | SupplyKind::Disadvantage
+            | SupplyKind::Upgrade => after.staged.len() > before.staged.len(),
         };
         if !moved {
-            inert.push(format!("{name} ({})", entry.kind));
+            inert.push(format!("{name} ({:?})", entry.kind));
         }
     }
 
@@ -1535,30 +1546,38 @@ fn the_cadence_travels_in_the_save() {
     );
 }
 
-/// A potion that would do nothing is kept, not drunk.
+/// A draw that would do nothing is skipped, and the supply waits for when it is
+/// wanted (§19, *Supply*).
 ///
 /// The silent loss of the one resource the domain exists to make you weigh, and
 /// the next siege arrives on `CADENCE` whether or not you have anything left.
 #[cfg(debug_assertions)]
 #[test]
-fn a_heal_at_full_strength_is_refused_and_the_potion_kept() {
+fn a_heal_at_full_draws_nothing_and_waits() {
     let mut sim = at_the_wall(11);
     run(&mut sim, "defend");
-    run(&mut sim, "debug_spawn mending 1");
+    run(&mut sim, "debug_spawn mending 6");
     run(&mut sim, "quaff mending");
     assert!(
-        ever_said(&sim, "the line is whole"),
-        "a heal at full strength was drunk anyway: {:?}",
+        ever_said(&sim, "from when it is wanted"),
+        "a heal at full strength drew anyway: {:?}",
         said(&sim),
     );
+    let arsenal = tower::keep(sim.world()).expect("the tower has an arsenal");
+    assert_eq!(
+        tower::held(sim.world(), arsenal, "mending"),
+        Some(tower::Stock::Counted(6)),
+        "a draw at full strength took the potions",
+    );
 
-    // ...and it is still there when it is wanted.
-    run(&mut sim, "hold");
-    run(&mut sim, "hold");
-    run(&mut sim, "quaff mending");
+    // ...and it draws once the line is hurt.
+    for _ in 0..4 {
+        run(&mut sim, "hold");
+    }
+    let held = tower::held(sim.world(), arsenal, "mending");
     assert!(
-        ever_said(&sim, "drunk"),
-        "the refused potion was consumed after all: {:?}",
+        held.is_none_or(|held| held != tower::Stock::Counted(6)),
+        "the supply never drew for a wounded line: {:?}",
         said(&sim),
     );
 }
@@ -1571,8 +1590,8 @@ fn a_siege_replays_from_its_submissions() {
     let script = [
         "attend bailey",
         "defend",
-        "debug_spawn troop 2",
-        "deploy troop",
+        "debug_spawn warding 2",
+        "quaff warding",
         "hold",
         "hold",
         "hold",
@@ -1672,14 +1691,14 @@ fn the_pool_is_the_same_on_every_seed() {
     );
 }
 
-/// A bonus bought for a round the garrison does not swing in is refused.
+/// A bonus supply draws nothing for a round the garrison does not swing in.
 ///
-/// `staged` clears when the round resolves, so a `warding` bought before a
-/// volley is spent on rolls that never happen. Bodies are not refused: a volley
-/// still hits you, so what it takes away is your answer, not their attack.
+/// `staged` clears when the round resolves, so warding drawn before a volley
+/// would be spent on rolls that never happen. Bodies still draw: a volley still
+/// hits you, so what it takes away is your answer, not their attack.
 #[cfg(debug_assertions)]
 #[test]
-fn a_bonus_is_refused_before_a_volley_and_a_troop_is_not() {
+fn a_bonus_draws_nothing_before_a_volley_and_bodies_do() {
     // Walk seeds until one telegraphs a volley on the opening round.
     let mut found = false;
     for seed in 0..30 {
@@ -1690,19 +1709,20 @@ fn a_bonus_is_refused_before_a_volley_and_a_troop_is_not() {
         }
         found = true;
 
-        run(&mut sim, "debug_spawn warding 1");
-        run(&mut sim, "debug_spawn troop 1");
+        run(&mut sim, "debug_spawn warding 6");
+        run(&mut sim, "debug_spawn verdant-scroll 4");
         run(&mut sim, "quaff warding");
         assert!(
-            ever_said(&sim, "will not swing"),
-            "a bonus was spent on a round with no rolls in it: {:?}",
+            ever_said(&sim, "from when it is wanted"),
+            "a bonus was drawn for a round with no rolls in it: {:?}",
             said(&sim),
         );
+        assert!(the_siege(&mut sim).staged.is_empty());
 
-        // ...and the troop still goes in, because a volley still lands.
+        // ...and bodies still go in, because a volley still lands.
         run(&mut sim, "survey garrison");
         let before = last(&sim, tower::siege::SPEARS).expect("a garrison");
-        run(&mut sim, "deploy troop");
+        run(&mut sim, "wield verdant-scroll");
         run(&mut sim, "survey garrison");
         assert!(
             last(&sim, tower::siege::SPEARS) > Some(before),

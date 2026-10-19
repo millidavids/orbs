@@ -88,6 +88,34 @@ fn progress(world: &World) -> ProgressSave {
         experience: world.resource::<tower::Experience>().get(),
         renown: world.resource::<tower::Renown>().get(),
         petitioned: world.resource::<tower::siege::Petitioned>().get(),
+        cultivated: world.resource::<tower::Cultivation>().grown(),
+        garrison: {
+            let garrison = world.resource::<tower::siege::Garrison>();
+            Some(super::document::GarrisonSave {
+                standing: garrison.standing(),
+                reserve: garrison.reserve(),
+            })
+        },
+        supplies: {
+            let supplies = world.resource::<tower::supply::Supplies>();
+            let saved = |stopped: bool| {
+                move |(name, open): (&str, &tower::supply::Open)| super::document::SupplySave {
+                    name: name.to_owned(),
+                    scope: open.scope.word().to_owned(),
+                    chosen: open.chosen,
+                    running: open.running,
+                    since: open.since,
+                    drawn: open.drawn,
+                    applied: open.applied,
+                    stopped,
+                }
+            };
+            supplies
+                .iter()
+                .map(saved(false))
+                .chain(supplies.iter_stopped().map(saved(true)))
+                .collect()
+        },
         integrity: Some(world.resource::<tower::Integrity>().get()),
         quintessence: Some(world.resource::<tower::Quintessence>().get()),
         // The clock, so an expired cooldown is not written at all — without it a
@@ -191,6 +219,13 @@ fn readings(at: bevy_ecs::world::EntityRef<'_>) -> Option<Vec<ReadSave>> {
 /// One node, and everything true of it.
 fn node(world: &World, entity: Entity) -> NodeSave {
     let at = world.entity(entity);
+    // Only a window that is still open — `Cooling`'s rule, one resource over.
+    // Nothing ever removes `Quickened`, so a bare `get` wrote a dead span into
+    // every autosave from the first scroll a player spent onward. `Burning`
+    // needs no such filter because `heat::spend` removes it.
+    let quickened = at
+        .get::<tower::Quickened>()
+        .filter(|quick| quick.remaining(*world.resource::<crate::tick::Tick>()) > 0);
     NodeSave {
         path: tower::path_of(world, entity),
         id: at.get::<tower::NodeId>().map_or(0, |id| id.get()),
@@ -235,6 +270,7 @@ fn node(world: &World, entity: Entity) -> NodeSave {
             subject: tower::path_of_id(world, work.subject).unwrap_or_default(),
             started: work.started.get(),
             ends: work.ends.get(),
+            hurried_by: (work.hurried_by > 1).then_some(work.hurried_by),
         }),
         triaging: at.get::<tower::Triaging>().map(|triage| SpanSave {
             started: triage.started.get(),
@@ -245,17 +281,11 @@ fn node(world: &World, entity: Entity) -> NodeSave {
             started: fire.lit_at.get(),
             ends: fire.lit_at.get().saturating_add(fire.ticks),
         }),
-        // Only a window that is still open — `Cooling`'s rule, one resource
-        // over. Nothing ever removes `Quickened`, so a bare `map` wrote a dead
-        // span into every autosave from the first scroll a player spent onward.
-        // `Burning` needs no such filter because `heat::spend` removes it.
-        quickened: at
-            .get::<tower::Quickened>()
-            .filter(|quick| quick.remaining(*world.resource::<crate::tick::Tick>()) > 0)
-            .map(|quick| SpanSave {
-                started: quick.from.get(),
-                ends: quick.from.get().saturating_add(quick.ticks),
-            }),
+        quickened: quickened.map(|quick| SpanSave {
+            started: quick.from.get(),
+            ends: quick.from.get().saturating_add(quick.ticks),
+        }),
+        quickened_by: quickened.map(|quick| quick.by),
         // Only the charms still in force, for `Quickened`'s reason: nothing
         // removes a lapsed charm, so a bare walk would write a dead row per
         // charm per node for the rest of the save's life. `Charmed::live` is the

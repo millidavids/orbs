@@ -133,7 +133,7 @@ fn a_potion_carries_from_the_room_that_made_it_to_every_other() {
         .does("kindle charcoal", "fuel for 600 ticks")
         .does("debug_spawn clarified-draught", "all along")
         .does("distil clarified-draught", "to alembic")
-        .does("meditate 60", "yields clarity")
+        .does("meditate 60", "yields 3 clarity")
         .does("empty alembic", "clarity")
         .does("move clarity to arsenal", "clarity: dispensary to arsenal")
         .does("attend archive", "/tower/archive")

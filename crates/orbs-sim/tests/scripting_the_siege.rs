@@ -133,6 +133,16 @@ fn every_reading_the_domain_declares_is_one_some_state_reaches() {
         seen.extend(words(&sim));
     }
 
+    // The roster's, read in the menagerie: a garrison at its most (§19,
+    // *Supply*).
+    let mut sim = Sim::new(3);
+    sim.world_mut()
+        .resource_mut::<tower::siege::Garrison>()
+        .restore(tower::siege::GARRISON_MOST, 0);
+    run(&mut sim, "attend menagerie");
+    run(&mut sim, &format!("survey {}", tower::siege::ROSTER));
+    seen.extend(words(&sim));
+
     let missing: Vec<&str> = tower::siege::readings()
         .into_iter()
         .filter(|word| !seen.contains(*word))
@@ -188,7 +198,7 @@ fn a_spell_can_walk_the_arsenal_and_find_what_has_gone_thin() {
     // why this asserts on `complaints` rather than on an effect.
     let mut sim = at_the_wall(11);
     run(&mut sim, "debug_spawn warding 1");
-    run(&mut sim, "debug_spawn troop 1");
+    run(&mut sim, "debug_spawn clarity 1");
     // Aged until the stores have run out: `spent` is what a keeping spell acts
     // on. `thin` needs production spread over time, which one `debug_spawn`
     // cannot make — its makings all leave the window together.

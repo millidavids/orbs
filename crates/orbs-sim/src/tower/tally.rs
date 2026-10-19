@@ -129,9 +129,10 @@ impl Work {
     /// Also record that this run put `product` on a shelf.
     ///
     /// For the runs that stock the tower without being a recipe: the menagerie
-    /// gives troops to the arsenal, the archive shelves a fragment. Neither goes
-    /// through [`made`](Self::made), so both answered [`sold`] no and stocked
-    /// the tower for nothing while the laboratory was paid for the same act.
+    /// fills the garrison or binds demons, the archive shelves a fragment.
+    /// Neither goes through [`made`](Self::made), so both answered [`sold`] no
+    /// and stocked the tower for nothing while the laboratory was paid for the
+    /// same act.
     ///
     /// [`sold`]: Self::sold
     #[must_use]
@@ -229,7 +230,7 @@ fn count(world: &mut World, work: &Work, earned: u64, itself: bool) {
         // this does.
         let over = work
             .product()
-            .is_some_and(|named| super::supply_of(world, named) == super::Supply::Fresh);
+            .is_some_and(|named| super::freshness_of(world, named) == super::Freshness::Fresh);
         if let Some(named) = work.product() {
             let named = named.to_owned();
             super::made(world, &named);

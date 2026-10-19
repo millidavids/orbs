@@ -96,6 +96,12 @@ pub struct Recipe {
     /// two fragments do not fire a four-fragment one.
     #[serde(default = "one")]
     pub count: u32,
+    /// How many of the output one run makes. The byproduct is always one.
+    ///
+    /// Experience, renown and the stores still count the run, not the batch
+    /// (§19, *"The tower counts runs, not things"*).
+    #[serde(default = "one")]
+    pub yields: u32,
     /// Whether this needs the athanor alight (§10.1).
     ///
     /// In the content file, for the same reason `potion` is. This was a
@@ -131,11 +137,6 @@ pub struct Recipe {
     /// the one that costs any (§19).
     #[serde(default)]
     pub quintessence: u32,
-    /// How many of the output the tower may hold at once. A run is refused
-    /// while that many are held or one is already brewing, and what it makes
-    /// never goes stale (§19).
-    #[serde(default)]
-    pub most: Option<u32>,
     /// Whether the player has to *earn* this before it will fire (§11.5).
     ///
     /// The other door: a secret is *found* — rolled on a broken ward, in the
@@ -305,13 +306,10 @@ impl Recipes {
                     format!("a `{instrument}` recipe gates `{stray}`, which it does not make"),
                 ));
             }
-            // A cap counts one name. A recipe whose product is drawn has
-            // several, and the cap would be checked against whichever came
-            // first.
-            if recipe.most.is_some() && recipe.outputs().len() != 1 {
+            if recipe.yields == 0 {
                 return Err(super::ContentError::new(
                     FILE,
-                    format!("a `{instrument}` recipe sets `most` and makes more than one thing"),
+                    format!("a `{instrument}` recipe yields nothing"),
                 ));
             }
         }
@@ -506,15 +504,15 @@ impl Recipes {
                 .names()
                 .map(str::to_owned),
         );
-        // And what the tower makes outside a recipe. A troop comes out of the
-        // menagerie's circle, which is not an instrument with a `[recipe]`, so
-        // it is invisible to `vocabulary` for the same reason charcoal is.
-        //
-        // Without it `debug_spawn troop` refused, so a tester could not reach a
-        // state the game produces every time a beast is held. `tower::home`'s
-        // three lints could not see it either: they walk *authored* materials,
-        // and a material no file declares is one no lint iterates.
-        names.push(crate::execute::TROOP.to_owned());
+        // And what the circle binds outside a recipe (§19, *Supply*): a demon
+        // is finished work no instrument makes, invisible to `vocabulary` for
+        // charcoal's reason.
+        names.extend(
+            world
+                .resource::<crate::content::Spendables>()
+                .demons()
+                .map(str::to_owned),
+        );
         names.sort_unstable();
         names.dedup();
         names
@@ -533,14 +531,6 @@ impl Recipes {
     /// which is most of the vocabulary.
     #[must_use]
     pub fn kind_of(&self, name: &str) -> crate::parser::NounKind {
-        // A troop is finished work no recipe makes, the one shape the three
-        // arms below cannot see — they ask which recipe produced the name, and
-        // a held beast is not a recipe. Named here rather than given a recipe
-        // nobody can fire, which is `tower::home`'s reasoning for the same
-        // material.
-        if name == crate::execute::TROOP {
-            return crate::parser::NounKind::Essence;
-        }
         let made_by = |wanted: fn(&Recipe) -> bool| {
             self.by_instrument
                 .values()
@@ -619,16 +609,6 @@ impl Recipes {
             .filter(|recipe| recipe.outputs().contains(&name))
             .peekable();
         routes.peek().is_some() && routes.all(|recipe| recipe.secret)
-    }
-
-    /// How many of `name` the tower may hold at once, if any route limits it.
-    #[must_use]
-    pub fn most_of(&self, name: &str) -> Option<u32> {
-        self.by_instrument
-            .values()
-            .flatten()
-            .filter(|recipe| recipe.outputs().contains(&name))
-            .find_map(|recipe| recipe.most)
     }
 
     /// Every product that has to be found, in the file's own order.
@@ -811,7 +791,11 @@ mod tests {
             recipes.matching("alembic", &held, &known).is_none(),
             "a gated recipe fired before it was earned",
         );
-        let all = crate::tower::Opened::all(&recipes, &super::super::Charms::builtin());
+        let all = crate::tower::Opened::all(
+            &recipes,
+            &super::super::Charms::builtin(),
+            &super::super::Spendables::builtin(),
+        );
         let known = crate::tower::Known::new(&learned, &all);
         assert!(
             recipes.matching("alembic", &held, &known).is_some(),
