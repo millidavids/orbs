@@ -5,13 +5,14 @@
 //! own. This only watches. DESIGN.md §19, *The orb is installed before the tower
 //! wakes*.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use orbs_sim::content::Length;
 use orbs_sim::parser::{Outcome, ParseRecord, Register, Verb};
 use orbs_sim::{Augur, Sim};
 
 use super::paint::Said;
+use crate::save::Keep;
 
 /// `0` never installs, `1` always does, and anything else leaves it to the
 /// `install` setting. In a dump, `1` poses the installation and nothing else
@@ -120,7 +121,7 @@ impl Wants {
 pub struct Raise {
     /// The slot it will be kept in, or [`None`] for a session that keeps
     /// nothing.
-    pub keep: Option<PathBuf>,
+    pub keep: Option<Keep>,
     /// How long it is to be.
     pub length: Length,
     /// Its seed, which the practice tower shares, so `status` reads the same
@@ -154,14 +155,29 @@ impl Raise {
     /// What `new` opens on: the practice tower, kept nowhere whatever slot `new`
     /// found, or the tower itself when nothing is installed. One copy for both
     /// frontends and the dump.
+    ///
+    /// The slot is asked again first, on both paths: the menu read it from the
+    /// disk, where a tower raised since its last autosave is not yet, and the
+    /// swap has just written that tower there. The trade is silent, since the
+    /// tower in it is this orb's own.
     #[must_use]
-    pub fn begin(self, installs: bool) -> Begun {
+    pub fn begin(mut self, installs: bool) -> Begun {
+        let free = self.keep.as_ref().map(Keep::still_free);
         if !installs {
+            let mut sim = self.tower();
+            if free == Some(None) {
+                sim.say_save_failed();
+            }
             return Begun {
-                sim: self.tower(),
+                sim,
                 install: None,
-                keep: self.keep,
+                keep: free.flatten().as_ref().map(Keep::path),
             };
+        }
+        // With no slot left the asked one is kept, so the wake finds it taken
+        // and says so in the real tower rather than the practice one.
+        if let Some(Some(slot)) = free {
+            self.keep = Some(slot);
         }
         let sim = self.sandbox();
         let install = Install::new(self, &sim);
@@ -172,35 +188,25 @@ impl Raise {
         }
     }
 
-    /// The tower itself, once the installation ends, in a slot asked again.
+    /// The tower itself, once the installation ends, in the slot `begin` chose —
+    /// or the lowest free one if another orb wrote that slot meanwhile, which is
+    /// said, as is having none left.
     #[must_use]
     pub fn wake(&self) -> Begun {
-        self.wake_beside(crate::save::path().as_deref())
-    }
-
-    /// [`wake`](Self::wake) with the save directory's base already found.
-    ///
-    /// The slot `new` found, or the lowest free one if a second orb wrote it
-    /// while this one was installing. Either change is said.
-    pub(super) fn wake_beside(&self, base: Option<&Path>) -> Begun {
         let mut sim = self.tower();
-        let keep = match &self.keep {
-            None => None,
-            Some(asked) if !asked.exists() => Some(asked.clone()),
-            Some(_) => {
-                let free = base.and_then(|base| Some((base, crate::save::free_slot_in(base)?)));
-                if let Some((_, slot)) = free {
-                    sim.say_save_moved(slot);
-                } else {
-                    sim.say_save_failed();
-                }
-                free.map(|(base, slot)| crate::save::slot_path(base, slot))
+        let keep = self.keep.as_ref().and_then(|asked| {
+            let free = asked.still_free();
+            match &free {
+                None => sim.say_save_failed(),
+                Some(slot) if slot != asked => sim.say_save_moved(slot.slot),
+                Some(_) => {}
             }
-        };
+            free
+        });
         Begun {
             sim,
             install: None,
-            keep,
+            keep: keep.as_ref().map(Keep::path),
         }
     }
 }

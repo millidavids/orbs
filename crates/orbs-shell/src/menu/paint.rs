@@ -357,6 +357,7 @@ fn said(complaint: &Complaint, prose: &Prose) -> String {
             prose.line("menu_unabandoned", &[("count", &slot.to_string())])
         }
         Complaint::Full => prose.line("menu_full", &[]),
+        Complaint::Unwritten => prose.line("menu_unwritten", &[]),
         Complaint::Unkept => prose.line("menu_unkept", &[]),
         Complaint::Warning => prose.line("menu_warning", &[]),
         Complaint::Unnamed(fault) => match fault {

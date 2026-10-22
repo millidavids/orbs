@@ -19,8 +19,9 @@ mod store;
 mod values;
 
 pub use keys::{
-    DRIVER, ECHO, ECHOES, FOCUS, INSTALL, MOTION, SCALE, SKIP, WARNED, driver, installs, moves,
-    set_driver, skips_boot, terse_echo, warn_once,
+    DRIVER, ECHO, ECHOES, FOCUS, INSTALL, MOTION, MOTION_VAR, PACE, SCALE, SIGHT, SKIP, WARNED,
+    driver, installs, motion_from, motion_wanted, moves, pace, set_driver, skips_boot, terse_echo,
+    warn_once,
 };
 pub use name::{LONGEST_NAME, NAME, NameFault, checked_name, chosen_name};
 pub use pair::Pair;

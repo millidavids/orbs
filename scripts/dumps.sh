@@ -34,7 +34,9 @@ run() {
   # block wanting one names it in its own arguments, which come after and win.
   # The installation off for the same reason: a capture poses it only by
   # asking, so an `ORBS_INSTALL` exported in this shell cannot move a baseline.
-  env ORBS_AUGURY=off ORBS_SCRIVENER=off ORBS_INSTALL=0 "$@" "$orbs" > "$out/$name.txt" 2>"$out/$name.err" || true
+  # `ORBS_MOTION` blank, so an exported one cannot move the settings rows. Not
+  # `ORBS_SIGHT`: a dump's sight row is `plain` whatever is exported.
+  env ORBS_AUGURY=off ORBS_SCRIVENER=off ORBS_INSTALL=0 ORBS_MOTION= "$@" "$orbs" > "$out/$name.txt" 2>"$out/$name.err" || true
   # A dump prints nothing to stderr in the ordinary case; keep the file only if
   # it has content, so `diff -r` is not full of empty noise.
   [ -s "$out/$name.err" ] || rm -f "$out/$name.err"

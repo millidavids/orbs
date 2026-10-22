@@ -103,12 +103,13 @@ numbers below are not consecutive.
 | [**Number go up**](#number-go-up) | `0.17.6` | ✅ every box ticked · interleaved with `0.17` |
 | [**The installation**](#the-installation) | `0.17.8` | ✅ every box ticked · interleaved with `0.17` · minute one of the apprenticeship |
 | [**The orb made yours**](#the-orb-made-yours) | `0.17.15` | ✅ every box ticked · interleaved with `0.17` · settings chosen from research |
+| [**Supply**](#supply) | `0.18.7` | ✅ every box ticked · no produced item has individual value |
+| [**The terminal kept true**](#the-terminal-kept-true) | `0.19.13` | ✅ every box ticked · every feature since `0.12` played in the terminal; motion, greyscale, and the swap and rasteriser fixes |
 
 ### Open — and **this table is not a running order**
 
 | | Months | Words | |
 |---|---|---|---|
-| [**Supply**](#supply) — **`0.18`, in hand** | 1 | ~2k | no produced item has individual value: standing supplies, a standing garrison, demons (§19) |
 | [**The tower as one machine**](#the-tower-as-one-machine) — `0.17` | 2 | ~3k | the dependency web, and two defects it cannot open on top of (§19) — the first fixed at `0.17.0` |
 | [Spellcraft's three](#phase-3--spellcraft) | — | ~1k | the terse register, a typed action at execution, hidden-directory authoring |
 | [Enchanting's two](#phase-9--enchanting) | — | ~1k | the shared-engine extraction, split into a refactor and a behaviour box |
@@ -6429,6 +6430,146 @@ fails the gate whenever they are stale.
       {essence}`, `stop {essence}` and binding at the circle. A gate cannot
       be green with the weights on disk stale, and `0.18.6`–`0.18.7` add no
       word a reader is taught. §19
+
+---
+
+## The terminal kept true
+
+**A feature is not shipped until the terminal build plays it.** `0.12`–`0.18`
+were built against the window and mostly reached `orbs-tui` through the shell;
+an audit found what did not. §19 *The terminal kept true* has the findings and
+the order.
+
+**`0.19`, every box ticked at `0.19.13`.** One patch per box. `0.17` stays
+paused, and resumes under whatever minor is in hand.
+
+- [x] **`drive.rs` split by concern; nothing changes** (`0.19.0`) — the loop
+      alone in `drive.rs`; `carried`, `hangup`, `keymap`, `session/`, and
+      `surfaces/` and `blit/` as folders. The session keeps one `Carried`. A dump
+      never runs this code, so the proof is the played suite and a byte-for-byte
+      snapshot of the wire. §19
+      **See it:** `scripts/play.sh` — 149 passed, as before the split;
+      `cargo test -p orbs-tui --bins a_frame_reaches_the_wire`;
+      `wc -l crates/orbs-tui/src/*.rs crates/orbs-tui/src/*/*.rs` — nothing over
+      300 but `theme.rs`, which box 7 splits.
+- [x] **The played harness gets a builder and a kept folder** (`0.19.1`) —
+      `Game::launch()` and its knobs; `Kept`, a folder for towers and settings
+      that outlives the games launched into it. `play.rs` split into `launch`,
+      `transcript` and `probes`. §19
+      **See it:** `scripts/play.sh kept::` — `motion off` set at one launch
+      reads `[off]` at the next, and §14's warning is said at the first launch
+      and not the second.
+- [x] **Supply, played** (`0.19.2`) — fifteen scenarios across `supply`,
+      `garrison` and `demons`: a potion's rates, `stop` and the board's
+      `drawing` row; spent stock; one supply an item; a spell's `has no draw`;
+      a batch moved whole; the lectern's two; the levy, desertion and a full
+      garrison; golems bound and deployed; a plain-English `stop`. §19
+      **See it:** `scripts/play.sh supply::`, `scripts/play.sh garrison::`,
+      `scripts/play.sh demons::` — 15 passed.
+- [x] **Sieges, standing and the ledger, played** (`0.19.3`) — ten scenarios
+      across `besieged`, `standing` and `ledger`: stillness ending a siege and
+      refused to a spell; vigour raising the wall; a brew's quintessence in
+      `recall`; a lie that outlasts the siege until `purge`; the coffer counting
+      down; `petition`; a win sung once; `status`'s ledger and a room's spells'
+      share. §19
+      **See it:** `scripts/play.sh besieged::`, `scripts/play.sh standing::`,
+      `scripts/play.sh ledger::` — 10 passed.
+- [x] **The front door and the settings, played** (`0.19.4`) — thirteen
+      scenarios across `kept`, `threshold` and `settings`: abandoning, loading
+      another tower, a chosen name; the manual and `back` before there is a
+      tower, `F6` writing nothing there, the boot card playing once, a length's
+      ley line, a game's own seed; `skip` holding, `echo changed`, `motion off`
+      stilling the fire, the menu's secrets. §19
+      **See it:** `scripts/play.sh kept::`, `scripts/play.sh threshold::`,
+      `scripts/play.sh settings::` — 15 passed with box 2's two.
+- [x] **Readers and refusals, played** (`0.19.5`) — seven scenarios across
+      `readers` and `refusals`: the augury reading a line and `reading plain`
+      leaving it unasked; a spell line read and marked `≈`; a guessed `summon`
+      refused; `winnowing` holding a beast; a leftover word named; an
+      unplaceable word asked about; `for each store` reaching every spent store.
+      §19
+      **See it:** `scripts/play.sh readers::`, `scripts/play.sh refusals::` —
+      7 passed.
+- [x] **The rasteriser draws what it was told** (`0.19.6`) — `▲` and `←`
+      narrowed, held by a scan of the painters' source; colour before weight,
+      so `NO_COLOR` keeps dim and bold; `theme` split, resolving in the
+      window's order. §19
+      **See it:** `cargo test -p orbs-tui --bins scan` and
+      `scripts/play.sh sight::` — both fail with either fix taken out, which
+      was tried. The fallback itself: `target/debug/orbs-tui` run directly in a
+      VTE terminal set to ambiguous-wide, `attend menagerie`, `summon`, `limn
+      keystone heed`, `summon` — the marks row stays under its numbers.
+- [x] **Every key a terminal sends** (`0.19.7`) — Shift+Tab completes as Tab;
+      PgUp and PgDn page nothing at the threshold; the menu reads the register
+      per keystroke, so `F7` silences its jokes at once; every shared `Key` is
+      matched with no `_` arm, so a new one fails to compile. §19
+      **See it:** `scripts/play.sh keys::` — `BTab` after `atte` writes
+      `attend`; `F7` with the menu up and `xyzzy` is refused.
+      `cargo test -p orbs-tui --bins mapping paging secret` — the secret test
+      fails with the per-keystroke refresh taken out, which was tried.
+- [x] **A swap replaces the tower and nothing else** (`0.19.8`) — opening a
+      save is one function (`orbs_shell::tower_from`, `loaded`); both builds
+      write the tower being left before reading, so loading the tower you are
+      in keeps where you are; a load never raises a tower, and a refused one
+      re-lists the slots; **a new tower never takes the slot of the tower being
+      left** (`Raise::begin` asks again); one watchdog per process. §19
+      **See it:** `scripts/play.sh swapping::` — six scenarios, and three of
+      them fail with the slot or the watchdog fix taken out, which was tried.
+      `cargo test -p orbs -- menuing` holds the window's three; `cargo run -p
+      orbs`, raise a tower, `menu` → `play` → `new` before sixty ticks, then
+      `menu` → `play` → `1` returns the first tower where it was.
+- [x] **`ORBS_MOTION`** (`0.19.9`) — `0` still, `1` moving, blank to the row;
+      it seeds the `motion` row at launch and the row wins after, read once in
+      each build (`settings::motion_wanted`). The played suite defaults to `0`
+      and the scenarios about motion opt in; `tui.sh` passes `0`, `dumps.sh`
+      pins it blank. §19
+      **See it:** `ORBS_MOTION=0 ORBS_BOOT=0 ORBS_SAVE=off ORBS_MENU='settings\naccess' target/debug/orbs-tui --dump menu`
+      reads `motion anything moving [off]`, and `[on]` with `1` or blank; the
+      same with `-p orbs`'s `ORBS_DUMP=menu`. `scripts/play.sh` stays green, the
+      fire scenarios included.
+- [x] **Numbers roll and screens cross, in the terminal** (`0.19.10`) — the
+      `motion` row is the terminal's one switch; `Climb` and `Passing` are
+      driven on it, the crossing through a shared `Passing::drive` the window
+      calls too. `passing.rs` split into a folder. §19
+      **See it:** `ORBS_MOTION=1 ORBS_PASSAGE=1 scripts/tui.sh start`, then
+      `type 'debug_renown 20'` — `0/25  +20` rolling to `20/25` — and `type
+      'attend forge'`, the strip wiping across. `scripts/play.sh motion::`;
+      `cargo test -p orbs-tui --bins session`.
+- [x] **Text types itself, and `pace`, in the terminal** (`0.19.11`) — one
+      shared `Reveal::drive` (notice, then type or land whole) both builds
+      call; `settings::PACE` and `settings::pace()` in the shell; the `pace` row
+      in the terminal, carried across a swap; any keystroke finishes it; the
+      echo row settles what it puts back. `reveal.rs` split into a folder. §19
+      **See it:** `ORBS_MOTION=1 scripts/tui.sh start`, then `menu`,
+      `settings`, `habits`, `pace 1200`, back out, and `type 'recall clarity'`
+      — it types over a second and a half, and any key lands it.
+      `scripts/play.sh motion::`; `cargo test -p orbs-tui --bins session`.
+- [x] **Greyscale in the terminal: `F8` and `sight`** (`0.19.12`) — `Sight`
+      and `settings::SIGHT` move to the shell, read by both builds; the
+      terminal's `sight` row, `F8` and `ORBS_SIGHT` take every hue to one of the
+      terminal's greys by lightness and keep the weights; carried across a swap
+      and written to the file. §19
+      **See it:** `scripts/tui.sh start`, `type 'attend laboratory' 'move sage
+      to mortar_and_pestle'`, `ink 89 103` reads green; `key F8`; `ink 89 103`
+      reads grey. `scripts/play.sh sight::` — six scenarios.
+- [x] **`unfurl` steps one record, in both builds** (`0.19.13`) — one shared
+      `orbs_shell::apply_to_reading`: the arrows one record, `Home` and `End`
+      the ends, `Escape` out. The window called its page system on the arrows
+      and bound no `Home`/`End`; it now runs one `input_just_pressed` system a
+      key through the table. The manual and `recall unfurl` say so. §19
+      **See it:** `scripts/tui.sh start`, a few `recall clarity`, `unfurl`,
+      then `key Up`, `key Home` (the session's first line), `key End`.
+      `cargo run -p orbs`, the same keys. `scripts/play.sh unfurling::`;
+      `cargo test -p orbs -- arrows_step`.
+      ✅ **Reviewed** (`0.19.13`) — fourteen findings, three a player could
+      meet: with the installation on, a second tower's wake blamed another orb
+      for the orb's own tower; `Home` went one past the top, so the next key
+      looked dead; and loading the tower in hand after a failed write read an
+      older save over it. A refused load now says why, a tower opened from the
+      menu no longer types its history out again, and no unit test moves with
+      `ORBS_PASSAGE`, `NO_COLOR` or `ORBS_SAVE` exported. §19
+      **See it:** `scripts/play.sh swapping::`; `env NO_COLOR=1 ORBS_SAVE=off
+      ORBS_PASSAGE=0 cargo test --workspace`.
 
 ---
 

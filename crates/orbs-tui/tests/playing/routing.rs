@@ -1,6 +1,6 @@
 //! Which surface a keystroke reaches — the thing only a real keyboard can ask.
 //!
-//! `surfaces.rs`'s unit tests prove the rule: for every combination of open
+//! `surfaces`'s unit tests prove the rule: for every combination of open
 //! surfaces, exactly one owner, decided rather than accidental. Only a real
 //! arrow key arriving through crossterm proves the dispatch. Two surfaces
 //! consuming one keystroke is invisible until a player types `:wq` and finds it
@@ -188,104 +188,6 @@ fn a_function_key_works_from_inside_a_surface() {
     game.press("F5");
     game.type_raw("quit");
     game.expect_drawn("name:");
-}
-
-#[test]
-#[ignore = "plays a real game through tmux; run with scripts/play.sh"]
-fn unfurl_pages_back_the_moment_it_is_typed() {
-    if !available() {
-        return;
-    }
-    // `unfurl` used to call `scroll.read()` and stop, so the pane showed the
-    // screen the player was already looking at and only the border hint
-    // changed. The Bevy build's `start_reading` pages by one screen on open.
-    let game = Game::start();
-    game.does("attend laboratory", "/tower/laboratory")
-        .does("help", "the work")
-        .does("recall clarity", "steps")
-        .does("survey dispensary", "sage");
-    let before = game.pane();
-    game.send("unfurl");
-    moved(
-        &game,
-        &before,
-        "unfurl took the keyboard and showed the same screen",
-    );
-}
-
-#[test]
-#[ignore = "plays a real game through tmux; run with scripts/play.sh"]
-fn the_arrows_step_the_transcript_one_record_at_a_time() {
-    if !available() {
-        return;
-    }
-    // The Bevy build binds `scroll_back`/`scroll_forward` to Up/Down gated on
-    // `editing::reading`; this build had only the page keys, so a reader could
-    // jump a screenful but not nudge two entries into line beside each other.
-    let game = Game::start();
-    game.does("attend laboratory", "/tower/laboratory")
-        .does("help", "the work")
-        .does("recall clarity", "steps");
-    game.send("unfurl");
-    let before = game.pane();
-    game.press("Up");
-    moved(&game, &before, "an arrow inside `unfurl` stepped nothing");
-}
-
-#[test]
-#[ignore = "plays a real game through tmux; run with scripts/play.sh"]
-fn the_transcript_pages_from_behind_an_open_surface() {
-    if !available() {
-        return;
-    }
-    // The editor swallowed both page keys: `Session::typed` handed every
-    // keystroke to the surface and returned, so the global arms below were
-    // unreachable whenever anything was open. The Bevy build's `scroll_back` is
-    // gated only on `booted` and pages happily behind the editor.
-    let game = Game::start();
-    game.does("attend laboratory", "/tower/laboratory")
-        .does("help", "the work")
-        .does("recall clarity", "steps")
-        .opens("scribe morning", "morning.spell in ");
-    let before = game.screen();
-    game.press("PageUp");
-    moved(&game, &before, "PageUp was swallowed by the editor");
-}
-
-/// Wait for the screen to change, or fail with it.
-fn moved(game: &Game, before: &str, complaint: &str) {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
-    while std::time::Instant::now() < deadline {
-        if game.screen() != before && game.pane() != before {
-            return;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(10));
-    }
-    panic!("{complaint}:\n{}", game.screen());
-}
-
-#[test]
-#[ignore = "plays a real game through tmux; run with scripts/play.sh"]
-fn the_transcript_scrolls_without_asking_for_permission() {
-    if !available() {
-        return;
-    }
-    // `unfurl` exists because the key could not be discovered, not because it
-    // needs permission — so PageUp works at the bare prompt.
-    let game = Game::start();
-    game.does("attend laboratory", "/tower/laboratory")
-        .does("help", "the work")
-        .does("recall clarity", "clarity");
-    let before = game.pane();
-    game.press("PageUp");
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
-    while std::time::Instant::now() < deadline {
-        if game.pane() != before {
-            return;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(10));
-    }
-    panic!("PageUp at the prompt scrolled nothing:\n{}", game.screen());
 }
 
 /// The manual pages, and the transcript behind it does not.

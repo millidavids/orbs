@@ -104,18 +104,10 @@ pub(crate) fn dying() -> std::io::Result<Arc<AtomicBool>> {
     Ok(flag)
 }
 
-/// A glyph whose width the terminal might disagree with us about.
-///
-/// `○` (U+25CB), and which glyph this is is the constant's whole job.
-///
-/// It was `‼` for a version, which is Neutral rather than Ambiguous — one column
-/// on every terminal there is — so `symbols_are_narrow` always returned `true`
-/// and the entire fallback beneath it was unreachable.
-///
-/// What genuinely widens under *ambiguous = wide* is the ward's `○ ♂ ♀ ♠`, the
-/// two trees' `• · ■` and the maze's `Ω`. `○` is drawn by both `board.rs` and
-/// `loom.rs` and is in `blit::narrowed`'s table, so a probe that fires has
-/// something to do.
+/// A glyph whose width the terminal might disagree with us about: `○`, East
+/// Asian Ambiguous and narrowed by `blit`, so a probe that fires has something
+/// to do. It was `‼`, which is Neutral, and the fallback was unreachable.
+/// `blit::scan` holds both properties.
 pub(crate) const PROBE: char = '○';
 
 /// Whether the terminal draws our symbols one column wide.
@@ -146,29 +138,4 @@ pub(crate) fn symbols_are_narrow() -> std::io::Result<bool> {
     )?;
     out.flush()?;
     Ok(col <= 1)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::PROBE;
-
-    /// Every glyph this game draws that is East Asian Ambiguous, and so takes
-    /// two columns under a CJK locale or *ambiguous = wide*.
-    ///
-    /// Measured with Python's `unicodedata.east_asian_width`, not recalled.
-    /// `‼ ► ☼ ♦ ░ √ → »` are absent because they are Neutral — one column
-    /// everywhere; getting that backwards made the probe dead code.
-    const AMBIGUOUS: [char; 8] = ['○', '♂', '♀', '♠', '•', '·', '■', 'Ω'];
-
-    /// The probe has to be a glyph whose width can actually differ: a Neutral
-    /// one reports `narrow` on every terminal ever built, which is an instrument
-    /// wired to a constant rather than a passing test.
-    #[test]
-    fn the_probe_is_a_glyph_that_can_actually_widen() {
-        assert!(
-            AMBIGUOUS.contains(&PROBE),
-            "{PROBE:?} is not East Asian Ambiguous, so symbols_are_narrow() can \
-             never return false and the whole fallback below it is unreachable"
-        );
-    }
 }

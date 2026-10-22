@@ -2469,6 +2469,248 @@ they are re-pointed at the phases that now need them rather than quietly dropped
 
 ## 19. Decisions log
 
+### The terminal kept true (`0.19`)
+
+**Rule: a feature is not shipped until the terminal build plays it.** Every
+feature from `0.12` to `0.18` was built against the window and reached
+`orbs-tui` through the shell, which carries almost everything, so most came for
+free. An audit (the window's behaviour against the terminal's, the rasteriser,
+and the played suite) found what did not: two glyphs with no narrow stand-in,
+`NO_COLOR` erasing weight, three copies of opening a save, a lapsed decision
+holding every animation still, no greyscale, and almost every feature since
+`0.17.1` with no played scenario.
+
+| Question | Decision |
+|---|---|
+| A minor of its own | Yes. The minor names the feature in hand, and a pass over the second frontend is one; `0.17` stays paused and resumes under whatever minor is in hand then |
+| Order | The refactor first, then the harness, then a scenario for every feature already shipped without one — CLAUDE.md's *"anything already built without a gate gets one before new work continues"* — then the fixes, then the switch that keeps the suite still, and only then anything that moves |
+| What the window gains | Whatever the pass decides for both builds: one reading-key table for `unfurl`, one rule for loading the tower you are in |
+| Left out | Tint hues sharing the accents' ANSI ink, and a bold dark green that some terminals brighten into the accent green — a palette pass of its own. A contrast row: dim carries the ramp steps |
+
+#### `drive.rs` is split by concern, and a dump cannot prove it (`0.19.0`)
+
+It was 1,708 lines against the ~300 rule, and every box after this one adds to
+it. It is now the loop and nothing else; `carried`, `hangup`, `keymap` and a
+`session/` folder hold the rest, `surfaces` and `blit` are folders, and the
+session keeps one `Carried` where it kept seven copies of its fields. `linear`
+stays the `Linear`'s, which `F5` toggles directly.
+
+**`orbs-tui --dump` never runs `drive`, `surfaces` or `blit`**, so the usual
+proof of no change proves nothing here. The proof is the whole played suite and
+the unit tests, before and after, plus `a_frame_reaches_the_wire_byte_for_byte`,
+written against the unmoved code so the rasteriser's split is held byte for
+byte.
+
+#### The played harness can keep a folder (`0.19.1`)
+
+Every scenario ran with `ORBS_SAVE=off`, which made a whole class of feature
+unplayable: settings remembered, the one-per-machine warning, abandoning and
+loading towers. `Kept` is a folder that outlives the games launched into it, and
+`Game::launch()` is a builder so a knob is one call rather than a seventh
+positional `bool`.
+
+| Question | Decision |
+|---|---|
+| What `ORBS_SAVE` names | A **file**, `<kept>/orbs-save.toml`. Settings and the other slots sit beside it; naming the folder put `orbs-settings.toml` into the shared temp directory |
+| Replace or append | Replace. A second `-e ORBS_SAVE` beside `off` is a race on tmux's ordering |
+| Cleanup | `Kept` removes its folder on drop and is declared before its games. A kept game's drop waits for its process: a `SIGHUP`ed game writes its tower on the way out and would recreate the folder |
+| A leftover | The `play-` prefix, so `play.sh`'s hour-old sweep collects a killed run's folders |
+| Knobs | Each lands with the first scenario that uses it — an unused builder method is dead code under `-D warnings` |
+
+#### Supply, played (`0.19.2`)
+
+Fifteen scenarios, each pinned against the harness's seed with
+`orbs-tui --dump` before it was written. Three things the pinning found:
+
+| Found | Decision |
+|---|---|
+| A demon at a lesser circle cannot be reached by play | No station opens a golem before the whole circle, so `summon golem` there answers `¿ summon` and the *"binds bodies only"* refusal is reachable only by a test that opens the demon by hand. The scenario plays what a player meets — a sealed tower knows no demon yet — and the refusal stays `orbs-sim`'s to hold |
+| `ORBS_AUGURY=stub` cannot read a wall | It holds six laboratory lines. `grammar` is deterministic and reads `phrasings.toml`, so a scenario about a plain-English `stop` names it. A plain-English *demon* is always a call, which the reader is refused on a guess — that refusal belongs to the readers' box |
+| `deploy troop` answers with names | Retiring the word left `deploy` offering what the arsenal holds. Played as a refusal that joins nothing, which is all a removal can be held to |
+
+#### Sieges, standing and the ledger, played (`0.19.3`)
+
+**A played siege is the dump's siege.** Every die comes from `RngStream::Siege`,
+which advances only when the player acts, so the round that gets something past
+the wall on the quiet seed is the second in both — whatever the wall clock did
+between keystrokes. That is what lets a scenario name the log a siege poisons
+rather than loop until one is.
+
+**Vigilance is not played.** Its node text appears only deep in the weave's fork
+navigation and its effect is a rate a scenario cannot see in under a minute;
+`orbs-sim`'s `grants` test holds the number. Everything else the CHANGELOG
+listed for `0.17.0`–`0.17.6` is played.
+
+#### The front door and the settings, played (`0.19.4`) — and a tower lost to a shared slot
+
+**Pinning the loading scenario lost a tower, in both builds.** Raise a tower,
+open the menu before its first autosave, and raise a second: the menu's free
+slot is computed from the disk, where the first has not been written, so both
+towers are given slot 1. The swap writes the first there and the second
+overwrites it at its first autosave. `Raise::wake` already asks again for a slot
+that filled while the installation ran; `Raise::begin` never did. Fixed with the
+other swap defects at `0.19.8`, where the six-towers scenario lands — it cannot
+be reached until then, since every `new` in one session shares a slot.
+
+This box's loading scenario writes its first tower by quitting, which is the
+path that always worked. Two smaller facts the pins settled:
+
+| Found | Decision |
+|---|---|
+| A tower not yet written is not listed | Correct, and played that way: the play page lists the disk, and the first autosave is sixty ticks in. Raising a second tower writes the first |
+| `F7` at the menu has nothing to show | Its gate is held by `F6`'s, the same line of code; `F6` at the menu is played writing no trace, and writing one once there is a tower |
+
+#### Readers and refusals, played (`0.19.5`)
+
+Each reader scenario names its reader, as `dumps.sh` does: `stub` for the
+augury's six fixed lines and the scrivener's seven, `grammar` where a
+phrasing has to come from `phrasings.toml`. With that, every CHANGELOG line for
+`0.12`–`0.15` is played.
+
+**A survey from a spell lands in no log.** `for each store` is held in
+`orbs-sim` by reading the scrollback's names, which a player cannot do; the
+first played draft surveyed the arsenal inside the loop and found nothing in
+`bailey.log`. The loop's body quaffs each spent store instead, so each refusal
+is logged by name — the proof the walk reached them all.
+
+#### The rasteriser draws what it was told (`0.19.6`)
+
+| Question | Decision |
+|---|---|
+| `▲` and `←` | The circle's balked mark and its wiring are East Asian Ambiguous and had no stand-in, so an ambiguous-wide terminal put a balked row under the wrong number. `x` and `{` — `{` the other way from `»`'s `}` |
+| How the next one is caught | **A scan of the painters' source**, in `orbs-tui` because the answer is its private table: every Ambiguous glyph in a string or char literal of `orbs-render`, `orbs-shell` and `orbs-sim`, `\u{…}` decoded — `∞` arrived as an escape and a scan of raw text missed it. Tests, comments, the CP437 table and stdout `println!`s are skipped; each root must yield files. `§` is left out of the list: it is how a message cites this document. The hand-kept list in `term.rs` is now the seventeen glyphs the game draws, and had called `√` and `→` Neutral |
+| `NO_COLOR` | crossterm writes a colour as `ESC[m` — SGR 0 — under it, and `set_pen` wrote the weight first, so every dim and bold was erased: the one channel built to survive a terminal with no colour. **Colour, then weight.** A byte-order unit test, and a played scenario reading the fire's weights through `ink` with `NO_COLOR=1`; both fail with the old order, which was tried |
+| `resolve`'s order | Its doc claimed the window's order and was not it: a depiction outranked a lexeme here and not there. Unreachable today — no painter puts both on one cell — and now the same, with a test |
+| `theme.rs` | 547 lines, split into `ink`, `resolve` and `tests`. A `const` block asserting `matches!(x, x)` held nothing and is gone |
+
+#### Every key a terminal sends (`0.19.7`)
+
+| Key | Decision |
+|---|---|
+| Shift+Tab | **Tab**, as the window reads it: winit gives the logical key, crossterm a code of its own that `as_key`'s `_ =>` dropped |
+| The mapper's `_` arm | Kept, since crossterm's enum is not ours to enumerate. The guard runs the other way: a test matches every `orbs_shell::Key` with no `_` arm and round-trips each through `as_key`, so the next variant fails to compile where `PageUp` once passed silently |
+| PgUp and PgDn at the threshold | Inert, as `playing` makes them in the window. They scrolled a scratch world's transcript nobody could see, which mattered only to the next frame drawn from it |
+| The menu's register | Read per keystroke, as `menuing.rs` does, not per tick: `F7` can make the tower tense with the menu up, and a joke answered in that beat is the one §3 forbids |
+
+#### A swap replaces the tower and nothing else (`0.19.8`)
+
+**Rule: the tower being left is written before anything is read, a load never
+raises a tower, and a new tower never takes the slot of the one being left.**
+Four defects, two of them in both builds.
+
+| Defect | Where | Decision |
+|---|---|---|
+| A second tower, raised before the first's autosave, took the first's slot and overwrote it | Both | `Raise::begin` asks again for a slot that has filled, as `Raise::wake` already did. **Silently**: `save_moved` says *another orb took this tower's place*, which is false when the tower just written was this orb's own. No slot left is said, as at a wake — the seventh tower in one session plays and is not remembered, and the menu refuses the eighth |
+| Loading the tower in hand put back its last autosave | The window | Read first, write second, so every tick since the last autosave was lost and the next autosave wrote the stale tower over the newer file. **Write first, in both builds** — the terminal already did. Reading first bought nothing: a refused load leaves the player in a tower that was just written, which is an autosave |
+| A load of a vanished file raised a fresh tower | Both | `orbs_shell::loaded` answers `None` for anything but a restored tower. Unreadable or gone, the player stays on the menu that asked, which reads its listing again (`Menu::relist`) — `read_from` sets an unreadable save aside, so the slot has changed. **Corrected below**: `loaded` returns why, and `Menu::refused` says it |
+| Opening a save was written three times | Both | `orbs_shell::tower_from`, for a launch: the window's `sim::raise` and the terminal's `main` call it. The terminal's swap had drifted — an empty slot built `Sim::begun` and ignored `ORBS_SEALED` and `ORBS_LENGTH` — and now has no such arm at all |
+| Each swap registered three signal handlers and started a watchdog | The terminal | `play` ran again per swap and did both. They are the process's and move to `run`. The lifetime was **not** extended, as first suspected: every watchdog kept its own deadline and the first still fired. A scenario counts `/proc/<pid>/task` across three swaps |
+
+**A test of a swap was handed a slot in the developer's own save folder.**
+`Raise` resolved its base from `save::path()`, and under `cargo test` with no
+`ORBS_SAVE` that is the app-data folder — the window's new swap test was given
+`~/.local/share/orbs/orbs-save.toml`. Nothing was written, since one frame runs
+no autosave. The base is now the asked slot's own folder with the save's file
+name, which in a running game is the same file and in a test is the test's.
+**Superseded by the corrections below**: the menu hands slot 1's path over with
+the slot (`save::Keep`), so nothing reads `ORBS_SAVE` at `begin`.
+
+#### `ORBS_MOTION` — the suite holds still before anything moves (`0.19.9`)
+
+**Rule: `0` holds everything still, `1` lets it move, and blank leaves it to the
+`motion` row. It seeds the row at launch; the row wins after.** `ORBS_INSTALL`'s
+shape exactly. Landed before the terminal animates anything, because the played
+suite reads screens back and a number half-rolled or a line half-typed is a
+screen nobody asked about — and with `ORBS_SAVE=off` no settings file is read,
+so the row starts on.
+
+| Question | Decision |
+|---|---|
+| Where it is read | `settings::motion_wanted`, once per build: the window's `Stillness::default` (which reaches the boot card through `moving_at_launch`) and the terminal's `Carried`. Never mid-session |
+| The tube | It never outranks one. The window still needs the row *and* every tube |
+| The harnesses | The played suite defaults to `0`; a scenario about motion asks with `.motion(..)` — the boot card, the fire, the remembered row. `tui.sh` passes `0` unless told otherwise. `dumps.sh` pins it blank, so an exported value cannot move a settings row in a capture |
+| The fire scenarios | Still pass: a still fire is drawn at a pinned phase and its ramp's hues are all on screen. `motion_off_stills_the_fire` would have passed with nothing tested, since the fire was still before the row was touched, so it opts back in to the row |
+
+#### Numbers roll and screens cross, in the terminal (`0.19.10`)
+
+**Rule: the terminal animates on the `motion` row alone, as `0.17.9` already
+said it should.** It held `Climb` and `Passing` settled for a reason that lapsed
+with that box — *"no switch a player can reach"* — and the two entries that gave
+it are marked superseded where they stand.
+
+| Question | Decision |
+|---|---|
+| The switch | `Session::moving` is `Some(row)`, always: the terminal's one combiner, as `shell::moving` is the window's. Every clock asks it |
+| The crossing | **One shared `Passing::drive`** — wake, advance, observe — which the window's `drive_passing` calls too. The switch stays a separate `advance(0.0, motion)`, because in the window it is read off the tube by another system and that system's tests stand unchanged. The terminal calls the two in that order |
+| What it sees | `Surfaces::held_open` feeds both `Focus::of` and `Showing::of`, so the keyboard and the screen cannot disagree about what is up |
+| The kept screen | Kept at the top of `draw`, before either reset, as the window does before its one. `resized` no longer resets the frame, or the next draw would keep a blank to cross from |
+| A swap | A new `Session`, so a new `Passing`: the wake plays again into the new tower, which the window's `reset_for_swap` already does |
+| How it is held | Session-level unit tests drive the clocks with their own delta — a moving session crosses and rolls a `+N`, a still one cuts, keeps nothing and lands settled. Played, only end states and the `+N`: a capture mid-roll is timing |
+| `passing.rs` | 692 lines, split into `clock`, `showing` and `tests` |
+
+#### Text types itself, and `pace`, in the terminal (`0.19.11`)
+
+| Question | Decision |
+|---|---|
+| The step | **One shared `Reveal::drive`**: count the new burst's cells, observe, then land whole if `motion` says still, or type at the pace. `tail_cells` moved from the window into the shell with its test; the window's `drive_reveal` is one call now |
+| `pace` | `settings::PACE` and `settings::pace()` in the shell, since both builds build the row; `the_keys_are_distinct` holds it. The terminal's `Carried` gains it, so a swap keeps how fast the player reads, as the window's `Paced` does |
+| A keystroke | Finishes the burst, at the top of `Session::typed` — the window's `finish_reveal`. Waiting is never something a player is made to do |
+| The echo row | Mirrors `keep_echo`: set the stream's terse echo, settle the reveal at the new drawn count, rewind the scroll. The echoes put back are not news |
+| Order | The terse echo is handed to the stream at the top of each frame, before the reveal counts drawn records |
+| `reveal.rs` | Split into `pace`, `burst` and `tests`; the tests read the burst's fields, which are `pub(super)` |
+
+#### Greyscale in the terminal: `F8` and `sight` (`0.19.12`)
+
+**Rule: in a terminal, `sight greyscale` sends no hue — each colour becomes one
+of the terminal's own greys by its lightness, and the weights stay.** It
+supersedes *"greyscale in the terminal build is the user's own colour scheme"*:
+a player who needs the accommodation should not have to reconfigure a terminal
+to get it, and the window's `F8` would otherwise have been a key one build bound
+and the other did not.
+
+| Question | Decision |
+|---|---|
+| Which greys | Dark grey, grey, white: ANSI 8, 7 and 15, inside the 0–15 the terminal's theme owns. **Never black**, which vanishes on the dark background most terminals have. By ordinary ANSI lightness: yellow and white to white; the greens, cyans, dark yellow and grey to grey; the reds, blues, magentas and dark grey to dark grey |
+| Why not the 256-colour grey ramp | It would keep more luminance steps, and it would be the first colour this build sends that the user's theme does not own (§13) |
+| What it costs | Three greys where the window keeps every luminance: Danger and Cost both read dark grey, and steps of one weight in a ramp can merge. The glyph and the fill length carry the reading (§14); the weights carry the ramps, which is what `NO_COLOR` already depended on |
+| Where | After `resolve`, before the diff key, in `blit::Screen`. A toggle therefore redraws the coloured cells and nothing else |
+| The setting | `orbs_shell::Sight` — names, `F8`'s order, and `ORBS_SIGHT` then the file — is the shell's now, and `settings::SIGHT` with it; the window keeps its shader pass and `Vision`. The terminal's `Carried` holds it, so a swap's new rasteriser takes it, and `F8` writes it as `F4` writes `focus`. A dump's row stays `plain` whatever is exported, as the window's dump defaults do |
+| `F8` | Ungated, like `F4` and `F5`: it is about the screen |
+
+#### `unfurl` steps one record, in both builds (`0.19.13`)
+
+**Rule: while the transcript has the keyboard, the arrows move one record,
+`Home` and `End` go to the ends, and `Escape` gives the keyboard back — one
+table, `orbs_shell::apply_to_reading`, in both builds.** It supersedes the
+window's arrows paging a screenful: they called the same system as `PgUp`, a
+second copy of a key the player already had, while the terminal stepped one
+record under a comment claiming the two builds matched.
+
+| Question | Decision |
+|---|---|
+| Which way | The terminal's. A one-record nudge is something the page keys cannot do; arrows that page are `PgUp` twice. `Home` and `End` came with it, unbound in the window before |
+| The table | No `_` arm, so a key added to `orbs_shell::Key` is decided there. `PgUp` and `PgDn` stay out of it: both builds answer them above every surface |
+| How the window reads it | One `input_just_pressed` system a key, each calling the table with the guards the arrows had — reading, `playing`, the manual not open. **Not** one system over `KeyboardInput`: a gated message reader keeps its cursor and re-reads the key that closed the manual on the frame it next runs, which `plugin.rs` records shipping once for the menu. The five sit in a nested tuple, since the plugin's outer tuple was at Bevy's arity |
+| Repeat | A held arrow repeats in the terminal, which delivers repeats as key events, and steps once in the window, where `input_just_pressed` sees one press. Accepted: holding is not how a record is found, `PgUp` is |
+| What the player is told | `recall unfurl` and the manual name the arrows, `Home` and `End`. The border hint stays `pgup/pgdn  esc out`, which already fills its cells at the 80-column floor |
+
+#### Corrections from review (`0.19.13`)
+
+**Rule: a `/code-review` of the pass found fourteen things; each is folded into
+`0.19.13` and none advances the version.** Three were bugs a player could meet.
+
+| Question | Decision |
+|---|---|
+| A new tower's slot | The menu hands over a `save::Keep` — the slot and slot 1's path, read once when the lengths page opened — and `Raise::begin` asks it again on both paths. It was asked again only with the installation off; on, the default, the stale slot reached the wake, which found the orb's own tower in it and said *"another orb took this tower's place"*. `wake` now reports only a slot taken while installing, so the `moved` flag is gone, and nothing reads `ORBS_SAVE` at `begin` |
+| `Home`, and the top | `Scroll::page` keeps one record on screen, as the painter always did. Held at the record count, the next `Down` or `PgDn` moved nothing visible. The dump's `ORBS_SCROLL` passes the record count now, so it lands where the painter would have clamped it |
+| A failed write | `orbs_shell::loaded(path, kept, written)` refuses the slot in hand when writing it first failed: read back, it would put an older autosave over the live tower, the loss `0.19.8` closed. Any other slot still loads. The menu says `menu_unwritten` |
+| A refused load is said | `Menu::refused` relists and names the slot, unreadable or empty, where it used to vanish with only a log line |
+| The reveal's first look | Takes what is on screen as said, as `Passing`'s first `Showing` does. A tower opened from the menu, or a launch into a saved one, typed its visible history out again, in both builds. A fresh tower's opening report now lands whole |
+| The reveal's cost | Cells are counted only when the stream grew: it walked the whole stream twice a frame, now at the terminal's 30 too. `observe` and `advance` are the module's own, so `drive` is the one way in |
+| Tests and the developer's shell | No unit test moves with `ORBS_PASSAGE`, `NO_COLOR` or `ORBS_SAVE` exported: `Passing::new(permitted)` takes what `Default` reads, the rasteriser's tests force colour on (never off: the switch is global), and the slot tests hand over a `Keep`. Measured by running the whole suite with all three set, which failed seven tests before |
+| The ambiguous list | `term::AMBIGUOUS` is gone: `blit::scan` measures from the painters' source and holds the probe's two properties |
+| Sizes | The played harness's `play.rs` into `play`, `driving` and `reading`, its tmux into `tmux.rs`; `blit/tests.rs` and `theme/tests.rs` split by concern; `Passing`'s poses into `pose.rs`. Files over 300 from before `0.19` are left |
+
 ### Supply — no produced item has individual value (`0.18`)
 
 **Rule: a potion, scroll or demon does nothing on its own.** It is a supply. It
@@ -3109,7 +3351,7 @@ holds every page of the window build to it.
 | **`scale` lives on `Screen`** | The tube's cell size is read from `Screen::scale` and the camera must agree with it to the pixel, or the scanlines miss the rows. One field, one scale: `whole` floors it, and a camera told how much world to show draws a cell at exactly that |
 | **`whole` below ×1 is the fill** | There is no whole multiple to keep under the floor |
 | **`pace` names the default 4800** | It was 420 characters a second, settled by looking; 480 is the nearest real line, and a name a player can read beat a number nobody could. `LONGEST` still caps a burst at 1.4 s at every pace |
-| **`pace` is the window's only** | The terminal never advances `Reveal`, so text there already lands whole — a row would be a dead one |
+| ~~**`pace` is the window's only**~~ | ~~The terminal never advances `Reveal`, so text there already lands whole — a row would be a dead one~~ — **superseded at `0.19.11`**: the terminal types text on the `motion` row, so the row is a live one there too |
 
 #### Echo verbosity is one predicate in the stream (`0.17.12`)
 
@@ -3382,7 +3624,7 @@ edges and the clock.
 | The edge | A world change, never a view change. First sight settles. **A number absent from an observation is forgotten**, so its next appearance settles. That is the opposite of the fire's `observe_hearth`, which keeps its last value on `None`: a room worked by a spell while the player was elsewhere would otherwise roll on their return |
 | A crossing | Cuts, for now. `15/16 → 2/8` rolled in one scale counts *down*, a gain drawn as a loss. `0.17.3` gives it a beat of its own |
 | A fall | Rolls down within its tier |
-| Reduce-motion | `Climb` defaults to off and only the Bevy frontend turns it on, from the tube's switch. Off is the truth, so `orbs-tui`, a dump and the F5 mirror draw every number settled without doing anything — the crossings' rule that §14 will not have motion without a switch a player can reach |
+| Reduce-motion | `Climb` defaults to off and a frontend turns it on from its motion switch. Off is the truth, so a dump and the F5 mirror draw every number settled without doing anything. ~~Only the Bevy frontend turns it on~~ — **superseded at `0.19.10`**: the terminal does too, on the `motion` row |
 | Swap and load | `Climb` is on `shell_resources!`, so `reset_for_swap` forgets every number and the new tower's first sight settles |
 | See it | `ORBS_ROLL_AT` poses a roll. It holds back the last `ORBS_DUMP` command as `ORBS_PASSAGE_AT` does, so the command that moves the number must be last; `ORBS_THEN` runs after the pose. `examples/screens` prints a whole roll with the hue as a ramp letter |
 
@@ -7123,6 +7365,10 @@ crossing posed. That keeps the standard `dump.rs` sets — a dump showing a scre
 the game cannot reach is the one thing that tool must never do.
 
 #### `orbs-tui` holds a settled crossing and does not animate one
+
+> **Superseded at `0.19.10`** — the persisted reduce-motion setting this waited
+> on shipped at `0.17.9` as the `motion` row, and the terminal crosses on it
+> now. See *The terminal kept true*.
 
 Not effort, and not the Frame boundary being ducked. That build has no CRT and
 passes `None` for the motion switch everywhere, so an animating crossing would be

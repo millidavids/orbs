@@ -45,18 +45,20 @@ impl Kept {
     }
 }
 
-/// Write `tower` to `kept` immediately, before anything else moves.
+/// Write `tower` to `kept` immediately, before anything else moves, and say
+/// whether it was written.
 ///
-/// The half of a swap that must happen first, and why it is a free function
-/// rather than a method: it is called with the outgoing pair, at a point where
-/// the incoming one has already been read off disk and is waiting.
-pub(crate) fn keep_now(tower: &Tower, kept: &Kept) {
+/// The half of a swap that must happen first: a load of the slot in hand reads
+/// back what this wrote, and is refused when it wrote nothing.
+pub(crate) fn keep_now(tower: &Tower, kept: &Kept) -> bool {
     let Some(path) = kept.path() else {
-        return;
+        return false;
     };
-    if let Err(error) = orbs_shell::write_save_to(path, &tower.sim().snapshot()) {
+    let written = orbs_shell::write_save_to(path, &tower.sim().snapshot());
+    if let Err(error) = &written {
         bevy::log::error!("the tower could not be written out: {error}");
     }
+    written.is_ok()
 }
 
 /// How often the tower writes itself out.

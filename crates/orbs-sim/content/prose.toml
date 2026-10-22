@@ -567,6 +567,9 @@ menu_unreadable = "the tower in {count} is not one this orb can read"
 menu_abandoning = "set the tower in {count} aside? abandon {count} again to do it"
 menu_unabandoned = "the tower in {count} would not move. is the folder read-only?"
 menu_full = "the orb keeps no more towers. open one and quit from it"
+# Loading the tower you are in, when writing it first failed: reading its slot
+# back would put an older autosave over it.
+menu_unwritten = "this tower would not write down, so it stays open. is the disk full?"
 menu_unkept = "this orb keeps no saves at all - ORBS_SAVE is off"
 # §14's health warning, said once per machine on the first threshold. Not a
 # refusal either, and short: it shares the complaint row with them.
@@ -1941,9 +1944,9 @@ man_menu_also = "quit, weave"
 
 man_unfurl_use = "unfurl"
 man_unfurl_gloss = "read back through the record"
-man_unfurl_1 = "the transcript takes the keyboard: pgup and pgdn"
-man_unfurl_2 = "move, esc gives the prompt back"
-man_unfurl_3 = "for what scrolled away while you were elsewhere"
+man_unfurl_1 = "the transcript takes the keyboard: pgup and pgdn move a page,"
+man_unfurl_2 = "the arrows one record, home and end to either end. esc gives"
+man_unfurl_3 = "the prompt back. for what scrolled away while you were elsewhere"
 man_unfurl_eg1 = "unfurl after a long meditate, to see what happened"
 man_unfurl_also = "peruse, sift"
 

@@ -19,7 +19,9 @@ behaviour box, is what is left. Renown closed at `0.11.14` and the interlude at
 `0.11.10`. `0.16` — the threshold — closed at `0.16.13`: eleven boxes, and three
 more for the corrections two `/code-review max` passes found in them. `0.17` —
 the tower as one machine — is in hand, paused for `0.18` — *Supply* — which is
-built: no produced item has individual value.** The
+built: no produced item has individual value. `0.19` — *the terminal kept true*
+— closed at `0.19.13`: every feature since `0.12` played in the terminal, which
+now animates on the `motion` row and has greyscale.** The
 determinism spine, the Frame boundary, the parser, the cell renderer, brewing,
 the archive, the lens, the sanctum, the menagerie, the bailey, the forge, the
 tower rail, the balance harness, the spell engine and its scripting language are

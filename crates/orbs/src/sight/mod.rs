@@ -7,4 +7,5 @@ pub use plugin::SightPlugin;
 // resource that holds it. `shell::setting` builds the settings row from these,
 // for the reason that module's header gives — a page shows what is in effect,
 // asked of the thing that holds it, never of the file.
-pub(crate) use settings::{Sight, Vision};
+pub(crate) use orbs_shell::Sight;
+pub(crate) use settings::Vision;

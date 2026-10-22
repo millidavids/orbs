@@ -32,8 +32,10 @@ impl Stillness {
 }
 
 impl Default for Stillness {
+    /// `ORBS_MOTION` first, then the row — read once here, so it reaches the
+    /// boot card through `moving_at_launch` too.
     fn default() -> Self {
-        Self(!orbs_shell::settings::moves())
+        Self(!orbs_shell::settings::motion_wanted())
     }
 }
 
@@ -202,7 +204,9 @@ mod tests {
         let mut app = App::new();
         app.add_plugins(MinimalPlugins)
             .init_resource::<Bench>()
-            .init_resource::<Passing>()
+            // Permitted rather than read, or an exported `ORBS_PASSAGE=0`
+            // fails the control below.
+            .insert_resource(Passing::new(true))
             .init_resource::<Climb>()
             .init_resource::<Panel>()
             .add_systems(Update, advance);

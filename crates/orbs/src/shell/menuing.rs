@@ -115,7 +115,7 @@ pub(crate) enum Raising {
         /// Where it will be kept, and written back to — or [`None`] for a
         /// session that keeps nothing (`ORBS_SAVE=off`), which is the ordinary
         /// case for every instrument here.
-        keep: Option<std::path::PathBuf>,
+        keep: Option<orbs_shell::Keep>,
         /// How long it is to be.
         length: orbs_sim::content::Length,
     },
@@ -230,9 +230,9 @@ pub(crate) fn type_into_menu(
                 seed: orbs_shell::new_game_seed(),
             });
         }
-        Some(MenuOutcome::Begin { path, length }) => {
+        Some(MenuOutcome::Begin { keep, length }) => {
             swapping.write(SwapMessage {
-                raising: Raising::Begin { keep: path, length },
+                raising: Raising::Begin { keep, length },
                 seed: orbs_shell::new_game_seed(),
             });
         }
@@ -282,8 +282,11 @@ pub(crate) fn apply_setting(world: &mut World) {
 ///
 /// 1. The game being left is written first, to the path it came from, or the
 ///    autosave writes the outgoing tower into the incoming one's file (`Kept`).
-/// 2. The incoming tower is read before anything is torn down, so a save that
-///    will not open leaves the player where they were.
+///    First even before a read: the play page lists the slot in hand too, and
+///    read first, loading it restored its last autosave over everything since.
+/// 2. The incoming tower is read before anything is torn down. A load that
+///    gives no tower — unreadable, or gone since it was listed — leaves the
+///    player where they were, with the listing read again; it never raises one.
 /// 3. Every shell resource goes back to its default — see
 ///    [`reset_for_swap`](super::plugin::reset_for_swap). `Reveal` holds indices
 ///    into the old record stream, `Passing` a snapshot of the old screen.
@@ -305,25 +308,11 @@ pub(crate) fn swap(world: &mut World) {
         return;
     };
 
-    // 2. Read first, so a refusal costs nothing.
-    let waiting = match &asked.raising {
-        // A new tower: nothing to read, and the file is written on the first
-        // autosave. `free_slot` already found it empty.
-        Raising::Begin { .. } | Raising::Installed(_) => orbs_shell::Opened::New,
-        Raising::Load(path) => orbs_shell::read_save_from(path),
-    };
-    if let (orbs_shell::Opened::Unreadable, Raising::Load(path)) = (&waiting, &asked.raising) {
-        // Left where they were. `read_from` has set the save aside; arriving at
-        // a fresh tower nobody asked for would be the worse answer.
-        bevy::log::error!("the tower in {} could not be read", path.display());
-        return;
-    }
-
-    // 1. ...but the outgoing tower is written before anything is replaced.
-    // `Kept` is `SimPlugin`'s, and a build without it keeps nothing.
-    if let Some(kept) = world.get_resource::<crate::sim::Kept>().cloned() {
-        crate::sim::keep_now(world.resource::<crate::sim::Tower>(), &kept);
-    }
+    // 1. `Kept` is `SimPlugin`'s, and a build without it keeps nothing.
+    let kept = world.get_resource::<crate::sim::Kept>().cloned();
+    let written = kept
+        .as_ref()
+        .is_some_and(|kept| crate::sim::keep_now(world.resource::<crate::sim::Tower>(), kept));
 
     let seed = asked.seed;
     // The name held in memory rather than read back from the file, so a name
@@ -353,10 +342,20 @@ pub(crate) fn swap(world: &mut World) {
             let woken = raise.wake();
             (crate::sim::Tower::raised(woken.sim), woken.keep)
         }
-        Raising::Load(path) => (
-            crate::sim::raise(waiting, seed, wizard.as_deref()),
-            Some(path),
-        ),
+        // 2. Read only now, after the write above — or refused, if it failed.
+        Raising::Load(path) => {
+            let kept_at = kept.as_ref().and_then(crate::sim::Kept::path);
+            match orbs_shell::loaded(&path, kept_at, written) {
+                Ok(loaded) => (crate::sim::Tower::raised(loaded), Some(path)),
+                Err(why) => {
+                    bevy::log::error!("the tower in {} was not opened: {why:?}", path.display());
+                    if let Some(menu) = world.resource_mut::<Standing>().0.as_mut() {
+                        menu.refused(&path, why);
+                    }
+                    return;
+                }
+            }
+        }
     };
     // 5. A new world holds the built-in prose; the watcher only fires on an edit.
     crate::sim::apply_content(&mut tower);
@@ -498,10 +497,126 @@ mod tests {
     }
 
     #[test]
+    fn loading_the_tower_in_hand_keeps_its_last_ticks() {
+        // The play page lists the slot in hand too. Read before the write, the
+        // load restored the last autosave over every tick since — and the next
+        // autosave wrote that over the newer file.
+        let dir = scratch("in-hand");
+        let one = dir.join("orbs-save.toml");
+        orbs_shell::write_save_to(&one, &orbs_sim::Sim::new(101).snapshot()).expect("slot one");
+
+        let mut app = app(101, one.clone());
+        for _ in 0..5 {
+            app.world_mut().resource_mut::<Tower>().step();
+        }
+        let live = app.world().resource::<Tower>().sim().tick();
+        app.world_mut().write_message(SwapMessage {
+            raising: Raising::Load(one),
+            seed: 1,
+        });
+        app.update();
+
+        assert_eq!(
+            app.world().resource::<Tower>().sim().tick(),
+            live,
+            "loading the tower in hand put back its last autosave",
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn loading_the_tower_in_hand_after_a_failed_write_keeps_it() {
+        // Read back after a write that failed, its slot held the last
+        // autosave, which went over every tick since.
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = scratch("unwritten");
+        let one = dir.join("orbs-save.toml");
+        orbs_shell::write_save_to(&one, &orbs_sim::Sim::new(101).snapshot()).expect("slot one");
+        let mut app = app(101, one.clone());
+        for _ in 0..5 {
+            app.world_mut().resource_mut::<Tower>().step();
+        }
+        let live = app.world().resource::<Tower>().sim().tick();
+        // A folder nothing can be written into, as a full disk would be. Run as
+        // root the write lands, and this is the in-hand test again.
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o555)).expect("chmod");
+
+        app.world_mut().write_message(SwapMessage {
+            raising: Raising::Load(one),
+            seed: 1,
+        });
+        app.update();
+
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+        assert_eq!(
+            app.world().resource::<Tower>().sim().tick(),
+            live,
+            "a failed write was followed by reading the older save over the tower",
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_load_that_finds_no_tower_leaves_the_player_where_they_were() {
+        // A slot listed and then gone — or unreadable and set aside. Before, a
+        // vanished file raised a fresh tower at that path.
+        let dir = scratch("vanished");
+        let one = dir.join("orbs-save.toml");
+        let gone = dir.join("orbs-save-2.toml");
+
+        let mut app = app(101, one.clone());
+        app.world_mut().write_message(SwapMessage {
+            raising: Raising::Load(gone),
+            seed: 1,
+        });
+        app.update();
+
+        assert_eq!(
+            app.world().resource::<Tower>().sim().snapshot().world.seed,
+            101,
+            "a load that found nothing put a different tower in front of the player",
+        );
+        assert_eq!(app.world().resource::<Kept>().path(), Some(one.as_path()));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_new_tower_never_takes_the_slot_of_the_tower_being_left() {
+        // The menu offered slot one from the disk, where the tower in hand had
+        // not been written yet; the swap then wrote it there.
+        let dir = scratch("same-slot");
+        let one = dir.join("orbs-save.toml");
+
+        let mut app = app(101, one.clone());
+        app.world_mut()
+            .insert_resource(crate::shell::Installs(false));
+        app.world_mut().write_message(SwapMessage {
+            raising: Raising::Begin {
+                keep: Some(slot(&one, 1)),
+                length: orbs_sim::content::Length::Short,
+            },
+            seed: 202,
+        });
+        app.update();
+
+        assert_eq!(
+            app.world().resource::<Kept>().path(),
+            Some(dir.join("orbs-save-2.toml").as_path()),
+            "the new tower took the slot the tower being left was just written to",
+        );
+        let orbs_shell::Opened::Restored(left) = orbs_shell::read_save_from(&one) else {
+            panic!("the tower that was left did not come back");
+        };
+        assert_eq!(left.world.seed, 101);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
     fn a_new_game_is_begun_at_the_length_that_was_chosen() {
         let dir = scratch("begun");
         let one = dir.join("orbs-save.toml");
-        let two = dir.join("orbs-save-2.toml");
 
         let mut app = app(11, one.clone());
         // Pinned, not left to the default: this would pass against a practice
@@ -510,7 +625,7 @@ mod tests {
             .insert_resource(crate::shell::Installs(false));
         app.world_mut().write_message(SwapMessage {
             raising: Raising::Begin {
-                keep: Some(two),
+                keep: Some(slot(&one, 2)),
                 length: orbs_sim::content::Length::Long,
             },
             seed: 482_913,
@@ -542,8 +657,16 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
+    /// Slot `slot` beside `base`, as the menu hands it over.
+    fn slot(base: &std::path::Path, slot: usize) -> orbs_shell::Keep {
+        orbs_shell::Keep {
+            base: base.to_path_buf(),
+            slot,
+        }
+    }
+
     /// `new`, with the installation on.
-    fn installing(app: &mut App, keep: std::path::PathBuf) {
+    fn installing(app: &mut App, keep: orbs_shell::Keep) {
         app.world_mut()
             .insert_resource(crate::shell::Installs(true));
         app.world_mut().write_message(SwapMessage {
@@ -565,8 +688,8 @@ mod tests {
         let dir = scratch("installed");
         let one = dir.join("orbs-save.toml");
         let two = dir.join("orbs-save-2.toml");
-        let mut app = app(11, one);
-        installing(&mut app, two.clone());
+        let mut app = app(11, one.clone());
+        installing(&mut app, slot(&one, 2));
 
         // Silent, from the chosen seed, and kept nowhere although `new` found
         // a slot: the autosave would otherwise write it there.
@@ -613,10 +736,9 @@ mod tests {
         let dir = scratch("install-load");
         let one = dir.join("orbs-save.toml");
         let two = dir.join("orbs-save-2.toml");
-        let three = dir.join("orbs-save-3.toml");
         orbs_shell::write_save_to(&two, &orbs_sim::Sim::new(909).snapshot()).expect("slot two");
-        let mut app = app(11, one);
-        installing(&mut app, three);
+        let mut app = app(11, one.clone());
+        installing(&mut app, slot(&one, 3));
         assert!(installation(&app).is_some());
 
         app.world_mut().write_message(SwapMessage {

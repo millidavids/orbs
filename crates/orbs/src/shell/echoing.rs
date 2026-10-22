@@ -91,8 +91,15 @@ mod tests {
         app.update();
         let after = drawn(&app);
         assert!(after > before, "no echo was hidden to put back");
+        // The next frame's look, with no time for anything to type.
         let mut reveal = *app.world().resource::<Reveal>();
-        reveal.observe(after, 99);
+        let tower = app.world().resource::<Tower>();
+        reveal.drive(
+            tower.sim().scrollback().records(),
+            0.0,
+            Some(true),
+            orbs_shell::Pace::default(),
+        );
         assert!(reveal.is_settled(), "the echoes put back began a burst");
     }
 }

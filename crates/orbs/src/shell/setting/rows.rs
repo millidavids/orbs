@@ -236,7 +236,7 @@ fn rows(read: Readings) -> Vec<Row> {
         ),
         Row::new(
             Category::Habits,
-            crate::shell::revealing::PACE,
+            settings::PACE,
             read.paced.unwrap_or_default().0.word(),
             &orbs_shell::Pace::ALL.map(orbs_shell::Pace::word),
         ),

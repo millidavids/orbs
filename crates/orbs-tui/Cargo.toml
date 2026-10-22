@@ -53,7 +53,7 @@ signal-hook = "0.3"
 # A destroyed pty reports `POLLHUP`, and `crossterm::event::read` responds to
 # that by looping inside itself for ever rather than returning — so the check has
 # to happen before the read, against the file descriptor directly. See
-# `hung_up` and `watch_for_hangup` in `drive.rs` for what it costs when nobody asks.
+# `hung_up` and `watch_for_hangup` in `hangup.rs` for what it costs when nobody asks.
 #
 # `rustix` rather than `libc` because `unsafe_code` is denied workspace-wide and
 # this is one `poll` — a safe wrapper is the whole reason to prefer it. Already

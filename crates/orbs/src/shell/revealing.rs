@@ -11,9 +11,6 @@ use super::{PaneTransition, Reveal};
 use crate::sim::Tower;
 use orbs_shell::{Pace, Panel, Passing, Showing};
 
-/// The settings-file key, which is also the row's word.
-pub(crate) const PACE: &str = "pace";
-
 /// How fast text types itself — `settings` → `habits` → `pace`.
 ///
 /// Its own resource rather than a field on [`Reveal`], which a swap resets: a
@@ -23,11 +20,7 @@ pub(crate) struct Paced(pub(crate) Pace);
 
 impl Default for Paced {
     fn default() -> Self {
-        Self(
-            orbs_shell::settings::get(PACE)
-                .and_then(|word| Pace::named(&word))
-                .unwrap_or_default(),
-        )
+        Self(orbs_shell::settings::pace())
     }
 }
 
@@ -44,30 +37,13 @@ pub(super) fn drive_reveal(
     paced: Option<Res<Paced>>,
     mut reveal: ResMut<Reveal>,
 ) {
-    let records = tower.sim().scrollback().records();
-    let cells = tail_cells(records, reveal.settled_len());
-    reveal.observe(records.drawn_len(), cells);
-    // Text typing itself is motion: when nothing may move it lands whole.
-    if super::moving(tubes.iter(), stillness.as_deref()) == Some(false) {
-        reveal.finish();
-        return;
-    }
-    let pace = paced.map_or_else(Pace::default, |paced| paced.0);
-    reveal.advance_at(time.delta_secs(), pace);
-}
-
-/// Characters in the drawn records added since `from`.
-///
-/// `from` counts drawn records, as `observe` does, so skipping the whole stream
-/// would land past the burst whenever an echo or a spell's record is hidden.
-/// Measured through `to_line`, which is what the view draws.
-fn tail_cells(records: &orbs_render::Records, from: usize) -> u16 {
-    let counted: usize = records
-        .drawn()
-        .skip(from)
-        .map(|record| record.to_line().chars().count())
-        .sum();
-    u16::try_from(counted).unwrap_or(u16::MAX)
+    // The shared step the terminal takes too: notice, then type or land whole.
+    reveal.drive(
+        tower.sim().scrollback().records(),
+        time.delta_secs(),
+        super::moving(tubes.iter(), stillness.as_deref()),
+        paced.map_or_else(Pace::default, |paced| paced.0),
+    );
 }
 
 /// Any keystroke puts the whole of the output on screen at once.
@@ -127,10 +103,12 @@ pub(super) fn drive_passing(
     // The tower opening, and it happens once. This system is gated on `booted`,
     // so its first run is the frame the boot card handed over, and
     // `Passing::wake` latches — so every frame after is free and there is no
-    // edge for a hitch to miss.
-    passing.wake();
-    passing.advance(time.delta_secs(), None);
-    passing.observe(&Showing::of(surfaces.open(), &panel, linear.showing()));
+    // edge for a hitch to miss. `drive` is that, the clock and the look, in
+    // the order the terminal takes them too.
+    passing.drive(
+        time.delta_secs(),
+        &Showing::of(surfaces.open(), &panel, linear.showing()),
+    );
 }
 
 /// Panes the main window holds outside a siege.
@@ -157,7 +135,10 @@ mod tests {
     use crate::crt::CrtSettings;
     use crate::shell::Stillness;
 
-    /// Whether a fresh tower's output has all arrived after one frame.
+    /// Whether a command's answer has all arrived one frame after it lands.
+    ///
+    /// A frame first: what is on screen before the first look is history, and
+    /// lands whole for anyone.
     fn text_lands_whole(still: bool) -> bool {
         let mut app = App::new();
         app.add_plugins(MinimalPlugins)
@@ -166,6 +147,10 @@ mod tests {
             .insert_resource(Stillness::asked(still))
             .add_systems(Update, drive_reveal);
         app.world_mut().spawn(CrtSettings::DEFAULT);
+        app.update();
+        let mut tower = app.world_mut().resource_mut::<Tower>();
+        tower.submit("recall clarity");
+        tower.step();
         app.update();
         app.world().resource::<Reveal>().is_settled()
     }
@@ -180,32 +165,6 @@ mod tests {
         app.world_mut().spawn(CrtSettings::DEFAULT);
         app.update();
         app.world().resource::<PaneTransition>().is_settled()
-    }
-
-    #[test]
-    fn a_burst_counts_only_what_is_drawn_after_it_began() {
-        use orbs_render::{FieldName, Outcome, RecordKind, Records};
-        let mut records = Records::new();
-        records.set_terse_echo(true);
-        for line in ["brew", "kindle", "look"] {
-            records
-                .push(RecordKind::Input)
-                .text(FieldName::Message, line)
-                .finish();
-            records
-                .push(RecordKind::Echo)
-                .outcome(Outcome::Resolved)
-                .text(FieldName::Message, line)
-                .finish();
-        }
-        let from = records.drawn_len();
-        records
-            .push(RecordKind::Entry)
-            .text(FieldName::Name, "athanor")
-            .finish();
-        let new = records.iter().last().expect("pushed").to_line();
-        // Three hidden echoes before the burst must not be counted into it.
-        assert_eq!(usize::from(tail_cells(&records, from)), new.chars().count());
     }
 
     #[test]

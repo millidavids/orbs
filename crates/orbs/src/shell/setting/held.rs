@@ -10,7 +10,7 @@ pub(crate) const CRT: &str = "crt";
 /// The word the phosphor is set by.
 pub(crate) const THEME: &str = "theme";
 /// The word §14's hue accommodation is set by.
-pub(crate) const SIGHT: &str = "sight";
+pub(crate) const SIGHT: &str = orbs_shell::settings::SIGHT;
 /// The word the linear stream is set by.
 ///
 /// `orbs-shell`'s, because both builds bind `F5` and both must write the same

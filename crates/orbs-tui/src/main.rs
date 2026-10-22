@@ -35,7 +35,11 @@
 //! the terminal in the ordinary way and prints its own warning instead.
 
 mod blit;
+mod carried;
 mod drive;
+mod hangup;
+mod keymap;
+mod session;
 mod surfaces;
 mod term;
 mod theme;
@@ -43,9 +47,8 @@ mod theme;
 use std::io::{IsTerminal, stdout};
 use std::process::ExitCode;
 
-use drive::default_settings;
+use carried::default_settings;
 use orbs_shell::wizard;
-use orbs_sim::Sim;
 
 /// The crossterm version this binary is built against.
 ///
@@ -124,34 +127,13 @@ fn play(seed: u64) -> std::io::Result<()> {
     // tower, and putting one in front of them (then writing it back a minute
     // later) is what the threshold exists to stop. This scratch world supplies
     // the prose the menu is drawn from and never ticks; a chosen tower arrives
-    // through `drive::run`'s swap.
+    // through `Session::raise`.
     let opened = if threshold.is_waiting() {
         orbs_shell::Opened::New
     } else {
         orbs_shell::read_save()
     };
-    let mut sim = match opened {
-        orbs_shell::Opened::Restored(save) => {
-            let mut resumed = Sim::restored(&save);
-            resumed.say_resumed(orbs_shell::away_for(&save));
-            resumed
-        }
-        orbs_shell::Opened::Unreadable => {
-            let mut fresh = orbs_shell::fresh(seed, true, orbs_sim::content::Length::Medium);
-            if let Some(name) = wizard() {
-                fresh.rename(&name);
-            }
-            fresh.say_save_unreadable();
-            fresh
-        }
-        orbs_shell::Opened::New => {
-            let mut fresh = orbs_shell::fresh(seed, true, orbs_sim::content::Length::Medium);
-            if let Some(name) = wizard() {
-                fresh.rename(&name);
-            }
-            fresh
-        }
-    };
+    let mut sim = orbs_shell::tower_from(opened, seed, wizard().as_deref());
     // Authored content, if `ORBS_CONTENT` names a directory (rule 6). Read once,
     // not watched — a watcher belongs to the frontend that already has one.
     // The complaint goes to `tracing`, which this build subscribes to; the dump

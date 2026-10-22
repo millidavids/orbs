@@ -58,7 +58,16 @@ climbing*, with the fill's hue as a ramp letter — it stays the truth's at ever
 frame.
 
 In a window: `cargo run -p orbs`, `attend laboratory; grind sage`, and watch
-the ley gauge count. F3 to `OFF` and it cuts. `orbs-tui` never rolls.
+the ley gauge count. F3 to `OFF` and it cuts.
+
+**In a terminal too, on the `motion` row alone** (`0.19.10`) — there is no tube
+there. `scripts/tui.sh` holds it still by default, so ask:
+
+```bash
+ORBS_MOTION=1 scripts/tui.sh start
+scripts/tui.sh type 'debug_renown 20'   # 0/25  +20, rolling to 20/25
+scripts/play.sh motion::                # the +N seen, and a still game's never
+```
 
 **A gain says how much, and a crossing is a beat** (`0.17.3`). Renown's first
 rank is 25:
@@ -648,6 +657,15 @@ end
 ```bash
 cargo test -p orbs-sim --test supply --test garrison --test demons \
   --test calm --test batches
+```
+
+**And played, through the terminal build** (`0.19.2`) — the same words typed
+at a real keyboard, the board's `drawing` row read off the screen:
+
+```bash
+scripts/play.sh supply::     # rates, stop, spent stock, one place, a spell, a batch
+scripts/play.sh garrison::   # the levy, desertion, a full garrison, sealed on six
+scripts/play.sh demons::     # golems bound and deployed; a plain-English stop
 ```
 
 ### Fame draws a crowd, and `petition` is how you are less famous
@@ -3756,7 +3774,7 @@ syscall, so `\x1b` and anything behind it in that read come back as
 `Alt+<letter>` — the Escape **gone**, the letter delivered. Closing the editor and
 typing `quit` fast enough put `quit` in the buffer as a line of the spell.
 
-`drive::escape_prefixed` splits the pair back apart. It answers **only for
+`keymap::escape_prefixed` splits the pair back apart. It answers **only for
 `KeyCode::Char`**, because that is the one shape an `\x1b <byte>` pair builds; a
 real `Alt+Left` arrives CSI-encoded and is left alone, or a player would leave
 the editor by pressing word-left. Suspect this whenever a key "does nothing" in
@@ -3782,14 +3800,22 @@ scripts/tui.sh key Escape                 # ...and the prompt has the keys back
 - **the weave screen** — `weave` opens it and **`quit` closes it**; `Escape` only
   returns to command mode, exactly as on the other side.
 - **the maze** — `wander` hands over the arrows, `Escape` gives them back.
-- **the transcript** — `unfurl`, then `PgUp`/`PgDn`, `Escape` out. It pages by
-  *records*, measured with `orbs_shell::page_step`, which both frontends share.
+- **the transcript** — `unfurl`, then `PgUp`/`PgDn` a page, the arrows one
+  record, `Home`/`End` the ends, `Escape` out — `orbs_shell::apply_to_reading`,
+  the one table both builds read (`0.19.13`; the window paged on the arrows
+  before). It pages by *records*, measured with `orbs_shell::page_step`.
   **`PgUp` works without `unfurl` too**, in both builds: the word exists because
   the *key* could not be discovered, not because the key needs permission.
 
-**Every key the Bevy build binds, the terminal build binds** — and it shipped
-once without them, while `prompt.rs` drew `F4 deep` into the border on every
-frame. A key the screen offers and the build ignores is §19's *"the first
+  ```bash
+  scripts/play.sh unfurling::            # arrows, Home and End, the page keys
+  cargo test -p orbs -- arrows_step      # the window's half
+  ```
+
+**Every key the Bevy build binds that means something without a GPU, the
+terminal build binds** — `F2` (phosphor), `F3` (tube) and `F12` (screenshot) are
+the window's alone. It shipped once without them, while `prompt.rs` drew
+`F4 deep` into the border on every frame. A key the screen offers and the build ignores is §19's *"the first
 affordance the game showed was one that did not work"*, so the rules behind them
 live in `orbs_shell::shortcuts` where a second copy cannot go missing.
 
@@ -3799,7 +3825,20 @@ live in `orbs_shell::shortcuts` where a second copy cannot go missing.
 | `F5` | §14's linear stream | the pane describes itself instead of drawing — the accessibility route, and this is the build §14 calls the cheapest one |
 | `F6` | writes `orbs-parse.tsv` | silent on success in both builds; the file appearing is the confirmation |
 | `F7` | cycles the tonal register | **visibly inert** — `Presentation` picks a glyph-atlas *face* and a terminal has the user's. The world still moves, and `F6`'s `register` column shows it |
+| `F8` | §14's greyscale | every hue out, the weights kept; written to the `sight` row as `F4` writes `focus` (`0.19.12`) |
 | `F10` | leaves | as it does under Bevy. `Ctrl-C` and `Ctrl-D` also do, because raw mode makes them ours to answer |
+
+**Shift+Tab completes as Tab does** (`0.19.7`). crossterm reports it as
+`BackTab`, which `keymap::as_key` dropped; winit reads the logical key and calls
+it Tab. `keymap`'s `every_shell_key_has_a_terminal_key_that_reaches_it` matches
+every `orbs_shell::Key` with no `_` arm, so a key added there fails to compile
+here. PgUp and PgDn page nothing at the threshold, where the transcript is a
+scratch world's behind the menu — the window gates them on `playing`.
+
+```bash
+scripts/play.sh keys::      # BTab completes; F7 silences the menu's jokes
+cargo test -p orbs-tui --bins mapping paging secret
+```
 
 **`F5` is inert over the editor, the loom and the maze, and that is a known
 hole rather than a rule.** `prompt::paint` returns early for all three modal
@@ -4001,6 +4040,19 @@ typed. (At the threshold it does not leave the *menu* either — see above.)
 > `settings`. A See-it line written before that does not run. §19 records the
 > supersession.
 
+**A swap writes the tower being left before it reads anything** (`0.19.8`), so
+loading the tower in hand keeps where you are, and a second tower raised before
+the first's autosave takes the next slot rather than the first's, with the
+installation on or off. A load that finds no tower — unreadable, or gone since
+the listing — raises nothing: the menu stays, lists its slots again and says
+which. Loading the tower in hand after its write failed is refused too, since
+its slot holds an older save. Played against a kept folder:
+
+```bash
+scripts/play.sh swapping::   # the slot, installed or not, the tower in hand, a refused load, six towers
+cargo test -p orbs -- menuing   # the window's, a failed write among them
+```
+
 **A dump reaches no save at all unless `ORBS_SAVE` names one.** It calls
 `save::seal()` when it does not, so `play` says *this orb keeps no saves at all*
 rather than listing your real towers — and `abandon` cannot reach them.
@@ -4123,6 +4175,26 @@ tmux -L chk new-session -d -s chk -x 120 -y 45 \
 # motion on: the fire's colours differ. motion off: only the tick counter does.
 ```
 
+**`ORBS_MOTION` (both builds, `0.19.9`).** `0` holds everything still, `1` lets
+it move, blank leaves it to the row. It seeds the row at launch and the row wins
+after; it never outranks the tube. `scripts/play.sh` and `scripts/tui.sh` pass
+`0` unless asked, and `dumps.sh` pins it blank.
+
+```bash
+ORBS_MOTION=0 ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_THRESHOLD=1 ORBS_DUMP=1 \
+  ORBS_MENU="settings\naccess" cargo run -q -p orbs     # motion [off]
+```
+
+**`sight` (access, both builds, `0.19.12`).** `sight greyscale` takes every hue
+out, and `F8` cycles it with the row following. The window does it in a render
+pass after the tube, and *Greyscale* has the capture matrix; the terminal sends
+each colour as one of its own greys and keeps the weights. A dump's row is
+`plain` whatever `ORBS_SIGHT` says, so this one is played:
+
+```bash
+scripts/play.sh sight::   # F8 out and back, ORBS_SIGHT, the row, a new tower, remembered
+```
+
 **`picture` (window build).** Seven ceilings on the tube. The quickest look is a
 settings file and a screenshot, from a scratch folder:
 
@@ -4145,9 +4217,15 @@ brighter, every letter is a pixel bolder, and `laboratory 9 ok` keeps its green.
 The log says the scale: `window 2880×1620 -> scale 2.000` whole against `2.250`
 filled. The athanor's shaded fill is unchanged at heavy — that range is exempt.
 
-**`pace` (window build).** `settings` → `habits` → `pace 1200`, then any command:
-the echo types itself slowly enough to watch, and a keystroke still finishes it.
-`pace instant` and `motion off` both land text whole.
+**`pace` (both builds, `0.19.11`).** `settings` → `habits` → `pace 1200`, then
+any command: the echo types itself slowly enough to watch, and a keystroke still
+finishes it. `pace instant` and `motion off` both land text whole. In a terminal
+ask for motion first — `scripts/tui.sh` holds still by default:
+
+```bash
+ORBS_MOTION=1 scripts/tui.sh start
+scripts/play.sh motion::   # text types and End finishes it; a still game lands it whole
+```
 
 **The sound switches, `away` (window build).** `keys`, `chimes`, `alarms` and
 `refusals` each switch a kind of sound. `keys off` under `ORBS_SOUND=1`, then
@@ -4383,9 +4461,9 @@ will see it.
 
 ### `scripts/play.sh` — the game, played, as a test suite
 
-**131 scenarios that type at a real terminal and read the screen back** — and
-count them with `scripts/play.sh 2>&1 | tail -1` rather than trusting this
-number, which has been stale twice. This is
+**Scenarios that type at a real terminal and read the screen back** — count them
+with `scripts/play.sh 2>&1 | tail -1`; this sentence quoted a number and it was
+stale three times. This is
 the third layer: `orbs-sim`'s tests prove the rules and `orbs-render`'s prove the
 picture, and neither presses a key. Run it **after anything touching the sim, the
 shell, or the loop** — `orbs-balance`'s standing, for the same reason.
@@ -4437,7 +4515,27 @@ Four more things the driver has to do, each of which failed loudly first:
 
 **Seeds are chosen, not tolerated.** `substitution` renames a base reagent at
 1/3600 from the seeded `Threat` stream, so the schedule is fixed in tick space
-and `play::QUIET` is 11. Logs are poisoned only by a siege round (§19).
+and `play::QUIET` is 11. Logs are poisoned only by a siege round (§19). Pin a
+string against seed 11, not the dump's 181, and keep a scenario inside the first
+200 ticks or verify its seed.
+
+**A game is started from a builder** (`0.19.1`). `Game::launch()` holds the
+scenarios' defaults — the quiet seed, 120×45, no boot card, every room open,
+past the front door, no installation, nothing kept — and each knob changes one:
+`.seed()`, `.sized()`, `.booting()`, `.sealed()`, `.at_the_threshold()`,
+`.installs()`. `.settled()` waits for the first prompt; `.spawn()` waits for
+nothing, for a card or a menu. The old constructors are one-liners over it.
+
+**`Kept` is a folder that outlives the games launched into it**, for what a
+relaunch remembers. `.kept_in(&kept)` replaces `ORBS_SAVE=off` with
+`ORBS_SAVE=<kept>/orbs-save.toml` — a *file*, because the settings and every
+other slot sit beside it. Declare it before the games that use it so it drops
+after them; a kept game's `Drop` waits for the process, whose exit-save would
+otherwise write the folder back into existence.
+
+```bash
+scripts/play.sh kept::   # settings remembered, and the warning said once
+```
 
 **Both frontends boot** (§19, `0.3.12`). `orbs-tui` skipped §4's sequence for a
 version on an "instant-startup" argument that was really about the development
@@ -4464,17 +4562,39 @@ of the rule: the glyph carries the identity. Three degradations are accepted and
 recorded — `Presentation` renders identically, a mixed `Wash` takes its first
 tint, and there is no CRT.
 
-**Ambiguous-width glyphs are a correctness item, not polish.** CP437's symbols —
-`‼ ► ☼ ○ ♂ ♀ ♦ ♠ Ω ░ ▒` — are East Asian *Ambiguous*, so a CJK locale or a
-terminal set to `ambiguous = wide` gives them two columns, which shifts the row
-**and** invalidates the per-cell diff. `orbs-tui` measures rather than assumes:
-it prints one at a known column and reads the cursor back, then swaps in ASCII if
-the answer is two. `cargo test -p orbs-tui` holds the table.
+**Ambiguous-width glyphs are a correctness item, not polish.** Seventeen of the
+symbols the game draws — `○ ♂ ♀ ♠ • · ■ Ω √ → ≈ ¿ ° ∟ ∞ ▲ ←` — are East Asian
+*Ambiguous*, so a CJK locale or a terminal set to `ambiguous = wide` gives them
+two columns, which shifts the row **and** invalidates the per-cell diff.
+`orbs-tui` measures rather than assumes: it prints one at a known column and
+reads the cursor back, then swaps in ASCII if the answer is two.
+
+**A scan of the painters' source holds the table** (`0.19.6`): every Ambiguous
+glyph in a string or char literal of `orbs-render`, `orbs-shell` and `orbs-sim`,
+`\u{…}` escapes decoded, must have a stand-in. It found the circle's `▲` and `←`
+on its first run. To see the fallback, run the binary **directly** in a VTE
+terminal set to ambiguous-wide — under `tmux` the probe asks tmux, which
+answers narrow:
+
+```bash
+cargo test -p orbs-tui --bins scan
+ORBS_BOOT=0 ORBS_THRESHOLD=0 ORBS_INSTALL=0 target/debug/orbs-tui
+# attend menagerie, summon, limn keystone heed, summon — the marks row holds
+```
 
 ### The passage — a screen leaving, and what it does not touch
 
-**Play it. This one genuinely needs a window**, and the switches above are the
-still photographs that go with it:
+**Play it. It needs a window or a terminal now** (`0.19.10`), and the switches
+above are the still photographs that go with it. In a terminal the `motion` row
+is the whole switch:
+
+```bash
+ORBS_MOTION=1 ORBS_PASSAGE=1 scripts/tui.sh start
+scripts/tui.sh type 'attend forge'      # the strip wipes across in ▒ and ░
+cargo test -p orbs-tui --bins session   # moving crosses, still cuts and keeps nothing
+```
+
+In a window:
 
 ```bash
 cargo run -p orbs
@@ -5034,12 +5154,22 @@ one of the few things only pixels can show.
 exists so the tube-off case is reachable without a keypress, which is the case
 §14 most needs checked automatically.
 
-**These two are the first `ORBS_*` switches that are Bevy-only.** Every other one
-works against `orbs-tui` as well, and the boundary claim further up this file
-says so — but a terminal has no render passes and no phosphor, so `ORBS_SIGHT`
-and `ORBS_CRT` are silently inert there. A See-it line using either does not move
-across frontends. Greyscale in the terminal build is the user's own colour
-scheme, which is §19's standing answer for that frontend.
+**`ORBS_CRT` is Bevy-only; `ORBS_SIGHT` is not, since `0.19.12`.** A terminal
+has no render passes and no phosphor, so `ORBS_CRT` is inert there. Greyscale is
+not: the terminal sends no hue at all — every colour becomes one of the
+terminal's own greys by its lightness, and the weights stay — on `F8`, the
+`sight` row, or `ORBS_SIGHT`, which `orbs_shell::Sight` reads for both builds.
+`NO_COLOR` is the other route and keeps the weights too.
+
+```bash
+scripts/tui.sh start
+scripts/tui.sh type 'attend laboratory' 'move sage to mortar_and_pestle'
+scripts/tui.sh ink 89 103    # green
+scripts/tui.sh key F8
+scripts/tui.sh ink 89 103    # grey, dim and bold where they were
+ORBS_SIGHT=greyscale scripts/tui.sh start
+scripts/play.sh sight::      # F8 both ways, the row, a swap, a relaunch, NO_COLOR
+```
 
 **The three correction filters are deliberately not built** (§19). Daltonisation
 was measured against this palette and degrades the accent triad in **eleven of

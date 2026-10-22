@@ -40,37 +40,10 @@ pub struct SimPlugin {
 
 /// Build the tower a save describes, or a fresh one if there is none.
 ///
-/// Extracted so the menu's loader is not a second copy of the three-way branch
-/// over `Restored`, `Unreadable` and `New`.
-///
-/// `wizard` names a *new* tower's wizard and is ignored by a restored one —
-/// `session::Wizard` is explicit that a save outranks the environment.
-pub(crate) fn raise(waiting: orbs_shell::Opened, seed: u64, wizard: Option<&str>) -> Tower {
-    match waiting {
-        orbs_shell::Opened::Restored(save) => {
-            let mut resumed = Tower::restored(&save);
-            // Read here because the sim has no wall clock and §19 forbids it
-            // acquiring one; the *words* are the sim's, by rule 6. Nothing
-            // accrues — §5 puts offline progression in Phase 11a.
-            resumed.say_resumed(orbs_shell::away_for(&save));
-            resumed
-        }
-        orbs_shell::Opened::Unreadable => {
-            let mut fresh = Tower::fresh(seed);
-            if let Some(wizard) = wizard {
-                fresh.rename(wizard);
-            }
-            fresh.say_save_unreadable();
-            fresh
-        }
-        orbs_shell::Opened::New => {
-            let mut fresh = Tower::fresh(seed);
-            if let Some(wizard) = wizard {
-                fresh.rename(wizard);
-            }
-            fresh
-        }
-    }
+/// `orbs_shell::tower_from`, the one copy both builds start from. A load from
+/// the menu is `orbs_shell::loaded`, which never raises a fresh tower.
+fn raise(waiting: orbs_shell::Opened, seed: u64, wizard: Option<&str>) -> Tower {
+    Tower::raised(orbs_shell::tower_from(waiting, seed, wizard))
 }
 
 impl Plugin for SimPlugin {

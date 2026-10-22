@@ -378,7 +378,7 @@ lines = [
   "",
   "The transcript: what you typed and what the orb said back. A `>` and a caret mean the orb is waiting for a line.",
   "",
-  "`PgUp` scrolls it back; `PgDn` returns. `unfurl` does the same thing with a word, and puts the keys on screen so you know they are there.",
+  "`PgUp` scrolls it back; `PgDn` returns. `unfurl` does the same thing with a word, and puts the keys on screen so you know they are there. While it holds the keyboard the arrows step one record, and `Home` and `End` reach either end.",
   "",
   "the rail",
   "",

@@ -15,12 +15,13 @@
   at 1.0 (DESIGN.md §19).
 -->
 
-## [v0.18.7] - 2026-10-19
+## [v0.19.13] - 2026-10-22
 
 ### Description
 In development — a dev log, not patch notes. A single potion no longer wins a
-round: brews make batches, and potions, scrolls and demons are supplies you keep
-flowing. The wall keeps a standing garrison of its own.
+round: potions, scrolls and demons are supplies you keep flowing. And the
+terminal build caught up: numbers roll, text types itself, and greyscale works
+there too.
 
 ### Added
 - **Potions, scrolls and demons are supplies.** `quaff`, `wield` or `deploy`
@@ -45,8 +46,16 @@ flowing. The wall keeps a standing garrison of its own.
   fast it runs and whether it ran dry.
 - **Your own words reach the new commands.** Asking for a demon at the circle,
   or to stop a supply, works without the exact command.
+- **The terminal build moves.** Numbers roll and show what a gain was worth,
+  the screen wipes across when you change room, and new text types itself out.
+  The `motion` setting holds it all still, and `pace` sets how fast text types.
+- **Greyscale in the terminal.** `F8` or the `sight` setting turns every colour
+  into one of your terminal's greys, keeping bold and dim.
 
 ### Changed
+- **`unfurl` steps one line at a time.** The arrows move one record, and `Home`
+  and `End` jump to the oldest and newest. In the window the arrows used to page
+  a screen; `PgUp` and `PgDn` still do.
 - **A run makes a batch.** A brew makes three potions (two of stillness), the
   lectern two scrolls. Experience and renown still count the run.
 - **Old stock runs slower.** Stock made long ago runs only at the slowest rate,
@@ -63,6 +72,22 @@ flowing. The wall keeps a standing garrison of its own.
 - **`move` carries a whole batch** onto the arsenal or a store. An instrument
   still takes one at a time.
 - **Older saves still load.** Troops you held join the garrison.
+
+### Fixed
+- **A second tower no longer overwrites the first.** Raising a new tower from
+  the menu before the first had saved gave both the same slot.
+- **Loading the tower you're in keeps your place.** The window put back its last
+  autosave, losing up to a minute. If the tower can't be written, loading it is
+  refused instead.
+- **A load never starts a fresh tower.** Choosing a save that has gone or can't
+  be read says why on the menu and leaves you where you were.
+- **An opened tower no longer types out its history again.** A new tower's
+  opening report now appears whole.
+- **Shift+Tab completes in the terminal**, as Tab does.
+- **The summoning circle lines up in every terminal.** Its marks no longer slip
+  a column where a terminal draws some symbols double-width.
+- **`NO_COLOR` keeps bold and dim** in the terminal. They were erased with the
+  colour.
 
 ## [v0.17.18] - 2026-10-12
 

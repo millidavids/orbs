@@ -7,7 +7,10 @@ use bevy::window::WindowResized;
 
 use super::commanding::{cycle_register, export_trace, quit, quit_requested, submit};
 use super::input::{SubmittedMessage, type_into_line};
-use super::reading::{scroll_back, scroll_forward, start_reading, stop_reading};
+use super::reading::{
+    nudge_back, nudge_forward, scroll_back, scroll_forward, start_reading, stop_reading, to_newest,
+    to_oldest,
+};
 use super::revealing::{drive_panes, drive_passing, drive_reveal, finish_reveal};
 use super::window::{cycle_mode, fit_projection, spawn_camera, track_window};
 /// Registration itself names `Tower` only through `resource_changed::<...>`,
@@ -431,9 +434,10 @@ impl Plugin for ShellPlugin {
                         .run_if(input_just_pressed(KeyCode::PageDown))
                         .run_if(crate::shell::playing)
                         .run_if(super::manualling::not_reading_the_manual),
-                    // The arrows scroll only while reading. At the prompt they
-                    // walk the command history; inside the mode there is no
-                    // history, so they are free.
+                    // The arrows, Home and End move through the transcript only
+                    // while reading — one record, or to an end, the table the
+                    // terminal reads too. At the prompt they walk the command
+                    // history and the caret; inside the mode they are free.
                     //
                     // And they carry the manual's guard, which the first pass
                     // gave only to PgUp/PgDn. `apply_to_manual` maps the arrows
@@ -441,27 +445,41 @@ impl Plugin for ShellPlugin {
                     // `scroll.is_reading()`, which nothing clears when the
                     // manual opens — so after an `unfurl` one ArrowDown
                     // scrolled the chapter *and* the transcript behind it.
-                    scroll_back
-                        .run_if(input_just_pressed(KeyCode::ArrowUp))
-                        .run_if(super::editing::reading)
-                        .run_if(crate::shell::playing)
-                        .run_if(super::manualling::not_reading_the_manual),
-                    scroll_forward
-                        .run_if(input_just_pressed(KeyCode::ArrowDown))
-                        .run_if(super::editing::reading)
-                        .run_if(crate::shell::playing)
-                        .run_if(super::manualling::not_reading_the_manual),
-                    // Escape leaves, exactly as it leaves the editor's buffer.
-                    // `playing` matters most here: Escape at the threshold must
-                    // reach the menu, and a `stop_reading` on the same
-                    // keystroke would be a second reader of a key the menu
-                    // owns. The manual's guard is the same one surface further
-                    // in.
-                    stop_reading
-                        .run_if(input_just_pressed(KeyCode::Escape))
-                        .run_if(super::editing::reading)
-                        .run_if(crate::shell::playing)
-                        .run_if(super::manualling::not_reading_the_manual),
+                    //
+                    // Nested, so the outer tuple stays inside Bevy's arity.
+                    (
+                        nudge_back
+                            .run_if(input_just_pressed(KeyCode::ArrowUp))
+                            .run_if(super::editing::reading)
+                            .run_if(crate::shell::playing)
+                            .run_if(super::manualling::not_reading_the_manual),
+                        nudge_forward
+                            .run_if(input_just_pressed(KeyCode::ArrowDown))
+                            .run_if(super::editing::reading)
+                            .run_if(crate::shell::playing)
+                            .run_if(super::manualling::not_reading_the_manual),
+                        to_oldest
+                            .run_if(input_just_pressed(KeyCode::Home))
+                            .run_if(super::editing::reading)
+                            .run_if(crate::shell::playing)
+                            .run_if(super::manualling::not_reading_the_manual),
+                        to_newest
+                            .run_if(input_just_pressed(KeyCode::End))
+                            .run_if(super::editing::reading)
+                            .run_if(crate::shell::playing)
+                            .run_if(super::manualling::not_reading_the_manual),
+                        // Escape leaves, exactly as it leaves the editor's
+                        // buffer. `playing` matters most here: Escape at the
+                        // threshold must reach the menu, and a `stop_reading`
+                        // on the same keystroke would be a second reader of a
+                        // key the menu owns. The manual's guard is the same one
+                        // surface further in.
+                        stop_reading
+                            .run_if(input_just_pressed(KeyCode::Escape))
+                            .run_if(super::editing::reading)
+                            .run_if(crate::shell::playing)
+                            .run_if(super::manualling::not_reading_the_manual),
+                    ),
                     start_reading
                         .run_if(resource_changed::<crate::sim::Tower>)
                         .run_if(crate::shell::playing),
@@ -663,6 +681,42 @@ mod tests {
             !app.world().resource::<orbs_shell::Scroll>().is_reading(),
             "escape did not return to the prompt",
         );
+    }
+
+    #[test]
+    fn the_arrows_step_one_record_and_home_and_end_reach_the_ends() {
+        // One table with the terminal (`orbs_shell::apply_to_reading`). Here an
+        // arrow was a second PgUp, and Home and End did nothing at all.
+        let mut app = app();
+        for _ in 0..6 {
+            type_line(&mut app, "status");
+            app.world_mut().resource_mut::<Tower>().step();
+            app.update();
+        }
+        app.world_mut().resource_mut::<orbs_shell::Scroll>().read();
+        let back = |app: &App| app.world().resource::<orbs_shell::Scroll>().back();
+
+        tap(&mut app, KeyCode::ArrowUp, Key::ArrowUp);
+        assert_eq!(back(&app), 1, "ArrowUp is not one record");
+        tap(&mut app, KeyCode::ArrowUp, Key::ArrowUp);
+        tap(&mut app, KeyCode::ArrowDown, Key::ArrowDown);
+        assert_eq!(back(&app), 1, "ArrowDown is not one record");
+
+        let total = app
+            .world()
+            .resource::<Tower>()
+            .sim()
+            .scrollback()
+            .records()
+            .drawn_len();
+        tap(&mut app, KeyCode::Home, Key::Home);
+        assert_eq!(
+            back(&app),
+            total - 1,
+            "Home did not stop at the oldest record"
+        );
+        tap(&mut app, KeyCode::End, Key::End);
+        assert_eq!(back(&app), 0, "End did not reach the newest");
     }
 
     #[test]

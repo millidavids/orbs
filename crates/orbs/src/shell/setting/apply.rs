@@ -83,7 +83,7 @@ pub(crate) fn apply(world: &mut World, setting: &str, value: &str) {
         Echoing::KEY => put(world, Echoing::named(value)),
         Contrast::KEY => put(world, Contrast::named(value)),
         Weight::KEY => put(world, Weight::named(value)),
-        crate::shell::revealing::PACE => put(
+        orbs_shell::settings::PACE => put(
             world,
             crate::shell::revealing::Paced(orbs_shell::Pace::named(value).unwrap_or_default()),
         ),

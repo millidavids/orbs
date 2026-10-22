@@ -126,11 +126,13 @@ impl Tower {
         Self(Sim::new(seed))
     }
 
-    /// The tower a fresh game builds.
+    /// The tower a fresh game builds, for the tests that want a player's start.
     ///
     /// Sealed unless `ORBS_SEALED=0` — a fresh game is a laboratory and nothing
     /// else (§11.5). `orbs_shell::fresh` is the one reader of the switch, so the
-    /// two builds cannot disagree.
+    /// two builds cannot disagree; a launch reaches it through
+    /// `orbs_shell::tower_from`.
+    #[cfg(test)]
     pub(crate) fn fresh(seed: u64) -> Self {
         Self(orbs_shell::fresh(
             seed,
@@ -142,8 +144,8 @@ impl Tower {
     /// The tower `new` or a wake raised, practice or real, as
     /// `orbs_shell::Raise` decided for both builds.
     ///
-    /// Not [`fresh`](Self::fresh) with an argument: `fresh` lets `ORBS_LENGTH`
-    /// speak, while this length is an answer the player just typed.
+    /// Not `fresh` with an argument: `fresh` lets `ORBS_LENGTH` speak, while this
+    /// length is an answer the player just typed.
     pub(crate) const fn raised(begun: Sim) -> Self {
         Self(begun)
     }
@@ -159,25 +161,6 @@ impl Tower {
         augur: Option<&dyn orbs_sim::Augur>,
     ) -> Option<orbs_shell::Raise> {
         install.submit(&mut self.0, line, augur)
-    }
-
-    /// The tower a save describes.
-    ///
-    /// Not renamed afterwards: `session::Wizard` says a save outranks the
-    /// environment, and a frontend seeds the name from `USER` only for a new
-    /// world — or a player who renamed their wizard is renamed back on load.
-    pub(crate) fn restored(save: &orbs_sim::Save) -> Self {
-        Self(Sim::restored(save))
-    }
-
-    /// Say the tower was resumed, and how long it was dark.
-    pub(crate) fn say_resumed(&mut self, away: Option<u64>) {
-        self.0.say_resumed(away);
-    }
-
-    /// Say a save was there and could not be read.
-    pub(crate) fn say_save_unreadable(&mut self) {
-        self.0.say_save_unreadable();
     }
 
     /// Say the tower could not be written out.
@@ -378,11 +361,6 @@ impl Tower {
     /// re-assembles the book: the edit lands, the scroll position does not jump.
     pub(crate) fn set_manual(&mut self, manual: orbs_sim::content::Manual) {
         self.0.set_manual(manual);
-    }
-
-    /// Name the wizard at the orb.
-    pub(crate) fn rename(&mut self, name: &str) {
-        self.0.rename(name);
     }
 
     /// Advance one tick, for a test that needs the world to have moved.

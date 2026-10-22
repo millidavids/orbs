@@ -5,11 +5,15 @@
 //! [`setting`](super::setting), the dispatch in [`pages`](super::pages). These
 //! three are the only ones that reach the filesystem.
 
+use std::path::Path;
+
 use orbs_sim::content::Length;
 
 use super::pages::abandoning;
 use super::state::{Complaint, Menu, Outcome, Page};
 use super::words::{ABANDON, NEW};
+use crate::opening::Refused;
+use crate::save::Keep;
 
 impl Menu {
     /// Read the listing and show the play page.
@@ -29,6 +33,23 @@ impl Menu {
             Vec::new()
         };
         self.page = Page::Play;
+    }
+
+    /// A load of `path` refused, and why: the listing is read again and the
+    /// slot's reason said.
+    ///
+    /// Read again because an unreadable save was set aside and a vanished one is
+    /// gone, so the listing is stale either way.
+    pub fn refused(&mut self, path: &Path, why: Refused) {
+        let slot = self
+            .saves
+            .iter()
+            .find(|save| save.path == path)
+            .map(|save| save.slot);
+        self.open_play();
+        if let Some(said) = refusal(why, slot) {
+            self.complaint = Some(said);
+        }
     }
 
     /// A slot number, `new`, or `abandon <slot>`, on the play page.
@@ -117,13 +138,13 @@ impl Menu {
                 None
             }
             Some(base) => {
-                let Some(slot) = crate::save::free_slot() else {
+                let Some(slot) = crate::save::free_slot_in(&base) else {
                     // Refused before the length is chosen: asking how long and
                     // then saying there is no room is §15's dead end.
                     self.complaint = Some(Complaint::Full);
                     return;
                 };
-                Some(crate::save::slot_path(&base, slot))
+                Some(Keep { base, slot })
             }
         };
         self.page = Page::Lengths;
@@ -143,9 +164,20 @@ impl Menu {
         // Resolved when the page opened, not now: a destination worked out
         // twice is one a changed `ORBS_SAVE` can make disagree with itself.
         Some(Outcome::Begin {
-            path: self.keep.clone(),
+            keep: self.keep.clone(),
             length,
         })
+    }
+}
+
+/// What the menu says about a refused load of the tower listed in `slot`.
+const fn refusal(why: Refused, slot: Option<usize>) -> Option<Complaint> {
+    match (why, slot) {
+        (Refused::Unwritten, _) => Some(Complaint::Unwritten),
+        (Refused::Unreadable, Some(slot)) => Some(Complaint::Unreadable(slot)),
+        (Refused::Gone, Some(slot)) => Some(Complaint::Empty(slot)),
+        // A path the listing never held has no number to say.
+        (Refused::Unreadable | Refused::Gone, None) => None,
     }
 }
 
@@ -324,18 +356,18 @@ mod tests {
         ] {
             let mut menu = Menu {
                 page: Page::Lengths,
-                keep: Some(PathBuf::from("/somewhere/orbs-save-3.toml")),
+                keep: Some(third()),
                 ..Menu::default()
             };
             menu.type_text(typed);
             let outcome = menu.enter();
-            let Some(Outcome::Begin { path, length }) = outcome else {
+            let Some(Outcome::Begin { keep, length }) = outcome else {
                 panic!("`{typed}` did not begin a game: {outcome:?}");
             };
             assert_eq!(length, want);
             assert_eq!(
-                path,
-                Some(PathBuf::from("/somewhere/orbs-save-3.toml")),
+                keep,
+                Some(third()),
                 "the tower was not begun where the page said it would be kept",
             );
         }
@@ -344,7 +376,7 @@ mod tests {
         // `Length::OFFERED` leaves it out and so must this.
         let mut menu = Menu {
             page: Page::Lengths,
-            keep: Some(PathBuf::from("/somewhere/orbs-save-3.toml")),
+            keep: Some(third()),
             ..Menu::default()
         };
         menu.type_text("baseline");
@@ -371,10 +403,33 @@ mod tests {
         assert_eq!(
             menu.enter(),
             Some(Outcome::Begin {
-                path: None,
+                keep: None,
                 length: Length::Short,
             }),
             "a session with nowhere to save refused to begin a game",
         );
+    }
+
+    /// Slot 3 of a folder nothing will touch.
+    fn third() -> Keep {
+        Keep {
+            base: PathBuf::from("/somewhere/orbs-save.toml"),
+            slot: 3,
+        }
+    }
+
+    #[test]
+    fn a_refused_load_says_why() {
+        // The slot used to vanish from the relisted page with nothing said.
+        assert_eq!(
+            refusal(Refused::Unreadable, Some(2)),
+            Some(Complaint::Unreadable(2))
+        );
+        assert_eq!(refusal(Refused::Gone, Some(2)), Some(Complaint::Empty(2)));
+        assert_eq!(
+            refusal(Refused::Unwritten, None),
+            Some(Complaint::Unwritten)
+        );
+        assert_eq!(refusal(Refused::Gone, None), None);
     }
 }

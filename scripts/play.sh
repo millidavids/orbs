@@ -50,7 +50,7 @@ trap 'tmux -L orbs-play kill-server 2>/dev/null || true' EXIT INT TERM
 #
 # So the backstop is in the game, not here — nothing a parent writes runs after
 # it is killed. `orbs-tui` exits when its terminal goes away (`watch_for_hangup`
-# in `orbs-tui/src/drive.rs`). What a hard kill leaves is a stale socket, which
+# in `orbs-tui/src/hangup.rs`). What a hard kill leaves is a stale socket, which
 # the line above clears on the next run.
 
 filter=""

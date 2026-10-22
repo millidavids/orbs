@@ -48,8 +48,39 @@ pub(super) fn start_reading(
 /// Escape, the same as the editor: one meaning in every mode, step out of the
 /// one you are in. It does not scroll back to the newest output — a player who
 /// read back and pressed Escape wants to type, not to lose their place.
-pub(super) fn stop_reading(mut scroll: ResMut<orbs_shell::Scroll>) {
-    scroll.stop_reading();
+pub(super) fn stop_reading(scroll: ResMut<orbs_shell::Scroll>, tower: Res<Tower>) {
+    read_with(&orbs_shell::Key::Escape, scroll, &tower);
+}
+
+/// One record older — the up arrow while reading.
+pub(super) fn nudge_back(scroll: ResMut<orbs_shell::Scroll>, tower: Res<Tower>) {
+    read_with(&orbs_shell::Key::Up, scroll, &tower);
+}
+
+/// One record newer — the down arrow while reading.
+pub(super) fn nudge_forward(scroll: ResMut<orbs_shell::Scroll>, tower: Res<Tower>) {
+    read_with(&orbs_shell::Key::Down, scroll, &tower);
+}
+
+/// The oldest output — Home while reading.
+pub(super) fn to_oldest(scroll: ResMut<orbs_shell::Scroll>, tower: Res<Tower>) {
+    read_with(&orbs_shell::Key::Home, scroll, &tower);
+}
+
+/// The newest output — End while reading.
+pub(super) fn to_newest(scroll: ResMut<orbs_shell::Scroll>, tower: Res<Tower>) {
+    read_with(&orbs_shell::Key::End, scroll, &tower);
+}
+
+/// A key through the table both builds read, `orbs_shell::apply_to_reading`.
+///
+/// One `input_just_pressed` system a key rather than one reading
+/// `KeyboardInput`: a gated message reader keeps its cursor and re-reads the
+/// key that closed the manual on the frame it next runs (`plugin.rs` records
+/// that shipping once for the menu).
+fn read_with(key: &orbs_shell::Key, mut scroll: ResMut<orbs_shell::Scroll>, tower: &Tower) {
+    let total = tower.sim().scrollback().records().drawn_len();
+    orbs_shell::apply_to_reading(key, &mut scroll, total);
 }
 
 /// Look further back through the transcript.

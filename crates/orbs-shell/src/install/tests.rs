@@ -11,6 +11,7 @@ use orbs_sim::{Augur, Fixture, Sim};
 
 use super::paint::split;
 use super::state::{Install, Raise, SKIP, Step, WAKE, from_value};
+use crate::save::Keep;
 
 fn raise() -> Raise {
     Raise {
@@ -205,7 +206,10 @@ fn the_strip_names_the_words_it_listens_for() {
 #[test]
 fn waking_hands_back_what_new_asked_for() {
     let raise = Raise {
-        keep: Some(PathBuf::from("/nowhere/orbs-save-3.toml")),
+        keep: Some(Keep {
+            base: PathBuf::from("/nowhere/orbs-save.toml"),
+            slot: 3,
+        }),
         length: Length::Long,
         seed: 41,
         wizard: Some("morgan".to_owned()),
@@ -216,8 +220,12 @@ fn waking_hands_back_what_new_asked_for() {
     let woke = install.submit(&mut sim, "skip", None);
     assert_eq!(woke, Some(raise.clone()));
 
-    let woken = raise.wake_beside(None);
-    assert_eq!(woken.keep, raise.keep, "an empty slot is kept as chosen");
+    let woken = raise.wake();
+    assert_eq!(
+        woken.keep,
+        Some(PathBuf::from("/nowhere/orbs-save-3.toml")),
+        "an empty slot is kept as chosen",
+    );
     assert!(woken.install.is_none());
     let tower = woken.sim;
     assert_eq!(tower.seed(), sim.seed());
@@ -234,11 +242,14 @@ fn a_slot_taken_while_installing_is_traded_for_a_free_one() {
     let base = dir.join("orbs-save.toml");
     let two = crate::save::slot_path(&base, 2);
     let raise = Raise {
-        keep: Some(two.clone()),
+        keep: Some(Keep {
+            base: base.clone(),
+            slot: 2,
+        }),
         ..raise()
     };
     let moved = Sim::new(0).prose().line("save_moved", &[("count", "1")]);
-    let woken = raise.wake_beside(Some(&base));
+    let woken = raise.wake();
     assert_eq!(woken.keep, Some(two.clone()));
     assert!(
         !said(&woken.sim, &moved),
@@ -247,10 +258,55 @@ fn a_slot_taken_while_installing_is_traded_for_a_free_one() {
 
     // A second orb wrote it while this one was installing.
     crate::save::write_to(&two, &Sim::new(5).snapshot()).expect("a save");
-    let woken = raise.wake_beside(Some(&base));
+    let woken = raise.wake();
     assert_eq!(woken.keep, Some(base));
     assert!(said(&woken.sim, &moved), "nothing said where it is kept");
-    assert_eq!(raise.wake_beside(None).keep, None);
+
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn a_new_tower_never_takes_the_slot_of_the_tower_just_left() {
+    // The menu offered slot 1 from the disk while the tower in hand had not
+    // been written yet; the swap then wrote that tower there. Kept as asked, the
+    // new tower overwrote it at its first autosave.
+    let dir = std::env::temp_dir().join(format!("orbs-install-begin-{}", std::process::id()));
+    std::fs::remove_dir_all(&dir).ok();
+    std::fs::create_dir_all(&dir).expect("a temp directory");
+    let base = dir.join("orbs-save.toml");
+    let two = crate::save::slot_path(&base, 2);
+    let raise = Raise {
+        keep: Some(Keep {
+            base: base.clone(),
+            slot: 1,
+        }),
+        ..raise()
+    };
+    assert_eq!(
+        raise.clone().begin(false).keep,
+        Some(base.clone()),
+        "an empty slot was not kept as asked",
+    );
+
+    // The tower being left, written by the swap before this one begins.
+    crate::save::write_to(&base, &Sim::new(5).snapshot()).expect("a save");
+    let begun = raise.clone().begin(false);
+    assert_eq!(begun.keep, Some(two.clone()));
+    let moved = Sim::new(0).prose().line("save_moved", &[("count", "2")]);
+    assert!(
+        !said(&begun.sim, &moved),
+        "a tower raised beside the orb's own said another orb took its place",
+    );
+
+    // With the installation on, the default: the slot was carried to the wake
+    // unasked, which then blamed another orb for the orb's own tower.
+    let install = raise.begin(true).install.expect("installing");
+    let woken = install.raise().wake();
+    assert_eq!(woken.keep, Some(two));
+    assert!(
+        !said(&woken.sim, &moved),
+        "the wake blamed another orb for the tower this one just wrote",
+    );
 
     std::fs::remove_dir_all(&dir).ok();
 }
@@ -266,19 +322,25 @@ fn a_tower_with_no_slot_left_says_it_will_not_be_kept() {
         crate::save::write_to(&path, &Sim::new(5).snapshot()).expect("a save");
     }
     let full = Raise {
-        keep: Some(crate::save::slot_path(&base, 2)),
+        keep: Some(Keep { base, slot: 2 }),
         ..raise()
     };
 
-    let woken = full.wake_beside(Some(&base));
+    let woken = full.wake();
     assert_eq!(woken.keep, None);
     let failed = woken.sim.prose().line("save_failed", &[]);
     assert!(
         said(&woken.sim, &failed),
         "nothing said it will not be kept"
     );
+    let begun = full.clone().begin(false);
+    assert_eq!(begun.keep, None);
+    assert!(said(&begun.sim, &failed), "a full orb began silently");
+    // Installing, it is said at the wake, in the tower that will not be kept.
+    let install = full.begin(true).install.expect("installing");
+    assert!(said(&install.raise().wake().sim, &failed));
     // And nothing to say for a tower that never asked to be kept.
-    let quiet = raise().wake_beside(Some(&base)).sim;
+    let quiet = raise().wake().sim;
     assert!(!said(&quiet, &failed));
 
     std::fs::remove_dir_all(&dir).ok();

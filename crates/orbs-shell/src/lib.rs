@@ -42,6 +42,7 @@ mod loom;
 mod manual;
 mod menu;
 mod offering;
+mod opening;
 pub mod panel;
 mod passing;
 mod post;
@@ -59,6 +60,7 @@ mod seed;
 pub mod settings;
 mod sheet;
 mod shortcuts;
+mod sight;
 pub mod sky;
 mod stacks;
 mod stage;
@@ -92,6 +94,7 @@ pub use manual::{
 };
 pub use menu::{Driver, Menu, Outcome as MenuOutcome, SETTINGS_ROWS, Stance, WORDS as MENU_WORDS};
 pub use offering::{Ghost, Offered};
+pub use opening::{Refused, loaded, tower_from};
 pub use passing::{Passing, Showing};
 pub use prompt::{View, paint, paint_booting, paint_too_small};
 pub use prose::{
@@ -99,14 +102,15 @@ pub use prose::{
 };
 pub use reveal::{Pace, Reveal};
 pub use save::{
-    Held, OFF as SAVE_OFF, Opened, SAVE_PATH, SAVE_VAR, SLOTS as SAVE_SLOTS, Slot, abandon,
+    Held, Keep, OFF as SAVE_OFF, Opened, SAVE_PATH, SAVE_VAR, SLOTS as SAVE_SLOTS, Slot, abandon,
     app_data, away_for, free_slot, migrate as migrate_saves, path as save_path, read as read_save,
     read_from as read_save_from, saves, slot_path, write as write_save, write_to as write_save_to,
 };
 pub use screen::{Fit, Screen};
-pub use scrollback::{Scroll, page_step};
+pub use scrollback::{Scroll, apply_to_reading, page_step};
 pub use seed::{SEED, SEEDS, fresh_seed, new_game_seed, seed};
 pub use shortcuts::{TRACE_PATH, cycle_register, export_trace};
+pub use sight::{SIGHT_VAR, Sight};
 pub use stage::{Boot, Stage};
 pub use tapestry::{Outcome as WeaveOutcome, Tapestry};
 pub use threshold::{THRESHOLD, Threshold};

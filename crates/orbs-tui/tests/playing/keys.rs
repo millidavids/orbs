@@ -160,6 +160,39 @@ fn every_other_chord_is_swallowed_rather_than_typed() {
 
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
+fn shift_tab_completes_as_tab_does() {
+    if !available() {
+        return;
+    }
+    // crossterm reports Shift+Tab as its own code, and it was dropped; winit
+    // reads the logical key and calls it Tab. tmux's name for it is `BTab`.
+    let game = Game::start();
+    game.send_text("atte");
+    game.press("BTab");
+    game.expect_drawn("wizard $ attend");
+}
+
+#[test]
+#[ignore = "plays a real game through tmux; run with scripts/play.sh"]
+fn f7_silences_the_menus_secrets() {
+    if !available() {
+        return;
+    }
+    // A tense register keeps the menu's jokes quiet (§3), and `F7` can change
+    // the register with the menu up. The surfaces unit test is the exact guard;
+    // this is the same thing on a keyboard.
+    let game = Game::start();
+    game.send("menu");
+    game.expect_drawn("the tower waits");
+    game.type_raw("xyzzy");
+    game.expect_drawn("nothing happens");
+    game.press("F7");
+    game.type_raw("xyzzy");
+    game.expect_drawn("the orb does not know 'xyzzy'");
+}
+
+#[test]
+#[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn the_manual_opens_on_the_room_and_then_the_words() {
     if !available() {
         return;

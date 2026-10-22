@@ -99,6 +99,47 @@ pub fn moves() -> bool {
     get(MOTION).is_none_or(|word| is_on(&word))
 }
 
+/// The settings-file key for how fast text types itself, which is also the row's
+/// word. Here rather than in either frontend, since both build the row now.
+pub const PACE: &str = "pace";
+
+/// The settings-file key for the greyscale accommodation, and the row's word.
+/// Both builds build the row and `F8` writes it; see [`Sight`](crate::Sight).
+pub const SIGHT: &str = "sight";
+
+/// How fast text types itself, as far as the file says; the default if it says
+/// nothing this build knows.
+#[must_use]
+pub fn pace() -> crate::Pace {
+    get(PACE)
+        .and_then(|word| crate::Pace::named(&word))
+        .unwrap_or_default()
+}
+
+/// `0` holds everything still, `1` lets it move, and blank or unset leaves it to
+/// the `motion` row.
+///
+/// It seeds the row at launch and the row wins after, as `ORBS_INSTALL` does.
+/// It is the harnesses' switch: the played suite reads screens back, and a
+/// number half-rolled or a line half-typed is a screen nobody asked about.
+pub const MOTION_VAR: &str = "ORBS_MOTION";
+
+/// Whether anything may move at launch: `ORBS_MOTION`, then the file. The one
+/// reading both builds take.
+#[must_use]
+pub fn motion_wanted() -> bool {
+    motion_from(std::env::var(MOTION_VAR).ok().as_deref(), moves())
+}
+
+/// [`motion_wanted`] with the lookups done, so it can be tested without a
+/// process-global environment. Blank or unrecognised falls to the setting.
+#[must_use]
+pub fn motion_from(value: Option<&str>, setting: bool) -> bool {
+    value
+        .and_then(crate::environment::switch)
+        .unwrap_or(setting)
+}
+
 /// Whether an echo that only repeats the line is left out, as the file says.
 ///
 /// A word this build does not know shows every echo: hiding is the choice
@@ -125,6 +166,17 @@ pub fn warn_once() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn orbs_motion_seeds_the_row_either_way_and_blank_leaves_it() {
+        for setting in [true, false] {
+            assert!(!motion_from(Some("0"), setting), "0 left something moving");
+            assert!(motion_from(Some("1"), setting), "1 held everything still");
+            assert_eq!(motion_from(None, setting), setting);
+            assert_eq!(motion_from(Some(""), setting), setting, "blank is unset");
+            assert_eq!(motion_from(Some("sometimes"), setting), setting);
+        }
+    }
 
     #[test]
     fn a_driver_survives_the_round_trip_through_the_file_format() {
@@ -169,7 +221,9 @@ mod tests {
     fn the_keys_are_distinct() {
         // Lines in one file: a collision would make one setting silently
         // overwrite another.
-        let keys = [DRIVER, SKIP, INSTALL, FOCUS, MOTION, SCALE, ECHO, WARNED];
+        let keys = [
+            DRIVER, SKIP, INSTALL, FOCUS, MOTION, SCALE, ECHO, WARNED, PACE, SIGHT,
+        ];
         for (at, key) in keys.iter().enumerate() {
             assert!(
                 !keys[..at].contains(key),

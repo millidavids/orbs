@@ -1,12 +1,36 @@
 //! Where in the transcript the player is looking, and whether it has the keys.
 //!
-//! Pure arithmetic over a record count. The keys that move it are
-//! each frontend's own; the word that hands it the keyboard is `unfurl`.
+//! Pure arithmetic over a record count, and the one table of what a key does
+//! while the transcript has the keyboard. The word that hands it the keyboard is
+//! `unfurl`.
 
 use bevy_ecs::prelude::Resource;
 use orbs_sim::Sim;
 
+use crate::keys::Key;
 use crate::screen::Screen;
+
+/// One key while the transcript has the keyboard, for both builds (§19).
+///
+/// No `PgUp`/`PgDn`, which both answer above every surface, and no `_` arm, so a
+/// new [`Key`] is decided here.
+pub fn apply_to_reading(key: &Key, scroll: &mut Scroll, total: usize) {
+    match key {
+        Key::Escape => scroll.stop_reading(),
+        Key::Up => scroll.page(1, true, total),
+        Key::Down => scroll.page(1, false, total),
+        Key::Home => scroll.page(total, true, total),
+        Key::End => scroll.rewind(),
+        Key::Enter
+        | Key::Backspace
+        | Key::Left
+        | Key::Right
+        | Key::Tab
+        | Key::PageUp
+        | Key::PageDown
+        | Key::Text(_) => {}
+    }
+}
 
 /// How far back through the transcript the player has scrolled.
 ///
@@ -79,10 +103,13 @@ impl Scroll {
     /// costs *at least* one row, which caps records-per-page above rather than
     /// below, so paging by the pane's rows moved more than a screenful and
     /// dropped the lines in between. See `plugin::page_step`.
+    ///
+    /// The oldest end keeps one record on screen, as the painter does: held at
+    /// `total`, the next step newer moved nothing anyone could see.
     pub fn page(&mut self, step: usize, older: bool, total: usize) {
         let step = step.max(1);
         self.back = if older {
-            self.back.saturating_add(step).min(total)
+            self.back.saturating_add(step).min(total.saturating_sub(1))
         } else {
             self.back.saturating_sub(step)
         };
@@ -133,4 +160,35 @@ pub fn page_step(screen: &Screen, sim: &Sim, back: usize) -> usize {
         }
     }
     (visible - narrowest).max(1)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_reading_keys_move_one_record_and_reach_the_ends() {
+        let mut scroll = Scroll::default();
+        scroll.read();
+        apply_to_reading(&Key::Up, &mut scroll, 10);
+        apply_to_reading(&Key::Up, &mut scroll, 10);
+        assert_eq!(scroll.back(), 2, "Up is not one record");
+        apply_to_reading(&Key::Down, &mut scroll, 10);
+        assert_eq!(scroll.back(), 1, "Down is not one record");
+        apply_to_reading(&Key::Home, &mut scroll, 10);
+        assert_eq!(scroll.back(), 9, "Home did not stop at the oldest record");
+        apply_to_reading(&Key::Down, &mut scroll, 10);
+        assert_eq!(
+            scroll.back(),
+            8,
+            "the first step back from the top moved nothing"
+        );
+        apply_to_reading(&Key::End, &mut scroll, 10);
+        assert_eq!(scroll.back(), 0, "End did not reach the newest");
+        // Paging is answered above every surface, never twice.
+        apply_to_reading(&Key::PageUp, &mut scroll, 10);
+        assert_eq!(scroll.back(), 0, "PgUp paged inside the table too");
+        apply_to_reading(&Key::Escape, &mut scroll, 10);
+        assert!(!scroll.is_reading(), "Escape kept the keyboard");
+    }
 }

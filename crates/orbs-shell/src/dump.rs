@@ -913,10 +913,9 @@ fn scrolled(sim: &mut orbs_sim::Sim) -> super::scrollback::Scroll {
     if let Ok(back) = std::env::var(SCROLL)
         && let Ok(back) = back.trim().parse::<u16>()
     {
-        // `page` moves by records and clamps to a total; asking it for exactly
-        // the requested distance, with that distance as the ceiling, lands on it.
-        let back = usize::from(back);
-        scroll.page(back, true, back);
+        // Clamped where the painter clamps: one record kept on screen.
+        let total = sim.scrollback().records().drawn_len();
+        scroll.page(usize::from(back), true, total);
     }
     // An `unfurl` in the script hands the transcript the keyboard, as
     // `plugin::start_reading` does in the game; a dump builds no `App`, so that

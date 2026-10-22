@@ -443,6 +443,39 @@ pub fn slot_path(base: &Path, slot: usize) -> PathBuf {
     base.with_file_name(name)
 }
 
+/// Where a new tower is to be kept: a slot, and slot 1's path beside it.
+///
+/// Both read once, when the play page opened, so a slot asked again later is
+/// asked of the same folder and name.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Keep {
+    /// Slot 1's path, which names the rest ([`slot_path`]).
+    pub base: PathBuf,
+    /// Which slot, from 1.
+    pub slot: usize,
+}
+
+impl Keep {
+    /// The file this slot is.
+    #[must_use]
+    pub fn path(&self) -> PathBuf {
+        slot_path(&self.base, self.slot)
+    }
+
+    /// This slot while it is empty, else the lowest empty one beside it, or
+    /// `None` when every slot is taken.
+    #[must_use]
+    pub fn still_free(&self) -> Option<Self> {
+        if !self.path().exists() {
+            return Some(self.clone());
+        }
+        free_slot_in(&self.base).map(|slot| Self {
+            base: self.base.clone(),
+            slot,
+        })
+    }
+}
+
 /// What a slot holds, when this build can read it.
 ///
 /// Everything here is already in the document — wizard, seed, tick, length and

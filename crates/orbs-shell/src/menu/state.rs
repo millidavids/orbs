@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use orbs_sim::content::Length;
 
 use super::stance::Stance;
-use crate::save::Slot;
+use crate::save::{Keep, Slot};
 use crate::settings::{Category, Row};
 
 /// The menu, while it is up.
@@ -51,12 +51,12 @@ pub struct Menu {
     pub(super) keeps: bool,
     /// Where a new tower would be kept, decided when the lengths page opened.
     ///
-    /// A path rather than a slot number, for [`Outcome::Load`]'s reason: a
-    /// number is resolved twice, and a changed `ORBS_SAVE` makes the two
-    /// resolutions disagree. `None` means this session keeps nothing — a tower
+    /// The slot and slot 1's path together, for [`Outcome::Load`]'s reason: a
+    /// destination worked out twice is one a changed `ORBS_SAVE` can make
+    /// disagree with itself. `None` means this session keeps nothing — a tower
     /// playable and not remembered, not a refusal. A *full* orb is refused
     /// before this page opens, so `None` here has one meaning.
-    pub(super) keep: Option<PathBuf>,
+    pub(super) keep: Option<Keep>,
     /// The slot `abandon` has asked about, while the question is open.
     ///
     /// A field rather than a [`Complaint`], because the complaint is cleared at
@@ -180,7 +180,7 @@ pub enum Outcome {
     /// resolved twice, and a stale `SLOTS` or a changed `ORBS_SAVE` is exactly
     /// what makes the two resolutions disagree.
     Load(PathBuf),
-    /// Begin a tower in this file, at this length.
+    /// Begin a tower in this slot, at this length.
     Begin {
         /// Where it will be kept, or [`None`] to keep it nowhere.
         ///
@@ -189,7 +189,7 @@ pub enum Outcome {
         /// played-game suite for every scenario — so a threshold that refused to
         /// begin a game without somewhere to keep it would make the build
         /// unreachable under the switch its own instruments run on.
-        path: Option<PathBuf>,
+        keep: Option<Keep>,
         /// How long it is to be.
         length: Length,
     },
@@ -253,6 +253,9 @@ pub enum Complaint {
     Unabandoned(usize),
     /// The orb is keeping as many towers as it can.
     Full,
+    /// The tower in hand could not be written, so loading its own slot was
+    /// refused: it would have read an older autosave over the live tower.
+    Unwritten,
     /// This session keeps no save at all — `ORBS_SAVE=off`.
     ///
     /// Said rather than hidden. A dump and the played-game suite both run this
