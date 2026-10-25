@@ -45,13 +45,8 @@ fn main() {
 
 /// Hand burn a device made outside it, the way the game will.
 ///
-/// `orbs` already has a wgpu device from Bevy. If burn cannot be given that one
-/// it opens a second Vulkan instance and shader compiler in a game whose whole
-/// picture is a text grid.
-///
-/// Bevy exposes all four pieces (`RenderInstance`, `RenderAdapter`,
-/// `RenderDevice::wgpu_device`, `RenderQueue`); this makes them the same way, so
-/// what is proved here is the mechanism rather than the plumbing.
+/// Or a second Vulkan stack opens beside Bevy's. Bevy exposes all four pieces;
+/// this makes them the same way, proving the mechanism.
 fn adopted() {
     use burn::backend::wgpu::{RuntimeOptions, WgpuSetup, init_device};
 
@@ -104,18 +99,9 @@ fn adopted() {
 
 /// The way this goes wrong, kept because it goes wrong quietly.
 ///
-/// A device built with `DeviceDescriptor::default()` is accepted by
-/// `init_device` and then computes zeros — no error, no warning, the tensor
-/// round-trips and every number in it is 0.0. cubecl's kernels need what the
-/// adapter actually has, not the downlevel `required_limits`.
-///
-/// Bevy configures its own device, so whether the augury works will depend on
-/// limits chosen elsewhere in the frontend — and the failure looks like a model
-/// that reads every sentence as the same command.
-///
-/// So adoption is checked, not assumed: a known matmul at startup, falling back
-/// to the CPU backend. Demonstrated here so the check has something to be
-/// written against.
+/// A `DeviceDescriptor::default()` device computes zeros silently, since
+/// cubecl needs the adapter's real limits. So adoption is checked with a known
+/// matmul, falling back to the CPU.
 fn hazard() {
     use burn::backend::wgpu::{RuntimeOptions, WgpuSetup, init_device};
 

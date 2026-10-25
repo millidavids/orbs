@@ -1,30 +1,15 @@
 //! What the tower has opened: rooms, recipes, charms, demons, and the wall
 //! (DESIGN.md §11.5, §19).
 //!
-//! One set, six kinds of key: `domain:archive`, `recipe:warding`,
-//! `charm:whetted`, `demon:golem`, `siege`, `circle`. Every question of the form *"may the
-//! player do this yet"* is answered here. One holder rather than one per kind,
-//! so a save carries one list and a restore cannot open a room and forget a
-//! recipe.
+//! One set of keys — `domain:archive`, `recipe:warding`, `charm:whetted`,
+//! `demon:golem`, `siege`, `circle` — answering every *may the player do this
+//! yet*, so a save carries one list. Not [`Learned`]: a secret is found, a gated
+//! recipe earned.
 //!
-//! Not [`Learned`], which stays the lens's: a secret recipe is *found* on a
-//! broken ward and a gated one is *earned* by the room's work. `learn` filters
-//! against `secrets()` on purpose, so a gated name routed through it would open
-//! nothing and say nothing.
-//!
-//! A start state, not a world rule. [`Opened::all`] is the everything-open tower
-//! every test, dump, balance policy and `screens` example uses; a fresh *game*
-//! starts sealed and earns the rest (`Sim::sealed`). §19 records the trade-off —
-//! ~200 See-it lines keep meaning what they meant, at the cost of the dump's
-//! default differing from a fresh game, the class of difference `ORBS_BOOT=0`
-//! already is.
-//!
-//! A sealed room is sealed everywhere it is a noun, through one gate: `attend`
-//! resolves any place tower-wide, so a room-name check alone is bypassed by
-//! `attend stacks`, and `survey`, the boot report, the scene and calm-layer
-//! sabotage all reach a room too. [`sealed_room_of`] is the one question;
-//! [`Sealed`] is the same answer as a marker, for queries that cannot ask a
-//! function.
+//! A start state, not a world rule: [`Opened::all`] is the open tower tests and
+//! dumps use, and a fresh game starts sealed (`Sim::sealed`, §19). A sealed room
+//! is sealed everywhere it is a noun through one gate, [`sealed_room_of`], with
+//! [`Sealed`] as the same answer for queries.
 
 use std::collections::BTreeSet;
 use std::fmt;
@@ -126,15 +111,9 @@ impl fmt::Display for Key {
 
 /// Every place that can be shut.
 ///
-/// Wider than [`DOMAINS`](super::DOMAINS) by two rooms: that list is the rooms
-/// you *work in*, and sealing asks a different question — the bailey is fought
-/// in and the grimoire is where spells live, and both can be shut without being
-/// somewhere you tend.
-///
-/// A list as well as a predicate, because a caller that wants to *walk* the shut
-/// rooms had nowhere to get them and reached for `DOMAINS` — which is how
-/// `tower::scene` stopped withholding a shut grimoire's name. This rule has had
-/// four sites.
+/// [`DOMAINS`](super::DOMAINS) plus the bailey and the grimoire, which can be
+/// shut without being rooms you tend. A list too, for callers that walk the shut
+/// rooms; one reached for `DOMAINS` and leaked the grimoire's name.
 pub const ROOMS: [&str; super::DOMAINS.len() + 2] = {
     let mut rooms = [""; super::DOMAINS.len() + 2];
     let mut index = 0;
@@ -208,10 +187,8 @@ impl Opened {
 
     /// What a fresh game starts with: everything no station opens.
     ///
-    /// Derived from the content, not authored twice: the laboratory is open
-    /// because nothing opens it, the archive is shut because `laboratory_1`
-    /// does. A second list of starting keys would be a second expression of the
-    /// same rule. The bailey follows the wall.
+    /// Derived from the content: the laboratory is open because nothing opens
+    /// it. The bailey follows the wall.
     #[must_use]
     pub fn start(
         recipes: &Recipes,
@@ -287,12 +264,8 @@ pub struct Sealed;
 
 /// Open `key`, and say whether it was shut before.
 ///
-/// Returns whether the state changed, and the caller says the sentence only
-/// then: a tower that restored open and re-reaches the station opening the
-/// archive must not announce an archive it already has.
-///
-/// The wall opens the bailey with it — a room to defend from is what `siege`
-/// arms — and a room opening clears its markers.
+/// Only a change is announced. The wall opens the bailey with it, and a room
+/// opening clears its markers.
 pub fn open(world: &mut World, key: &str) -> bool {
     let changed = world.resource_mut::<Opened>().insert(key);
     if key == SIEGE {
@@ -308,10 +281,7 @@ pub fn open(world: &mut World, key: &str) -> bool {
 
 /// Open every key a station carries, and say each one that was shut.
 ///
-/// Both tracks open things and this is the one loop that does it. Two copies
-/// would be two places to forget that only a *change* is announced — the rule a
-/// migrated tower depends on, since it re-reaches stations whose rooms it
-/// already stands in.
+/// The one loop for both tracks, so neither forgets that only a change is said.
 pub(crate) fn opening(world: &mut World, keys: &[String]) {
     for key in keys {
         if !open(world, key) {
@@ -370,14 +340,8 @@ pub fn seal(world: &mut World) {
 
 /// The shut room `node` stands in, if it stands in one.
 ///
-/// The one gate: `attend`, `survey`, the scene and the boot report all ask this
-/// rather than checking a name against the set, because a node reached by path —
-/// `attend stacks` — has a room the name alone would not mention.
-///
-/// It walks the ancestors itself rather than asking `domain_of`, because the
-/// grimoire is `/tower`'s *sibling* and `domain_of` answers `None` for it. So
-/// every node inside a shut grimoire answered "not in a shut room" while
-/// [`seal`], which walks the tree, had marked all twenty.
+/// The one gate, since `attend stacks` names no room. It walks the ancestors
+/// itself: `domain_of` answers `None` for the grimoire, `/tower`'s sibling.
 #[must_use]
 pub fn sealed_room_of(world: &World, node: Entity) -> Option<String> {
     let mut at = node;
@@ -394,9 +358,7 @@ pub fn sealed_room_of(world: &World, node: Entity) -> Option<String> {
 /// What the player may make: the secrets they have found and the products
 /// they have earned, read together.
 ///
-/// The one question, asked of both holders. `Recipes::matching` and its siblings
-/// used to take `&Learned`; a second parameter for `Opened` at every site would
-/// be two expressions of one rule.
+/// One question, asked of both holders.
 #[derive(Debug, Clone, Copy)]
 pub struct Known<'a> {
     learned: &'a Learned,

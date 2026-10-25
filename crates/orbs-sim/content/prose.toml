@@ -1,28 +1,14 @@
 # The orb's voice.
 #
-# CLAUDE.md rule 6: prose lives here, never as a string literal in Rust. The
-# writing budget is ~88k words (DESIGN.md §12) and string literals would make it
-# unmanageable by month 20.
+# Prose lives here, never in Rust (rule 6). Compiled in, and hot-reloadable
+# through `Sim::set_prose` at a tick boundary.
 #
-# This file is compiled in as the default (`include_str!`), so headless tests and
-# the balance harness need no filesystem. A frontend may hand a replacement to
-# `Sim::set_prose` at a tick boundary, which is what makes it hot-reloadable.
+# `{name}`, `{state}`, `{source}` … interpolate the record's fields by
+# `FieldName::label`; an unmatched placeholder stays visible, to be caught by
+# looking.
 #
-# ## Placeholders
-#
-# `{name}`, `{state}`, `{source}` … interpolate the record's own fields, by the
-# label in `FieldName::label`. A placeholder with no matching field is left as
-# written — visible on screen, so a typo is caught by looking rather than by
-# silently rendering an empty gap.
-#
-# ## Style
-#
-# Lower case throughout. The tower's whole surface is a terminal and a
-# capitalised sentence would be the only thing on screen shouting (§3). No
-# trailing full stop for the same reason.
-#
-# Keep every line inside the 80×22 floor's usable width — roughly 70 cells once
-# the border and glyph are drawn. `worst_case_legibility` is what measures it.
+# Lower case, no trailing full stop: nothing on the tube shouts (§3). Every line
+# within ~70 cells, the 80×22 floor's usable width.
 
 [lines]
 
@@ -30,15 +16,8 @@
 # Work — the production slot (§9, §11.5)
 # ---------------------------------------------------------------------------
 
-# §5.0: "repairing the rats occupies the laboratory pane for its duration,
-# during which you are not brewing". The refusal only bites if it says so - this
-# line replaces three bare field values that rendered as "decoct decoct
-# laboratory" and told a player nothing.
-#
-# `{state}` is `Verb::participle`, already inflected. It used to be
-# `{state}ing` over `Verb::canonical`, which reads correctly for `wield` and
-# gave "the archive is busy researching" for the only other verb that can hold
-# the slot.
+# The slot's refusal must say so (§5.0). `{state}` is `Verb::participle`,
+# already inflected.
 work_busy = "the {source} is busy {state}. wait for it, or stop it"
 
 # §7 guards catastrophic targets in character rather than with an error. It
@@ -49,11 +28,8 @@ purge_protected = "the orb will not unmake the {path}"
 
 # A verb that belongs to an instrument, typed where that instrument is not (§7).
 #
-# `mix` means the flask and rod, and there is no flask and rod in the archive —
-# so the parser never considers the word there, which is what keeps one domain's
-# vocabulary from capturing another's typos as §10's five further domains land.
-# But "I do not know that word" would be a lie about a word the game taught in
-# the room next door, so the refusal names the verb and says where it is not.
+# Scoping keeps one room's words from catching another's typos, but "I do not
+# know that word" would lie, so it names the verb and says it is not here.
 verb_elsewhere = "there is nothing here to {name} with"
 
 # A place with nothing in it. Every other record `survey` emits is pushed inside
@@ -69,34 +45,23 @@ verb_needs_fixture = "there is no {source} here to {name} with"
 
 # A verb that takes nothing, handed words anyway (§19).
 #
-# `status gibberish` ran `status` with the word thrown away, and `undo
-# gibberish` acknowledged. A verb whose argument explained nothing asks "verify
-# what?" by naming the slot it is waiting for; a verb that takes nothing has no
-# slot to name, so the refusal names the verb and the words it could not use.
+# With no slot to name, it names the verb and the words it could not use.
 verb_takes_nothing = "{name} takes nothing - '{words}' is not something it can use"
 
-# The commonest refusal in the game: the parser resolved a name on submit and by
-# the next tick it was gone, or the player named something that is not within
-# reach. It drew as two bare field values — `mix sage` — which says what was
-# wanted and never says it was refused.
+# The commonest refusal: a name resolved on submit and gone by the tick, or
+# out of reach.
 missing_target = "there is no {path} within reach"
 
-# The one sentence on the "window too small" screen (§9's `is_hostable`). It
-# lived as a `Span::new("...")` literal in the Bevy frontend — invisible to the
-# `ORBS_CONTENT` watcher, invisible to the width and CP437 lints below, and
-# unfindable by a writer grepping `content/`. Rule 6 has no frontend exemption.
+# The "window too small" screen's sentence (§9); rule 6 has no frontend
+# exemption.
 window_too_small = "the orb needs a larger window"
 
 # ---------------------------------------------------------------------------
 # The laboratory (§10.1)
 # ---------------------------------------------------------------------------
 
-# §10.1's loop opens with clearing an instrument of what the last brew left.
-# A place is emptied, never destroyed.
-# empty - the counterpart of purge. §10.1: every byproduct has at least one use,
-# so the loop needs a way to clear an instrument that *keeps* what was in it.
-# Husks are the mortar's leavings and the water bath's input; a player who can
-# only clear by destroying never finds the second route to a draught.
+# `empty`, purge's counterpart: it clears an instrument and keeps what it held,
+# since every byproduct has a use (§10.1).
 empty_done = "you turn the {name} out into the {path}: {state}"
 empty_already = "the {name} is already empty"
 empty_nowhere = "there is nowhere here to put what the {name} holds"
@@ -107,56 +72,28 @@ purge_already = "you are already scouring the {path}"
 purge_place = "the {path} is clean"
 purge_place_empty = "the {path} was already clean"
 
-# `siphon_*` lived here. The verb is retired (§19): the next stage reaches into
-# an idle instrument for what it needs, so drawing the product onto a bench had
-# stopped doing anything - and with nothing able to put a reagent on the floor,
-# the bench and the shelf are one place.
-
 # ---------------------------------------------------------------------------
 # `recall` (§6.1) - the in-world manual.
 #
-# A recipe name answers with its routes, walked out of `recipes.toml`. Anything
-# else is a *subject*, and answers from here. Keys are `recall_<topic>`.
-#
-# **Only subjects take the `recall_` prefix.** `Prose::topics` strips it to
-# decide what the player may *name*, so a template key sharing the prefix
-# becomes something to ask the orb about: the route templates below used to be
-# `grimoire_step` and `grimoire_step_or`, which registered `step` and `step_or`
-# as manual subjects nobody authored. They are `route_` now.
+# A recipe answers with its routes from `recipes.toml`; anything else is a
+# subject, `recall_<topic>`. Only subjects take the prefix: `Prose::topics`
+# makes every `recall_` key nameable.
 # ---------------------------------------------------------------------------
 
 recall_brewing = "kindle, grind, digest, mix, distil - then empty, or purge the waste"
 
-# The manual is where a player looks for a word they half-remember, so the verb
-# that exists *because* an affordance was undiscoverable had better be findable
-# in the one place built for finding things.
-
-# A recipe, written as instructions rather than as a table.
-#
-# The steps come out in **doing** order — the walk is post-order over the recipe
-# graph — so reading top-down is the order you type.
-#
-# **What becomes what, first**, because that is the part a player is looking
-# for; where and how long follow in brackets. Long steps wrap at a word boundary
-# rather than clipping — see `RecordView::wrapped_rows` — so a two-input step
-# breaks after the arrow instead of losing the thing it makes.
-#
-# `{kind}` is the heat marker, already worded. Forgetting to light the athanor is
-# the commonest way a stage refuses, so it earns its place on the line.
+# A recipe as instructions, in doing order. What becomes what first, then where
+# and how long; long steps wrap. `{kind}` is the heat marker, since a cold
+# athanor is the commonest refusal.
 route_line = "{name}: {count} steps, {ticks} ticks"
 route_step = "{index} {detail} -> {name}{state}  ({source}, {ticks}t{kind})"
 route_step_or = "or {detail} -> {name}{state}  ({source}, {ticks}t{kind})"
 route_heat = ", needs heat"
 route_quintessence = ", {quantity} quintessence, lost if stopped"
-# The byproduct clause, composed in like `route_heat` beside it - because not
-# every step leaves one. Byproducts are the laboratory's mechanic, and a step
-# without one used to read "-> gleaning-scroll +  " with nothing after the plus.
+# The byproduct clause, composed in, since not every step leaves one.
 route_leaves = " + {state}"
 
-# Terse on purpose. The interpolated line is what has to fit ~60 cells at the
-# 80x22 floor, and "you move the ground-sage from the laboratory to the
-# balneum_mariae" is 66 - clipped, in the one line whose whole job is saying
-# where a thing came from and went to.
+# Terse, since the interpolated line must fit ~60 cells at the floor.
 move_done = "{name}: {origin} to {path}"
 move_done_all = "{count} {name}: {origin} to {path}"
 
@@ -168,19 +105,14 @@ wield_busy = "the {name} is at work. wait, or stop it"
 wield_empty = "the {name} is empty"
 wield_no_recipe = "the {name} can do nothing with {detail}"
 wield_done = "the {source} yields {name}, and leaves {detail}  +{count}"
-# A run that leaves nothing behind. Byproducts are the laboratory's mechanic, so
-# the sentence cannot end in "and leaves " with a hole where one would go - the
-# hole is exactly how a missing key surfaces (S19), and here it would surface on
-# every scroll the archive ever assembles.
+# A run that leaves nothing, so no "and leaves " with a hole.
 wield_done_clean = "the {source} yields {name}  +{count}"
 # The same two, for a run that makes a batch. `{quantity}` is how many.
 wield_done_batch = "the {source} yields {quantity} {name}, and leaves {detail}  +{count}"
 wield_done_clean_batch = "the {source} yields {quantity} {name}  +{count}"
 
-# A run that lands on contents matching no recipe. Should not be reachable —
-# the lock sees to that — but `transmute` used to return silently here, which
-# made it the one path that ends a wield with no record at all: the echo, and
-# then nothing, ever. §14 announces completions, and a run ending is one.
+# Contents matching no recipe: unreachable behind the lock, but a run ending
+# is announced (§14).
 wield_nothing = "the {name} settles, and yields nothing"
 
 stop_done = "you still the {name}. what it holds is untouched"
@@ -188,10 +120,7 @@ stop_idle = "the {name} is not working"
 
 # The athanor - shared heat, and the one instrument that takes no focus.
 #
-# Every one of these carries the fuel count, because banked fuel is the only
-# thing in the laboratory with no node to `survey`. Without the number a player
-# who damps sees an empty athanor and concludes the charcoal is gone - which is
-# exactly how it was reported.
+# Each carries the fuel count, since banked fuel has no node to `survey`.
 kindle_done = "the athanor takes light. fuel for {left} ticks"
 kindle_banked = "the athanor catches on banked fuel. {left} ticks of it"
 kindle_lit = "the athanor is already burning"
@@ -204,47 +133,25 @@ wield_short = "the {name} wants {kind} quintessence, and you hold {quantity}"
 wield_beyond = "the {name} wants {kind} quintessence. a worn barrier holds {quantity}"
 
 # ---------------------------------------------------------------------------
-# Experience and concentration (§11.5, §19). The work is worth something, and
-# what it is worth buys the orb the right to do the work for you.
-#
-# **The first thing in the game that opens rather than refuses**, so it names the
-# verb: a capability nobody can find is a capability nobody has, which is the
-# lesson `unfurl` is on the tutorial list for.
+# Experience and concentration (§11.5, §19). The first thing that opens rather
+# than refuses, so it names the verb.
 # ---------------------------------------------------------------------------
 concentration_gained = "the orb can hold a spell now. bind one, and walk away"
 
 # ---------------------------------------------------------------------------
 # Renown (§11.5, §19). The tower's second number, and the only one that falls.
 #
-# **Only the loss speaks.** Earning is quiet: a sweep of the clarity loop showed
-# a line per potion taking two hours of transcript from 466 records to 792, which
-# is `credit`'s lesson one file over - a continuous fact is read off `status`,
-# and only an edge is news. The edge that speaks is the rank.
-#
-# A loss is different: it happened *to* the player, possibly while they were not
-# watching, and §6 forbids a state changing under someone in silence.
-#
-# Not scolding, though. §11.5 forbids a punishment that compounds, and a tower
-# that has had a bad night is already being told so by the wall.
+# Only the loss speaks, and the rank: earning is read off `status`, but a loss
+# happened to the player (§6). Not scolding (§11.5).
 # ---------------------------------------------------------------------------
 renown_lost = "word gets about: {quantity} renown lost, and {count} left"
 
 # ---------------------------------------------------------------------------
 # What a whole siege did to the tower's standing (§11.5, §19).
 #
-# **One line per fight, not one per round.** A round moves renown quietly —
-# it was elected by typing `hold` and has just said what the enemy did, so a
-# sentence per exchange is the same news twice, six to thirteen times over.
-# These are what `settle` says instead, once, after the siege's own sentence.
-#
-# They are also the only thing that says it at all on a short or narrow pane,
-# where the gauges yield and the number moves with nothing drawn — and the
-# only thing §14's linear stream carries. Hence a `{count}` as well as a
-# `{quantity}`: where the fight left you, not only what it moved.
-#
-# **The songs, and the quiet.** A siege is the one place standing is won or
-# lost in public, so the voice is other people talking about it rather than
-# the orb reporting a number.
+# One line a fight, from `settle`, not one a round. It carries `{count}` too,
+# being all a narrow pane or a listener gets (§14). Others talking, since a
+# siege is standing won in public.
 # ---------------------------------------------------------------------------
 siege_standing_won = "they are singing about it: {quantity} renown, {count} in all"
 siege_standing_lost = "word gets about: the wall cost {quantity} renown, {count} left"
@@ -252,13 +159,8 @@ siege_standing_lost = "word gets about: the wall cost {quantity} renown, {count}
 # ---------------------------------------------------------------------------
 # The two gauges at the top of every pane (§11.5, §14).
 #
-# **Terse, because they share a row with a bar and a reading.** The label is a
-# column nine cells wide and the reading is what is left after the bar, so both
-# are as short as they can be and still be words.
-#
-# `gauge_spoken` is what a screen reader hears instead of a row of pipes - §14
-# names progress bars specifically, and `Painter::gauge` takes the sentence for
-# exactly that. It says the numbers a listener needs and never the glyphs.
+# Terse: a nine-cell label beside a bar. `gauge_spoken` is the bar for a
+# listener (§14), the numbers and never the glyphs.
 # ---------------------------------------------------------------------------
 gauge_ley = "ley line"
 gauge_renown = "renown"
@@ -266,26 +168,15 @@ gauge_toward = "{count}/{quantity}"
 gauge_topped = "nothing more authored"
 gauge_spoken = "{name}: {count} of {quantity} toward the next"
 
-# ...and what a *topped* track says instead. `Toward::FULL` is `1/1`, which fills
-# the bar and counts nothing, so the sentence above would have told a listener the
-# tower stood one short of a tier that is not authored. This says what the row
-# itself says.
+# ...and a topped track, whose `Toward::FULL` would read one short.
 gauge_spoken_topped = "{name}: nothing more authored"
 
 # ---------------------------------------------------------------------------
 # THE LEDGER (§19, number go up).
 #
-# A label per `[[ledger]]` row in `progression.toml`, keyed by its id. `status`
-# draws each as a reading - the label, dots, the count - so a label is a short
-# noun phrase that reads as *how many*, and the room's column draws the same
-# label beside its count.
-#
-# `ledger_by_spell` is a spell's share of one row, named in full so the record
-# stands alone - `sift` and a pipe see one record at a time, never the row above
-# it. `ledger_share` is the same share in the room's column, where it sits
-# under its own row and space is short. `ledger_spells` is everything the
-# tower's spells have done. No commas: a reader hears a row as
-# `name: ..., qty: ...`, and a comma in the name splits it.
+# A label per `[[ledger]]` row, a short noun phrase reading as *how many*.
+# `ledger_by_spell` stands alone for `sift`; `ledger_share` is the room
+# column's short form. No commas, which split a spoken row.
 # ---------------------------------------------------------------------------
 # Runs, not potions: one brew yields a batch.
 ledger_potions = "brews finished"
@@ -306,12 +197,8 @@ ledger_spells = "done by your spells"
 # ---------------------------------------------------------------------------
 # THE TEN THINGS THE TOWER IS CALLED (§11.5).
 #
-# Titles, not gates - a rank names where you stand and unlocks nothing. Each is
-# short because it is drawn after the renown gauge's reading, on a shared row.
-#
-# They climb from a name nobody would use to one that is not a rank at all: what
-# is said of a tower after it is gone. That is the soft ending, said the other
-# way round.
+# Titles, not gates, short for the gauge's row; the last is what is said of a
+# tower after it is gone.
 # ---------------------------------------------------------------------------
 rank_reached = "they are calling you {name} now"
 rank_fallen = "they are back to calling you {name}"
@@ -330,15 +217,8 @@ renown_remembered = "remembered"
 weave_renown = "renown {count}"
 
 # ---------------------------------------------------------------------------
-# `debug_spawn` (§19). A tester's door: the **code** is `cfg(debug_assertions)`
-# and absent from a release build, but this file is compiled in whole, so these
-# four lines ship as text nothing can reach. Kept here anyway rather than moved
-# to string literals - four dead lines cost less than an exemption from rule 6,
-# and the width, shouting and CP437 lints all read this file.
-#
-# **Written in the orb's voice** for the same reason. §3's register has no
-# exception for tooling, and a line that shouts in a game that never shouts is a
-# line somebody has to remember not to screenshot.
+# `debug_spawn` (§19): debug-only code, but its lines ship here, unreachable,
+# rather than earn rule 6 an exemption, and in the orb's voice (§3).
 # ---------------------------------------------------------------------------
 debug_spawn_done = "the shelf finds it had {name} all along"
 debug_spawn_unknown = "nothing in the tower is called '{name}'"
@@ -346,12 +226,8 @@ debug_spawn_nowhere = "there is no shelf here to put {name} on"
 debug_spawn_unkept = "the arsenal keeps finished work. {name} is not any"
 debug_spawn_known = "the shelf could find: {name}"
 
-# `debug_spell`, the other tester's door - a known-good spell written out, so a
-# solver need not be typed by hand to check the archive still works.
-#
-# **The refusal names the room**, which is the one thing this word must say that
-# `debug_spawn` need not: a spell is written *for* a domain, so writing it in the
-# wrong one produces a file whose every line fails to resolve.
+# `debug_spell`, a known-good spell written out. The refusal names the room,
+# since a spell is written for one.
 debug_spell_done = "the grimoire remembers {name}, in a hand not yours"
 debug_spell_unknown = "no spell in the orb's own hand is called '{name}'"
 debug_spell_elsewhere = "that one is written for the {name}. go there first"
@@ -401,8 +277,7 @@ quit_asks = "leave the orb? quit again to go. anything else stays"
 # clock runs only while the window is open, so this is the wizard stepping away
 # rather than the world ending.
 quit_begins = "you let the orb go dark. the tower keeps its own counsel"
-# The menu is its own word now, and its own step out. `quit` opened it for one
-# iteration; §19 records why that was superseded.
+# The menu is its own word (§19).
 menu_begins = "you lift your eyes from the orb"
 
 # The menu's own furniture. Authored against the narrow pane, like the weave's.
@@ -603,28 +478,13 @@ moon_waning = "the moon is waning, {count} nights from new"
 moon_hallows = "it is all hallows' eve"
 moon_unlucky = "it is friday the thirteenth"
 moon_and = "{detail}. {name}"
-# **As short as the `PgDn newest` it replaces.** This rides in the border title
-# beside the location, the tick, the tier and the grid, and at the 80-column
-# floor there is about twenty cells left - the first wording was 39 and drew as
-# "esc back to" with the rest cut off.
-#
-# Lower case like everything else here, which `authored_lines_do_not_shout`
-# caught: the two hints this sits between are `F4 deep` and `PgDn newest`, both
-# Rust literals, and matching *them* would have made this the one capitalised
-# line in the file. §3's no-shouting rule is about the file, not the neighbours.
+# As short as the `PgDn newest` it replaces, with ~20 cells left in the border
+# at the floor. Lower case, whatever the Rust literals beside it do (§3).
 unfurl_keys = "pgup/pgdn  esc out"
 
-# The weave screen (§11.5, §19). Progression had no surface at all: `status`
-# printed two numbers and nothing said what they were for.
-#
-# **The opening line names the next threshold**, because that is the fact a
-# player who typed this wanted and it is what survives in the transcript after
-# the screen is closed. A tower with nothing left to open gets the second line -
-# the first would name a target of 0, which reads as reached.
-#
-# `{quantity}` is the earned total, which is what `FieldName::Quantity` on the
-# record carries too - the two named the opposite things once, which is a trap
-# for whoever authors the next line here.
+# The weave screen (§11.5, §19). The opening names the next threshold, what
+# survives in the transcript; a topped-out tower gets the second. `{quantity}`
+# is the earned total, as on the record.
 weave_begins = "{quantity} earned. the next turning is at {detail}"
 weave_begins_topped_out = "{quantity} earned, and the orb has learned all it can for now"
 
@@ -638,27 +498,16 @@ weave_browsing_mastery = "arrows move   esc back"
 weave_ley = "ley line"
 weave_mastery = "mastery"
 weave_title = "weave"
-# The bar is spoken as a sentence, never as a row of blocks - §14 names progress
-# bars specifically, and `Painter::progress` takes the sentence for this.
-#
-# **Against a fixed scale, not the next turning.** Retargeting emptied the bar
-# at the moment the player earned something, which is the one instant it should
-# have looked like progress - and a constant scale is what lets the ley line be
-# drawn beneath it at the same width, so a step's position on the line is its
-# cost read against the same cells.
+# Spoken as a sentence (§14). Against a fixed scale, so earning never empties
+# it and the ley line beneath shares its cells.
 weave_bar = "{quantity} experience of {detail}"
 # The details panel before anything is aimed at. Not blank: a panel that is
 # sometimes full and sometimes empty reads as a screen that has broken.
 weave_aim_first = "say ley or mastery"
 weave_details = "details"
 weave_at = "costs {count}"
-# **Two facts, and they are not the same fact.** `unlocked` is whether the tower
-# has earned enough to reach it; `active` is whether what it grants is in effect.
-# A ley line step is both at once - passing one is taking it - but a mastery node
-# can be unlocked and idle (nobody chose it) or unlocked and idle for ever (a
-# sibling took the tier's one choice).
-#
-# All four fit half of a 30-cell panel, which is what they are authored against.
+# Two facts: `unlocked` is reachable, `active` in effect; a fork node can be
+# one without the other. Each fits half a 30-cell panel.
 weave_unlocked = "unlocked"
 weave_locked_state = "locked"
 weave_active = "active"
@@ -679,11 +528,7 @@ road_done = "every station reached"
 # The same line as words, at the end of a room's primer. `{detail}` is the next
 # deed's sentence and its count - "5 brews finished, 3 of 5".
 #
-# **`primer_`, never `recall_`.** Every key under that prefix becomes a manual
-# subject the parser knows (`Prose::topics`), so these two shipped as topics
-# called `road` and `road_done` - and `recall road` answered with the raw
-# template, braces and all. The route templates paid for this once already and
-# the note beside `topics()` says it: a template takes any prefix but that one.
+# `primer_`, never `recall_`, which would make a template a manual subject.
 primer_road = "{name} line: {count} of {quantity} reached. next, {detail}"
 primer_road_done = "{name} line: every station reached"
 # The pane is under the screen's floor. It has to say so rather than draw a
@@ -694,39 +539,24 @@ weave_too_small = "the pane is too small for the weave. quit, or press F4"
 # doing its deed - and saying so plainly is better than a refusal that sounds
 # like a rule.
 #
-# **All of these fit 46 cells**, which is the status row's whole width in a
-# 48-column pane. Longer is silently cut mid-word - an early draft of one of
-# these ended "...nothing is" and stopped, which reads as a bug in the orb.
+# All within 46 cells, the status row of a 48-column pane.
 weave_not_a_choice = "{name} is reached by doing, not by taking"
 # **Said by the world, not by the screen**, so it survives the screen closing and
 # `sift` can find the decision in the log. `{detail}` is the node's own sentence,
 # so the log says what was bought and not only that something was.
 weave_took = "the orb takes {name}: {detail}"
-# **Says "opens at", not "its tier opens at".** A ley line step has no tier, and
-# this line answers for both tracks - the first wording told a player about a
-# tier that does not exist wherever the step they aimed at was on the line.
+# No "tier": a ley step has none, and this answers for both tracks.
 weave_locked = "{name} is shut until {count}"
 weave_spent = "you took {name} from this tier already"
-# **Held already, which is not the same as empty.** A ley line step is taken by
-# being passed, so this is the one refusal about something the tower really has -
-# and `weave_nothing_behind` answered it at first, calling the game's one real
-# grant a marker one row under a panel saying `active`.
+# Held already, not empty: a ley step is taken by being passed.
 weave_already = "{name} is yours already"
 weave_nothing_here = "point at something first, or name it"
 weave_unknown = "the orb weaves nothing called {name}"
 
-# One sentence per node id, keyed by the id in `progression.toml`. The **id** is
-# a decision and lives there; the **sentence** is prose and lives here, which is
-# the same split `recipes.toml` makes with the lines about what a recipe yields.
-#
-# **Authored to fit 28 cells**, which is the details panel's width inside its
-# border. Longer is clipped mid-word, and a sentence that stops at "while you
-# are" reads as a bug in the orb rather than as a pane that ran out of room.
-# `every_node_sentence_fits_the_details_panel` holds every `weave_node_` and
-# `mastery_` line to it.
-#
-# The two the budget reads. Said as what it buys rather than as a number: a step
-# is a tick, so what a player gets is a spell that keeps up.
+# A sentence per node id: the id is a decision in `progression.toml`, the
+# sentence prose here. 28 cells, the details panel
+# (`every_node_sentence_fits_the_details_panel`). The budget's two first, said
+# as what they buy.
 weave_node_steps_1 = "one more step a second"
 weave_node_steps_2 = "two more steps a second"
 weave_node_satchel_1 = "a satchel, to queue and pull"
@@ -756,19 +586,9 @@ weave_node_haste_1 = "spells' work lands a tenth sooner"
 weave_node_haste_2 = "spells' work lands sooner again"
 weave_node_steps_3 = "three more steps a second"
 
-# The seven mastery lines, one sentence per station, keyed by the id in
-# `progression.toml`. Each is the deed as a thing done - "a clarity brewed" -
-# so it reads under a details panel saying `3 of 5` and in the record that says
-# the line advanced. 28 cells, like the node sentences above.
-#
-# **`{count}` rather than the number spelled out**, and the spelled-out version
-# is why. These read *"five potions brewed"* under a details panel saying `3 of
-# 5`, which was true of exactly one curve — the moment a game could be short or
-# long, the sentence and the tally beside it disagreed, and the sentence was the
-# one that was wrong.
-#
-# The three that carry no count are the `Made` deeds: *make this thing once* is
-# a reveal gate rather than a grind, and there is nothing in it to stretch.
+# The six mastery lines, a sentence per station: the deed as done, in 28 cells.
+# `{count}`, never a spelled number, which game length would contradict. The
+# `Made` deeds carry none.
 mastery_reached = "the {name} line advances: {detail}"
 mastery_laboratory_1 = "a clarity brewed"
 mastery_laboratory_2 = "{count} brews finished"
@@ -796,20 +616,9 @@ mastery_forge_1 = "{count} charms laid"
 mastery_forge_2 = "{count} charms laid"
 mastery_forge_3 = "{count} charms laid"
 
-# **The singular, for the six deeds that ask for one of a thing.** The sentences
-# above say the *number* rather than spelling it, because they are drawn beside a
-# live `3 of 5` counter and a spelled-out count contradicts it the moment a game
-# is longer than baseline - but "1 charms laid" is worse than either. `Prose::counted`
-# reads these when the count is one and falls through when it is not, so only the
-# keys that read wrong in the singular are authored twice.
-#
-# Not a pluralisation rule: English inflects more than the noun here - compare
-# "the stacks walked" with "3 walks of the stacks" - and a rule that added an `s`
-# would have to be undone by hand for half of them.
-#
-# `archive_2` is on the list because it can *stop* being one: it sits second on
-# its line, so a long game stretches it to two and the plural above is then
-# right. The other five are each first on their line and never move.
+# The singular, for deeds that can ask for one: `Prose::counted` reads these at
+# one. Authored, not a rule, since English inflects more than the noun.
+# `archive_2` can grow past one in a long game.
 mastery_archive_1_one = "the stacks walked"
 mastery_archive_2_one = "a scroll assembled"
 mastery_lens_1_one = "a ward broken"
@@ -817,15 +626,13 @@ mastery_sanctum_1_one = "a course mustered"
 mastery_menagerie_1_one = "a beast held"
 mastery_forge_1_one = "a charm laid"
 
-# What a station opened, said once and only if it was shut - a tower restored
-# open that re-reaches the station opening the archive has an archive already.
-# `{name}` is the room, the product, the charm.
-# A room the tower has not opened yet, from any door — `attend`, `survey`, a
-# path into it. It names the room, so `attend stacks` teaches what the stacks
-# are in; it does not say how to open it, because that is the weave's to show.
+# A room not opened yet, from any door. It names the room and leaves how to open
+# it to the weave.
 room_sealed = "the {name} is not yours yet"
 defend_unarmed = "there is no wall to hold yet. muster a course first"
 forge_charm_unopened = "the forge cannot lay {name} yet"
+# What a station opened, said once and only if it was shut. `{name}` is the
+# room, the product, the charm.
 opened_domain = "the {name} is yours now. attend it"
 opened_recipe = "the orb knows {name} now. recall it"
 opened_charm = "the forge can lay {name} now"
@@ -835,21 +642,9 @@ opened_siege = "the wall can be held now. defend it"
 # is: nearly every whole beast arrives with a turned wire.
 opened_circle = "the circle opens whole. a ~ wire gives its glyph the sense turned over"
 
-# The editor's own furniture. Terse: these sit on one row of a pane that may be
-# 80 cells wide, beside the filename and the position.
-#
-# **The command row is the whole interface in command state**, so these have to
-# name every word. A player who does not know them has nowhere else to look -
-# the editor is the first modal surface in the game.
-#
-# Two words, where there were four. `save` and `discard` are gone because the
-# buffer writes itself out a beat after you stop typing (§19): saving is not a
-# thing you do, and there is therefore nothing to throw away. What is left is
-# the only two decisions still the player's - write, or leave.
-#
-# **Three now.** `interpret` is the third, and it exists because the file stopped
-# being rewritten (§19): the orb's reading used to be visible in the saved spell,
-# and this is where it went. A validation step the player asks for.
+# The editor's furniture, terse for one row. The command row is the whole
+# interface in command state, so it names every word. No `save`: the buffer
+# writes itself (§19). `interpret` is where the orb's reading went (§19).
 editor_words = "edit  guide  interpret  quit"
 
 # The scribing guide's own furniture. Terse: the pane is thirty cells wide and
@@ -863,14 +658,8 @@ editor_reading = "what the orb hears. esc to go back"
 editor_unknown = "the orb does not know '{detail}' - try edit or quit"
 # §14: a mark on a line is a fact carried only by colour, so the count is said.
 #
-# **No noun after the number**, which is what makes one line work for one and for
-# many: "{count} lines" gives "1 lines", and naming nothing gives "2 the orb
-# cannot read", which is not a sentence in any number. It drew as the second of
-# those for a while.
-#
-# The editor's status row is the tightest budget in the game - it shares a pane
-# that can be 48 cells wide with the caret position - so this is about as long as
-# it can be. The longer wording that says "of these" clipped at "interpret t".
+# No noun after the number, so one line reads for one and many. The tightest
+# budget in the game, beside the caret in a 48-cell pane.
 editor_unread = "the orb cannot read {count}. interpret to see"
 
 # On the title bar while an invocation of this spell is running, beside the
@@ -973,15 +762,8 @@ spell_parts_too_deep = "{name} calls {detail} too deep to follow. it stops there
 spell_unreadable_alongside = "{name} line {count}: alongside wants a part and its brackets"
 spell_strands_too_many = "{name} sets {detail} going with too many already running. it goes on"
 
-# A question about somewhere the tower does not have. §8's *Referent missing*,
-# and **not the same as the answer being no** - which is exactly the bug this
-# line exists to make impossible to have again. `if mortar is empty` compared
-# `mortar` against `mortar_and_pestle`, found nothing, answered no on every pass
-# and took the else for ever, saying not one word about it (§19).
-#
-# Said **once per line per casting**, not once per evaluation: a question inside
-# a repeat is asked every tick, and a name the tower cannot place is wrong on the
-# first turn exactly as it is on the four hundredth.
+# A question about somewhere the tower lacks: §8's *Referent missing*, not a no
+# (§19). Once per line per casting, not per evaluation.
 spell_nowhere = "{name} line {count}: there is no {detail} here to ask about"
 spell_too_deep = "{name} is too many spells deep; the orb loses the thread"
 
@@ -1033,29 +815,18 @@ spell_unattended = "{name} needed you there. it stops"
 # ---------------------------------------------------------------------------
 # The archive's stacks (§10, §19).
 #
-# `research` (`divine` until the archive got its name right) opened nothing and
-# produced nothing for two phases; it now opens the
-# stacks out of a page, and `follow` threads them. The three defects that came
-# with the old verb - a completion with no sentence, a run that could not be
-# stopped, a domain with no manual entry - are gone because the domain has an
-# instrument, not because they were patched.
+# `research` opens the stacks out of a page, and `follow` threads them.
 # ---------------------------------------------------------------------------
 # The lens (§10). Outcome lines first, then the manual pages further down.
 #
-# **Every refusal names the way forward**, which is what keeps all three verbs
-# off `is_gated` — a word that can only say no is worse than a word that is not
-# offered, and none of these can only say no.
+# Every refusal names the way forward, which keeps the verbs off `is_gated`.
 verify_substituted = "something here is not what it says: {detail}"
 
 # ---------------------------------------------------------------------------
 # §8.1's two forms of `verify`, and the price between them.
 #
-# **Bare `verify` is the audit** — the expensive form the design writes as
-# `verify --all`, spelled the way every other widening in this game is, because
-# the parser has no flag syntax. It takes the production slot for a duration
-# that grows with the tower, so the sentence quotes the wait up front: a
-# Production-class action that did not say what it was costing would be the
-# refusal §6 forbids, arriving as a surprise instead of a no.
+# Bare `verify` is the audit, §8.1's `verify --all`: it holds the slot for a
+# time that grows with the tower, so it quotes the wait up front (§6).
 verify_sweep_begins = "the orb turns its attention on the whole tower. {quantity} ticks"
 verify_sweep_sound = "everything the orb can see is what it says it is"
 # **Named, not counted** — §8.1's rule that sabotage is engaging to find and
@@ -1092,15 +863,9 @@ spill_step = "{name} {detail}"
 # The sanctum (§10). Same contract as the lens above: every refusal names the
 # way forward, which is what keeps both verbs off `is_gated`.
 #
-# **The fiction, because these lines are where it lives.** Raw arcane energy
-# wells up in the wellspring; the wizard draws it through the conduit a ward at a
-# time and assembles it into the barrier. The tower's walls are stone and the
-# wards are not — what he is shoring up is a magical defence, which is why not
-# one line here says "wall".
-#
-# **`haul_greater` is the one refusal that is the puzzle rather than a dead
-# end.** A player who hits it has learned the rule, which is the only rule there
-# is — so it says what happened and nothing about what to do instead.
+# The fiction: arcane energy wells up, is drawn through the conduit and
+# assembled into the barrier, a magical defence, so no line says "wall".
+# `haul_greater` is the puzzle's rule itself, so it only says what happened.
 pylon_title = "pylon"
 # **`hauled`, not `hauls`.** `debug_course` can finish a course in one, and so
 # can a very short one, and "1 hauls" is the kind of line a player notices. The
@@ -1201,17 +966,9 @@ circle_balks_one = "1 row balks"
 # A call whose answer agreed everywhere is a hold, and removes the beast — so this
 # is only ever drawn over a hand-edited save, and it says what is true.
 circle_balks_none = "every row agrees"
-# **Words for a reader, never the drawn cells** — the lattice's `residue_spoken`
-# lesson. A reader hears which glyph takes what, what the temper is lit on, and
-# where the last call balked, by the row numbers the board draws over its columns.
-# Each row list is written both ways, since a temper can be lit on one row and
-# a call can balk at one.
-#
-# **A lit row names its senses** — *"4 (bone breath)"* — because the board's sense
-# rows are silent, and a number alone asks a listener to know how rows are
-# counted. With the senses named, the temper is the whole question in words.
-# **A turned wire is said as turned**, for the same reason: the `~` is drawn, and
-# nothing else would tell an ear.
+# Words for a reader, never the drawn cells: each glyph's senses, the lit rows
+# named by their senses, the balked row, and a turned wire said as turned.
+# Row lists come singular and plural.
 circle_spoken = "{name}. the temper is lit on rows {quantity}. {detail}"
 circle_spoken_one = "{name}. the temper is lit on row {quantity}. {detail}"
 circle_row_spoken = "{count} ({name})"
@@ -1255,12 +1012,8 @@ follow_unopened = "nothing is open to follow. research first"
 follow_nowhere = "follow which way? north, east, south or west"
 
 # ---------------------------------------------------------------------------
-# Scrolls. Four fragments become one, and wielding it spends it.
-#
-# Every refusal names the scroll, because the player is holding a thing four
-# walks of the stacks paid for and "no" alone is the dead end S15 weighs heaviest.
-# Each one also says what would work instead: that is S6's rule, and it is why
-# none of these is a bare complaint.
+# Scrolls, assembled from fragments and wielded as supplies. Every refusal
+# names the scroll and what would work instead (§6, §15).
 # ---------------------------------------------------------------------------
 scroll_gleaning = "the stacks gather now. {count} things in the dark, and no way out"
 scroll_gleaning_waits = "the next stacks you open will gather {count}"
@@ -1283,21 +1036,14 @@ scroll_all_flowered = "every herb has flowered. the {name} rolls itself up"
 # ---------------------------------------------------------------------------
 # The arsenal: the one room reachable from every other, and what it will hold.
 #
-# The refusal names what the room is *for* rather than what the thing is not.
-# S6 forbids a bare error, and "no" about a reagent you are holding is exactly
-# that - the player has to be told where their sage does belong.
+# The refusal names what the room is for, never a bare no (§6).
 # ---------------------------------------------------------------------------
 move_unkept = "the {path} keeps finished work. {name} belongs on a shelf"
 recall_arsenal = "finished potions, scrolls and demons, within reach from any room"
 
 # ---------------------------------------------------------------------------
-# The ported herbs. Every one is a real plant or resin, and the line says what it
-# **looks like and where it grows** before what it is for - which is the shape
-# `../court_wizard` uses for all nineteen of its ingredients, and the reason a
-# player asking "what is this" gets an answer rather than an invented name.
-#
-# S19 records the four shard names failing exactly this: "nothing in the game
-# ever said what one was". A herb the orb cannot describe is the same defect.
+# The ported herbs, each said as how it looks and where it grows, as
+# `../court_wizard` does, so "what is this" has an answer (§19).
 # ---------------------------------------------------------------------------
 recall_mugwort = "a silvery roadside weed. its underside catches the moonlight"
 recall_valerian = "a pale wet-woodland root. pungent enough to slow a room"
@@ -1306,21 +1052,9 @@ recall_amber = "warm fossil resin off a cold shore. it holds what it touches"
 # ---------------------------------------------------------------------------
 # Every material has a page, and `every_material_has_a_page` holds it.
 #
-# `recall <thing>` used to answer with the **route** and nothing else, so a
-# player holding a potion could be told its five steps and not one word about
-# what it was for. A route answers *how do I get one*; this answers *what is
-# this*, and both are said now - what it is first, because that is what someone
-# holding the thing is asking.
-#
-# `using_<name>` is the second half: how you spend it. It is optional, because a
-# byproduct is a thing you have rather than a thing you do - and where a use is
-# **not built yet** it says so, which is what `undo`'s verb page already does and
-# what S15 wants, since a page admitting a thing does nothing is the cheapest way
-# to keep a player out of a dead end.
-#
-# **Not `recall_<name>_use`.** `Prose::topics` decides what is nameable by
-# stripping `recall_`, so that spelling would register `clarity_use` as something
-# to ask the orb about - the trap `grimoire_step_or` already paid for.
+# What it is, before the route's how to get one. `using_<name>`, optional, is
+# how you spend it, admitting a use not built yet (§15). Not
+# `recall_<name>_use`, which `Prose::topics` would make nameable.
 # ---------------------------------------------------------------------------
 
 # Base stock: the three the tower opens with.
@@ -1350,10 +1084,7 @@ recall_quiet-draught = "valerian cut with salt. a gleaning scroll stills it"
 recall_stilling-draught = "quiet held still by a gleaning scroll. it distils into stillness"
 
 # ---------------------------------------------------------------------------
-# Essences. **Every one says its use is not built**, because it is not: S11.5's
-# resource table has a siege consuming 4-8 potions, and sieges are Phase 8. A
-# page that described a drinking that does not exist would be worse than one that
-# is honest about the wait.
+# Essences: what each is, and below, how its supply is spent on the wall.
 # ---------------------------------------------------------------------------
 recall_clarity = "a potion of clear sight, and the laboratory's flagship work"
 recall_warding = "a potion that turns harm aside"
@@ -1414,41 +1145,19 @@ using_verdant-scroll = "wield it outside a siege. four open it; growth keeps if 
 # ---------------------------------------------------------------------------
 # The six words a spell is written with, which nothing in the game taught.
 #
-# **Found by auditing the language against seven others** - Inform 7, HyperTalk,
-# AppleScript, Autonauts, Factorio, Oxygen Not Included and the Zachtronics
-# assemblers. Every one of them ships a reference; HyperTalk's whole thesis is
-# that an author learns by looking things up. Ours had none: control words are
-# spell-only and outside `Verb::ALL`, so `recall repeat` reached nothing at all.
-#
-# A `recall_` key is what makes a word nameable, so these six lines are the
-# difference between a language and a puzzle.
+# Every language audited ships a reference; control words sit outside
+# `Verb::ALL`, so these `recall_` keys are what make them nameable.
 # ---------------------------------------------------------------------------
-# `recall scripting` - the one page about the language rather than the tower,
-# and the only one whose last section changes with the room. The grammar is the
-# same everywhere; what a question can *name* is not, and a player standing in
-# the laboratory has no way to guess the archive's vocabulary.
-# **The reference. `recall apprentice` is the lesson**, and the two are named in
-# each other's opening line — this page is the wrong thing to hand somebody who
-# has never written one, because no listing of words teaches an order.
+# `recall scripting`, the reference, its last section the room's vocabulary.
+# `recall apprentice` is the lesson; each names the other.
 recall_scripting = "what a spell is made of. recall apprentice to make one"
 
 # ---------------------------------------------------------------------------
 # THE PRIMER - how to make a spell, start to finish (§12's in-world grimoire).
 #
-# **A tutorial, where `recall scripting` is the reference.** That page answers
-# *what may I write*; this one answers *how do I make one at all*, which nothing
-# did. A player who has never written a spell needs the order — scribe, edit,
-# type, escape, save, invoke, read the log — and no listing of words teaches an
-# order.
-#
-# **The worked example comes from the room**, which is `recall scripting`'s third
-# section arriving at the same conclusion: the shape of a spell is the same
-# everywhere and the lines in one are not, and a guide showing `grind sage` to
-# somebody standing in the lens is teaching them a room they are not in.
-#
-# Two lines and one question per scriptable domain, below. A room with no work to
-# script falls back to the laboratory's and says so — which is honest, and is
-# what the grimoire's own primer already tells you to do.
+# The tutorial: the order to make a spell, which no listing teaches. The
+# worked example is the room's, two lines and a question each; a room with no
+# work falls back to the laboratory's and says so.
 # ---------------------------------------------------------------------------
 recall_apprentice = "how to teach the orb to do your work, from nothing"
 
@@ -1590,17 +1299,9 @@ using_odd = "if the pylon has odd, the least ward travels the other way"
 recall_integrity = "how the tower's barrier stands. it wears down on its own"
 using_integrity = "if the pylon has fewer than 60 integrity, muster"
 
-# The menagerie's words. **The six humours are the circle's logic gates**, and
-# each page names the gate a logician would and its four rows - the two a glyph
-# is given, both dark, one lit, the other lit, both lit - because a player who
-# knows the gates by their real names should not have to learn them twice, and
-# one who does not can learn them here. Each second humour is the first turned
-# over. They are words a spell writes too: a glyph carries its humour as a
-# reading, so `if the keystone has heed` is how a spell asks what it limned.
-#
-# **Every example limns the keystone**, because it is the one glyph a new tower's
-# lesser circle has: a page teaching yoke by limning sunwise would teach a refusal
-# to a player who has not opened the whole circle yet.
+# The six humours are logic gates, each page naming its gate and four rows;
+# each second humour is the first turned over, and a spell reads one with
+# `has`. Every example limns the keystone, a lesser circle's one glyph.
 recall_yoke = "lit only when both are lit. a logician's and. dark dark dark lit"
 using_yoke = "limn keystone yoke. and turned over is spurn"
 
@@ -1619,14 +1320,8 @@ using_oppose = "limn keystone oppose. xor turned over is mirror"
 recall_mirror = "lit when the two agree. a logician's xnor. lit dark dark lit"
 using_mirror = "limn keystone mirror. oppose turned over"
 
-# The three glyphs. **The keystone is what the beast is held by**, and the other
-# two feed it - which two senses each is given, and whether a wire is turned, is
-# drawn with the beast, so it has to be read off the board every time.
-#
-# **Sunwise's page teaches De Morgan by name**, because it is the fact a spell can
-# spend: turn both outer glyphs over and swap the keystone for its dual, and every
-# row answers as before - so a search that tries sunwise at yoke, heed and oppose
-# misses no beast. `winnowing` is built on it.
+# The three glyphs: the keystone holds the beast, and the others' senses come
+# with each beast. Sunwise's page teaches De Morgan, which `winnowing` spends.
 recall_keystone = "the glyph the beast is held by. given two senses, or the other two"
 using_keystone = "limn keystone heed, or limn keystone to step it round the six"
 
@@ -1724,12 +1419,8 @@ maze_walked = "walked {quantity} of {detail}"
 # The manual (S6.1, S19). `recall` bare lists what works here; `recall <topic>`
 # answers on one thing.
 #
-# **`man_`, not `recall_`.** `Prose::topics` strips `recall_` to decide what is
-# nameable, so a key under that prefix becomes a subject a player can ask about
-# - which is how `step_or` once became one. Only whole subjects earn `recall_`.
-#
-# Headings are lower case like everything else: the tube is the only thing on
-# screen and a capitalised word would be shouting (S3).
+# `man_`, not `recall_`, which only whole subjects earn. Headings lower case
+# (§3).
 # ---------------------------------------------------------------------------
 man_group_getting = "finding your way"
 man_group_work = "the work"
@@ -1750,29 +1441,13 @@ man_teachable = "the orb can be taught to do all of it. recall apprentice"
 # ---------------------------------------------------------------------------
 # The room primer - what `help` says BEFORE the word list.
 #
-# Three keys per room, and they are the three questions a lost player has:
-# `man_here_<room>` is what the place is, `man_start_<room>` is how to begin its
-# puzzle, `man_solve_<room>` is how to finish one. What-it-is before how-it-works
-# is the same order a thing's `recall_`/`using_` pair uses, because it is the same
-# split.
+# A lost player's three questions: `man_here_` what the place is, `man_start_`
+# how to begin, `man_solve_` how to finish — two instructions, followed at
+# different times. `man_`, not `recall_`.
 #
-# **Three rather than two because of the width lint.** `every_authored_line_fits
-# _the_worst_case_width` gives 70 cells against §4's 80x22 floor, and the first
-# draft ran to 112 in one sentence. Splitting start from solve is not a workaround:
-# they are two instructions and the player follows them at different times.
-#
-# **`man_`, not `recall_`.** `Prose::topics` strips `recall_` to decide what is
-# nameable, so `recall_here_lens` would register `here_lens` as a subject nobody
-# authored - the trap `grimoire_step_or` and `clarity_use` both paid for.
-#
-# `every_room_a_player_can_stand_in_explains_itself` fails the build for a built
-# room missing any of the three, so a new domain cannot ship without a primer.
-#
-# **Keep the last two lines instructions, and name only words that work here.**
-# A player typing `help` in a room they do not understand wants the first verb to
-# type, not a summary of the theme. `a_primer_only_names_words_that_room_actually
-# _offers` holds the availability half; the *refusal* half it cannot see, which is
-# what the grimoire note below is about.
+# `every_room_a_player_can_stand_in_explains_itself` demands all three of a
+# built room. The last two are instructions naming words that work here
+# (`a_primer_only_names_words_that_room_actually_offers`).
 # ---------------------------------------------------------------------------
 man_here_laboratory = "where reagents become potions, one instrument at a time"
 man_start_laboratory = "kindle charcoal for heat, then grind sage in the mortar"
@@ -2198,13 +1873,8 @@ pledge_short = "{name} would take {kind}, and you hold {detail}"
 # ---------------------------------------------------------------------------
 # `petition` — spending standing so that fewer come up the road (§11.5, §19).
 #
-# **The price and the number it moves, in the same breath.** `pledge_short`
-# above sets the rule for this room: a refusal a player cannot plan around is
-# not a refusal, it is a wall. So both sentences carry the two numbers.
-#
-# The voice is a wizard asking to be troubled less — not bargaining with the
-# enemy, which would be a different fiction and the wrong one. What is bought
-# is quiet, and it is paid for in fame.
+# The price and what it moves in one breath, as `pledge_short`. A wizard asking
+# to be troubled less, not bargaining: quiet, paid for in fame.
 # ---------------------------------------------------------------------------
 petition_done = "word goes out. at most {quantity} will come, for {kind} renown"
 petition_short = "that would take {kind} renown, and you hold {quantity}"
@@ -2223,12 +1893,8 @@ spend_shelved = "your {name} is in the {source}. move it to the arsenal"
 # ---------------------------------------------------------------------------
 # Stores that have run down (§11.5, §19).
 #
-# **The shelf is not empty — the stores behind it are.** What the arsenal holds
-# is one thing and what your industry can still supply is another, so these
-# never say "there is no {name}": `spend_none` is that sentence and it means
-# something else. Nothing is taken.
-#
-# It names the way out, because the way out is the mechanic: make more.
+# The stores behind the shelf are empty, not the shelf, so never "there is no
+# {name}" (`spend_none`). It names the way out: make more.
 # ---------------------------------------------------------------------------
 spend_stale = "your {name} stores are out. make more and come back"
 # ---------------------------------------------------------------------------

@@ -7,29 +7,12 @@
 //! `debug_circle` and `debug_siege` are the doors in, so these are debug-only.
 #![cfg(debug_assertions)]
 
+mod common;
+
+use common::{ever_said, reloaded, run, said};
 use orbs_render::{FieldName, Value};
 use orbs_sim::tower::siege::{self, GARRISON_FLOOR, GARRISON_MOST, Garrison, Siege};
 use orbs_sim::{Save, Sim};
-
-fn run(sim: &mut Sim, line: &str) {
-    sim.submit(line);
-    sim.step();
-}
-
-fn said(sim: &Sim) -> Vec<String> {
-    sim.scrollback()
-        .records()
-        .iter()
-        .filter_map(|record| match record.field(FieldName::Message) {
-            Some(Value::Text(text)) => Some(text.to_owned()),
-            _ => None,
-        })
-        .collect()
-}
-
-fn ever_said(sim: &Sim, needle: &str) -> bool {
-    said(sim).iter().any(|line| line.contains(needle))
-}
 
 fn garrison(sim: &Sim) -> Garrison {
     *sim.world().resource::<Garrison>()
@@ -284,8 +267,7 @@ fn the_bailey_stands_without_the_menagerie() {
 fn a_standing_garrison_travels_in_the_save() {
     let mut sim = Sim::new(3);
     set(&mut sim, 9, 0);
-    let text = sim.snapshot().to_toml().expect("a save renders");
-    let loaded = Sim::restored(&Save::from_toml(&text).expect("a save reads back"));
+    let loaded = reloaded(&sim.snapshot());
     assert_eq!(garrison(&loaded).standing(), 9);
 }
 

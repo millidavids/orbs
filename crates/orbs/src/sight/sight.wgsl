@@ -1,18 +1,8 @@
 // The accommodation pass — DESIGN.md §14, ROADMAP Phase 13.
 //
-// **The last thing that touches a pixel**, and that placement is the whole
-// design. §19 originally said "after the phosphor and before the barrel"; there
-// is no such place. `crt.wgsl` applies the barrel *first* — it decides the
-// sampling coordinate — and three later terms put hue back into a pixel that had
-// none: the aperture grille attenuates R, G and B by different amounts per
-// column, the chromatic aberration is a deliberate coloured fringe, and the
-// breach flash is additive. A greyscale pass upstream of any of those would be
-// undone by them, and "no hue anywhere" would be false as drawn.
-//
-// It is a **separate pass** rather than more of `crt.wgsl` for a reason that is
-// about switches rather than tidiness: that shader early-returns when the tube
-// is off, so a filter living below the guard would be turned off by F3. §19:
-// "a switch inferred from the absence of something is not a switch."
+// The last thing to touch a pixel, since the tube's grille, aberration and
+// flash put hue back (§19). A separate pass, since `crt.wgsl` returns early
+// with the tube off, and F3 must not switch this off too.
 
 // What Bevy's fullscreen vertex shader hands on, written out: Bevy 0.20 gives a
 // `.wgsl` file to wgpu as it is, with no `#import` to resolve.

@@ -1,36 +1,23 @@
 //! How big a siege arrives, and what buying it down costs (§11.5, §19).
 //!
-//! Renown decides the ceiling and `petition` lowers it — one mechanic, so both
-//! halves live here and a reader changing one number can see the other.
-//!
-//! Nothing in here draws. The ceiling is a pure function of the tower's rank and
-//! what has been petitioned, so it composes with `Siege::begin_against` without
-//! touching the stream, and it can be asked before a siege exists — which is
-//! what lets `petition` quote a price and refuse without spending.
+//! Renown decides the ceiling and `petition` lowers it — one mechanic, kept in
+//! one file. Nothing here draws, so the ceiling can be asked before a siege
+//! exists, which lets `petition` quote a price and refuse without spending.
 
 use bevy_ecs::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use super::{BASE_MOST, FEWEST, MOST, RANKS_PER_FOE};
 
-/// What one foe fewer costs in standing.
+/// What one foe fewer costs in standing: exactly what that foe would have paid.
 ///
-/// Priced at `RENOWN_PER_FOE`, what a foe is worth when the wall holds: buying
-/// one off hands back exactly what that foe would have paid you.
-///
-/// Self-limiting without a second rule — spending drops your rank, which lowers
-/// the ceiling anyway, so habitual petitioning retires the mechanic rather than
-/// becoming a tax on every siege.
+/// Self-limiting: spending drops your rank, which lowers the ceiling anyway.
 pub const PETITION_PER_FOE: u64 = super::RENOWN_PER_FOE;
 
 /// How many foes have been bought off the next siege to arrive.
 ///
-/// A resource rather than a component, because it outlives every siege: bought
-/// when no rampart is standing, spent by the next one that opens.
-///
-/// `#[serde(default)]` at its save site — absent reads as nought, which is the
-/// honest reading of a document written before anyone could petition, so no
-/// `FORMAT` bump.
+/// A resource, because it outlives every siege. Absent in a save reads as
+/// nought, the honest reading of a document from before petitioning.
 #[derive(Resource, Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Petitioned(u32);
 
@@ -62,13 +49,8 @@ impl Petitioned {
 /// The largest enemy this tower would meet, at `ranks` standing, having
 /// petitioned `bought` foes away.
 ///
-/// The floor never moves: [`FEWEST`] is the answer at every standing, so fame
-/// lengthens the *tail* rather than shifting the band — a famous tower can
-/// still draw a quiet night, and an unknown one never meets the worst.
-///
-/// Saturating rather than wrapping, because `petition` is refused once the
-/// ceiling is already at [`FEWEST`]: a player who bought the tail away entirely
-/// is told so and keeps their renown.
+/// The floor never moves, so fame lengthens the tail: a famous tower can still
+/// draw a quiet night, and an unknown one never meets the worst.
 #[must_use]
 pub fn most_at(ranks: usize, bought: u32) -> u32 {
     let earned = u32::try_from(ranks / RANKS_PER_FOE).unwrap_or(u32::MAX);

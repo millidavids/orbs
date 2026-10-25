@@ -1,53 +1,37 @@
 //! How the tower's walls wear down, and what a finished course puts back.
 //!
-//! §11.5 lists Integrity among the resources, and until now nothing produced it
-//! and nothing spent it. This is both halves.
+//! §11.5's Integrity, both halves. The first drain in the game, falling whether
+//! or not anybody plays, which makes the sanctum a room you come back to — a
+//! drain, not yet a contested pool (§19).
 //!
-//! The first drain in the game — everything else the tower has is a faucet — and
-//! it falls whether or not anybody is playing, which is what makes the sanctum a
-//! room you come *back* to. A drain, not yet a contested pool (§19).
-//!
-//! Low integrity does one thing today: [`height_for`] raises a taller course,
-//! and seven wards is 127 hauls against three wards' seven, so a tower left
-//! alone is expensive to put right and never impossible. Feeding it into
-//! `sabotage`'s rates would move every rate `orbs-balance` pins (§19).
-//!
-//! [`erode`] reads a clock and draws nothing, because a system that drew would
-//! shift every existing replay from its position onward. The one draw this
-//! domain makes is in [`height_for`], once per `muster`.
+//! Low integrity only raises a taller course ([`height_for`]): seven wards is
+//! 127 hauls against three wards' seven, so a neglected tower is expensive and
+//! never impossible. Feeding it into sabotage rates would move every rate
+//! `orbs-balance` pins (§19). [`erode`] draws nothing; the domain's one draw is
+//! in [`height_for`].
 
 use bevy_ecs::prelude::*;
 
 use super::pylon::{LEAST, MOST};
 use crate::tick::Tick;
 
-/// Walls in good repair.
-///
-/// A hundred because a player reads it as a percentage without being told, and
-/// §11.5's invariant 1 is written as *"a set fraction of its departure value"*.
+/// Walls in good repair — a hundred, so it reads as a percentage untold.
 pub const STANDING: u32 = 100;
 
 /// Ticks a point of integrity lasts.
 ///
-/// A placeholder, like every duration in the game. At thirty, a tower goes from
-/// whole to nothing in fifty minutes unattended, which puts one course an hour
-/// near the middle of what a player would want to do anyway.
+/// Whole to nothing in fifty minutes unattended, about one course an hour.
 /// `orbs-balance`'s `warding` policy settles it.
 pub const EROSION: u64 = 30;
 
-/// How much of the deficit one ward of a finished course puts back.
-///
-/// The award scales with the course, because the work does: a seven-ward course
-/// is sixteen times the hauling of a three-ward one and would otherwise pay the
-/// same. Also a placeholder.
+/// How much of the deficit one ward of a finished course puts back — per ward,
+/// because a seven-ward course is sixteen times the hauling of a three.
 pub const MENDED_PER_WARD: u32 = 8;
 
 /// How the tower's defences stand, from nothing to [`STANDING`].
 ///
-/// A resource rather than a component on the pylon, on `Experience`'s
-/// precedent: one number about the whole tower, read by the rail mid-frame and
-/// saved as a single value. The pylon carries a *reading* of it, republished
-/// when it changes — see [`erode`].
+/// A resource, `Experience`'s precedent: one number about the whole tower. The
+/// pylon carries a reading of it, republished when it changes — see [`erode`].
 #[derive(Resource, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Integrity(u32);
 
@@ -84,11 +68,8 @@ impl Integrity {
         }
     }
 
-    /// Put a total back, for a save.
-    ///
-    /// Not [`mend`](Self::mend), on `Experience::restore`'s precedent: a load
-    /// is the world being what it already was, and clamping up to whole would
-    /// quietly repair a tower the player left broken.
+    /// Put a total back, for a save — not [`mend`](Self::mend), since a load is
+    /// the world as it already was.
     pub(crate) const fn restore(&mut self, standing: u32) {
         self.0 = if standing > STANDING {
             STANDING
@@ -100,16 +81,11 @@ impl Integrity {
 
 /// Wear the walls down, one point every [`EROSION`] ticks.
 ///
-/// Reads the clock and nothing else, so it can sit anywhere after the threat
-/// rolls without touching a replay.
-///
-/// Exclusive because the number has to reach the world: the pylon carries an
-/// `integrity` *reading*, and a reading is a node. The first version left the
-/// node alone, so `survey pylon` reported a whole defence for ever while the
-/// rail counted down beside it. Republished only on the tick the value moves.
+/// Exclusive, because the pylon's `integrity` reading is a node, republished on
+/// the tick the value moves; leaving it alone had `survey pylon` report a whole
+/// defence for ever.
 pub fn erode(world: &mut World) {
-    // Nought is the floor: a tower at nothing is at its worst, which is a state
-    // the game has to be able to sit in.
+    // A tower at nothing is a state the game has to be able to sit in.
     if world.resource::<Integrity>().get() == 0 {
         return;
     }
@@ -124,11 +100,10 @@ pub fn erode(world: &mut World) {
 
 /// Put back what a finished course is worth, and say how much.
 ///
-/// Returns what was actually added, which is less than asked for when the walls
-/// were nearly whole — the number the completion line quotes, so a player is
-/// never told they mended forty points into a wall missing ten.
+/// What was actually added, which the completion line quotes, so nobody is told
+/// they mended forty into a wall missing ten.
 pub fn mend(world: &mut World, height: usize) -> u32 {
-    // Per ward, plus the Ley Line's `mend` on top of every finished course.
+    // Per ward, plus the Ley Line's `mend` on every finished course.
     let asked = MENDED_PER_WARD
         .saturating_mul(u32::try_from(height).unwrap_or(u32::MAX))
         .saturating_add(super::grant::mend_bonus(world));
@@ -141,11 +116,8 @@ pub fn mend(world: &mut World, height: usize) -> u32 {
 
 /// Put a number of points back onto the barrier, and say how many landed.
 ///
-/// [`mend`]'s point-denominated twin, and [`wear_by`]'s mirror. `mend` is
-/// denominated in *wards*, the sanctum's unit, and a siege has no wards in it.
-///
-/// It republishes, for [`wear_by`]'s reason. `pylon::fixture`, never `Cwd` —
-/// the caller here is a siege ending in the *bailey*.
+/// [`mend`] in points rather than wards, for a siege, which has none. It
+/// republishes through `pylon::fixture`, since its caller is in the bailey.
 pub fn mend_by(world: &mut World, points: u32) -> u32 {
     let mut integrity = world.resource_mut::<Integrity>();
     let before = integrity.get();
@@ -160,24 +132,16 @@ pub fn mend_by(world: &mut World, points: u32) -> u32 {
 /// Take a number of points off the barrier, and say how many were actually
 /// taken.
 ///
-/// [`mend`]'s mirror, and it returns for the same reason: a siege lost against
-/// a barrier already down to two must not be told it cost more.
-///
-/// The second thing that writes integrity, where [`erode`] is ambient: this is
-/// the player wearing it, which is why it is admissible where §19 deferred the
-/// *nuisance* coupling — a cost the player chooses to risk moves no rate
-/// `orbs-balance` pins until somebody fights.
-///
-/// It republishes, which is why it is not two lines at the call site (§19).
+/// The player wearing it, where [`erode`] is ambient — a risk chosen, so it
+/// moves no pinned rate until somebody fights. It republishes, which is why it
+/// is not two lines at the call site (§19).
 pub fn wear_by(world: &mut World, points: u32) -> u32 {
     let mut integrity = world.resource_mut::<Integrity>();
     let before = integrity.get();
     integrity.0 = integrity.0.saturating_sub(points);
     let after = integrity.get();
-    // `pylon::fixture`, never `refresh_pylon`: the latter reads `Cwd`, and the
-    // caller that mattered was a chant collapsing in the *menagerie*, so it
-    // found no pylon and returned every time. A publisher that runs on anything
-    // but the player's own command must take the entity.
+    // The entity, never `Cwd`: a chant collapsing in the menagerie found no
+    // pylon there and returned every time.
     if let Some(pylon) = super::pylon::fixture(world) {
         crate::execute::publish_pylon(world, pylon);
     }
@@ -186,16 +150,11 @@ pub fn wear_by(world: &mut World, points: u32) -> u32 {
 
 /// How tall a course to raise, given how far the walls have slipped.
 ///
-/// The jitter is what makes the parity reading load-bearing: without it a player
-/// learns their tower's height and hard-codes the cycle, and the one thing this
-/// puzzle asks anybody to *read* stops being read. One draw per `muster`.
+/// The jitter makes the parity reading load-bearing, or a spell would hard-code
+/// its tower's cycle. One draw per `muster`.
 pub fn height_for(world: &mut World, deficit: u32) -> usize {
-    // A quarter of the range per extra ward, which walks 3, 4, 5, 6 across a
-    // whole tower's decay and leaves the seventh to the jitter.
-    //
-    // Capped at `MOST - 1`: without it, a deficit of 100 reaches 7 by division
-    // and `+ roll % 2` clamps back to 7, so a wholly worn tower always mustered
-    // an odd course — a hard-codable parity where the jitter matters most.
+    // 3, 4, 5, 6 across a whole tower's decay, the seventh left to the jitter.
+    // Capped at `MOST - 1`, or a wholly worn tower always mustered an odd course.
     let base = LEAST
         .saturating_add((deficit / 25) as usize)
         .min(MOST.saturating_sub(1));
@@ -224,9 +183,7 @@ mod tests {
 
     #[test]
     fn integrity_never_falls_below_nothing_and_never_rises_above_whole() {
-        // Both clamps, and the floor is the one that matters: a `u32` going
-        // under would wrap to four billion and read as a tower in perfect
-        // repair.
+        // A `u32` going under would wrap and read as perfect repair.
         let mut integrity = Integrity::default();
         for _ in 0..(STANDING + 50) {
             integrity.wear();
@@ -238,9 +195,7 @@ mod tests {
 
     #[test]
     fn a_worn_tower_musters_a_taller_course() {
-        // The whole of what erosion does today. Checked across the band rather
-        // than at one point, because the interesting property is that it is
-        // monotone and capped, not what any single deficit gives.
+        // Monotone and capped across the band.
         let mut sim = Sim::new(3);
         let world = sim.world_mut();
         let mut tallest = 0;
@@ -264,13 +219,8 @@ mod tests {
 
     #[test]
     fn the_height_is_jittered_so_the_parity_cannot_be_assumed() {
-        // The reading `odd` exists because this is true. If one deficit always
-        // gave one height, a spell could hard-code its cycle and never ask.
-        //
-        // Every deficit across the band: this once sampled only nought, and
-        // the shipped curve reached `MOST` by division at a deficit of 100 with
-        // the jitter clamping straight back, so a wholly worn tower was always
-        // odd and the test could not see it.
+        // Every deficit across the band: sampling only nought missed a worn
+        // tower that was always odd.
         let mut sim = Sim::new(7);
         let world = sim.world_mut();
         for deficit in [0, 25, 50, 75, 100, STANDING] {
@@ -282,7 +232,6 @@ mod tests {
                 seen.len() > 1,
                 "forty musters at a deficit of {deficit} gave one height: {seen:?}",
             );
-            // ...and both parities, which is the property `odd` is published for.
             assert!(
                 seen.iter().any(|height| height.is_multiple_of(2))
                     && seen.iter().any(|height| !height.is_multiple_of(2)),
@@ -295,10 +244,8 @@ mod tests {
     fn mending_reports_what_it_actually_put_back() {
         let mut sim = Sim::new(1);
         let world = sim.world_mut();
-        // Nearly whole: a big course cannot add more than is missing.
         world.resource_mut::<Integrity>().restore(STANDING - 5);
         assert_eq!(mend(world, MOST), 5);
-        // ...and a worn one takes the whole award.
         world.resource_mut::<Integrity>().restore(0);
         assert_eq!(mend(world, 3), MENDED_PER_WARD * 3);
     }

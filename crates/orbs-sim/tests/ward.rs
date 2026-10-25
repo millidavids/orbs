@@ -4,11 +4,12 @@
 //! words resolve, the readings publish, a press costs the tower nothing, and a
 //! seal that opens pays what `progression.toml` says it does.
 //!
-//! The sweep here is the one `debug_spell breaking` writes, in Rust: one socket
-//! at a time, turning it until `aligned` moves, reading nothing but which way it
-//! went — because §8's language has no variables and a codemaker says nothing
-//! else. If this cannot solve a ward through `dial` and `probe`, no spell can.
+//! The sweep is `breaking`'s, in Rust, reading only which way `aligned` moved:
+//! if it cannot solve a ward through `dial` and `probe`, no spell can.
 
+mod common;
+
+use common::{run, said};
 use orbs_render::{FieldName, Value};
 use orbs_sim::Sim;
 use orbs_sim::content::Recipes;
@@ -24,23 +25,6 @@ const SOCKETS: [&str; 4] = ["first", "second", "third", "fourth"];
 /// these tests also let *other* work land between presses, and a helper that
 /// stepped nought would make a future duration invisible rather than loud.
 const PRESS: u64 = 1;
-
-fn run(sim: &mut Sim, line: &str) {
-    sim.submit(line);
-    sim.step();
-}
-
-/// Every sentence the tower has said so far.
-fn said(sim: &Sim) -> Vec<String> {
-    sim.scrollback()
-        .records()
-        .iter()
-        .filter_map(|record| match record.field(FieldName::Message) {
-            Some(Value::Text(text)) => Some(text.to_owned()),
-            _ => None,
-        })
-        .collect()
-}
 
 /// Press, wait for the answer, and say which way the ward moved.
 fn press(sim: &mut Sim) -> String {
@@ -139,37 +123,14 @@ fn the_writable_sweep_breaks_a_ward_through_the_real_verbs() {
     }
 }
 
-/// Gated: `debug_ward` and `debug_spell` are both `cfg(debug_assertions)` and
-/// both unresolvable lines in a release build rather than errors. Without this
-/// the test ran against a ward nobody had broken and a spell nobody had
-/// written, and failed saying the seed could not bind anything.
-///
-/// The honest alternative is brute-forcing a 360-code ward per seed, which
-/// `a_blind_ladder_breaks_a_ward_through_the_real_verbs` already does through
-/// the real verbs and in either profile — so what is gated here is the
-/// *shortcut*, not the coverage.
+/// Gated with `debug_ward` and `debug_spell`; the blind ladder above covers
+/// both profiles through the real verbs.
 #[cfg(debug_assertions)]
 #[test]
 fn the_solver_spell_keeps_solving_and_never_goes_quiet() {
-    // The test above is a *reference* ladder written in Rust and does not run
-    // the spell: it has a `tried.clear()` the shipped spell cannot express, so
-    // it proved a Rust loop terminates while the thing a player casts went
-    // unmeasured. `debug_spell breaking` is what this runs.
-    //
-    // A faucet that stops is the failure mode rather than a crash — a solver out
-    // of moves presses an unchanged aperture for ever, holding the production
-    // slot and earning nothing. So the assertion is that the second half of a
-    // long run earns as much as the first; a plateau is what a stall looks like.
-    //
-    // `MAX_MEDITATE` is 3600, so a longer wait must be several commands. One
-    // `meditate 9600` silently becomes 3600, which is how a first pass at this
-    // "found" a plateau that was the cap.
-    //
-    // Bound, not invoked, and the difference is new: `repeat until the prism is
-    // idle` solves the ward and exits, and with a press in flight for twelve
-    // ticks the guard never saw the solve, so an invocation lapped by accident.
-    // An instant press lands the solve before the guard is asked, so the faucet
-    // is the *binding* — an invocation is an act, a binding is automation.
+    // The shipped `breaking`, not the Rust reference. A stall is a plateau, so
+    // the second half must earn as the first. Waits in `MAX_MEDITATE` pieces.
+    // Bound, not invoked: an invocation exits on the solve.
     for seed in [1u64, 3, 11] {
         let mut sim = Sim::new(seed);
         run(&mut sim, "attend lens");
@@ -338,29 +299,13 @@ fn a_press_is_instant_and_takes_no_slot() {
     );
 }
 
-/// Gated: `debug_ward` and `debug_spell` are both `cfg(debug_assertions)` and
-/// both unresolvable lines in a release build rather than errors. Without this
-/// the test ran against a ward nobody had broken and a spell nobody had
-/// written, and failed saying the seed could not bind anything.
-///
-/// The honest alternative is brute-forcing a 360-code ward per seed, which
-/// `a_blind_ladder_breaks_a_ward_through_the_real_verbs` already does through
-/// the real verbs and in either profile — so what is gated here is the
-/// *shortcut*, not the coverage.
+/// Gated with `debug_ward` and `debug_spell`; the blind ladder above covers
+/// both profiles through the real verbs.
 #[cfg(debug_assertions)]
 #[test]
 fn a_solver_keeps_working_after_the_player_walks_out() {
-    // The domain's own selling point, and nothing covered it: `land` runs in the
-    // tick schedule, outside `spell::run`'s domain swap, so a `refresh` that
-    // resolved the prism from `Cwd` published nothing whenever the player was
-    // elsewhere — every reading froze at the last `dial` and the rung fired for
-    // ever. Every other test here stands in the lens for its whole run, which is
-    // why it went unseen.
-    //
-    // `bind`, not `invoke`, and that distinction is the whole test: an
-    // invocation ends when the player walks out, so only a binding is
-    // unattended. `bind` costs 16 experience and nothing grants it, so the wards
-    // are broken by hand first.
+    // Readings publish with the player elsewhere, since `land` runs outside the
+    // spell's domain swap. `bind`, the unattended form, earned by hand first.
     let mut sim = Sim::new(3);
     run(&mut sim, "attend lens");
     while sim.experience() < 16 {
@@ -389,27 +334,13 @@ fn a_solver_keeps_working_after_the_player_walks_out() {
     );
 }
 
-/// Gated: `debug_ward` and `debug_spell` are both `cfg(debug_assertions)` and
-/// both unresolvable lines in a release build rather than errors. Without this
-/// the test ran against a ward nobody had broken and a spell nobody had
-/// written, and failed saying the seed could not bind anything.
-///
-/// The honest alternative is brute-forcing a 360-code ward per seed, which
-/// `a_blind_ladder_breaks_a_ward_through_the_real_verbs` already does through
-/// the real verbs and in either profile — so what is gated here is the
-/// *shortcut*, not the coverage.
+/// Gated with `debug_ward` and `debug_spell`; the blind ladder above covers
+/// both profiles through the real verbs.
 #[cfg(debug_assertions)]
 #[test]
 fn a_bound_solver_leaves_the_tower_a_share_of_its_one_slot() {
-    // It takes *none* of it now, which is the assertion. §19 refuses the
-    // production slot to a maze because a solver holding the tower's one slot
-    // would starve every other spell, and this measured a bound `breaking`
-    // pressing twelve ticks in roughly thirteen — contended but not starving.
-    // A press schedules nothing now, so the share is nought.
-    //
-    // Kept rather than deleted: the *claim* it holds — the lens does not own the
-    // slot — is the one that matters, and it is what a future decision to price a
-    // press again would break.
+    // The lens takes none of the slot (§19); kept for whoever prices a press
+    // again.
     const SPAN: u32 = 600;
 
     let mut sim = Sim::new(3);

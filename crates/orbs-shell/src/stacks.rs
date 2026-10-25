@@ -22,18 +22,10 @@
 use orbs_render::{Painter, Rect, Span, Stacks, Style, UtteranceKind};
 use orbs_sim::content::Prose;
 
-// The gap and the floor every board beside the transcript keeps. The map's own
-// `split` is its own; the transcript it leaves is not.
-use crate::beside::{GUTTER, TRANSCRIPT_FLOOR};
-
-/// Where the map sits, and what is left for the transcript.
-#[derive(Debug, Clone, Copy)]
-pub struct Split {
-    /// The map's own rectangle, border included. Empty when there is none.
-    pub area: Rect,
-    /// What the transcript gets.
-    pub rest: Rect,
-}
+// The gap, the floor and the shape every board beside the transcript keeps. The
+// map's own `split` is its own, because it windows; the transcript it leaves is
+// not.
+use crate::beside::{GUTTER, Split, TRANSCRIPT_FLOOR};
 
 /// The map's footprint, and what is left for the transcript.
 ///

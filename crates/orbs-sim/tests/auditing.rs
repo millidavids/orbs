@@ -1,42 +1,16 @@
 //! §8.1's two forms of `verify`, driven through the real parser and schedule.
 //!
-//! `tower::audit`'s own tests prove the curve and the cooldown arithmetic;
-//! these prove the game — that a bare `verify` is the expensive audit, that it
-//! holds the production slot, and that checking one surface costs you that
-//! surface and not the other.
-//!
-//! Phase 1 debt rather than Phase 8 work: `sabotage::verify` promised the
-//! expensive form in Phase 1 and Phase 1 closed without it, leaving four
-//! instant checks that audited the whole tower for nothing — the collapse §8.1
-//! names by name.
+//! `tower::audit` proves the arithmetic; these prove a bare `verify` is the
+//! expensive audit, holding the slot, and one surface costs only itself.
 
+mod common;
+
+use common::{attended, ever_said, reloaded, run, said};
 use orbs_render::{FieldName, Value};
-use orbs_sim::{Save, Sim};
-
-fn run(sim: &mut Sim, line: &str) {
-    sim.submit(line);
-    sim.step();
-}
+use orbs_sim::Sim;
 
 fn in_the_laboratory() -> Sim {
-    let mut sim = Sim::new(11);
-    run(&mut sim, "attend laboratory");
-    sim
-}
-
-fn said(sim: &Sim) -> Vec<String> {
-    sim.scrollback()
-        .records()
-        .iter()
-        .filter_map(|record| match record.field(FieldName::Message) {
-            Some(Value::Text(text)) => Some(text.to_owned()),
-            _ => None,
-        })
-        .collect()
-}
-
-fn ever_said(sim: &Sim, needle: &str) -> bool {
-    said(sim).iter().any(|line| line.contains(needle))
+    attended(11, "laboratory")
 }
 
 /// Every `State` field the tower has emitted — where `verify`'s verdict lives.
@@ -160,8 +134,7 @@ fn a_cooldown_survives_a_save() {
     let mut sim = in_the_laboratory();
     run(&mut sim, "verify laboratory.log");
 
-    let text = sim.snapshot().to_toml().expect("a save renders");
-    let mut restored = Sim::restored(&Save::from_toml(&text).expect("a save reads back"));
+    let mut restored = reloaded(&sim.snapshot());
 
     run(&mut restored, "attend laboratory");
     run(&mut restored, "verify laboratory.log");

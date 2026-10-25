@@ -1,15 +1,8 @@
 //! What is true of one node, put back on it.
 //!
-//! Split from [`mod@super::restore`], which owns the world's *shape* — the clock,
-//! the streams, the tree, the resources. This owns what hangs off each node, and
-//! the two halves are separated by a real seam rather than a line count: every
-//! function below needs the tree to already exist.
-//!
-//! [`references`] is why the seam is there at all. `Working::subject` and
-//! `Running::{spell, at}` are `NodeId`s that the document spells as **paths**,
-//! so neither can be resolved while the tree is still being walked — the node a
-//! path names may not have been created yet. A second pass over the finished
-//! tree costs nothing and removes the ordering question entirely.
+//! What hangs off each node, where [`mod@super::restore`] owns the shape. The
+//! seam is real: everything here needs the finished tree, and [`references`]
+//! resolves paths a walk may not have created yet.
 
 use bevy_ecs::prelude::*;
 use orbs_render::FieldName;
@@ -188,13 +181,9 @@ pub(super) fn apply(world: &mut World, entity: Entity, node: &NodeSave) {
             at.remove::<tower::circle::Beast>();
         }
     }
-    // Straight back on, with no `from_save` to validate through: a `Siege` saves
-    // as itself, so there is no derived shape to disagree with the stored one.
-    //
-    // Both directions, which this arm's first version broke — `apply` adopts
-    // onto the *live* world, so a save taken before a siege must *remove* one
-    // that is running, or loading it reopens the bailey mid-fight with a stale
-    // `clear_at` gating `defend`.
+    // Straight back on: a `Siege` saves as itself. Both directions, since
+    // `apply` adopts onto the live world and a save from before a siege must
+    // remove one.
     match node.siege.clone() {
         Some(siege) => {
             at.insert(siege);
@@ -262,11 +251,8 @@ fn marker<T: Component>(world: &mut World, entity: Entity, wanted: bool, value: 
 
 /// The two components that name another node, put back once the tree exists.
 ///
-/// `Working::subject` and `Running::{spell, at}` are `NodeId`s, and the document
-/// spells them as paths — so neither can be resolved while [`apply`] is still
-/// walking, because the node a path names may not have been created yet. A
-/// second pass over the finished tree costs nothing and removes the ordering
-/// question entirely.
+/// `Working::subject` and `Running::{spell, at}` are saved as paths, which
+/// [`apply`]'s walk may not have created yet.
 pub(super) fn references(world: &mut World, save: &Save) {
     let found: Vec<(Entity, &NodeSave)> = save
         .nodes
@@ -297,19 +283,10 @@ pub(super) fn references(world: &mut World, save: &Save) {
 
 /// Put one part-way-through spell back.
 ///
-/// The program is re-derived rather than carried, because the text is the single
-/// source of truth and the program is rebuilt at every cast
-/// (`tower::spell::program`).
-///
-/// Re-deriving it blind would not be safe, though: `pc` is a path into the tree
-/// the spell was cast against, and both the spell's own text and a reagent's
-/// name can have moved since — editing a spell mid-flight and §8.1's
-/// substitutions are both shipped features. A stale `pc` runs the wrong line, or
-/// `program::at` returns nothing and the run ends with no reason given.
-///
-/// So the save carries a fingerprint of the text it compiled and a mismatch ends
-/// the run and says so. A `Bound` spell is cast again next tick from the top,
-/// which is the correct recovery and needs no code here.
+/// The program is re-derived from the text (`tower::spell::program`), but not
+/// blind: `pc` is a path into the tree it was cast against, and the text may
+/// have moved. A fingerprint mismatch ends the run and says so; a `Bound`
+/// spell recasts next tick.
 fn spell(world: &mut World, entity: Entity, node: &NodeSave) {
     {
         let Some(run) = node.running.as_ref() else {
@@ -389,10 +366,7 @@ fn spell(world: &mut World, entity: Entity, node: &NodeSave) {
 
 /// Say that a spell's text changed while it was not running.
 ///
-/// In voice and in the log rather than silently, because the player is about to
-/// find a spell they left running has stopped, and §8's failure taxonomy is
-/// *"scripts always log and never halt"* — halting quietly is the one thing it
-/// forbids.
+/// In voice and the log, since halting quietly is what §8 forbids.
 fn moved_under_it(world: &mut World, spell: &str) {
     let name = spell.rsplit_once('/').map_or(spell, |(_, leaf)| leaf);
     let message = world
@@ -410,10 +384,8 @@ fn moved_under_it(world: &mut World, spell: &str) {
 
 /// A `Loop`, as one number.
 ///
-/// `repeat 5` counts down, `repeat until` counts nothing, and a branch of an
-/// `if` runs once. A save with a position and no counts would resume every
-/// enclosing loop from its first turn, so the counts have to travel — and one
-/// integer per open block reads better in a file than a tagged table would.
+/// The counts travel, or every enclosing loop resumes from its first turn —
+/// one integer per block (see `RunningSave::loops`).
 pub(super) fn loop_code(open: &spell::Loop) -> i64 {
     match open {
         spell::Loop::Repeat(Some(turns)) => i64::from(*turns),

@@ -1,26 +1,16 @@
 //! Whole sessions, played end to end.
 //!
-//! The short scenarios each prove one thing and tell you what broke. These three
-//! chain systems together the way an actual sitting does, and catch what no
-//! single-claim scenario can: a threshold reached by real work rather than by
-//! being handed the number, a spell running against a world it changed, a room
-//! that only misbehaves once something else has happened in it.
-//!
-//! They assert on outcomes, never on stock. A long run meets ambient sabotage —
-//! `substitution` swaps a reagent about once an hour — so a listing is not a
-//! stable claim, while a count, a name and an experience total are.
+//! Systems chained as a sitting chains them. On outcomes, never stock, since a
+//! long run meets ambient sabotage.
 
-use crate::play::{Game, available};
+use crate::play::Game;
 
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn a_morning_in_the_laboratory() {
-    if !available() {
-        return;
-    }
     // Brew the flagship by hand, watch the orb learn to hold a spell, and see
     // the progression screen agree about what was earned.
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.does("attend laboratory", "/tower/laboratory")
         .does("help", "the work")
         .does("recall clarity", "5 steps")
@@ -54,13 +44,10 @@ fn a_morning_in_the_laboratory() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn an_afternoon_in_the_stacks() {
-    if !available() {
-        return;
-    }
     // Open a maze, walk it by hand, then hand it to the solver and take what it
     // wins. `1 or more`, never an exact count: how many laps land inside 7200
     // ticks depends on the wall clock, which is not a claim about the game.
-    let game = Game::seeded(11);
+    let Some(game) = Game::seeded(11) else { return };
     game.does("attend archive", "/tower/archive")
         .does("help", "the work")
         .does("research", "a way out is in them")
@@ -88,14 +75,11 @@ fn an_afternoon_in_the_stacks() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn an_evening_writing_a_spell() {
-    if !available() {
-        return;
-    }
     // Two distillations first, and not decoration: `bind` costs 16 experience,
     // concentration is derived from work completed, and `debug_spawn` earns
     // none. There is no way to grant it, so the only route to a bound spell is
     // to do the work.
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.does("attend laboratory", "/tower/laboratory")
         .does("kindle charcoal", "fuel for 600 ticks")
         .does("debug_spawn clarified-draught 2", "all along")

@@ -13,6 +13,7 @@
 
 mod boot;
 mod crt;
+mod fullscreen;
 mod render;
 mod shell;
 mod sight;
@@ -26,17 +27,9 @@ use orbs_shell::wizard;
 /// 1920×1080 puts the 960×720 picture at scale 1.5 — a 12×24 glyph — with 240
 /// pixels of bar down each side.
 ///
-/// A half step rather than a whole one, priced in §19: the sampler is
-/// `mag: Nearest`, so nearest-neighbour duplicates some source columns and not
-/// others. The cell is even on both axes, so 8×16 lands on 12×24 and every cell
-/// boundary is a whole pixel — a scale that did not divide the cell would put
-/// the grid on half-pixels and moiré against the RGB mask (§4).
-///
-/// It was 1280×720, ×1.0, the pixels the font designer drew, and that is a real
-/// loss. It buys a window that fills a modern display rather than a third of it.
-///
-/// The bars survive the change: 1440×1080 inside 1920×1080 still leaves 240 a
-/// side, so the 4:3 letterbox is exercised on every run.
+/// A half step, priced in §19; the cell is even on both axes, so every cell
+/// boundary stays a whole pixel (§4). The bars exercise the letterbox on every
+/// run.
 const INITIAL_WINDOW: (u32, u32) = (1920, 1080);
 
 fn main() -> AppExit {

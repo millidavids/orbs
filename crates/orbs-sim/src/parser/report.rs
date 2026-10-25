@@ -1,19 +1,11 @@
 //! The parser's answer, as records.
 //!
-//! The first producer on the boundary architectural rule 4 describes:
-//! *commands emit records; presentation is a view over the record.* Everything
-//! downstream — the scrollback pane, a screen reader, `sift`, the balance
-//! harness — reads what this writes, and none of them reads a rendered string.
+//! Rule 4: everything downstream — the pane, a screen reader, `sift`, the
+//! harness — reads these, never a rendered string. No prose: only facts already
+//! in the [`Resolution`], for a content file to compose around (rule 6).
 //!
-//! No prose lives here. Rule 6 and §12 put authored prose in hot-reloadable
-//! content files, so this emits only facts already in the [`Resolution`] — a
-//! canonical command form, a verb name, the category a slot wants. The sentence
-//! around them is composed by a content file from these fields.
-//!
-//! Every record says which of these it is, and [`FieldName::Outcome`] is not
-//! decoration: a numbered disambiguation prompt is selectable where a suggestion
-//! list is not, and a forced echo needs a correction affordance where a clear
-//! one does not. All four look alike as text.
+//! [`FieldName::Outcome`] is not decoration: a numbered prompt is selectable
+//! where a suggestion list is not, and the four look alike as text.
 //!
 //! | Resolution | Records | `Outcome` |
 //! |---|---|---|
@@ -23,11 +15,8 @@
 //! | `Ambiguous` | one per tied reading, best first | [`Outcome::Candidate`] |
 //! | `Unresolved` | one naming the input, then one per suggestion | [`Outcome::Unresolved`], then [`Outcome::Suggestion`] |
 //!
-//! §6 makes the echo canonical *arcane* whatever register was typed, because the
-//! canonical form is the one players absorb. §14 requires it be tagged as
-//! metadata so a reader can suppress it without losing output — which is what
-//! [`RecordKind::Echo`] does, via
-//! [`UtteranceKind::Echo`](orbs_render::UtteranceKind).
+//! The echo is arcane whatever was typed (§6), and tagged
+//! [`RecordKind::Echo`] so a reader can suppress it (§14).
 
 use orbs_render::{FieldName, Outcome, RecordKind, Records};
 
@@ -36,28 +25,15 @@ use crate::content::Prose;
 
 /// Write `resolution` to `records`.
 ///
-/// `input` is the raw line the player typed. [`Resolution::Unresolved`] does not
-/// carry it and the orb cannot say *"I do not know that word"* without naming
-/// the word, so it is threaded in rather than reconstructed.
-///
-/// Always emits at least one record: §6 forbids a bare error, and a parser that
-/// resolved nothing and suggested nothing would otherwise produce silence.
-///
-/// Roles stay [`Role::Normal`](orbs_render::Role) throughout. The accent triad
-/// is danger, cost, and success (§4), and a parser needing one more word is none
-/// of those — spending an accent here would dilute the three signals that have
-/// to read instantly during a siege.
-///
-/// Takes [`Prose`] because one outcome needs an authored sentence rather than a
-/// restatement of the input: a verb that exists but not *here* has to say so, and
-/// rule 6 puts that sentence in `content/prose.toml`.
+/// `input` is the raw line, which [`Resolution::Unresolved`] does not carry
+/// and the orb must name. Always at least one record (§6). Roles stay
+/// [`Role::Normal`](orbs_render::Role): the accent triad is danger, cost and
+/// success (§4), and a parser needing a word is none of them. [`Prose`] is for
+/// the outcomes that need an authored sentence.
 pub fn report(input: &str, resolution: &Resolution, prose: &Prose, records: &mut Records) {
     match resolution {
         Resolution::Resolved { intent, confidence } => {
-            // `Divined` draws as `Forced` does, on purpose: both mean *the orb
-            // acted on its best reading and invites correction*, which is one
-            // fact and deserves one marker. A seventh glyph would teach a second
-            // symbol for something the player already understands.
+            // `Divined` draws as `Forced` does: one fact, one marker.
             let outcome = match confidence {
                 Confidence::Clear => Outcome::Resolved,
                 Confidence::Forced | Confidence::Divined => Outcome::Forced,
@@ -74,13 +50,8 @@ pub fn report(input: &str, resolution: &Resolution, prose: &Prose, records: &mut
             filled,
             ..
         } => {
-            // The command as far as it got, so the prompt can show the player
-            // their own words back rather than starting over. §19 records the
-            // defect where rebuilding this from scratch dropped resolved slots.
-            //
-            // Leaves here too, or `move sage` prompts in full paths while
-            // `move sage X` echoes leaves — the same command shown two ways one
-            // keystroke apart.
+            // The command as far as it got, in leaves as the echo is, so the
+            // prompt shows the player their own words back.
             let mut sofar = String::from(verb.canonical());
             for argument in filled {
                 sofar.push(' ');
@@ -93,10 +64,8 @@ pub fn report(input: &str, resolution: &Resolution, prose: &Prose, records: &mut
                 .text(FieldName::Kind, missing.label())
                 .finish();
         }
-        // A verb that takes nothing, handed words anyway. `Incomplete` names the
-        // slot it waits for and this verb has none, so the record carries the
-        // verb as a fact and the sentence naming the words is the content's
-        // (rule 6). Drawn as `Unresolved`, as `Elsewhere` is: nothing ran.
+        // A verb that takes nothing, handed words anyway: the verb as a fact,
+        // the sentence the content's. Drawn as `Unresolved`, since nothing ran.
         Resolution::TakesNothing { verb, extra, .. } => {
             let message = prose.line(
                 "verb_takes_nothing",
@@ -110,10 +79,8 @@ pub fn report(input: &str, resolution: &Resolution, prose: &Prose, records: &mut
                 .finish();
         }
         Resolution::Ambiguous { candidates } if !candidates.is_empty() => {
-            // Numbered from one, because §6's prompt is numbered and the player
-            // answers with a digit. The number is a fact about the option rather
-            // than a position a view invents: a view draws a window onto the
-            // scrollback and may not be holding the whole list.
+            // Numbered from one, as a fact about the option: a view drawing a
+            // window onto the scrollback may not hold the whole list.
             for (index, candidate) in candidates.iter().enumerate() {
                 let choice = u64::try_from(index + 1).unwrap_or(u64::MAX);
                 records
@@ -124,22 +91,14 @@ pub fn report(input: &str, resolution: &Resolution, prose: &Prose, records: &mut
                     .finish();
             }
         }
-        // An `Ambiguous` with nothing in it is a parser defect, not a state the
-        // player can reach on purpose. Falling through to the same floor as
-        // `Unresolved` keeps the "always at least one record" guarantee true
-        // without inventing a fifth outcome for a bug.
+        // An empty `Ambiguous` is a parser defect; the `Unresolved` floor keeps
+        // "at least one record" true without a fifth outcome.
         Resolution::Ambiguous { .. } => unresolved(input, records),
-        // A real verb, in a room that does not answer to it. The record carries
-        // the verb as a *fact* and the sentence comes from `content/prose.toml`
-        // (rule 6); §6 forbids a bare error, and "I do not know that word" would
-        // be a lie about a word the game taught next door.
+        // A real verb, in a room that does not answer to it: the verb as a
+        // fact, the sentence from `content/prose.toml`.
         Resolution::Elsewhere { verb } => {
-            // And it names the fixture, the other half of the answer. *"there is
-            // nothing here to wander with"* says the verb is real and does not
-            // apply, which satisfies §6; *"there is no stacks here to wander
-            // with"* tells the player where to go. Drawn from the content by
-            // `tower::fixture_of`, so a new domain reads correctly the day its
-            // branch is authored.
+            // And the fixture, which tells the player where to go — from
+            // `tower::fixture_of`, so a new domain reads right on arrival.
             let (key, fixture) = match crate::tower::fixture_of(*verb) {
                 Some(fixture) => ("verb_needs_fixture", fixture),
                 None => ("verb_elsewhere", ""),
@@ -238,14 +197,9 @@ mod tests {
 
     #[test]
     fn a_forced_reading_is_flagged_so_a_view_can_offer_correction() {
-        // §6: a siege never blocks on a prompt, so the correction moves into the
-        // echo. A view cannot draw that affordance from the text alone, so the
-        // flag has to survive the trip through the record.
-        //
-        // Built directly rather than resolved from input: whether any *current*
-        // phrase happens to tie under siege is a property of the vocabulary, and
-        // a test that silently stops exercising `Forced` when a synonym moves is
-        // a test that asserts nothing.
+        // A siege never blocks (§6), so the correction rides the echo and the
+        // flag must survive the record. Built by hand, so a moved synonym
+        // cannot stop this exercising `Forced`.
         let intent = Intent {
             verb: Verb::Survey,
             register: Register::Arcane,
@@ -294,10 +248,8 @@ mod tests {
 
     #[test]
     fn a_failure_never_looks_like_a_success() {
-        // The defect this outcome field exists for: `Resolved`, `Ambiguous` and
-        // `Unresolved` all carry one canonical form in `Message`, so without the
-        // annotation a view could not tell a command that will run from one the
-        // parser could not read at all.
+        // All three carry one canonical form in `Message`; only the outcome
+        // tells a command that will run from one that could not be read.
         let scene = Scene::default();
         let good = records_for("look around", &scene);
         let bad = records_for("xyzzy", &scene);

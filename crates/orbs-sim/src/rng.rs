@@ -15,10 +15,7 @@ use rand_chacha::rand_core::SeedableRng;
 /// Independent random streams. Add variants freely — existing streams are
 /// unaffected, which is the entire point.
 ///
-/// Deliberately not `#[non_exhaustive]`: that attribute is for downstream
-/// compatibility across crate versions, every consumer here is in this
-/// workspace, and exhaustive matching is a feature — adding a stream should
-/// force the private `index` mapping to be updated rather than compile.
+/// Not `#[non_exhaustive]`, so a new stream forces the `index` mapping.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RngStream {
     /// Parser tie-breaking when candidate intents score equally.
@@ -50,10 +47,7 @@ pub enum RngStream {
     Menagerie,
     /// The siege: every die the tower rolls (§10, `tower::dice`).
     ///
-    /// Its own stream, where sharing [`Threat`](Self::Threat) was the tempting
-    /// shortcut: that one is drawn twice a tick by `substitution`, so a combat
-    /// roll from it would shift the ambient sabotage
-    /// schedule and invalidate every replay with a siege in it.
+    /// Not [`Threat`](Self::Threat)'s, which sabotage draws every tick.
     Siege,
     /// The forge: the lattice a charm is bound with.
     ///
@@ -66,18 +60,8 @@ pub enum RngStream {
 impl RngStream {
     /// Number of distinct streams. Must equal the variant count.
     ///
-    /// Changing this is a save-format change, which is not obvious from here:
-    /// `save::Save::from_toml` refuses a document whose `[rng].positions` is not
-    /// this long, so a world written with eight streams cannot be read by a
-    /// build with nine. `save::FORMAT` went to 3 with the ninth so the refusal
-    /// reads as *behind* rather than *malformed*, to 4 with the tenth, to 6 with
-    /// the eleventh when the siege brought [`Siege`](RngStream::Siege), and to 9
-    /// with the twelfth when the forge brought [`Forge`](RngStream::Forge).
-    ///
-    /// A new domain almost always brings a stream and a stream is always a
-    /// format change — three of the last four bumps were this. The bump belongs
-    /// in the same commit as the variant rather than being discovered by the
-    /// first player whose tower will not open.
+    /// A save-format change: a save's `[rng].positions` must be this long. Bump
+    /// `save::FORMAT` in the same commit as the variant.
     pub const COUNT: usize = 12;
 
     /// Fixed index into [`Rngs::streams`].
@@ -130,14 +114,9 @@ impl Rngs {
 
     /// Every stream, wound forward to where it stood when the save was written.
     ///
-    /// The master seed alone is not enough and never was: a stream is a
-    /// `ChaCha8Rng` that advances in place, so reconstructing from the seed
-    /// rewinds all of them to tick zero. `sabotage`'s two systems draw once per
-    /// tick unconditionally, so a rewound stream re-runs the whole schedule of
-    /// drifts and swaps from the beginning.
-    ///
-    /// The positions go beside [`master_seed`](Self::master_seed) in a save.
-    /// Order is `RngStream`'s own fixed index order, which is never renumbered.
+    /// The seed alone rewinds every stream to tick zero. The positions go
+    /// beside [`master_seed`](Self::master_seed), in `RngStream`'s fixed index
+    /// order.
     #[must_use]
     pub fn positions(&self) -> [u128; RngStream::COUNT] {
         std::array::from_fn(|i| self.streams[i].get_word_pos())
@@ -148,11 +127,8 @@ impl Rngs {
     /// Derives each stream exactly as [`from_seed`](Self::from_seed) does, so a
     /// save carries no key material, then winds each one forward.
     ///
-    /// The cost of deriving rather than storing: changing `derive_stream_seed`
-    /// breaks every existing save silently. The keys are recomputed from the
-    /// current mixing function and wound to the old word positions, so nothing
-    /// compares and nothing errors — the world just diverges on the first roll.
-    /// So that function is a format change, and `save::FORMAT` says so.
+    /// The cost: changing `derive_stream_seed` silently diverges every save,
+    /// so it is a format change, and `save::FORMAT` says so.
     #[must_use]
     pub fn restore(master_seed: u64, positions: [u128; RngStream::COUNT]) -> Self {
         let mut rngs = Self::from_seed(master_seed);

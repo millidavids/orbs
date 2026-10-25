@@ -6,13 +6,11 @@
 //! `debug_spawn` is the door in, so these are debug-only.
 #![cfg(debug_assertions)]
 
-use bevy_ecs::prelude::Entity;
-use orbs_sim::{Sim, tower};
+mod common;
 
-fn run(sim: &mut Sim, line: &str) {
-    sim.submit(line);
-    sim.step();
-}
+use bevy_ecs::prelude::Entity;
+use common::run;
+use orbs_sim::{Sim, tower};
 
 fn alembic(sim: &mut Sim) -> Entity {
     let world = sim.world_mut();

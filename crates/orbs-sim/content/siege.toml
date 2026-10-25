@@ -1,28 +1,20 @@
 # What the arsenal is worth in a siege (DESIGN.md §5.1, §11.5).
 #
-# **Rule 6, and this file is the reason it applies here.** Balancing this domain
-# means moving numbers dozens of times; in Rust that is a recompile per guess.
-# Which die a thing rolls, what it adds, and how fast it drains are all
-# authored, so a tuning pass is a content edit.
+# Authored, so a tuning pass is a content edit (rule 6). Every key is a potion,
+# scroll or demon the arsenal can hold; one with no entry cannot be spent.
 #
-# Every key is a material the arsenal can hold — a potion or a scroll.
-# `execute::defend` looks a name up here and refuses anything absent, so **an
-# item with no entry cannot be spent**, which is what stops `quaff sage`
-# resolving and doing something quietly.
-#
-# No single item does anything (§19, Supply). Each row is a standing
-# supply: its verb opens it, the verb again raises it one rate, and `stop`
-# closes it. While open it applies every round and draws every round.
+# No single item does anything (§19, Supply): each row is a standing supply,
+# opened by its verb, raised a rate by it again, closed by `stop`, drawing
+# every round.
 #
 #   rates = [{ opens, draws, worth }, ...], slowest first
 #     opens  — how many the arsenal must hold to run at this rate
 #     draws  — how many each round takes
 #     worth  — what a draw buys: a bonus, a heal, a room, a refill
 #
-# A draw runs at the fastest rate the held count still meets, and a thin store
-# (made once lately) runs only the slowest. Below the slowest it is drained.
-# `content::rate` refuses, at load, a slowest rate opening under two, a draw as
-# big as its threshold, and a faster rate worth more per item.
+# A draw runs at the fastest rate the held count meets, a thin store only the
+# slowest. `content::rate` refuses a slowest rate under two, a draw as big as
+# its threshold, and a faster rate worth more per item.
 #
 # `kind` is one of:
 #   troops   — refills the line, never past the garrison's most
@@ -34,13 +26,8 @@
 #   advantage / disadvantage — draw twice, keep the better / worse
 #   upgrade  — roll a bigger die. `die` is one of d4 d6 d8 d10 d12 d20 d100
 #
-# `verb` is which word opens it, and it is authored rather than inferred
-# from the material's kind: §19 keeps `wield` for scrolls because *"spending a
-# scroll is setting a thing going, which is what `wield` already means"*. A
-# mismatch is refused in voice.
-#
-# The numbers are a first pass, sized so a run of three is worth what one
-# potion was (§19, Supply). `orbs-balance` decides them.
+# `verb` opens it, authored, not inferred (§19); a mismatch is refused in voice.
+# First-pass numbers, a run of three worth one old potion (§19, Supply).
 
 # ---------------------------------------------------------------------------
 # THE POTIONS (§10.1's laboratory).
@@ -89,11 +76,8 @@ verb = "quaff"
 kind = "advantage"
 rates = [{ opens = 8, draws = 3 }]
 
-# Clarity sees the weakness rather than adding force. **It was an upgrade to a
-# `d100` and that made it strictly the best thing in the arsenal** — a 90% hit
-# rate against haste's 75%. `upgrade` changes the share of faces that clear a
-# fixed `AGAINST` of 11, so a d100 is forty points of hit rate; nothing shipped
-# uses it, deliberately. The flagship's due is the best flat bonus.
+# Clarity, the flagship, takes the best flat bonus. Nothing ships `upgrade`:
+# against a fixed `AGAINST` of 11 a d100 is forty points of hit rate.
 [clarity]
 verb = "quaff"
 kind = "bonus"
@@ -149,13 +133,9 @@ rates = [
 ]
 
 # ---------------------------------------------------------------------------
-# THE DEMONS (§19, Supply). The menagerie's second use: a beast held at the
-# circle refills the garrison, or `summon <demon>` binds it as one of these into
-# the arsenal instead. `summoned` is what a hold binds — four within par, three
-# past it — and `deploy` opens them on the wall like any supply.
-#
-# One for each thing a line needs and a potion also gives, so a menagerie can
-# stand in for a laboratory and the choice between them is a real one.
+# THE DEMONS (§19, Supply): `summon <demon>` binds a hold into the arsenal,
+# `summoned` within and past par; `deploy` opens them. One for each thing a
+# potion gives, so a menagerie can stand in for a laboratory.
 
 # Bodies: a golem fills a gap in the line, never past the garrison's most.
 [golem]

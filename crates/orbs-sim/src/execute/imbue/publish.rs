@@ -1,12 +1,8 @@
 //! Every reading the forge publishes.
 //!
-//! Published only while true: `spell::watch` answers `is empty` by asking
-//! whether a node has children, so a column that always carried `lit` could
-//! never be dark and the first rung of every solver would be dead.
-//!
-//! So there is no `dark` — a column publishes `lit` or nothing, and `if the
-//! apex has no lit` is the question. (`dark` was unavailable in any case: it
-//! scores 750 against the maze's `marks`.)
+//! Published only while true, as every domain's, so a column publishes `lit`
+//! or nothing and `if the apex has no lit` is the question. Not `dark`, 750
+//! against `marks`.
 
 use bevy_ecs::prelude::*;
 
@@ -17,9 +13,7 @@ use crate::tower::{self, charm};
 
 /// Republish everything about the lattice.
 ///
-/// Takes the lattice rather than reading `Cwd`, the rule the lens paid for: a
-/// bound solver running while the player stands in the laboratory would find no
-/// lattice and leave every reading frozen at whatever it last said.
+/// Takes the lattice, never `Cwd`, the lens's rule.
 pub(crate) fn publish(world: &mut World, lattice: Entity) {
     let Some(room) = room_of(world, lattice) else {
         return;
@@ -28,10 +22,8 @@ pub(crate) fn publish(world: &mut World, lattice: Entity) {
 
     clear(world, lattice);
     if let Some(binding) = &binding {
-        // Which charm is open, so a spell can tell one lattice from another,
-        // and nothing else: a `binding.lattice.set()` arm raising `graced` here
-        // could never fire, because a fall that lights removes the `Binding`
-        // before publishing.
+        // Which charm is open, and nothing else: a fall that lights removes
+        // the `Binding` before publishing.
         tower::raise_reading(world, lattice, &binding.kind);
     }
 
@@ -55,12 +47,9 @@ pub(crate) fn publish(world: &mut World, lattice: Entity) {
 
 /// What each charm is doing across the whole tower, on the charm's own node.
 ///
-/// Neither word carries a count, which is what makes this cheap enough to run
-/// on a tick: `graced` as ticks-remaining meant despawning and re-raising a
-/// node once a second, and insertion order is the parse while `NodeId`s travel
-/// in the save. Presence and the [`EBBING_AT`](charm::EBBING_AT) threshold
-/// change rarely, so this compares and does nothing on almost every tick. The
-/// exact figure is on the panel and in `survey`.
+/// No count, so it can run on a tick: presence and the
+/// [`EBBING_AT`](charm::EBBING_AT) threshold change rarely, and re-raising a
+/// node a second would churn `NodeId`s. The exact figure is on the panel.
 pub(crate) fn charms(world: &mut World, room: Entity) {
     // One query for all five, hoisted out of the loop: a fresh `QueryState` per
     // `Kind` is five a tick, and `meditate 3600` collapses those ticks into one
@@ -121,12 +110,8 @@ pub(crate) fn charms(world: &mut World, room: Entity) {
 
 /// Keep the charm words true as time passes.
 ///
-/// Appended to the schedule and drawing nothing, the licence `settling`,
-/// `erode` and `regenerate` already hold: a system that only reads the clock
-/// cannot perturb any `RngStream`.
-///
-/// Without it the words are only true when a forge verb happens to run, and the
-/// maintenance spell is built entirely on `ebbing` arriving on its own.
+/// Appended to the schedule and drawing nothing, as `erode` is, so no
+/// `RngStream` moves. The maintenance spell rests on `ebbing` arriving alone.
 pub fn lapse(world: &mut World) {
     let Some(room) = tower::find_by_path(world, "/tower/forge") else {
         return;
@@ -136,11 +121,8 @@ pub fn lapse(world: &mut World) {
 
 /// The most ticks any tool in the tower has left, of every kind at once.
 ///
-/// The longest rather than the nearest, so `ebbing` fires when the last one is
-/// running out — renewing on the first tool to dip would relay a charm with
-/// most of its life left, once a lap, for ever.
-///
-/// One pass for all five, indexed by `Kind`, because this runs on a tick.
+/// The longest, so `ebbing` fires when the last runs out rather than relaying
+/// a charm with life left. One pass for all five, since this runs on a tick.
 fn longest_of_each(world: &mut World) -> [u64; Kind::ALL.len()] {
     let now = *world.resource::<crate::tick::Tick>();
     let mut out = [0u64; Kind::ALL.len()];
@@ -157,8 +139,5 @@ fn longest_of_each(world: &mut World) -> [u64; Kind::ALL.len()] {
     out
 }
 
-// A `Cwd`-based `refresh` used to live here. It resolved the forge through
-// `readings::fixture` — where the player is standing — which at
-// `Sim::with_schedule` time is the filesystem root, so it silently did nothing.
-// The verbs call `publish` with the lattice they already hold, and the
-// bootstrap calls [`lapse`], which addresses the forge by path.
+// No `Cwd`-based refresh: at construction `Cwd` is the root. The verbs pass the
+// lattice they hold, and the bootstrap calls [`lapse`].

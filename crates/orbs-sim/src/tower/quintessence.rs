@@ -1,27 +1,13 @@
 //! Quintessence: the tower's one spendable resource.
 //!
-//! §11.5's **mana**, and its table has always read *"Produced by: passive
-//! regeneration, Ley Line steps"*. What shipped at `0.8.15` was the siege's
-//! narrowing of that — a fixed pool granted on `defend`, spent on dice, gone
-//! when the fight ended. Enchanting spends the same resource, so the pool comes
-//! up to the tower where §11.5 always had it, and the siege becomes one of two
-//! rooms that draw on it rather than the only one.
+//! §11.5's mana, the tower's and not the siege's, since enchanting spends it
+//! too (§19). Integrity and the ley line decide how much the tower holds, so
+//! repairing the barrier buys capacity and a worn tower is smaller, not slower.
 //!
-//! A return, not a reversal (§19).
-//!
-//! Integrity and the ley line used to decide what a siege granted; they now
-//! decide how much the tower can hold, so repairing the barrier buys enchanting
-//! capacity and a worn tower is smaller rather than slower. The curve is
-//! unchanged, [`FLOOR_PCT`] and all — only the question it answers.
-//!
-//! In the calm quintessence trickles: [`REGEN_TICKS`] apart, one at a time,
-//! capped. Under siege it does not trickle at all — a round resolved by `hold`
-//! grants [`REGEN_PER_ROUND`] and waiting inside a turn earns nothing. That is
-//! §14 by construction: the screen-reader accommodation advances siege ticks on
-//! player input, so anything measured in ticks would mean more typing produces
-//! more resource for the players that mode exists to serve. It also gets the
-//! shape the design wants for free — the only way to more quintessence is to
-//! advance the fight and take what the enemy does to you.
+//! In the calm it trickles, [`REGEN_TICKS`] apart. Under siege only a resolved
+//! round grants it ([`REGEN_PER_ROUND`]): a tick-measured grant would pay more
+//! typing under §14's screen-reader pacing, and the only way to more is to
+//! advance the fight.
 
 use bevy_ecs::prelude::*;
 
@@ -29,11 +15,9 @@ use super::erosion::STANDING;
 
 /// The ceiling a tower at full [`STANDING`] holds, before the ley line.
 ///
-/// A first-pass number. Against `siege.toml`'s dice costs (`d6` 1, `d8` 2, `d20`
-/// 5) a full allocation is eight a round, so 24 is three unrestrained rounds of
-/// a siege that runs six to thirteen — enough to matter, never enough to stop
-/// choosing. It also buys charms now, which is the tension the shared pool
-/// exists for. `orbs-balance` settles whether it is right.
+/// Three unrestrained rounds of eight against a siege of six to thirteen —
+/// enough to matter, never enough to stop choosing — and charms besides. A
+/// first pass; `orbs-balance` settles it.
 pub const QUINTESSENCE_BASE: u32 = 24;
 
 /// What one ley-line step granting quintessence adds to the ceiling.
@@ -41,31 +25,21 @@ pub const PER_LEY_STEP: u32 = 6;
 
 /// The share of the ceiling a tower worn to nothing still holds, as a percentage.
 ///
-/// The anti-spiral. A lost siege takes `DEFEAT_WEAR` off the barrier, so an
-/// unfloored ceiling would make each defeat cheapen the next until it could not
-/// be won — which §11.5 forbids: *"never ruinous, only slower"*. At a half,
-/// neglect is expensive and never fatal.
+/// The anti-spiral: unfloored, each defeat would cheapen the next until none
+/// could be won (§11.5).
 pub const FLOOR_PCT: u32 = 50;
 
 /// How often a point comes back in the calm, in ticks.
 ///
-/// Thirty seconds at §5.0's one tick a second, so a full ceiling from empty is
-/// about twelve minutes unattended — deliberately slower than erosion's wear, or
-/// walking away would be a strategy. A placeholder like every duration here, and
-/// `orbs-balance` sweeps it.
+/// About twelve minutes to fill from empty — slower than erosion, or walking
+/// away would be a strategy. `orbs-balance` sweeps it.
 pub const REGEN_TICKS: u64 = 30;
 
 /// What resolving one siege round grants.
 ///
-/// Two, and it was four — measured, not argued. A full allocation of the three
-/// shipped dice is eight a round, so four made a fight pay for half of itself.
-/// The reachability sweep in `tests/scripting_the_siege.rs` then came back with
-/// `outnumbered` published on no seed at all: a garrison that can afford its
-/// dice every round is never overtaken, so a whole reading and the solver rungs
-/// that ask for it were quietly dead.
-///
-/// At two the pool drains six a round against a base of 24 — four unrestrained
-/// rounds where the fixed pool bought three, and the enemy can still get ahead.
+/// Measured: at four, a garrison that can always afford its dice is never
+/// overtaken, and `outnumbered` was published on no seed. At two the enemy can
+/// still get ahead.
 pub const REGEN_PER_ROUND: u32 = 2;
 
 /// What the tower holds, and what it may hold.
@@ -101,13 +75,8 @@ impl Quintessence {
 
     /// Put `amount` back, never raising the pool *past* `ceiling`.
     ///
-    /// A pool already above the ceiling keeps what it has. The obvious spelling
-    /// — add, then clamp — confiscates the surplus, contradicting what the load
-    /// path states: the ceiling caps regeneration and nothing else, so a pool
-    /// above it is a legal state a world reaches by wearing down while full.
-    ///
-    /// The two disagreed silently: a full tower whose barrier wore down lost the
-    /// difference at the next multiple of [`REGEN_TICKS`], with no message.
+    /// A pool above the ceiling keeps what it has: the ceiling caps regeneration
+    /// only, and a full tower whose barrier wore down must not lose the surplus.
     pub const fn restore(&mut self, amount: u32, ceiling: u32) {
         if self.held >= ceiling {
             return;
@@ -161,13 +130,8 @@ pub fn ceiling(world: &World) -> u32 {
 
 /// The calm trickle.
 ///
-/// Appended to the schedule and drawing nothing — the licence `settling` and
-/// `erode` already hold: a system that only reads the clock cannot perturb any
-/// `RngStream`, so it goes on the end without touching an existing replay.
-///
-/// A modulo on the tick rather than a countdown, for `erode`'s reason:
-/// `meditate` collapses hundreds of ticks inside one `step`, and a counter would
-/// advance once where a clock reading advances properly.
+/// Draws nothing, so it could be appended to the schedule. A modulo on the
+/// tick, not a countdown, for `erode`'s reason.
 pub fn regenerate(world: &mut World) {
     if !world
         .resource::<crate::tick::Tick>()

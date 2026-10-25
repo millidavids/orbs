@@ -1,17 +1,16 @@
 //! Resize, redraw, and colour — the three things no dump can reach.
 
-use crate::play::{Game, available};
+use crate::play::Game;
 
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn shrinking_a_full_screen_leaves_nothing_of_the_old_one() {
-    if !available() {
-        return;
-    }
     // `blit`'s shadow buffer is addressed by `(col, row)`, so keeping it across
     // a resize wrote this frame's cells at last frame's coordinates. A full
     // screen shrunk is the case that shows it: every dropped cell has to go.
-    let mut game = Game::start();
+    let Some(mut game) = Game::start() else {
+        return;
+    };
     game.does("attend laboratory", "/tower/laboratory")
         .does("help", "the work")
         .does("recall clarity", "steps");
@@ -28,10 +27,9 @@ fn shrinking_a_full_screen_leaves_nothing_of_the_old_one() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn growing_a_window_fills_the_new_room_rather_than_leaving_it_blank() {
-    if !available() {
+    let Some(mut game) = Game::sized(90, 24) else {
         return;
-    }
-    let mut game = Game::sized(90, 24);
+    };
     game.does("attend laboratory", "/tower/laboratory")
         .does("survey dispensary", "sage");
     game.resize(120, 45);
@@ -47,13 +45,12 @@ fn growing_a_window_fills_the_new_room_rather_than_leaving_it_blank() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn the_rail_yields_whole_and_falls_back_into_the_border() {
-    if !available() {
-        return;
-    }
     // `fits_rail` wants 36 rows; below that the rail is gone and its readings
     // fall back into the session border's title, which is why the driver reads
     // the tick from two places.
-    let game = Game::sized(90, 24);
+    let Some(game) = Game::sized(90, 24) else {
+        return;
+    };
     game.does("attend laboratory", "/tower/laboratory");
     let title = game.screen().lines().next().unwrap_or_default().to_owned();
     assert!(
@@ -65,12 +62,11 @@ fn the_rail_yields_whole_and_falls_back_into_the_border() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn below_the_floor_the_orb_asks_for_a_larger_window() {
-    if !available() {
-        return;
-    }
     // §19 names *"a terminal the user shrank"* as a normal runtime state, so
     // this is a real screen rather than a refusal.
-    let mut game = Game::start();
+    let Some(mut game) = Game::start() else {
+        return;
+    };
     game.does("attend laboratory", "/tower/laboratory")
         .does("survey dispensary", "sage");
     game.resize(60, 18);
@@ -80,10 +76,9 @@ fn below_the_floor_the_orb_asks_for_a_larger_window() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn a_window_that_comes_back_brings_the_game_with_it() {
-    if !available() {
+    let Some(mut game) = Game::start() else {
         return;
-    }
-    let mut game = Game::start();
+    };
     game.does("attend laboratory", "/tower/laboratory")
         .does("survey dispensary", "sage");
     game.resize(60, 18);
@@ -95,17 +90,9 @@ fn a_window_that_comes_back_brings_the_game_with_it() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn the_fire_is_orange_all_the_way_up() {
-    if !available() {
-        return;
-    }
-    // Orange on every tube (§19): the four heats are one hue differing by
-    // weight, and `ORBS_DUMP` throws colour away, so this decoder is the only
-    // instrument that can see it.
-    //
-    // The columns are the whole test. The athanor burns at 100-101, inside the
-    // instrument panel; decoding the tower rail instead reads a band with no
-    // fire in it and passes whatever the ramp does.
-    let game = Game::start();
+    // Orange on every tube (§19), which only this decoder sees. Columns
+    // 100-101, the athanor, not the rail beside it.
+    let Some(game) = Game::start() else { return };
     game.does("attend laboratory", "/tower/laboratory")
         .does("kindle charcoal", "fuel for 600 ticks")
         .meditates(3);
@@ -124,12 +111,9 @@ fn the_fire_is_orange_all_the_way_up() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn the_rails_fault_mark_is_drawn_in_the_danger_hue() {
-    if !available() {
-        return;
-    }
     // The mark and its colour are two claims, and only the second needs this
     // layer: `‼` in the success hue would say a broken room was fine.
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.does("attend laboratory", "/tower/laboratory")
         .opens("scribe broken", "broken.spell in ");
     game.type_raw("edit");
@@ -158,18 +142,9 @@ fn the_rails_fault_mark_is_drawn_in_the_danger_hue() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn a_material_tint_reaches_the_cell_it_was_authored_for() {
-    if !available() {
-        return;
-    }
-    // A tint changes no glyph, so a colour that never reaches a cell draws in
-    // the base hue and looks exactly like a material nobody has tinted yet.
-    // sage grinds green.
-    //
-    // Read the panel band, and take a control first: the transcript's
-    // `Role::Success` is already green, so decoding that band passes with the
-    // tint path dead. Green that was not there and then is came from the
-    // material.
-    let game = Game::start();
+    // Sage grinds green. The panel band, with a control first, since the
+    // transcript's success is green already.
+    let Some(game) = Game::start() else { return };
     game.does("attend laboratory", "/tower/laboratory");
     let bare = game.ink(89, 103);
     assert!(
@@ -189,16 +164,13 @@ fn a_material_tint_reaches_the_cell_it_was_authored_for() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn the_transcript_marks_a_refusal_differently_from_a_success() {
-    if !available() {
-        return;
-    }
     // `√` and `¬` are the glyphs; the colours are what a player reads at a
     // glance, and §14 says the glyph must carry it too.
     //
     // An instrument that is already empty is not a refusal — `empty` on a bare
     // mortar answers `√ the mortar_and_pestle is already empty`. A second load
     // onto a working one is the real thing.
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.does("attend laboratory", "/tower/laboratory")
         .does("grind sage", "to mortar_and_pestle")
         .does("grind rock-salt", "is at work");
@@ -212,13 +184,10 @@ fn the_transcript_marks_a_refusal_differently_from_a_success() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn the_boot_report_is_on_the_transcript_before_anything_is_typed() {
-    if !available() {
-        return;
-    }
     // §4's report is records rather than a picture, and `tower/boot.rs` builds
     // it by walking the world so it cannot go stale — so this asks the rooms by
     // name rather than for a banner. It is the screen `ORBS_BOOT=0` lands on.
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.expect_somewhere("orb")
         .expect_somewhere("laboratory")
         .expect_somewhere("archive")
@@ -228,13 +197,10 @@ fn the_boot_report_is_on_the_transcript_before_anything_is_typed() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn the_orb_is_found_before_it_is_switched_on() {
-    if !available() {
-        return;
-    }
     // §4's sequence. `Stage::Dark` paints nothing, so the orb reads as *found*
     // rather than powering on like a monitor, and the logo then prints itself a
     // letter at a time.
-    let game = Game::booting();
+    let Some(game) = Game::booting() else { return };
     game.expect_drawn("Operational")
         .expect_drawn("Operational Relic Bewitching System");
 }
@@ -242,13 +208,10 @@ fn the_orb_is_found_before_it_is_switched_on() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn the_card_names_this_machine_and_not_the_other_one() {
-    if !available() {
-        return;
-    }
     // The card is a diegetic inventory of the machine (§4), so a shared painter
     // hard-coding `bevy 0.19.0` would be a lie here, in a binary that does not
     // link Bevy at all.
-    let game = Game::booting();
+    let Some(game) = Game::booting() else { return };
     game.expect_drawn("crossterm");
     assert!(
         !game.screen().contains("bevy"),
@@ -260,14 +223,11 @@ fn the_card_names_this_machine_and_not_the_other_one() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn the_sequence_hands_over_to_a_tower_whose_clock_never_started() {
-    if !available() {
-        return;
-    }
     // Not cosmetic: `tower::substitution` rolls every tick, so a sim left running
     // through the animation advances its RNG stream by a wall-clock-dependent
     // number of draws — one seed reaching different worlds on different
     // machines.
-    let game = Game::booting();
+    let Some(game) = Game::booting() else { return };
     game.expect_drawn("wizard $");
     let tick = game.tick();
     assert!(

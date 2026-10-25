@@ -1,17 +1,14 @@
 //! The sanctum: a course of wards across three stations, and the rule about them.
 
-use crate::play::{Game, QUIET, available};
+use crate::play::{Game, QUIET};
 
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn a_course_is_drawn_and_the_board_appears_beside_the_transcript() {
-    if !available() {
-        return;
-    }
     // The board is not gated on a word — the map's rule and the sheet's: it
     // draws whenever a course is standing, because watching a bound solver and
     // solving it yourself are different activities.
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.does("attend sanctum", "/tower/sanctum")
         .does("muster", "well up in the wellspring")
         .expect_drawn("wellspring")
@@ -22,12 +19,9 @@ fn a_course_is_drawn_and_the_board_appears_beside_the_transcript() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn a_haul_is_answered_on_the_tick_it_is_typed() {
-    if !available() {
-        return;
-    }
     // Neither verb takes the production slot and neither schedules anything, so
     // the answer is in the same block as the word — no `meditate` between.
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.does("attend sanctum", "/tower/sanctum")
         .does("muster", "well up in the wellspring")
         .does(
@@ -39,12 +33,9 @@ fn a_haul_is_answered_on_the_tick_it_is_typed() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn the_one_rule_is_refused_in_voice() {
-    if !available() {
-        return;
-    }
     // The whole puzzle, in one refusal. A player who hits this has learned the
     // rule, which is why the line says what happened and not what to do instead.
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.does("attend sanctum", "/tower/sanctum")
         .does("muster", "well up in the wellspring")
         .does("haul wellspring barrier", "drawn from the wellspring")
@@ -54,14 +45,13 @@ fn the_one_rule_is_refused_in_voice() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn the_rail_says_how_the_barrier_stands_from_another_room() {
-    if !available() {
-        return;
-    }
     // The one meter in the tower that counts up. Every other rail detail is work
     // remaining; this is a thing you want more of, so `detail_of` prints the
     // value — and it must be there when the barrier is whole, which is exactly
     // where a `left > 0` gate would have silenced it.
-    let game = Game::seeded(QUIET);
+    let Some(game) = Game::seeded(QUIET) else {
+        return;
+    };
     game.does("attend laboratory", "/tower/laboratory")
         .expect_drawn("sanctum")
         .expect_drawn("py 100%");
@@ -70,19 +60,11 @@ fn the_rail_says_how_the_barrier_stands_from_another_room() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn the_barrier_fades_while_the_player_works() {
-    if !available() {
+    // A point every 30 ticks. A bound, not an exact number, which tmux latency
+    // would miss and hang on.
+    let Some(game) = Game::seeded(QUIET) else {
         return;
-    }
-    // A point every 30 ticks. Ten minutes is twenty of them, which is plainly
-    // visible on the reading and is the whole reason this room is one you come
-    // back to.
-    //
-    // A bound, not the exact number. This asserted the literal `80`, true only
-    // while the tick count is in 600..629 — 27 ticks of slack, and every second
-    // of tmux latency spends one. On a loaded machine the reading is 79, the
-    // substring never arrives, and the scenario hangs to its timeout rather than
-    // failing. What the test is for is that the reading moved.
-    let game = Game::seeded(QUIET);
+    };
     game.does("attend sanctum", "/tower/sanctum")
         .does("survey pylon", "integrity")
         .meditates(600);
@@ -113,13 +95,12 @@ fn the_barrier_fades_while_the_player_works() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn a_neglected_tower_musters_a_taller_course() {
-    if !available() {
-        return;
-    }
     // The whole of what erosion does today, and the reason the parity has to be
     // readable: an hour unattended takes the barrier to nothing, and a barrier
     // at nothing musters six or seven wards where a kept tower gets three.
-    let game = Game::seeded(QUIET);
+    let Some(game) = Game::seeded(QUIET) else {
+        return;
+    };
     game.does("attend sanctum", "/tower/sanctum")
         .meditates(3600)
         .does("survey pylon", "integrity")
@@ -144,10 +125,7 @@ fn a_neglected_tower_musters_a_taller_course() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn the_words_reach_nothing_in_another_room() {
-    if !available() {
-        return;
-    }
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.does("attend laboratory", "/tower/laboratory")
         .does("muster", "no pylon");
 }

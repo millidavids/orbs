@@ -21,27 +21,13 @@
 //!    ██              ▓▓               ▓▓               ▓▓
 //! ```
 //!
-//! The ends are not special cases: `charged` is nothing collected — a solid bar
-//! of `█` — and `ready` is everything collected, held until the tool is emptied.
+//! - Four shades of one substance, and no tool.
+//! - The cell above the bed is never `▒`, so the value survives no colour.
+//! - One cell every [`FALL_EVERY`] ticks, so no photosensitivity exemption.
+//! - An integer hash, never an RNG, so dumps reproduce.
 //!
-//! Four things this holds:
-//!
-//! - Four shades, four states of one substance: `█` whole, `▒` and `░` in the
-//!   air, `▓` broken and settled. No *tool* — a pestle `■` read as an object
-//!   visiting the bar rather than as material changing state.
-//! - The value survives with no colour: the cell above the bed holds `░` or
-//!   air, never `▒`, so the join is 75% against 25% rather than one dither step
-//!   the CRT's bloom erases.
-//! - The fall is slower than the clock — one cell every [`FALL_EVERY`] ticks,
-//!   1.5 flashes a second — so unlike the fire it needs no exemption.
-//! - Deterministic: an integer hash of position, never an RNG, so `ORBS_DUMP`
-//!   stays reproducible and this stays out of `orbs-sim`'s seeded streams.
-//!
-//! No [`Depiction`](crate::Depiction), where the fire needed one: [`Intensity`]
-//! is "the base hue at three weights" (§4) and this picture is that channel
-//! doing its job, where orange and yellow are hues the green phosphor does not
-//! contain. Greyscale is the test — four shades are four *glyphs* and survive
-//! it; the flame goes flat.
+//! No [`Depiction`](crate::Depiction): four glyphs at [`Intensity`]'s weights
+//! (§4) survive greyscale.
 
 use crate::pulse::{TICKS_PER_CYCLE, drift_noise, falling, salted, shade, shared_tick};
 use crate::style::{Intensity, Style};
@@ -94,22 +80,15 @@ pub struct Grind {
     pub working: bool,
     /// How far through the current world tick, `0.0..1.0`.
     ///
-    /// Why a bar fills faster than the world turns: the sim reports whole ticks
-    /// at 1 Hz (§5.0) but a duration action is *continuous*, so the bed creeps
-    /// between samples, closer to the truth than the sample. `stop` mid-tick is
-    /// the one wrong prediction, and it corrects next frame. A frontend supplies
-    /// the fraction, as it supplies [`Burn::flare`](crate::Burn).
+    /// The bed creeps between whole ticks, since a duration is continuous;
+    /// `stop` mid-tick corrects next frame. The frontend's, as
+    /// [`Burn::flare`](crate::Burn) is.
     pub advance: f32,
     /// How recently a reagent went in: `1.0` at the instant of loading, decaying
     /// to `0.0` over one world tick.
     ///
-    /// Drives the pour — the block builds up from the floor as this decays. A
-    /// load is otherwise invisible, `Empty` and `Charged` both reporting no
-    /// meter, so the bar would simply *be* a solid block.
-    ///
-    /// `move` reaches it; `grind` does not, `grind sage` being the move and the
-    /// wield in one command (§19), so the bowl never rests at `Charged`. The
-    /// See-it line uses `move sage to mortar_and_pestle`.
+    /// Drives the pour, or a load would be invisible. Only `move` reaches it,
+    /// since `grind sage` also wields (§19).
     pub load: f32,
     /// Whether what is in the bowl is only leavings.
     ///

@@ -104,7 +104,7 @@ pub(crate) const fn way_word(way: Way) -> &'static str {
 
 /// The bearing a word names.
 pub(crate) fn way_from(word: &str) -> Option<Way> {
-    Way::ALL.into_iter().find(|way| way.word() == word)
+    Way::named(word)
 }
 
 /// The word for a maze's errand.
@@ -163,10 +163,7 @@ pub(super) const fn record_kind_word(kind: RecordKind) -> &'static str {
 
 /// Every record kind.
 ///
-/// `RecordKind::ALL`, not a copy — the same trap [`FIELDS`] documents: a
-/// hand-written list compiles unchanged when an eleventh kind arrives, and
-/// `record_kind_from` then reads it back as `Message` while the round-trip test
-/// iterates the stale array and passes.
+/// `RecordKind::ALL`, not a copy — see [`FIELDS`].
 const RECORD_KINDS: [RecordKind; RecordKind::ALL.len()] = RecordKind::ALL;
 
 /// The kind a word names. An unknown one is a message, which draws plainly and
@@ -201,10 +198,8 @@ pub(super) fn role_from(word: &str) -> Role {
 
 /// Every field a record can carry.
 ///
-/// `FieldName::ALL`, not a copy of it. A hand-written list would compile
-/// happily when a sixteenth field arrived, `field_from` would return `None`,
-/// and `restore::stream` would drop it silently while the round-trip test
-/// iterated the stale array and passed.
+/// `FieldName::ALL`, not a copy, which would compile unchanged as a field
+/// arrived and pass its round-trip while restores dropped it.
 const FIELDS: [FieldName; FieldName::ALL.len()] = FieldName::ALL;
 
 /// The word for a field.
@@ -282,18 +277,13 @@ mod tests {
 
     #[test]
     fn every_verb_reads_back_from_its_canonical_name() {
-        for verb in Verb::ALL {
-            assert_eq!(verb_from(verb_word(verb)), Some(verb), "{verb:?}");
-        }
+        crate::testing::assert_round_trips(&Verb::ALL, verb_word, verb_from);
     }
 
     /// Adding a variant to any of these must not compile until it has a word.
     ///
-    /// The arrays above are hand-written where the upstream enum publishes no
-    /// `ALL`, and such an array compiles unchanged when a variant arrives, the
-    /// reverse lookup then silently returning the fallback. The exhaustive
-    /// match closes it — the same instrument
-    /// `every_noun_kind_has_a_word_and_the_word_reads_back` uses one screen up.
+    /// Where an upstream enum has no `ALL`, the hand array would compile
+    /// unchanged; the exhaustive match closes it.
     #[test]
     fn no_variant_can_arrive_without_a_word() {
         for role in ROLES {
@@ -337,23 +327,8 @@ mod tests {
     }
 
     #[test]
-    fn the_small_enums_read_back() {
-        for way in Way::ALL {
-            assert_eq!(way_from(way_word(way)), Some(way), "{way:?}");
-        }
-        for errand in [Errand::Way, Errand::Glean] {
-            assert_eq!(errand_from(errand_word(errand)), errand, "{errand:?}");
-        }
-        for mark in [Mark::Fault, Mark::News] {
-            assert_eq!(mark_from(mark_word(mark)), Some(mark), "{mark:?}");
-        }
-        for register in [
-            Presentation::Plain,
-            Presentation::Eldritch,
-            Presentation::Tampered,
-        ] {
-            assert_eq!(register_from(register_word(register)), register);
-        }
+    fn a_way_reads_back() {
+        crate::testing::assert_round_trips(&Way::ALL, way_word, way_from);
     }
 
     #[test]
@@ -361,12 +336,7 @@ mod tests {
         for kind in RECORD_KINDS {
             assert_eq!(record_kind_from(record_kind_word(kind)), kind, "{kind:?}");
         }
-        for role in ROLES {
-            assert_eq!(role_from(role_word(role)), role, "{role:?}");
-        }
-        for field in FIELDS {
-            assert_eq!(field_from(field_word(field)), Some(field), "{field:?}");
-        }
+        crate::testing::assert_round_trips(&FIELDS, field_word, field_from);
     }
 
     #[test]

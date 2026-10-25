@@ -1,10 +1,8 @@
 //! Every reading the bailey publishes — the half the scripting rests on (§5.1).
 //!
-//! A reading is published only while it is true, and often only while something
-//! is standing. Not tidiness: `spell::watch` answers `is empty` by asking
-//! whether a node has children, so a band or area that always carried a count
-//! could never be empty and the first rung of every solver would be dead. The
-//! sanctum records the same rule for `potency`.
+//! A reading is published only while it is true: `spell::watch` answers `is
+//! empty` by asking for children, so an always-counted area could never be
+//! empty. The sanctum's `potency` follows the same rule.
 
 use bevy_ecs::prelude::*;
 
@@ -17,9 +15,7 @@ use crate::tower::{self, siege, siege::Siege};
 
 /// Republish every reading the bailey publishes.
 ///
-/// Takes the rampart rather than reading `Cwd`, which is the bug the lens paid
-/// for: a bound solver working while the player stands in the laboratory would
-/// find no rampart, publish nothing, and freeze every reading at the last round.
+/// Takes the rampart, never `Cwd`, the lens's rule.
 pub(crate) fn publish(world: &mut World, rampart: Entity) {
     let Some(room) = room_of(world, rampart) else {
         return;
@@ -52,9 +48,7 @@ pub(crate) fn publish(world: &mut World, rampart: Entity) {
     //   if the sortie has 12 ceiling   — the best it could come to
     //   if the buckler has wasted      — the intent will throw it away
     //
-    // Published only when something is pledged, apart from `wasted`, for the
-    // module header's reason: an area that always carried a count could never be
-    // empty, and *find the empty area* is the commonest rung a solver wants.
+    // Published only when something is pledged, apart from `wasted`.
     for area in siege::Area::ALL {
         let Some(node) = reading(world, room, area.word()) else {
             continue;
@@ -69,29 +63,16 @@ pub(crate) fn publish(world: &mut World, rampart: Entity) {
             let (_, high) = siege.range(area);
             tower::raise_count(world, node, siege::CEILING, high);
         }
-        // The warning is published whether or not anything is on it — the one
-        // exception to the rule above, because a solver wants to know *not to
-        // pledge here* before it has, and a reading that appeared only after
-        // the mistake would be useless.
+        // The exception: a solver wants *not here* before it pledges.
         if !area.answers(siege.intent) {
             tower::raise_reading(world, node, siege::MOOT);
         }
     }
 
-    // The coffer says which dice are free *and affordable*, by name. A die held
-    // but unpayable is absent, so `if the coffer has d20` means "I hold it and
-    // can pay for it" — one question, a natural positive, no grammar.
-    //
-    // The alternative was the numeric comparison, and it is a trap in the
-    // positive: `has more quintessence than the d20` is **strict**
-    // (`watch.rs:180`), so it excludes the die you can exactly afford, and there
-    // is no *at least as many* comparative to reach for. Only the negative
-    // spelling is correct, and a mechanic whose natural sentence is a double
-    // negative is one §6 would not recognise. This is the maze's `spoil`/`exit`
-    // pattern instead: the world derives the word, the spell asks for it.
-    //
-    // The pool rides the coffer too, so a spell that wants to reason about what
-    // is left — rather than merely what it can afford right now — still can.
+    // The coffer names the dice free *and affordable*, so `if the coffer has
+    // d20` is one natural positive. The comparison is strict and excludes the
+    // die you can exactly afford; the world derives the word, as the maze's
+    // `spoil` does. The pool rides the coffer too.
     if let Some(coffer) = reading(world, room, siege::COFFER) {
         clear(world, coffer);
         if let Some(siege) = &siege
@@ -130,11 +111,9 @@ pub(crate) fn publish(world: &mut World, rampart: Entity) {
             tower::raise_reading(world, node, siege::ROUTED);
         }
 
-        // The odds as a number a spell can weigh — what the hand player has
-        // always had and the solver has not. `enemy_roll` and `garrison_roll`
-        // compose without drawing, so the chance is knowable before the
-        // commitment (§5.1). Only while the band is standing, because a routed
-        // side's aim is meaningless rather than nought.
+        // The odds as a number a spell can weigh, composed without drawing
+        // (§5.1). Only while the band stands: a routed side's aim is
+        // meaningless, not nought.
         if band.count > 0 {
             let odds = if name == siege::GARRISON {
                 siege.garrison_roll().chance()
@@ -172,9 +151,7 @@ pub(crate) fn publish(world: &mut World, rampart: Entity) {
 
 /// Republish from wherever the player is standing, for the typed path.
 ///
-/// `debug_siege`'s and nothing else's, since every other caller has the node
-/// already. Gated the way its one caller is, so a release build does not find it
-/// dead.
+/// `debug_siege`'s alone, and gated as it is.
 #[cfg(debug_assertions)]
 pub(crate) fn refresh(world: &mut World) {
     let Some(rampart) = fixture(world) else {
@@ -185,20 +162,12 @@ pub(crate) fn refresh(world: &mut World) {
 
 /// What each die costs, on the die's own node.
 ///
-/// Raised once at construction and never again: a die's price is a fact about
-/// the die rather than about a fight, and in [`publish`] it did not exist until
-/// the first bailey verb — so `survey d20` on a fresh tower answered *"the d20
-/// holds nothing"*, and an absent reading is nought. That made every solver's
-/// affordability guard compare nought against nought and answer yes on a tower
-/// with no pool. The sanctum's `integrity` is the same defect and fix.
-///
-/// `for each die` walks these nodes (`build.rs`), so this is also what lets a
-/// solver weigh one die against another.
+/// Raised once at construction: a price is the die's, not a fight's, and an
+/// absent reading is nought, which an affordability guard reads as free — the
+/// sanctum's `integrity` defect. `for each die` walks these.
 pub(crate) fn publish_dice(world: &mut World) {
-    // Found by walking for the operation, never through `Cwd`: this runs at
-    // construction, where the player stands at the root, so the ordinary
-    // `fixture` answers `None` and the whole bootstrap silently did nothing.
-    // `pylon`'s Cwd-free lookup is the precedent.
+    // Walked for by operation, never through `Cwd`, which is the root at
+    // construction — `pylon`'s lookup.
     let Some(rampart) = world.iter_entities().find_map(|entity| {
         entity
             .get::<crate::tower::Operation>()

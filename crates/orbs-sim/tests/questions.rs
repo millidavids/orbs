@@ -1,12 +1,7 @@
 //! The `if` grammar, exhaustively — every shape, every refusal, and the two
 //! properties that catch the shapes nobody thought to write down.
 //!
-//! A table rather than thirty tests: a grammar is a claim about *every* input,
-//! so rows make the coverage countable and the properties at the bottom cover
-//! what rows cannot.
-//!
-//! Never `a`, `b`, `c`: `a` is on §6's filler list — `mix a potion` — so the
-//! usual metasyntactic names silently test the empty question.
+//! A table, so coverage counts. Never `a`, `b`, `c`: `a` is §6's filler.
 
 use orbs_sim::parser::{Bound, Condition, SpellState, condition, write_condition};
 
@@ -355,7 +350,7 @@ fn layout_and_case_and_punctuation_do_not_change_a_question() {
 #[test]
 fn nothing_a_file_can_hold_makes_the_parser_panic() {
     // §8.1: script text is a sabotage surface. The parser may refuse anything;
-    // it may not fall over or go quadratic on a long word.
+    // it may not fall over. Nothing here times it, so quadratic would pass.
     let long = "x".repeat(4096);
     let deep = "not ".repeat(200) + "mortar is idle";
     let brackets = "either ".repeat(200) + "mortar is idle";

@@ -29,7 +29,7 @@ pub use load::ContentError;
 pub use manual::{Chapter, Manual};
 pub use material::Materials;
 pub use phrasing::{CORPUS_CAP, Example, Phrasing, Phrasings, Refusal, Span, corpus_scene};
-pub use progression::{Catalogue, Milestone, Progression, Station};
+pub use progression::{Catalogue, Milestone, Progression, Rank, Station};
 pub use prose::Prose;
 pub use rate::{Rate, Rates};
 pub use recipe::{Recipe, Recipes};

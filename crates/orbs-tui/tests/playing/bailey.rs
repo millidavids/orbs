@@ -1,23 +1,16 @@
 //! A siege, fought at a real keyboard (§5.1).
 //!
-//! `orbs-sim`'s `tests/besieging.rs` proves the rules and the arithmetic. What
-//! it cannot prove is that the domain is *playable*: that the board is on screen
-//! beside the transcript, that a player can read what is coming and answer it,
-//! and that the whole thing can be fought start to finish by typing.
-//!
-//! Step 3's See-it line is what this domain is judged on: if a hand-played
-//! siege is not worth doing, no spell will rescue it — so the scenarios below
-//! fight one the way a person would rather than driving the model.
+//! That the domain is playable by typing, the board beside the transcript. If a
+//! hand-played siege is not worth doing, no spell rescues it.
 
-use crate::play::{Game, QUIET, available};
+use crate::play::{Game, QUIET};
 
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn a_siege_is_fought_by_typing_and_the_board_is_beside_you() {
-    if !available() {
+    let Some(game) = Game::seeded(QUIET) else {
         return;
-    }
-    let game = Game::seeded(QUIET);
+    };
     game.does("attend bailey", "/tower/bailey")
         .does("defend", "come up the road");
 
@@ -35,13 +28,12 @@ fn a_siege_is_fought_by_typing_and_the_board_is_beside_you() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn nothing_moves_while_you_read_the_board() {
-    if !available() {
-        return;
-    }
     // §10's rule, at a real keyboard: outcome follows *what the player chooses
     // given readable state*, never how fast they act. Twenty seconds of standing
     // still must not advance the siege by a round.
-    let game = Game::seeded(QUIET);
+    let Some(game) = Game::seeded(QUIET) else {
+        return;
+    };
     game.does("attend bailey", "/tower/bailey")
         .does("defend", "come up the road");
 
@@ -63,12 +55,11 @@ fn nothing_moves_while_you_read_the_board() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn the_arsenal_is_spent_on_the_wall() {
-    if !available() {
-        return;
-    }
     // Step 4, and what retires the ten shipped prose lines saying *"a siege will
     // be what spends them"*.
-    let game = Game::seeded(QUIET);
+    let Some(game) = Game::seeded(QUIET) else {
+        return;
+    };
     game.does("attend bailey", "/tower/bailey")
         .does("defend", "come up the road")
         .does("debug_spawn verdant-scroll 4", "all along")
@@ -80,13 +71,12 @@ fn the_arsenal_is_spent_on_the_wall() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn a_siege_runs_beside_a_brewing_loop() {
-    if !available() {
-        return;
-    }
     // §19's *"a domain stands alone"*: a siege exists to test the automation,
     // so a grind must keep working while one is fought — otherwise the enemy
     // has nothing to attack.
-    let game = Game::seeded(QUIET);
+    let Some(game) = Game::seeded(QUIET) else {
+        return;
+    };
     game.does("attend bailey", "/tower/bailey")
         .does("defend", "come up the road")
         .does("hold", "you lose")

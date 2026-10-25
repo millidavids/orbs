@@ -60,10 +60,8 @@ pub(super) fn set_open(world: &mut World, name: &str, spoils: u32) {
 
 /// The archive's stacks, wherever the player stands.
 ///
-/// Not `research::stacks`, which reads `Cwd` so the map cannot follow the
-/// player out of the room. A supply opened from the laboratory still has to
-/// find the maze. The archive is where a fragment lives, a rule rather than a
-/// path.
+/// Not `research::stacks`, which reads `Cwd`: a supply opened from the
+/// laboratory still finds the maze.
 fn archive_stacks(world: &World) -> Option<Entity> {
     let shelf = tower::home(world, "fragment")?;
     super::super::research::stacks_in(world, tower::domain_of(world, shelf)?)
@@ -72,9 +70,8 @@ fn archive_stacks(world: &World) -> Option<Entity> {
 /// Set the maze in `stacks` to gather `spoils`, scattered on floor nobody has
 /// walked, or as many as it has left. Returns whether it was set.
 ///
-/// Drawn in one go, on the archive's own stream. Growing it as the maze was
-/// walked would tie the draw to how the ticks were consumed, so a live-watched
-/// run and a `meditate`-collapsed one would differ from one seed.
+/// Drawn in one go, on the archive's stream, so how the ticks were consumed
+/// cannot change it.
 pub(in crate::execute) fn gather(world: &mut World, stacks: Entity, spoils: usize) -> bool {
     let Some(mut floor) = world
         .get::<Maze>(stacks)
@@ -120,6 +117,8 @@ pub(in crate::execute) fn gather(world: &mut World, stacks: Entity, spoils: usiz
         .text(FieldName::Name, name)
         .text(FieldName::State, Errand::Glean.word().unwrap_or_default())
         .text(FieldName::At, "stacks")
+        // What puts it in `archive.log` (`files::in_domain`).
+        .text(FieldName::Source, "stacks")
         .count(FieldName::Quantity, spoils as u64)
         .text(FieldName::Message, &message)
         .role(Role::Success)

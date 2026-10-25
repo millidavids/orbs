@@ -5,17 +5,14 @@
 //! halves of a pipeline in one file, so these tests are about the cursor model
 //! rather than parallelism.
 
-use orbs_render::{FieldName, Value};
-// `Save` is the debug-gated tests' — `debug_take` buys the second cursor, and
-// that word does not exist in a release build.
-#[cfg(debug_assertions)]
-use orbs_sim::Save;
-use orbs_sim::Sim;
+mod common;
 
-fn run(sim: &mut Sim, line: &str) {
-    sim.submit(line);
-    sim.step();
-}
+#[cfg(debug_assertions)]
+use common::reloaded;
+use common::{ever_said, run, said, write};
+#[cfg(debug_assertions)]
+use orbs_render::{FieldName, Value};
+use orbs_sim::Sim;
 
 /// The menagerie with §8's channel and its second cursor both bought.
 ///
@@ -28,27 +25,6 @@ fn in_the_menagerie() -> Sim {
     run(&mut sim, "debug_take satchel_1");
     run(&mut sim, "debug_take cursors_1");
     sim
-}
-
-fn said(sim: &Sim) -> Vec<String> {
-    sim.scrollback()
-        .records()
-        .iter()
-        .filter_map(|record| match record.field(FieldName::Message) {
-            Some(Value::Text(text)) => Some(text.to_owned()),
-            _ => None,
-        })
-        .collect()
-}
-
-fn ever_said(sim: &Sim, needle: &str) -> bool {
-    said(sim).iter().any(|line| line.contains(needle))
-}
-
-fn write(sim: &mut Sim, name: &str, lines: &[&str]) {
-    let lines: Vec<String> = lines.iter().map(|line| (*line).to_owned()).collect();
-    sim.write_spell(name, &lines);
-    sim.step();
 }
 
 /// A second cursor sells ergonomics, not power: two spells already run at once
@@ -455,8 +431,7 @@ fn a_forked_spell_comes_back_with_both_cursors() {
     // Far enough in that both cursors are mid-`bide` and neither has emitted.
     sim.step_n(6);
 
-    let text = sim.snapshot().to_toml().expect("a save renders");
-    let mut restored = Sim::restored(&Save::from_toml(&text).expect("a save reads back"));
+    let mut restored = reloaded(&sim.snapshot());
     restored.step_n(80);
 
     assert!(

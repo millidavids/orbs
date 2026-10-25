@@ -1,11 +1,7 @@
 //! The command line the examples share.
 //!
-//! `train`, `measure` and `trials` are driven together by `scripts/seeds.sh`,
-//! which needs them to read the same flags the same way: a `--reader` that meant
-//! one thing to the measurement and another to the trials would compare two runs
-//! through two different readers and report the difference as a result. An
-//! example cannot import another example, so the shared half lives here rather
-//! than in three copies.
+//! One reading of the flags for `scripts/seeds.sh`'s three examples, which
+//! cannot import each other.
 
 /// The word after `flag` on the command line.
 ///
@@ -39,4 +35,36 @@ pub fn missing(scores: bool, what: &str, train: &str) {
         std::process::exit(1);
     }
     println!("  no {what} yet — `{train}`\n");
+}
+
+/// The scrivener `--scribe` and `--reader` name, or the shipped one — or
+/// `None`, having said there is none to measure.
+#[must_use]
+pub fn scribe(scores: bool) -> Option<crate::Scribe<burn::backend::NdArray<f32>>> {
+    let loaded = crate::Scribe::load_from(
+        &weights("--scribe", crate::trained::SCRIBE_WEIGHTS),
+        &weights("--reader", crate::trained::WEIGHTS),
+        Default::default(),
+    );
+    if loaded.is_err() {
+        missing(
+            scores,
+            "spell weights",
+            "cargo run --release -p orbs-augury --example train --features train -- --spells",
+        );
+    }
+    loaded.ok()
+}
+
+/// `part` of `whole` as a percentage, and nought of nothing.
+#[must_use]
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "counts of lines and epochs, not 2^24"
+)]
+pub fn percent(part: usize, whole: usize) -> f32 {
+    if whole == 0 {
+        return 0.0;
+    }
+    part as f32 / whole as f32 * 100.0
 }

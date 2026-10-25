@@ -6,11 +6,11 @@
 //! `type_raw`: neither reaches a world, so no `wizard $` block ever answers
 //! them for `send` to wait on.
 
-use crate::play::{Game, available};
+use crate::play::Game;
 
 /// From the menu to the practice tower's first step.
-fn installing() -> Game {
-    let game = Game::installing();
+fn installing() -> Option<Game> {
+    let game = Game::installing()?;
     game.expect_drawn("no tower yet");
     game.type_raw("play");
     game.expect_drawn("open a tower");
@@ -19,7 +19,7 @@ fn installing() -> Game {
     game.type_raw("short");
     game.expect_drawn("initialising the orb");
     game.expect_drawn("step 1 of 5");
-    game
+    Some(game)
 }
 
 /// The seed `status` reports, from its block.
@@ -39,10 +39,7 @@ fn seed(game: &Game) -> String {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn a_new_game_installs_the_orb_and_then_wakes_the_tower() {
-    if !available() {
-        return;
-    }
-    let game = installing();
+    let Some(game) = installing() else { return };
     game.does("help", "recall");
     game.expect_drawn("step 2 of 5");
     game.does("survey", "laboratory");
@@ -74,10 +71,7 @@ fn a_new_game_installs_the_orb_and_then_wakes_the_tower() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn skip_wakes_the_tower_at_once() {
-    if !available() {
-        return;
-    }
-    let game = installing();
+    let Some(game) = installing() else { return };
     game.type_raw("skip");
     game.expect_drawn("cold start");
     game.expect_off_screen("initialising the orb");
@@ -92,12 +86,11 @@ fn skip_wakes_the_tower_at_once() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn the_setting_turns_it_off() {
-    if !available() {
-        return;
-    }
     // With the setting deciding, as a player's game does. `ORBS_SAVE=off`
     // keeps no file, so it starts on and the session holds what the page sets.
-    let game = Game::at_the_threshold_by_setting();
+    let Some(game) = Game::at_the_threshold_by_setting() else {
+        return;
+    };
     game.expect_drawn("no tower yet");
     game.type_raw("settings");
     game.expect_drawn("habits");
@@ -125,12 +118,9 @@ fn the_setting_turns_it_off() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn the_linear_mirror_keeps_the_lesson_after_a_long_answer() {
-    if !available() {
-        return;
-    }
     // §14's route. `help` answers in more rows than the pane, and the mirror
     // shows a stream's tail, so the strip is pinned above it.
-    let game = installing();
+    let Some(game) = installing() else { return };
     game.does("help", "recall");
     game.press("F5");
     game.expect_drawn("linear F5 back");
@@ -141,12 +131,9 @@ fn the_linear_mirror_keeps_the_lesson_after_a_long_answer() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn the_menu_inside_the_installation_still_works() {
-    if !available() {
-        return;
-    }
     // The practice tower is a tower, so `menu` opens the in-tower menu and
     // `resume` comes back to the strip where it was.
-    let game = installing();
+    let Some(game) = installing() else { return };
     game.type_raw("menu");
     game.expect_drawn("resume");
     game.type_raw("resume");

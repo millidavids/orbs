@@ -1,29 +1,16 @@
 # What each instrument does to what is put in it (DESIGN.md §10.1).
 #
-# One table per instrument, and each has a single shape — which is what makes
-# this readable and what lets a material's *state* decide which recipes can fire,
-# rather than the player memorising a fixed sequence.
+# One table per instrument, each one shape, so a material's state decides what
+# fires rather than a memorised sequence.
 #
 #   mortar_and_pestle   one reagent  -> one reagent          (preprocess)
 #   balneum_mariae      one reagent  -> one reagent          (process, needs heat)
 #   flask_and_rod       two reagents -> one reagent          (combine)
 #   alembic             one reagent  -> a potion             (distil, needs heat)
 #
-# `leaves` is the byproduct. §10.1's rule is that **every byproduct has at least
-# one use** — a byproduct that is only ever litter turns `purge` into tidying,
-# which is the feeling this whole item exists to remove. `husks` feeds the
-# balneum_mariae; `ash` is a flask_and_rod input; `sediment` and `dregs` are
-# below.
-#
-# `ticks` is a placeholder. ROADMAP is explicit: the balance CLI sweeps these and
-# they are not to be hand-tuned. They sit short on purpose so a fifteen-minute
-# scripted scenario can run a whole brew more than once.
-#
-# `heat = true` means the athanor must be alight. It is written **here** rather
-# than inferred from the instrument's name: the table above used to say "needs
-# heat" in a comment while the executor carried the same fact as a `matches!` over
-# two hardcoded names, so a designer adding a heated instrument would have edited
-# this file, read their own note, and shipped a recipe that silently runs cold.
+# `leaves` is the byproduct, and every byproduct has a use (§10.1), or `purge`
+# is tidying. `ticks` are placeholders the balance harness sweeps. `heat = true`
+# needs the athanor lit, written here rather than inferred from a name.
 
 # ---------------------------------------------------------------------------
 # mortar_and_pestle - grinding. No heat.
@@ -41,15 +28,8 @@ output = "ground-salt"
 leaves = "husks"
 ticks = 8
 
-# Ash is a byproduct that grinds down into something the flask wants, which is
-# what keeps the athanor's waste from being pure litter.
-#
-# **`dust` was here too and is gone with it.** The lectern shed it, so the mortar
-# was given a second route to the same potash to satisfy §10.1's rule that every
-# byproduct has a use - and the dust could never actually get here, because
-# reagents do not cross a domain boundary. A recipe that only fires on material a
-# tester spawns is not content, and the honest fix was upstream: byproducts are
-# the laboratory's mechanic and no other domain replicates them.
+# Ash grinds into what the flask wants, so the athanor's waste is not litter.
+# Byproducts are the laboratory's mechanic alone.
 [[mortar_and_pestle]]
 input = "ash"
 output = "potash"
@@ -59,15 +39,9 @@ ticks = 6
 # ---------------------------------------------------------------------------
 # The ported herbs, and the two potions they reach.
 #
-# Names and character come from `../court_wizard`, whose alchemy is nineteen real
-# historical herbs each with prose saying what it looks like and where it grows.
-# Its *effects* do not port - all fourteen are tower-defence terms - so what came
-# across is the half that matters: a substance a player can be told about.
-#
-# **These three are not on the shelf at the start.** A `verdant-scroll` puts one
-# of them there, and what counts as unlockable is derived rather than listed: a
-# base reagent is one the vocabulary knows and no recipe makes. So a fourth herb
-# added here is unlockable the same tick, with no Rust to touch.
+# Names and character from `../court_wizard`'s historical herbs, not its
+# effects. Off the shelf at the start: a `verdant-scroll` grows one, and what is
+# unlockable is derived — known to the vocabulary, made by no recipe.
 # ---------------------------------------------------------------------------
 
 [[mortar_and_pestle]]
@@ -132,17 +106,9 @@ output = "clarified-draught"
 leaves = "dregs"
 ticks = 10
 
-# **The second route to the same draught**, and the whole of §10.1's exit
-# criterion: the same goal, two right answers, and which is right depends on what
-# the laboratory is holding.
-#
-# Route A above spends fresh sage. This one spends the husks the mortar left
-# behind - free if you have been grinding, and unavailable if you have not. It is
-# slower, because that is the trade: waste costs time, stock costs stock.
-#
-# It also puts weak-tincture in two places at once. Sent to the alembic it is
-# haste; sent to the flask it is half a clarity. That is the second decision, and
-# it is the one that keeps this interesting on the twentieth brew.
+# The second route to the same draught (§10.1): husks instead of sage, slower,
+# since waste costs time and stock costs stock. Weak-tincture is haste at the
+# alembic or half a clarity here, the second decision.
 [[flask_and_rod]]
 inputs = ["weak-tincture", "ground-salt"]
 output = "clarified-draught"
@@ -202,11 +168,8 @@ ticks = 8
 # one at a time (§19, Supply), and the tower still counts the run, not the batch.
 # ---------------------------------------------------------------------------
 
-# **The long one, and the only stage that is.** Four times what it was: a
-# distillation is the last thing that happens to a brew and the one worth
-# watching, and at fourteen ticks it was over before the picture had said
-# anything. It is also what makes the vessel read: the liquid now climbs slower
-# than the bubbles rising through it, which is the right way round for a boil.
+# The one long stage, the one worth watching, and long enough that the liquid
+# climbs slower than its bubbles.
 [[alembic]]
 input = "clarified-draught"
 output = "clarity"
@@ -219,14 +182,8 @@ heat = true
 # ---------------------------------------------------------------------------
 # THE THREE THE LABORATORY EARNS (§11.5, `progression.toml`).
 #
-# `gated = true` means the player has to **earn** this before it will fire — a
-# station on the laboratory's mastery line opens it, and until then the alembic
-# reads `fouled` on the draught exactly as it does for a secret. Progressive
-# reveal inside the room: a fresh tower knows clarity's chain and nothing else.
-#
-# **`haste` is gated deliberately late.** §19 records the haste chain as the
-# fastest experience in the game and a risk; behind the fifth station it arrives
-# after the player has automated clarity rather than instead of it.
+# `gated = true`: a mastery station opens it, and until then it reads `fouled`.
+# `haste`, the fastest experience (§19), comes after clarity is automated.
 # ---------------------------------------------------------------------------
 [[alembic]]
 input = "fixed-draught"
@@ -261,21 +218,9 @@ gated = true
 # ---------------------------------------------------------------------------
 # THE THREE ANOTHER WIZARD KNEW (§10, `lens/`).
 #
-# `secret = true` means the player has to **find** this before it will fire — a
-# broken ward spills a far wizard's log, and now and then the log spells out how
-# they made something. Until then the alembic reads `fouled` on a load it cannot
-# transmute, which is honest: two things that make nothing, as far as you know.
-#
-# **The order here is the reveal order.** `execute::scry` takes the first unfound
-# one rather than drawing at random, so this file decides what a player meets
-# first — the same argument §19 makes for `recall`'s primary route being the
-# file's first entry.
-#
-# **Each is one step over a byproduct**, and that is the point rather than a
-# saving. §10.1's rule is that every byproduct has at least one use; these give
-# three of them a *second*, so a laboratory full of leavings becomes a laboratory
-# with options. It also means a discovery needs no new intermediate and no new
-# route — what you find is a use for something you have been throwing away.
+# `secret = true`: found in a broken ward's log, `fouled` until then. In reveal
+# order, since `execute::scry` takes the first unfound. Each is one step over a
+# byproduct, a second use for something thrown away.
 [[alembic]]
 input = "potash"
 output = "mending"
@@ -322,58 +267,25 @@ gated = true
 quintessence = 20
 
 # ---------------------------------------------------------------------------
-# athanor - fuel, not recipes. Arrives with step 4.
+# athanor - fuel, not recipes: `fuel.toml`.
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
 # lectern - the archive. Assembly, not transformation.
 #
-# Four fragments make a scroll, and the fragments come from walking the stacks
-# rather than from a shelf. **One generic fragment, deliberately**: the four were
-# `shard-of-dawn`/`noon`/`dusk`/`night`, drawn at random, which made collecting a
-# set coupon-collector attrition - 8.3 solves on average, and no decision anywhere
-# in it, since you could not aim for the one you lacked. The names were also
-# invented rather than designed, and nothing in the game ever said what one was.
+# Four fragments from walking the stacks make a scroll: one generic fragment,
+# since four drawn kinds made collecting attrition with no decision. `count`
+# makes four of one work. It leaves nothing, and needs no heat.
 #
-# Specific fragments for specific spells are the intended shape and will want
-# distinct names again; until they exist, one name is the honest placeholder.
-#
-# `count` is what makes four-of-one work at all: what an instrument holds is a
-# node per *name* with a stock count on it, so four fragments are one entry.
-#
-# **It leaves nothing**, and `leaves` is optional for that reason. It shed
-# `dust` for one recipe's worth of the field being compulsory, and the dust then
-# had nowhere to go: reagents do not cross a domain boundary, so it could never
-# reach the mortar written to grind it, and the archive had to grow a shelf to
-# stop it being trapped in the lectern. §10.1 builds the whole waste-has-a-use
-# loop around brewing, where a second route to the same draught can exist and be
-# interesting; replicating it here bought a substance nobody had decided anything
-# about.
-#
-# No heat: a lectern is not an instrument you light.
-#
-# ## `outputs`, and why it is a list
-#
-# What four fragments assemble into is **drawn**, not fixed. Four fragments are
-# four fragments however they were won, so nothing about the inputs could decide
-# which scroll comes out - and a lectern that always made the same thing would be
-# §10's objection to the old `research` all over again: a duration with no
-# decision content, one level up.
-#
-# The list is on the recipe rather than being three `[[lectern]]` blocks because
-# `Recipes::matching` returns the **first** recipe whose inputs match. Three
-# blocks all wanting four fragments would leave two of them permanently
-# unreachable, with the file looking perfectly reasonable and nothing saying so.
-#
-# One entry today. The draw is uniform over whatever is here, so adding a scroll
-# is adding a line - and `every_scroll_the_lectern_makes_can_be_spent` refuses
-# a name with no effect behind it.
+# `outputs` is drawn, not fixed, since nothing about four fragments could
+# decide; a list, since `Recipes::matching` takes the first match and three
+# blocks would leave two unreachable. The draw is uniform, and
+# `every_scroll_the_lectern_makes_can_be_spent` refuses a scroll that does
+# nothing.
 # ---------------------------------------------------------------------------
 #
-# **Two of the three are gated, per output** (§11.5): the archive's own line
-# opens them, and the recipe fires from the first because *any* known output
-# is enough — a gate on the whole recipe would have sealed the gleaning scroll
-# behind the last station that opens the others.
+# Two of the three are gated per output (§11.5), so the gleaning scroll is not
+# sealed behind the others' stations.
 [[lectern]]
 input = "fragment"
 count = 4

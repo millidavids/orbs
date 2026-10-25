@@ -8,16 +8,9 @@
 //! |---|---|
 //! | **your own capability** — verbs, hidden directories, what fragments assemble | **other people's knowledge** — what a far wizard knows how to make |
 //!
-//! *"Archive powers all discovery"* is about the first. You do not decipher a
-//! recipe out of your own shelves; you steal it from somebody who already had
-//! it, which is what a broken ward is for.
-//!
-//! The chance climbs and resets: flat would let a player be forty solves in
-//! with nothing to show, certainty would make the lottery a queue. It rises
-//! with every fruitless solve and drops to nothing the moment one lands.
-//!
-//! It retires once all three shipped secrets are known, rather than promising
-//! something it cannot deliver.
+//! The chance climbs with every fruitless solve and resets when one lands:
+//! flat would leave a player forty solves in with nothing, certainty would make
+//! it a queue. It retires once every shipped secret is known.
 
 use std::collections::BTreeSet;
 
@@ -29,10 +22,8 @@ use crate::rng::{RngStream, Rngs};
 
 /// What the player has learned to make, beyond what they started knowing.
 ///
-/// Player state, not content: `Recipes` stays immutable because a recipe
-/// reaches a decision and swapping one mid-session would break replay. This is
-/// the mutable half, still reproducible from `(seed, submissions)` — a
-/// discovery is rolled from a seeded stream on a deterministic tick.
+/// Player state, the mutable half beside the immutable `Recipes`, still
+/// reproducible from `(seed, submissions)`.
 #[derive(Resource, Debug, Default, Clone)]
 pub struct Learned {
     known: BTreeSet<String>,
@@ -48,11 +39,8 @@ const STEP: u32 = 4;
 
 /// Where the chance reaches certainty.
 ///
-/// `4 + 4 × 24` is 100, so the 25th solve after a discovery cannot fail. The
-/// mean interval is about six.
-///
-/// Public because it is a promise: a player is owed a bound on bad luck, and
-/// the tests below hold it.
+/// `4 + 4 × 24` is 100, so the 25th solve after a discovery cannot fail; the
+/// mean is about six. Public, because a bound on bad luck is a promise.
 pub const CERTAIN: u32 = 24;
 
 impl Learned {
@@ -67,10 +55,8 @@ impl Learned {
 
     /// Every secret recipe found so far, by name, in alphabetical order.
     ///
-    /// Not [`found`](Self::found)'s order, which is `recipes.toml`'s. A
-    /// `BTreeSet` because a save's bytes must not depend on insertion order, or
-    /// two routes to one world write different files. Anything a player reads
-    /// wants `found`; this is for the save.
+    /// For the save, whose bytes must not depend on insertion order; anything a
+    /// player reads wants [`found`](Self::found).
     pub fn known(&self) -> impl Iterator<Item = &str> {
         self.known.iter().map(String::as_str)
     }
@@ -92,10 +78,8 @@ impl Learned {
 
     /// Everything found so far, in `recipes.toml`'s own order.
     ///
-    /// Ordered against the content rather than the `BTreeSet` it is stored in.
-    /// The file's order is load-bearing in this module — `discover` and `learn`
-    /// both take the first unfound one — so an accessor answering
-    /// alphabetically is a trap for its first caller.
+    /// The file's order is load-bearing — `discover` and `learn` take the first
+    /// unfound — so alphabetical would be a trap.
     #[must_use]
     pub fn found<'a>(&self, recipes: &'a Recipes) -> Vec<&'a str> {
         recipes
@@ -155,12 +139,8 @@ pub fn discover(world: &mut World) -> Option<String> {
 
 /// Learn a secret outright, for a tester's `debug_learn`.
 ///
-/// Not a second discovery path: it writes the same set and resets the same
-/// counter, skipping only the roll, so a tower reached this way and one reached
-/// by probing are the same tower.
-///
-/// `None` means the next one in the file's order, which is the order the lens
-/// reveals them in.
+/// The same set and counter as a discovery, skipping only the roll. `None` is
+/// the next in the file's order, the lens's own.
 #[must_use]
 pub fn learn(world: &mut World, wanted: Option<&str>) -> Option<String> {
     let found = {

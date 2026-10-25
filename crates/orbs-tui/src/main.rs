@@ -1,15 +1,8 @@
 //! O.R.B.S. — terminal frontend.
 //!
-//! A full-screen raw-mode application. It does not shell out, touch the real
-//! filesystem, or interoperate with the host shell — the terminal is a
-//! framebuffer and a keyboard. Same sim, same commands, same simulated tower;
-//! only the rasteriser differs.
-//!
-//! Second-class by decision, not by neglect (DESIGN.md §13, §19). The Bevy
-//! build is the product and never waits for this one. This one is for §15's
-//! charter: *"a no-GPU, no-window, instant-startup, trivially scriptable
-//! target"* — the scripting being `tmux send-keys`, which makes every screen
-//! something a person or a script can drive and read back.
+//! Raw mode over a framebuffer and a keyboard; same sim, another rasteriser.
+//! Second-class by decision (§13, §19): §15's no-GPU, scriptable target,
+//! driven by `tmux send-keys`.
 //!
 //! ```bash
 //! cargo build -p orbs-tui
@@ -18,21 +11,9 @@
 //! tmux capture-pane -t orbs -p
 //! ```
 //!
-//! It boots, and `ORBS_BOOT=0` stops it. §4's sequence runs here too, naming
-//! `crossterm` where the other build names `bevy` — the card is a diegetic
-//! inventory of the machine, and this is a different machine. Skipping it for
-//! *"instant-startup"* (§15) was really about the development loop, which
-//! `ORBS_BOOT=0` already answers. The clock and the card are `orbs-shell`'s;
-//! here is the frame that advances one and the engine line that fills the other.
-//!
-//! No content watcher: `ORBS_CONTENT` is read once at startup. A watcher is
-//! `notify` and a background thread, and it belongs to the frontend that already
-//! has one. Edit `prose.toml` and restart.
-//!
-//! No `tracing` subscriber either. In raw mode a subscriber writing to stderr
-//! would scribble across the screen at the moment a writer is looking at their
-//! own edit; with none, the macro compiles to nothing. The `--dump` path owns
-//! the terminal in the ordinary way and prints its own warning instead.
+//! It boots, naming `crossterm` on the card (§4); `ORBS_BOOT=0` skips it.
+//! `ORBS_CONTENT` is read at launch and on each swap, with no watcher. No
+//! `tracing` subscriber, which would scribble across a raw screen.
 
 mod blit;
 mod carried;
@@ -119,33 +100,40 @@ fn play(seed: u64) -> std::io::Result<()> {
     // would be testing the door.
     let threshold = orbs_shell::Threshold::chosen(orbs_shell::Threshold::Waiting);
 
-    // The save outranks the seed and the environment both, as in the other
-    // build. `session::Wizard` goes the other way round: a name is world state,
-    // so it is read from the machine only when there is no world yet.
-    //
-    // At the threshold no save is read at all — the player has not asked for a
-    // tower, and putting one in front of them (then writing it back a minute
-    // later) is what the threshold exists to stop. This scratch world supplies
-    // the prose the menu is drawn from and never ticks; a chosen tower arrives
-    // through `Session::raise`.
+    // The save outranks seed and environment, as in the other build. At the
+    // threshold no save is read: a scratch world for the menu's prose, never
+    // ticked, until `Session::raise`.
     let opened = if threshold.is_waiting() {
         orbs_shell::Opened::New
     } else {
         orbs_shell::read_save()
     };
     let mut sim = orbs_shell::tower_from(opened, seed, wizard().as_deref());
-    // Authored content, if `ORBS_CONTENT` names a directory (rule 6). Read once,
-    // not watched — a watcher belongs to the frontend that already has one.
-    // The complaint goes to `tracing`, which this build subscribes to; the dump
-    // prints its own line.
-    for file in orbs_shell::load(&mut sim) {
-        tracing::warn!("content: {file} did not load; running on the built-in text");
-    }
+    // Authored content, if `ORBS_CONTENT` names a directory (rule 6). Read here
+    // and on every swap, not watched — a watcher belongs to the frontend that
+    // already has one.
+    let mut missed = orbs_shell::load(&mut sim);
 
     term::enter()?;
-    let result = drive::run(sim, threshold, engine());
+    let result = drive::run(sim, threshold, engine(), &mut missed);
     term::leave();
+    say_missed(missed);
     result
+}
+
+/// Say what `ORBS_CONTENT` could not load, once the terminal is given back.
+///
+/// Printed, since this build has no `tracing` subscriber, and only now, since
+/// stderr during play scribbles across a raw screen.
+fn say_missed(mut missed: Vec<&'static str>) {
+    missed.sort_unstable();
+    missed.dedup();
+    for file in missed {
+        eprintln!(
+            "orbs-tui: {} is set but {file} did not load; ran on the built-in text",
+            orbs_shell::CONTENT_DIR
+        );
+    }
 }
 
 #[cfg(test)]

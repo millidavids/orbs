@@ -1,36 +1,18 @@
 //! Whether the orb *looks a line up* or has to *work it out*.
 //!
-//! The augury (DESIGN.md §6) reads anything the player did not type literally;
-//! this predicate decides which is which. It routes rather than parses — a
-//! literal line still goes through [`analyse`](super::analyse), keeping
-//! [`Elsewhere`](super::Resolution::Elsewhere),
-//! [`InSpell`](super::Resolution::InSpell),
-//! [`Incomplete`](super::Resolution::Incomplete), the domain bonus and the
-//! tolerated-collision scoring intact. A hash lookup answering a literal line
-//! itself would lose all four, and `mix` typed in the archive would stop saying
-//! *"there is nothing here to mix with"*.
+//! The augury (§6) reads anything the player did not type literally; this
+//! decides which is which. It routes rather than parses — a literal line still
+//! goes through [`analyse`](super::analyse), keeping `Elsewhere`, `InSpell`,
+//! `Incomplete` and the domain bonus.
 //!
-//! Four things count as literal, each a lookup rather than a guess:
+//! Four things count, each a lookup rather than a guess: a bare digit answering
+//! a numbered prompt, a tester's `debug_*` door, a spell word
+//! ([`spellword::leading`](super::spellword::leading)), and nothing at all.
 //!
-//! - A bare digit, answering a numbered prompt. Routing one to the augury would
-//!   make the prompt rhetorical.
-//! - A tester's door, spelled `debug_*` and matched exactly.
-//! - A spell word, exact and case-folded already
-//!   ([`spellword::leading`](super::spellword::leading)).
-//! - Nothing at all.
-//!
-//! An exactly-typed verb is not on that list, though it was for one commit.
-//! `put` is a plain-register synonym for `dial`, and `take`, `make`, `find`,
-//! `set`, `hold`, `show` and `open` are claimed too — so *"the head is a word
-//! the game knows"* routes `put the sage in the mortar and grind it` into a
-//! lens command with eight words left over. What a router needs is *did the
-//! parser explain the whole line*, which takes the candidate scores and is
-//! [`Analysis`](super::Analysis)' question. This is the narrow half: the lines
-//! that must never reach the augury whatever the world looks like.
-//!
-//! The answer does not depend on the build: a `debug_*` line is literal in a
-//! release binary too, or a tester and a player would be routed differently and
-//! `scripts/play.sh` would stop exercising the path players get.
+//! Not an exactly-typed verb: `put` is `dial`'s, so `put the sage in the mortar
+//! and grind it` would route into the lens. Whether the parser explained the
+//! whole line is [`Analysis`](super::Analysis)' question; this is the narrow
+//! half. Build-independent, so a tester and a player route alike.
 
 use super::{normalise, spellword};
 

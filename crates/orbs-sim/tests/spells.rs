@@ -9,7 +9,9 @@
 //! *"asserting on `holds` directly would have agreed with the bug"* (§19). The
 //! questions are asked by casting spells whose branches differ visibly.
 
-use orbs_render::{FieldName, Value};
+mod common;
+
+use common::{attended, ever_said, run_all, said};
 use orbs_sim::Sim;
 
 // ---------------------------------------------------------------------------
@@ -49,28 +51,28 @@ impl World {
     /// A laboratory in this state, standing in it.
     fn build(self) -> Sim {
         let mut sim = Sim::new(1);
-        run(&mut sim, &["attend laboratory"]);
+        run_all(&mut sim, &["attend laboratory"]);
         match self {
             Self::Cold => {}
-            Self::Lit => run(&mut sim, &["kindle charcoal"]),
-            Self::Grinding => run(&mut sim, &["kindle charcoal", "grind sage"]),
+            Self::Lit => run_all(&mut sim, &["kindle charcoal"]),
+            Self::Grinding => run_all(&mut sim, &["kindle charcoal", "grind sage"]),
             Self::Ready => {
-                run(&mut sim, &["kindle charcoal", "grind sage"]);
+                run_all(&mut sim, &["kindle charcoal", "grind sage"]);
                 sim.step_n(20);
             }
             Self::Banked => {
-                run(&mut sim, &["kindle charcoal", "grind sage"]);
+                run_all(&mut sim, &["kindle charcoal", "grind sage"]);
                 sim.step_n(20);
                 // Empty takes the product to the shelf and leaves the husks.
-                run(&mut sim, &["empty mortar_and_pestle", "stop athanor"]);
+                run_all(&mut sim, &["empty mortar_and_pestle", "stop athanor"]);
                 sim.step_n(4);
             }
             Self::Scouring => {
-                run(&mut sim, &["grind sage"]);
+                run_all(&mut sim, &["grind sage"]);
                 sim.step_n(20);
-                run(&mut sim, &["empty mortar_and_pestle", "grind rock-salt"]);
+                run_all(&mut sim, &["empty mortar_and_pestle", "grind rock-salt"]);
                 sim.step_n(20);
-                run(
+                run_all(
                     &mut sim,
                     &["empty mortar_and_pestle", "purge mortar_and_pestle"],
                 );
@@ -80,27 +82,11 @@ impl World {
     }
 }
 
-/// Submit each line and give the world a tick to do it.
-fn run(sim: &mut Sim, lines: &[&str]) {
-    for line in lines {
-        sim.submit(line);
-        sim.step();
-    }
-}
-
 /// Whether `question` holds in `world`, by casting a spell that says which
 /// branch it took.
 ///
-/// Two `wait`s, because the branch has to be visible without changing the world
-/// it was asked about. Grinding fails three ways: it needs the mortar free, it
-/// takes ten ticks to say anything, and `Banked` reaches its state *by
-/// grinding*, so the setup has already said the word the assertion looks for.
-///
-/// A `wait` for something that never happens says `watches for <name>` at once,
-/// needs no instrument and changes nothing, then blocks.
-///
-/// Only records after the cast are read, so nothing the setup said can be
-/// mistaken for what the spell did.
+/// Two `wait`s, which speak at once and change nothing, where a grind would
+/// change the world asked about. Only records after the cast are read.
 fn asks(world: World, question: &str) -> Option<bool> {
     let mut sim = world.build();
     let lines: Vec<String> = [
@@ -114,10 +100,10 @@ fn asks(world: World, question: &str) -> Option<bool> {
     sim.write_spell("asking", &lines);
     sim.step();
 
-    let before = messages(&sim).len();
-    run(&mut sim, &["invoke asking"]);
+    let before = said(&sim).len();
+    run_all(&mut sim, &["invoke asking"]);
     sim.step_n(6);
-    let said: Vec<String> = messages(&sim).into_iter().skip(before).collect();
+    let said: Vec<String> = said(&sim).into_iter().skip(before).collect();
 
     match (
         said.iter().any(|line| line.contains("yesmark")),
@@ -131,28 +117,10 @@ fn asks(world: World, question: &str) -> Option<bool> {
     }
 }
 
-/// Every message the orb has said.
-fn messages(sim: &Sim) -> Vec<String> {
-    sim.scrollback()
-        .records()
-        .iter()
-        .filter_map(|record| record.field(FieldName::Message))
-        .filter_map(|value| match value {
-            Value::Text(text) => Some(text.to_owned()),
-            _ => None,
-        })
-        .collect()
-}
-
-/// Whether anything the orb said contains `needle`.
-fn mentioned(sim: &Sim, needle: &str) -> bool {
-    messages(sim).iter().any(|line| line.contains(needle))
-}
-
 /// A laboratory spell, written and ready to cast.
 fn with_spell(name: &str, lines: &[&str]) -> Sim {
     let mut sim = Sim::new(1);
-    run(&mut sim, &["attend laboratory"]);
+    run_all(&mut sim, &["attend laboratory"]);
     let lines: Vec<String> = lines.iter().map(|line| (*line).to_owned()).collect();
     sim.write_spell(name, &lines);
     sim.step();
@@ -228,9 +196,9 @@ fn two_things_equally_close_are_a_coin_flip_and_the_orb_refuses_to_toss_it() {
     // laboratory does.
     let mut sim = World::Scouring.build();
     assert!(
-        mentioned(&sim, "ground-salt") && mentioned(&sim, "ground-sage"),
+        ever_said(&sim, "ground-salt") && ever_said(&sim, "ground-sage"),
         "the world under test does not hold both: {:?}",
-        messages(&sim),
+        said(&sim),
     );
 
     sim.write_spell(
@@ -244,10 +212,10 @@ fn two_things_equally_close_are_a_coin_flip_and_the_orb_refuses_to_toss_it() {
     sim.step();
     // From here on only: the world above was built by grinding, so a sweep over
     // the whole transcript would read the setup's work as the spell's.
-    let before = messages(&sim).len();
-    run(&mut sim, &["invoke tie"]);
+    let before = said(&sim).len();
+    run_all(&mut sim, &["invoke tie"]);
     sim.step_n(20);
-    let said: Vec<String> = messages(&sim).into_iter().skip(before).collect();
+    let said: Vec<String> = said(&sim).into_iter().skip(before).collect();
 
     assert!(
         said.iter().any(|line| line.contains("neither half runs")),
@@ -382,27 +350,23 @@ fn a_word_that_names_nothing_at_all_is_a_typo_rather_than_an_answer_of_no() {
         "slip",
         &["if the dispensary has ground-slat", "grind sage", "end"],
     );
-    run(&mut sim, &["invoke slip"]);
+    run_all(&mut sim, &["invoke slip"]);
     sim.step_n(20);
 
-    assert!(mentioned(&sim, "neither half runs"), "{:?}", messages(&sim));
+    assert!(ever_said(&sim, "neither half runs"), "{:?}", said(&sim));
     assert!(
-        !mentioned(&sim, "yields ground-sage"),
+        !ever_said(&sim, "yields ground-sage"),
         "a typo answered a question: {:?}",
-        messages(&sim),
+        said(&sim),
     );
     // ...and the real name still works, so the rule did not cost the loop.
     let mut sim = with_spell(
         "sound",
         &["if the dispensary has ground-salt", "grind sage", "end"],
     );
-    run(&mut sim, &["invoke sound"]);
+    run_all(&mut sim, &["invoke sound"]);
     sim.step_n(20);
-    assert!(
-        !mentioned(&sim, "neither half runs"),
-        "{:?}",
-        messages(&sim)
-    );
+    assert!(!ever_said(&sim, "neither half runs"), "{:?}", said(&sim));
 }
 
 #[test]
@@ -700,10 +664,10 @@ fn every_name_it_could_not_place_is_named_once() {
             "end",
         ],
     );
-    run(&mut sim, &["invoke broken"]);
+    run_all(&mut sim, &["invoke broken"]);
     sim.step_n(30);
 
-    let complaints: Vec<String> = messages(&sim)
+    let complaints: Vec<String> = said(&sim)
         .into_iter()
         .filter(|line| line.contains("to ask about"))
         .collect();
@@ -733,12 +697,12 @@ fn a_name_that_stops_resolving_is_reported_rather_than_answered() {
         "watching",
         &["repeat", "if the mortar is idle", "survey", "end", "end"],
     );
-    run(&mut sim, &["invoke watching"]);
+    run_all(&mut sim, &["invoke watching"]);
     sim.step_n(4);
     assert!(
-        !mentioned(&sim, "to ask about"),
+        !ever_said(&sim, "to ask about"),
         "it complained while the name was good: {:?}",
-        messages(&sim),
+        said(&sim),
     );
 }
 
@@ -751,7 +715,7 @@ fn a_name_that_stops_resolving_is_reported_rather_than_answered() {
 /// The prompt pane draws *what the player did, not what their spells did*
 /// (`prompt.rs`), so a spell's record of itself is in the stream, not on screen.
 fn issued(sim: &Sim) -> Vec<String> {
-    messages(sim)
+    said(sim)
 }
 
 #[test]
@@ -777,24 +741,24 @@ fn four_blocks_deep_runs_the_steps_it_should_and_no_others() {
             "end",
         ],
     );
-    run(&mut sim, &["invoke deep"]);
+    run_all(&mut sim, &["invoke deep"]);
     sim.step_n(40);
 
     // It starts cold, so the outer `if` is taken, the inner one is taken, and
     // the athanor is lit. Next turn it is *not* idle, so the outer `else` damps
     // it. What matters is that it finishes and that all four halves ran.
     assert!(
-        mentioned(&sim, "takes light"),
+        ever_said(&sim, "takes light"),
         "the innermost branch never ran: {:?}",
         issued(&sim),
     );
     assert!(
-        mentioned(&sim, "you damp the athanor"),
+        ever_said(&sim, "you damp the athanor"),
         "the outer else never ran: {:?}",
         issued(&sim),
     );
     assert!(
-        mentioned(&sim, "is finished"),
+        ever_said(&sim, "is finished"),
         "the spell never came out of its blocks: {:?}",
         issued(&sim),
     );
@@ -816,16 +780,16 @@ fn a_question_answered_differently_next_turn_takes_the_other_branch() {
             "end",
         ],
     );
-    run(&mut sim, &["invoke tending"]);
+    run_all(&mut sim, &["invoke tending"]);
     sim.step_n(40);
 
     assert!(
-        mentioned(&sim, "yields ground-sage"),
+        ever_said(&sim, "yields ground-sage"),
         "the first turn never ground: {:?}",
         issued(&sim),
     );
     assert!(
-        mentioned(&sim, "watches for"),
+        ever_said(&sim, "watches for"),
         "the second turn never took the else: {:?}",
         issued(&sim),
     );
@@ -847,20 +811,20 @@ fn an_unanswerable_question_inside_a_loop_stops_neither_the_loop_nor_the_spell()
             "end",
         ],
     );
-    run(&mut sim, &["invoke shrug"]);
+    run_all(&mut sim, &["invoke shrug"]);
     sim.step_n(30);
 
     assert!(
-        mentioned(&sim, "there is no gatehouse"),
+        ever_said(&sim, "there is no gatehouse"),
         "{:?}",
         issued(&sim)
     );
     assert!(
-        !mentioned(&sim, "yields"),
+        !ever_said(&sim, "yields"),
         "a branch ran on a question nobody could answer: {:?}",
         issued(&sim),
     );
-    assert!(mentioned(&sim, "is finished"), "{:?}", issued(&sim));
+    assert!(ever_said(&sim, "is finished"), "{:?}", issued(&sim));
 }
 
 #[test]
@@ -880,7 +844,7 @@ fn a_malformed_spell_with_compound_questions_still_runs() {
             "survey",
         ],
     );
-    run(&mut sim, &["invoke rough"]);
+    run_all(&mut sim, &["invoke rough"]);
     sim.step_n(30);
 
     for expected in [
@@ -889,13 +853,13 @@ fn a_malformed_spell_with_compound_questions_still_runs() {
         "nothing closed this",
     ] {
         assert!(
-            mentioned(&sim, expected),
+            ever_said(&sim, expected),
             "{expected:?} unreported: {:?}",
             issued(&sim)
         );
     }
     assert!(
-        mentioned(&sim, "yields ground-sage"),
+        ever_said(&sim, "yields ground-sage"),
         "the readable part did not run: {:?}",
         issued(&sim),
     );
@@ -934,7 +898,7 @@ fn everything_a_file_can_hold_survives_a_save() {
     .collect();
 
     let mut sim = Sim::new(1);
-    run(&mut sim, &["attend laboratory"]);
+    run_all(&mut sim, &["attend laboratory"]);
     assert_eq!(round_trip(&mut sim, "kept", &typed), typed);
 }
 
@@ -954,12 +918,12 @@ fn saving_the_same_spell_again_never_moves_it() {
     .collect();
 
     let mut sim = Sim::new(1);
-    run(&mut sim, &["attend laboratory"]);
+    run_all(&mut sim, &["attend laboratory"]);
     for _ in 0..5 {
         assert_eq!(round_trip(&mut sim, "steady", &typed), typed);
         // ...including when the shelf has changed underneath, which is what the
         // old rewriter re-read against.
-        run(&mut sim, &["grind sage"]);
+        run_all(&mut sim, &["grind sage"]);
         sim.step_n(12);
     }
 }
@@ -968,7 +932,7 @@ fn saving_the_same_spell_again_never_moves_it() {
 fn the_shipped_spell_is_not_rewritten_by_being_opened() {
     let mut sim = Sim::new(1);
     let shipped = sim.spell("first_light").expect("the shipped spell");
-    run(&mut sim, &["attend laboratory", "scribe first_light"]);
+    run_all(&mut sim, &["attend laboratory", "scribe first_light"]);
     let opened = sim.opening().expect("the editor was asked to open");
     assert_eq!(opened.lines, shipped);
 
@@ -988,11 +952,11 @@ fn a_file_kept_whole_still_runs() {
             "end",
         ],
     );
-    run(&mut sim, &["invoke loose"]);
+    run_all(&mut sim, &["invoke loose"]);
     sim.step_n(30);
 
     assert!(
-        mentioned(&sim, "yields ground-sage"),
+        ever_said(&sim, "yields ground-sage"),
         "loose phrasing stopped working once it stopped being rewritten: {:?}",
         issued(&sim),
     );
@@ -1005,7 +969,7 @@ fn a_file_kept_whole_still_runs() {
 #[test]
 fn saving_says_nothing_however_compound_the_spell() {
     let mut sim = Sim::new(1);
-    run(&mut sim, &["attend laboratory"]);
+    run_all(&mut sim, &["attend laboratory"]);
     let before = sim.scrollback().records().len();
     sim.write_spell(
         "quiet",
@@ -1019,7 +983,7 @@ fn saving_says_nothing_however_compound_the_spell() {
         sim.scrollback().records().len(),
         before,
         "a save put something in the transcript: {:?}",
-        messages(&sim),
+        said(&sim),
     );
 }
 
@@ -1041,10 +1005,10 @@ fn no_line_a_spell_can_say_has_a_hole_in_it() {
             "end",
         ],
     );
-    run(&mut sim, &["invoke broken"]);
+    run_all(&mut sim, &["invoke broken"]);
     sim.step_n(160);
 
-    let holes: Vec<String> = messages(&sim)
+    let holes: Vec<String> = said(&sim)
         .into_iter()
         .filter(|line| line.contains('{'))
         .collect();
@@ -1055,7 +1019,7 @@ fn no_line_a_spell_can_say_has_a_hole_in_it() {
     // ...and it really reached the failures, or the sweep proves nothing.
     for expected in ["to ask about", "neither half runs", "waited too long"] {
         assert!(
-            mentioned(&sim, expected),
+            ever_said(&sim, expected),
             "{expected:?} never said: {:?}",
             issued(&sim)
         );
@@ -1075,16 +1039,16 @@ fn a_question_the_orb_cannot_read_is_said_once_and_the_spell_runs_on() {
             "grind sage",
         ],
     );
-    run(&mut sim, &["invoke half"]);
+    run_all(&mut sim, &["invoke half"]);
     sim.step_n(40);
 
-    let said = messages(&sim)
+    let said = said(&sim)
         .iter()
         .filter(|line| line.contains("neither half runs"))
         .count();
     assert_eq!(said, 1, "said {said} times");
     assert!(
-        mentioned(&sim, "yields ground-sage"),
+        ever_said(&sim, "yields ground-sage"),
         "the rest of the spell did not run: {:?}",
         issued(&sim),
     );
@@ -1097,7 +1061,7 @@ fn a_question_the_orb_cannot_read_is_said_once_and_the_spell_runs_on() {
 #[test]
 fn a_spell_full_of_questions_replays_from_seed_and_submissions() {
     let mut live = Sim::new(7);
-    run(&mut live, &["attend laboratory"]);
+    run_all(&mut live, &["attend laboratory"]);
     let lines: Vec<String> = [
         "repeat 3",
         "if either the mortar is idle or the flask is idle and the dispensary has sage",
@@ -1114,23 +1078,14 @@ fn a_spell_full_of_questions_replays_from_seed_and_submissions() {
     .collect();
     live.write_spell("thorough", &lines);
     live.step();
-    run(&mut live, &["invoke thorough"]);
+    run_all(&mut live, &["invoke thorough"]);
     live.step_n(40);
 
-    let mut replayed = Sim::new(7);
-    for (tick, submission) in live.submissions().all().to_vec() {
-        while replayed.tick() < tick {
-            replayed.step();
-        }
-        replayed.replay(submission);
-    }
-    while replayed.tick() < live.tick() {
-        replayed.step();
-    }
+    let replayed = common::replayed(&live, Sim::new(7));
 
     assert_eq!(
-        messages(&replayed),
-        messages(&live),
+        said(&replayed),
+        said(&live),
         "a replay said something different",
     );
 }
@@ -1166,18 +1121,18 @@ fn a_meditate_answers_the_same_as_the_ticks_it_stands_for() {
     ];
 
     let mut stepped = with_spell("paced", &lines);
-    run(&mut stepped, &["invoke paced"]);
+    run_all(&mut stepped, &["invoke paced"]);
     stepped.step_n(60);
 
     let mut skipped = with_spell("paced", &lines);
-    run(&mut skipped, &["invoke paced", "meditate 60"]);
+    run_all(&mut skipped, &["invoke paced", "meditate 60"]);
 
     assert_eq!(
-        messages(&skipped)
+        said(&skipped)
             .into_iter()
             .filter(|line| line.contains("ground-sage"))
             .count(),
-        messages(&stepped)
+        said(&stepped)
             .into_iter()
             .filter(|line| line.contains("ground-sage"))
             .count(),
@@ -1199,9 +1154,7 @@ fn read(lines: &[&str]) -> Vec<orbs_sim::Reading> {
 
 /// A laboratory, stood in.
 fn laboratory() -> Sim {
-    let mut sim = Sim::new(1);
-    run(&mut sim, &["attend laboratory"]);
-    sim
+    attended(1, "laboratory")
 }
 
 #[test]
@@ -1239,13 +1192,9 @@ fn a_thing_named_where_a_place_belongs_is_reported_before_it_is_cast() {
 
     // ...and the runner agrees, which is what makes the editor's mark true.
     let mut sim = with_spell("probe", &["if the sage is idle", "survey", "end"]);
-    run(&mut sim, &["invoke probe"]);
+    run_all(&mut sim, &["invoke probe"]);
     sim.step_n(6);
-    assert!(
-        mentioned(&sim, "there is no sage here"),
-        "{:?}",
-        messages(&sim)
-    );
+    assert!(ever_said(&sim, "there is no sage here"), "{:?}", said(&sim));
 }
 
 #[test]
@@ -1300,13 +1249,8 @@ fn a_spell_not_written_yet_is_quoted_rather_than_resolved() {
 
 #[test]
 fn a_forward_reference_holds_however_many_spells_already_exist() {
-    // What the half above could not see: a forward reference matches no spell
-    // well, so which resolution the parser returns depends on how many are on
-    // the shelf — one resolves (the verb is weighted double), four tie and come
-    // back `Ambiguous`. `names_a_spell` covered only the first.
-    //
-    // A player with four spells of their own would have found it, so this
-    // asserts against a grimoire that has grown rather than today's.
+    // A forward reference resolves with one spell shelved and ties with four,
+    // so against a grown grimoire.
     let mut sim = Sim::new(1);
     sim.submit("attend laboratory");
     sim.step();

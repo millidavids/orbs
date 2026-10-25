@@ -1,24 +1,16 @@
 //! What the orb last noticed about the room, held between ticks.
 //!
-//! Four questions the painters ask every frame and the world answers once a
-//! second. Asking the sim directly from a painter is what this replaced, and the
-//! cost was not theoretical: `Sim::briefs` alone walks every built room, builds
-//! two `QueryState`s, and runs `instruments_in` per room — at 60 Hz, for a table
-//! that changes at 1 Hz.
-//!
-//! [`Panel::refresh`] is the whole of it, and it is a method rather than a
-//! system so that a frontend without an ECS can call it too.
+//! What the painters ask every frame and the world answers once a tick, held
+//! here so nothing is rebuilt at 60 Hz. [`Panel::refresh`] is a method, so a
+//! frontend without an ECS can call it.
 
 use bevy_ecs::prelude::Resource;
 use orbs_sim::Sim;
 
 /// §10.1's instrument panel, as the sim last reported it.
 ///
-/// Rebuilt on tick, not per frame. `tower::instruments` walks the room's
-/// children then each fixture's, cloning a `String` per name and allocating a
-/// `Vec` per lookup — roughly twenty allocations for the laboratory's five
-/// instruments, at 60 Hz, for state that changes once a second. The sim is the
-/// authority either way; this is where the answer waits between ticks.
+/// Rebuilt on tick, not per frame; the sim is the authority, and this is
+/// where its answer waits.
 #[derive(Resource, Debug, Default)]
 pub struct Panel {
     /// The instruments where the player is standing.
@@ -27,54 +19,28 @@ pub struct Panel {
     pub domain: String,
     /// The room the player is standing in, which is not the same thing.
     ///
-    /// `Sim::domain` walks up to the room and `domain` above is the leaf, so a
-    /// player standing at the alembic has `domain: "alembic"` and
-    /// `room: "laboratory"`. [`Passing`](crate::Passing) needs the room and only
-    /// the room: keyed on the leaf, `attend alembic` would play a whole crossing
-    /// for a fixture inside the room already on screen.
-    ///
-    /// On the tick clock with everything else here, because `Sim::domain` clones
-    /// a `String` per call and the answer changes at most once a second. `line`
-    /// below makes the same distinction.
+    /// At the alembic, `domain` is `alembic` and this is `laboratory` — what
+    /// [`Passing`](crate::Passing) keys on, or `attend alembic` crosses.
     pub room: String,
     /// The stacks the player is standing over, if they are open.
     ///
-    /// On the same tick clock as the instruments, for the same reason: a 49-cell
-    /// `Vec` rebuilt at 60 Hz is the allocation this resource exists to stop,
-    /// and rebuilt once a second it is exactly as fresh as the world it
-    /// describes.
+    /// On the tick clock, as everything here is.
     pub stacks: Option<orbs_render::Stacks>,
     /// The ward the player is standing over, if a reading is open.
     ///
-    /// Beside the stacks and on the same clock, for the same reason: it is a
-    /// description of a world that moves at 1 Hz, so rebuilding it per frame
-    /// would allocate sixty times for one change.
+    /// Only one room's puzzle is ever present: the player stands in one.
     pub ward: Option<orbs_render::Board>,
     /// The course the player is standing over, if one is up.
-    ///
-    /// Beside the other two and on the same clock. Only one of the three can
-    /// ever be present, because they belong to three different rooms and the
-    /// player stands in one.
     pub pylon: Option<orbs_render::Pylon>,
     /// The beast waiting at the menagerie's circle, if there is one.
-    ///
-    /// Beside the other three and on the same clock. Only one of the four can
-    /// ever be present, because they belong to four different rooms and the
-    /// player stands in one.
     pub circle: Option<orbs_render::Circle>,
     /// The siege being fought, if one is.
-    ///
-    /// Beside the other four and on the same clock. Only one of the five can
-    /// ever be present, because they belong to five different rooms and the
-    /// player stands in one.
     pub rampart: Option<orbs_render::Rampart>,
     /// The forge's open lattice, if the player is standing at it.
     pub lattice: Option<orbs_render::LatticeBoard>,
     /// Where the tower's total stands against the Ley Line's next station.
     ///
-    /// On the panel's clock with the rest: both gauges move at most once a tick
-    /// and the pane paints at 60 Hz, so reading them per frame would be the
-    /// per-frame work this resource exists to stop.
+    /// On the tick clock, as everything here is.
     pub station: orbs_sim::Toward,
     /// Where renown stands against the next rank, and what the tower is called.
     pub rankward: orbs_sim::Toward,
@@ -91,26 +57,18 @@ pub struct Panel {
     /// The mastery line of the room the player is standing in, for the road
     /// under the pane's title (§11.5).
     ///
-    /// On the same clock as the rest, for the same reason: the tally moves at
-    /// most once a tick, and every room's line rebuilt at 60 Hz would be the
-    /// allocation this resource exists to stop.
+    /// On the tick clock.
     pub line: Option<orbs_sim::Line>,
     /// Every domain at a glance, for §9's rail.
     ///
-    /// Here rather than asked from the painter, and the most expensive of the
-    /// four: `Sim::briefs` walks every top-level room, builds two `QueryState`s
-    /// and runs `instruments_in` — with its per-recipe allocations — once per
-    /// room. From `rail::paint` that ran at 60 Hz for data that changes at 1 Hz.
+    /// The most expensive answer here: `Sim::briefs` walks every room.
     pub briefs: Vec<orbs_sim::tower::Brief>,
 }
 
 impl Panel {
     /// Re-read the panel from the world.
     ///
-    /// A method, not a system. Every frontend needs this set of questions asked
-    /// in this order once a tick; only the Bevy build has a `resource_changed`
-    /// guard to hang it on, and a guard is not a reason for the answer to live
-    /// somewhere a terminal cannot reach.
+    /// A method, not a system, so the terminal asks it too.
     pub fn refresh(&mut self, sim: &Sim) {
         self.instruments = sim.instruments();
         self.domain = orbs_sim::parser::leaf(&sim.location()).to_owned();

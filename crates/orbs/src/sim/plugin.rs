@@ -12,38 +12,21 @@ pub struct SimPlugin {
     pub seed: u64,
     /// Who is at the orb, or `None` to leave the default name.
     ///
-    /// §4's framing is *"always inside"* — the player is the wizard — so their
-    /// own name at the prompt is the honest thing to show.
-    ///
-    /// Read in the frontend rather than the sim: the environment is not
-    /// deterministic, and reaching for `USER` from a world that must replay
-    /// from a seed is a habit worth not starting.
+    /// The player is the wizard (§4). Read here, since the environment is not
+    /// deterministic.
     pub wizard: Option<String>,
     /// Whether this app keeps a tower between sessions.
     ///
-    /// A field, not `ORBS_SAVE=off`: an environment variable is process-global
-    /// and `cargo test` runs threads, so one test's setting is every test's. A
-    /// flag says what it means at the call site — `main` keeps a tower, a test
-    /// does not.
+    /// A field, not `ORBS_SAVE=off`, which is process-global under threaded
+    /// tests.
     pub persist: bool,
     /// Whether the orb waits at its menu instead of raising a tower.
     ///
-    /// Not `persist: false`, which decides whether
+    /// Not `persist: false`: this says *no tower yet*, and
     /// [`autosave`](super::persist::autosave) and
-    /// [`keep_on_the_way_out`](super::persist::keep_on_the_way_out) are
-    /// registered at all — a threshold session without them would reach a tower
-    /// through the menu and then never save it. `persist` says *this app keeps
-    /// towers*; this says *it has not been given one yet*. The systems are
-    /// registered either way and gated on [`playing`](crate::shell::playing).
+    /// [`keep_on_the_way_out`](super::persist::keep_on_the_way_out) stay
+    /// registered, gated on [`playing`](crate::shell::playing).
     pub threshold: bool,
-}
-
-/// Build the tower a save describes, or a fresh one if there is none.
-///
-/// `orbs_shell::tower_from`, the one copy both builds start from. A load from
-/// the menu is `orbs_shell::loaded`, which never raises a fresh tower.
-fn raise(waiting: orbs_shell::Opened, seed: u64, wizard: Option<&str>) -> Tower {
-    Tower::raised(orbs_shell::tower_from(waiting, seed, wizard))
 }
 
 impl Plugin for SimPlugin {
@@ -51,17 +34,20 @@ impl Plugin for SimPlugin {
         // The save outranks the seed and the environment both: `ORBS_SEED` and
         // `USER` build a *new* tower only.
         //
-        // At the threshold no save is read at all — the player has not asked
-        // for a tower, and writing one back sixty ticks later is what the
-        // threshold exists to stop. What is built is a scratch world: it
-        // supplies the menu's prose, never ticks, and is replaced by whatever
-        // `menuing::swap` puts in front of the player.
+        // At the threshold, no save: a scratch world for the menu's prose,
+        // never ticked, replaced by `menuing::swap`.
         let waiting = if self.persist && !self.threshold {
             orbs_shell::read_save()
         } else {
             orbs_shell::Opened::New
         };
-        let tower = raise(waiting, self.seed, self.wizard.as_deref());
+        // `tower_from` is the one copy both builds start from. A load from the
+        // menu is `Raising::raise`, which never raises a fresh tower.
+        let tower = Tower::raised(orbs_shell::tower_from(
+            waiting,
+            self.seed,
+            self.wizard.as_deref(),
+        ));
         // Where this tower is kept, resolved once and carried — see `Kept`: a
         // path read at the moment of writing is a path read after a swap.
         //
@@ -88,12 +74,9 @@ impl Plugin for SimPlugin {
                 orbs_shell::Threshold::Playing
             })
             .insert_resource(Time::<Fixed>::from_hz(1.0))
-            // Gated on boot being over and a tower having been chosen. Not
-            // cosmetic: `tower::substitution` rolls every tick, so ticking through
-            // a wall-clock animation would advance the RNG stream by however
-            // long boot took — the same seed, a different world. A menu is the
-            // same argument with a longer clock. A `run_if` on `FixedUpdate` is
-            // evaluated per fixed step, so no catch-up burst accrues.
+            // After boot and with a tower, or a wall-clock wait would advance
+            // the RNG and change the seed's world. Per fixed step, so no
+            // catch-up accrues.
             .add_systems(FixedUpdate, advance.run_if(crate::shell::playing));
 
         if self.persist {
@@ -103,14 +86,8 @@ impl Plugin for SimPlugin {
                     .after(advance)
                     .run_if(crate::shell::playing),
             )
-            // `Last`, reading `AppExit` rather than ordering against `quit`:
-            // three of the four ways out never touch the `Quitting` flag, since
-            // `F10` and the close button write an `AppExit` directly. The only
-            // place that sees them all is the message they all end by writing.
-            //
-            // The `playing` gate is a second lock, `Kept` being already `None`
-            // at the threshold, because this is the system that loses a
-            // player's work when it is wrong.
+            // `Last`, on `AppExit`, the one message every way out writes.
+            // `playing` is a second lock beside `Kept`.
             .add_systems(
                 Last,
                 super::persist::keep_on_the_way_out.run_if(crate::shell::playing),
@@ -154,10 +131,7 @@ mod tests {
         // The property the threshold exists for, and it is structural:
         // `keep_now` and `keep` both return early without a path.
         //
-        // Asserted on `Kept` rather than a directory listing because
-        // `save_path()` reads `ORBS_SAVE`, which is process-global while
-        // `cargo test` runs threads (`save.rs` records why). This asks the
-        // question without touching it.
+        // On `Kept`, not a directory, since `ORBS_SAVE` is process-global.
         let app = waiting();
         assert_eq!(
             app.world().resource::<super::super::Kept>().path(),

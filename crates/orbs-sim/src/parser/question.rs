@@ -15,14 +15,11 @@
 //! | `either a or b and c` | `(a or b) and c` |
 //! | `a and either b or c` | `a and (b or c)` |
 //!
-//! `both … and …` mirrors it and changes no meaning, but refusing a word
-//! someone would type is §6's dead end. It earns its keep in the *writer*, the
-//! only way to stop a nested `All` flattening into its parent.
+//! `both … and …` mirrors it and changes no meaning; the writer needs it to
+//! stop a nested `All` flattening into its parent.
 //!
-//! Everything must be read, or nothing is: the parser this replaces took the
-//! first `is`, read one word after it, and dropped the rest. A question that
-//! does not consume every token returns `None`, the line is kept as typed, and
-//! the orb says which line it could not read.
+//! Everything must be read, or nothing is: a question that does not consume
+//! every token returns `None`, and the orb says which line it could not read.
 
 use super::normalise::{Tokens, is_filler};
 use super::verb::NounKind;
@@ -45,9 +42,7 @@ pub enum Bound {
     AtMost,
     /// This many and no other — `has exactly 4 X`, or `has = 4 X`.
     ///
-    /// Arrived with the symbols; reading the untaught `=` as at-least would be
-    /// the quiet reinterpretation §6 forbids. `not has exactly 4 X` asks the
-    /// fourth question, so there is no `!=` to learn.
+    /// `not has exactly 4 X` asks the fourth question, so there is no `!=`.
     Exactly,
 }
 
@@ -83,12 +78,8 @@ const BOUNDS: &[(&[&str], Bound, i64)] = &[
 
 /// What a count is compared *against*.
 ///
-/// The far side was once a typed number only, so *"the way with the fewest
-/// marks"* was inexpressible. `Quantity` rather than `Value`, which is the
-/// record field type `watch` imports beside this.
-///
-/// An expression tree in word notation; §19 records the reversal from refusing
-/// arithmetic outright. What holds the ceiling:
+/// An expression tree in word notation (§19). Not `Value`, the record field
+/// type `watch` imports beside this. What holds the ceiling:
 ///
 /// - Words, never symbols — `plus` and `double`, so there is nothing to
 ///   parenthesise.
@@ -123,11 +114,7 @@ pub enum Quantity {
         /// What to look for there.
         thing: String,
     },
-    /// Twice what is inside — `than double the garrison`.
-    ///
-    /// `outnumbered` answered *"the enemy count is twice that of defenders"*
-    /// only while the ratio was fixed at two. A word rather than a `*`; see the
-    /// module doc.
+    /// Twice what is inside — `than double the garrison`. A word, not a `*`.
     Doubled(Box<Quantity>),
     /// What is inside, and `by` more — `than the enemy has mettle plus 6`.
     ///
@@ -242,14 +229,9 @@ pub enum Condition {
         place: String,
         /// What to look for.
         thing: String,
-        /// How many of it are wanted.
-        ///
-        /// One unless a number was written — `has sage` *is* `has 1 sage`. At
-        /// least, never exactly: a guard asks *"have I enough yet"*. Before
-        /// this field the number was silently swallowed (§19).
-        ///
-        /// A [`Quantity`], so the other side can be the world too;
-        /// `Quantity::Count(1)` is exactly the old bare `u32`.
+        /// How many of it are wanted — one unless a number was written, so
+        /// `has sage` *is* `has 1 sage`. A [`Quantity`], so the other side can
+        /// be the world too.
         count: Quantity,
         /// Which side of `count` satisfies it.
         ///
@@ -386,13 +368,11 @@ impl State {
     }
 
     /// Every spelling [`read`](Self::read) accepts, canonical first within each
-    /// state.
+    /// state, for completion to offer.
     ///
-    /// For completion, which must *offer* the vocabulary and not only recognise
-    /// it — all eight, because §6 says a register is not second class. A
-    /// `match` cannot be enumerated, so
-    /// `every_state_word_the_list_offers_is_one_the_language_reads` stops the
-    /// two drifting.
+    /// A `match` cannot be enumerated, so
+    /// `every_state_word_the_list_offers_is_one_the_language_reads` keeps the
+    /// two in step.
     pub const WORDS: [&'static str; 8] = [
         "idle", "free", "still", "working", "busy", "running", "empty", "bare",
     ];
@@ -441,13 +421,9 @@ fn shift(count: u32, offset: i64) -> u32 {
 #[must_use]
 pub fn write_condition(condition: &Condition) -> String {
     match condition {
-        // The count is written only when it is not one, and `or more` never:
-        // the bare spelling is canonical. `or fewer` is written, nothing else
-        // saying it.
-        //
-        // One comparative arm, `COMPARATIVES` pairing each bound with its
-        // closer. Guarded on `far()` rather than a variant, so every world-read
-        // shape shares it.
+        // The bare spelling is canonical: the count only when not one, `or
+        // more` never, `or fewer` always. Guarded on `far()`, so every
+        // world-read shape shares the comparative arm.
         Condition::Has {
             place,
             thing,
@@ -654,10 +630,9 @@ impl<'a> Reader<'a> {
 
     /// A leading number, if the next word is one — `has 4 fragment`.
     ///
-    /// Only called on the `has` side; `is 4 idle` is not a sentence. A number
-    /// too large for a `u32` falls through to [`span`](Self::span) and becomes
-    /// part of a name nothing is called, so §8.1 gets its culprit — saturating
-    /// would make a typo a guard that never fires.
+    /// One too large for a `u32` becomes part of a name nothing is called, so
+    /// §8.1 gets its culprit; saturating would make a typo a guard that never
+    /// fires.
     fn eat_count(&mut self) -> Option<u32> {
         let count = self.peek()?.parse().ok()?;
         self.at += 1;
@@ -688,20 +663,15 @@ impl<'a> Reader<'a> {
         })
     }
 
-    /// The count and which side of it satisfies, however it was written.
+    /// The count and which side of it satisfies, however it was written —
+    /// `has 2 marks`, `has 2 or more marks`, `has >=2 marks` and four more.
     ///
-    /// `has 2 marks`, `has at least 2 marks`, `has 2 or more marks`,
-    /// `has more than 1 mark`, `has >= 2 marks`, `has >=2 marks`,
-    /// `has exactly 2 marks` — one question, seven ways of asking it.
+    /// Returns whether a bound was *written*: bare `has 0 X` collapses to `has
+    /// no X`, an explicit `has 0 or more X` must not.
     ///
-    /// Returns whether a bound was *written*: a bare `has 0 X` collapses to
-    /// `has no X` and an explicit `has 0 or more X` must not, the player having
-    /// asked for the vacuous question by name.
-    ///
-    /// The postfix is read here because the `or` must be claimed before the
-    /// disjunction parser sees it, and this is the only place that can:
-    /// `disjunction` → `conjunction` → `comparison` → here. Whole row or
-    /// nothing, so `has 2 sage or the mortar is idle` still reads as one.
+    /// The postfix is read here, the one place that sees the `or` before the
+    /// disjunction parser does. Whole row or nothing, so `has 2 sage or the
+    /// mortar is idle` still reads.
     fn eat_bounded_count(&mut self) -> Option<(u32, Bound, bool)> {
         if let Some((bound, offset, count)) = self.glued() {
             self.at += 1;
@@ -777,10 +747,8 @@ impl<'a> Reader<'a> {
     /// Left to right, and it cannot contain a comparison, so there is nothing
     /// to bracket. `double` binds to the whole of what follows.
     ///
-    /// The place reads to a [`STOPPERS`] word, not to the next connective,
-    /// which gave `than the d20 has quintessence` a place called *"d20 has
-    /// quintessence"*. Multi-word names still work; `balneum mariae` contains
-    /// no stopper.
+    /// The place reads to a [`STOPPERS`] word, not to the next connective, or
+    /// `than the d20 has quintessence` names a place *"d20 has quintessence"*.
     fn far_side(&mut self) -> Option<Quantity> {
         let doubled = self.eat("double");
 
@@ -1013,12 +981,9 @@ impl<'a> Reader<'a> {
     /// The words from here to the next connective **or question word**, without
     /// consuming them.
     ///
-    /// `is` and `has` end a span, or a line missing an `and` gives `the
-    /// dispensary has sage the mortar is idle` a shelf holding *"sage mortar is
-    /// idle"*. The words left unconsumed make the all-or-nothing rule refuse
-    /// the line instead.
-    ///
-    /// Nothing in the tower is named `is` or `has`.
+    /// `is` and `has` end a span, so a line missing an `and` leaves words
+    /// unconsumed and is refused, not read as a shelf holding *"sage mortar is
+    /// idle"*.
     fn span(&self) -> Vec<&'a str> {
         self.to_connective()
             .into_iter()
@@ -1041,11 +1006,8 @@ impl<'a> Reader<'a> {
 
 /// One item is itself; several are the group, flattened.
 ///
-/// A one-item `All` would give `a` and `a and b` different shapes for the same
-/// meaning; `and` and `or` being associative, the `Any` inside an `Any` that
-/// `either a or either b or c` builds would give one question two trees. Only
-/// same-kind nesting flattens — an `Any` inside an `All` is the grouping
-/// `either` exists for.
+/// So one meaning has one tree. Only same-kind nesting flattens — an `Any`
+/// inside an `All` is the grouping `either` exists for.
 fn gather(mut items: Vec<Condition>, group: fn(Vec<Condition>) -> Condition) -> Condition {
     if items.len() == 1 {
         return items.remove(0);
@@ -1071,11 +1033,8 @@ mod tests {
         condition(text).as_ref().map(write_condition)
     }
 
-    /// Every state word the completer offers is one the language reads.
-    ///
-    /// Two lists of one vocabulary went wrong three times (§19). Both
-    /// directions: a word missing from [`State::WORDS`] is one the editor
-    /// silently refuses to help with.
+    /// Every state word the completer offers is one the language reads, and
+    /// the other way round.
     #[test]
     fn every_state_word_the_list_offers_is_one_the_language_reads() {
         for word in State::WORDS {

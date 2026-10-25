@@ -16,25 +16,7 @@ use crate::sim::Tower;
 ///
 /// On `shell_resources!`, so every swap clears it: the wake, a load from the
 /// menu, and another `new`, which sets a fresh one after the reset.
-#[derive(Resource, Debug, Default)]
-pub(crate) struct Installing(Option<Install>);
-
-impl Installing {
-    /// An installation under way.
-    pub(crate) const fn begun(install: Install) -> Self {
-        Self(Some(install))
-    }
-
-    /// The installation, if one is under way.
-    pub(crate) const fn get(&self) -> Option<&Install> {
-        self.0.as_ref()
-    }
-
-    /// The installation, to hand a line.
-    pub(crate) const fn get_mut(&mut self) -> Option<&mut Install> {
-        self.0.as_mut()
-    }
-}
+pub(crate) type Installing = super::modal::Modal<Install>;
 
 /// Whether a new tower is installed before it wakes. Read once, as
 /// `setting::Skipping` is, and off under `cargo test` so no test reaching `new`
@@ -51,17 +33,12 @@ impl Default for Installs {
     }
 }
 
-/// Run condition: an installation is under way.
-pub(crate) fn installing(installing: Res<Installing>) -> bool {
-    installing.0.is_some()
-}
-
 /// Finish the steps the practice tower now shows were done.
 ///
 /// On every change to the tower, not only on a line: `attend` is judged by
 /// where the player stands, and that moves on the tick after it is typed.
 pub(crate) fn follow_install(tower: Res<Tower>, mut installing: ResMut<Installing>) {
-    if let Some(install) = installing.0.as_mut() {
+    if let Some(install) = installing.get_mut() {
         install.observe(tower.sim());
     }
 }

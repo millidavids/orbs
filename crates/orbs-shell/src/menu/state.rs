@@ -4,24 +4,15 @@
 //! it. Nothing here draws — see [`paint`](super::paint) — and nothing here ends
 //! a process.
 
-use std::path::PathBuf;
-
-use orbs_sim::content::Length;
-
 use super::stance::Stance;
+use crate::opening::Raising;
 use crate::save::{Keep, Slot};
 use crate::settings::{Category, Row};
 
 /// The menu, while it is up.
 ///
-/// A page, a line and a complaint. Its choices are authored, its state is what
-/// is half-typed and which page is showing, and the screen it sits over is the
-/// frontend's. Smaller than its precedent `Tapestry`: no cursor, because there
-/// is nothing here to walk — every choice is a word, as in the rest of the game.
-/// `Default` is written out rather than derived because of `keeps`: a derive
-/// gives it `false`, which says *this session keeps nothing* about a session
-/// nothing has asked yet. Every other field's default is genuinely its zero
-/// value, which is what made the derive look safe.
+/// A page, a line and a complaint; no cursor, since every choice is a word.
+/// `Default` is written out for `keeps`, whose honest default is `true`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Menu {
     /// Where the menu is standing — over a tower, or in front of none.
@@ -41,40 +32,26 @@ pub struct Menu {
     pub(super) saves: Vec<Slot>,
     /// Whether this session keeps towers at all, as of the same read.
     ///
-    /// Beside [`saves`](Self::saves) rather than derived from it: *no towers*
-    /// and *nowhere to put one* are two different sentences, and an empty `Vec`
-    /// cannot tell them apart.
-    ///
-    /// `true` before the play page has looked, which is why `Menu` cannot take a
-    /// derived `Default` — a menu that has not asked has not found out this
-    /// session keeps nothing, and claiming so is the more misleading guess.
+    /// Not derived from [`saves`](Self::saves): *no towers* and *nowhere to put
+    /// one* are different sentences. `true` until the play page has looked.
     pub(super) keeps: bool,
     /// Where a new tower would be kept, decided when the lengths page opened.
     ///
-    /// The slot and slot 1's path together, for [`Outcome::Load`]'s reason: a
-    /// destination worked out twice is one a changed `ORBS_SAVE` can make
-    /// disagree with itself. `None` means this session keeps nothing — a tower
-    /// playable and not remembered, not a refusal. A *full* orb is refused
-    /// before this page opens, so `None` here has one meaning.
+    /// Worked out once, for [`Raising::Load`]'s reason. `None` is a session that
+    /// keeps nothing — a full orb is refused before this page opens.
     pub(super) keep: Option<Keep>,
     /// The slot `abandon` has asked about, while the question is open.
     ///
-    /// A field rather than a [`Complaint`], because the complaint is cleared at
-    /// the top of every line and this has to survive exactly one: `abandon 3`
-    /// puts the question, a second `abandon 3` answers it, any other line
-    /// answers no. `quit`'s shape (§19), deliberately — this is the only other
-    /// word in the game that cannot be undone by typing something else.
+    /// A field, since it survives exactly one line: a second `abandon 3`
+    /// answers, any other line says no — `quit`'s shape (§19).
     pub(super) asking: Option<usize>,
     /// Which driver the settings page last read, so it can show what is chosen.
     /// Read when the page opens, for `saves`' reason.
     pub(super) driver: Driver,
     /// Every setting this frontend can honour, and what each is set to.
     ///
-    /// Handed in by the frontend when the menu opens, `show_driver`'s rule
-    /// generalised: the menu does not know what a phosphor theme is, how many
-    /// there are, or whether this build has a tube. A page with no rows is not
-    /// offered — so `orbs-tui`, which binds five function keys and has no audio,
-    /// shows fewer pages rather than controls that do nothing.
+    /// Handed in by the frontend, which knows what it can set. A page with no
+    /// rows is not offered, so `orbs-tui` shows fewer pages.
     pub(super) rows: Vec<Row>,
     /// Whether the tower behind the menu speaks in any register but plain.
     ///
@@ -85,10 +62,8 @@ pub struct Menu {
 
 /// Which of the menu's pages is showing.
 ///
-/// Pages rather than as many surfaces, because they share the line, the
-/// complaint and the way out: `back` and Escape step one level, and from the top
-/// Escape is `resume`. A `Focus` variant each would be that much of everything
-/// for one screen a player sees a page of at a time.
+/// Pages, not surfaces, since they share the line, the complaint and the way
+/// out.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Page {
     /// The words.
@@ -97,10 +72,7 @@ pub enum Page {
     /// Open a tower: the ones the orb is keeping, numbered, and `new` beside
     /// them.
     ///
-    /// One page rather than a listing and a *begin a game* beside it. As two
-    /// words on the top page — `saves` and `new` — they asked the player to hold
-    /// the difference between *open one you have* and *raise one* before
-    /// anything had told them there was one.
+    /// One page, so a player need not tell *open one* from *raise one* first.
     Play,
     /// How long a new game should be.
     Lengths,
@@ -117,19 +89,9 @@ pub enum Page {
 
 /// How the orb reads what you type.
 ///
-/// The player's choice between the two drivers, which until now was an
-/// environment variable and therefore nobody's. §6's mastery arc rests on
-/// seeing the canonical form echoed back; this decides whether the orb works one
-/// out from a sentence, or answers only the words it already knows.
-///
-/// [`Augury`](Self::Augury) means the same in both builds: the terminal
-/// frontend is the whole game, not a cut-down one. It had no reader while the
-/// reader needed `wgpu`; inference is `ndarray` and costs 436µs, so the GPU went
-/// behind `orbs-augury`'s `train` feature.
-///
-/// Still a *preference* rather than a claim about the build — a checkout with no
-/// trained weights has nothing to consult and falls through to the matcher,
-/// which is what a fresh clone does.
+/// Whether the orb works a canonical form out of a sentence or answers only
+/// the words it knows. The same in both builds; a preference, so a checkout
+/// with no weights falls through to the matcher.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Driver {
     /// The orb works out what you meant, then echoes the command it settled on.
@@ -173,26 +135,8 @@ pub enum Outcome {
     Close,
     /// Leave the orb.
     PutDown,
-    /// Put the tower in this file in front of the player.
-    ///
-    /// A path, not a slot number. The shell writes the game it is leaving before
-    /// it loads this one, and to the file that one came from — a number would be
-    /// resolved twice, and a stale `SLOTS` or a changed `ORBS_SAVE` is exactly
-    /// what makes the two resolutions disagree.
-    Load(PathBuf),
-    /// Begin a tower in this slot, at this length.
-    Begin {
-        /// Where it will be kept, or [`None`] to keep it nowhere.
-        ///
-        /// `None` is a playable tower, not a refusal. `ORBS_SAVE=off` is not an
-        /// exotic mode — `scripts/dumps.sh` exports it for every capture and the
-        /// played-game suite for every scenario — so a threshold that refused to
-        /// begin a game without somewhere to keep it would make the build
-        /// unreachable under the switch its own instruments run on.
-        keep: Option<Keep>,
-        /// How long it is to be.
-        length: Length,
-    },
+    /// Put a different tower in front of the player: a load or a new game.
+    Raise(Raising),
     /// Read lines this way from now on.
     ///
     /// Already written down by the time this is returned: the menu persists the
@@ -208,10 +152,8 @@ pub enum Outcome {
     OpenManual,
     /// Set this to that, now.
     ///
-    /// Written down by the time this is returned, as [`Drive`] is; this tells
-    /// the running frontend to honour it *now* rather than at the next launch.
-    /// A player who turns the tube off and cannot see it go off would reasonably
-    /// think nothing happened.
+    /// Written down already, as [`Drive`] is; this has the frontend honour it
+    /// now, where the player can see it.
     ///
     /// [`Drive`]: Self::Drive
     Set {
@@ -284,15 +226,41 @@ impl Default for Menu {
 impl Menu {
     /// A menu standing here, with nothing typed at it.
     ///
-    /// `Menu::default()` is the in-tower one and stays that way — four frontend
-    /// tests and `dump::menued` build it, and all of them mean the menu the
-    /// `menu` verb opens.
+    /// `Menu::default()` is the in-tower one and stays that way — frontend tests
+    /// build it, and mean the menu the `menu` verb opens.
     #[must_use]
     pub fn at(stance: Stance) -> Self {
         Self {
             stance,
             ..Self::default()
         }
+    }
+
+    /// A menu at `stance` marking `driver` and showing `rows` — what every door
+    /// opens on, so the page does not differ by which one the player came in.
+    ///
+    /// Both are what is in effect, asked of the frontend and never read back
+    /// from the settings file: `ORBS_SAVE=off` has no file and still has a
+    /// tube, and `ORBS_CRT=off` outranks it. The file would offer the terminal
+    /// build a CRT.
+    #[must_use]
+    pub fn open_at(stance: Stance, driver: Driver, rows: Vec<Row>) -> Self {
+        Self {
+            driver,
+            rows,
+            ..Self::at(stance)
+        }
+    }
+
+    /// Show `rows` if they are not what the page already shows, and say
+    /// whether they were — so a frontend can keep its change detection quiet
+    /// while nothing moved.
+    pub fn follow(&mut self, rows: Vec<Row>) -> bool {
+        if self.rows == rows {
+            return false;
+        }
+        self.rows = rows;
+        true
     }
 
     /// Say §14's health warning, if this machine has not heard it.
@@ -334,11 +302,8 @@ impl Menu {
 
     /// Whether this session keeps towers at all.
     ///
-    /// Not the same question as *"are there any?"*, and the play page needs
-    /// both: *no towers yet* is a first launch and invites `new`, while
-    /// `Complaint::Unkept` is a session with nowhere to put one. Drawing the
-    /// first when the second is true is the untruth the page used to tell — see
-    /// `open_play`.
+    /// Not *are there any*: the play page needs both, a first launch and
+    /// `Complaint::Unkept` being different (`open_play`).
     #[must_use]
     pub const fn keeps_towers(&self) -> bool {
         self.keeps
@@ -348,17 +313,6 @@ impl Menu {
     #[must_use]
     pub const fn driver(&self) -> Driver {
         self.driver
-    }
-
-    /// Tell the menu what this frontend can set, and what each is set to.
-    ///
-    /// `show_driver`'s rule generalised: the frontend is the source of truth
-    /// about its own settings — how many phosphor themes there are, whether it
-    /// has a tube, whether anything is playing. A menu that read the settings
-    /// *file* would draw a session the choices it did not make, and would offer
-    /// the terminal build a CRT.
-    pub fn show_settings(&mut self, rows: Vec<Row>) {
-        self.rows = rows;
     }
 
     /// Every setting on `page`, in the order the frontend gave them.
@@ -402,16 +356,6 @@ impl Menu {
         matches!(self.page, Page::Setting(_))
     }
 
-    /// Every setting, whatever page it is on.
-    ///
-    /// For a frontend keeping an open page current — see
-    /// `shell::setting::follow_the_keys`, and the stale row a function key left
-    /// behind before it existed.
-    #[must_use]
-    pub fn settings(&self) -> &[Row] {
-        &self.rows
-    }
-
     /// The pages that have anything on them.
     ///
     /// A page with no rows is not offered, which is how *unsupported* is
@@ -421,17 +365,6 @@ impl Menu {
         Category::ALL
             .into_iter()
             .filter(|page| self.rows(*page).next().is_some())
-    }
-
-    /// Tell the menu what is currently in effect.
-    ///
-    /// The frontend is the source of truth, not the settings file: a session
-    /// with nowhere to write one still has a driver, and a page that read the
-    /// file would show it the choice it did not make. Called when the menu
-    /// opens, the only moment the answer can have changed without this page
-    /// changing it.
-    pub const fn show_driver(&mut self, driver: Driver) {
-        self.driver = driver;
     }
 
     /// What is typed at it.
@@ -469,11 +402,7 @@ impl Menu {
         let typed = said.to_lowercase();
         self.complaint = None;
         if typed.is_empty() {
-            // An empty line is still a line, and §19's rule is that any line but
-            // the same one answers *no*. Returning before `answered` left the
-            // question armed with its text rubbed off: a bare Enter cleared
-            // `menu_abandoning` from the pane while `asking` kept pointing at
-            // the slot.
+            // An empty line is still a line, so it answers *no* (§19).
             self.asking = None;
             return None;
         }
@@ -484,27 +413,14 @@ impl Menu {
 
     /// Escape: one page back, and from the top page back to the tower.
     ///
-    /// From the top it is `resume`, because the menu is a place you stepped into
-    /// rather than a question you must answer; from a page it is `back`, for the
-    /// reason the weave's Escape returns to command mode rather than closing.
-    /// Either way it never leaves the orb: the one irreversible choice here is
-    /// always typed.
-    ///
-    /// At the threshold there is no top to leave from, and [`Stance::may_close`]
-    /// gates it. Closing hands the keyboard back to the prompt — of a scratch
-    /// world that never ticks and is never kept, with no way back to the menu
-    /// and no way out of the orb. So Escape on the top page does nothing there,
-    /// and `resume` is not a word the menu answers to at all: `Word::offered`
-    /// filters it out of the vocabulary, not merely out of the listing.
+    /// `resume` from the top, `back` from a page; it never leaves the orb. At
+    /// the threshold [`Stance::may_close`] forbids it, since behind is a scratch
+    /// world with no way out — and `Word::offered` drops `resume` entirely.
     pub fn escape(&mut self) -> Option<Outcome> {
         self.complaint = None;
         self.command.clear();
-        // Escape answers an open `abandon` question with *no*, like any other
-        // line. It clears the question's *text* either way, so leaving the latch
-        // armed meant the page said nothing was being asked while `asking` still
-        // pointed at a slot — harmless today, since `answered` takes it on the
-        // next line, and the kind of state that stops being harmless when
-        // something else reads it. `enter` does the same for an empty line.
+        // Escape answers an open `abandon` with *no*, as `enter` does for an
+        // empty line, so text and latch agree.
         self.asking = None;
         match self.page {
             Page::Choices if self.stance.may_close() => Some(Outcome::Close),

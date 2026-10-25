@@ -26,6 +26,7 @@ Nothing was reworded in the move. Every line below is what CLAUDE.md said.
 | a number that rolls — the gauges, the room's count, the road, the siege board — or `status`'s ledger | *A number rolls to the truth* |
 | accessibility, colour, or the tube | *Greyscale* |
 | the manual, `recall`, or a room's primer | *`recall apprentice`* |
+| a refactor whose claim is that nothing changed, or a comment pass | *Proving nothing changed* |
 
 **Three instruments recur and are worth knowing before you need them.**
 `scripts/dumps.sh` captures every surface as text and is the gate for a refactor
@@ -2961,8 +2962,9 @@ ORBS_SEED=3 ORBS_BOOT=0 ORBS_GRID=100x40 ORBS_DUMP="attend archive; research; \
   follow west; follow west; peruse archive.log" cargo run -p orbs
 ```
 ```text
-line: 2, message: the reading goes west
+line: 2, message: the page opens into shelves that do not end. a way out is in them
 line: 3, message: the reading goes west
+line: 4, message: the reading goes west
 ```
 
 **An arrow moves the reading immediately and consumes no tick.** `Sim::walk` is a
@@ -5188,4 +5190,58 @@ cargo test -p orbs --bins render::palette   # the floors, including the deficien
 monochrome was solved as integers, landed a rounding step away, and failed
 `accents_are_distinguishable_from_body_text` at 1.191 against a floor of 1.2.
 These margins are smaller than one step of 1/255.
+
+---
+
+### Proving nothing changed (`0.20`)
+
+*The tower swept* was a pass whose every box claimed the same game, byte for
+byte. Its gate is a set of instruments, and which ones a change needs depends
+on where it reaches.
+
+**A refactor of code.** Capture every surface before and after, and diff:
+
+```bash
+scripts/dumps.sh target/dumps/before     # before the change
+scripts/dumps.sh target/dumps/after      # after it
+diff -r target/dumps/before target/dumps/after   # only the POST card's version may differ
+```
+
+Then add whichever of these the change reaches. A dump is blind to all three:
+
+```bash
+cargo run -p orbs-balance -- sweep --ticks 7200 --why   # the sim: identical output
+cargo run -p orbs-render --example screens               # the painters: identical
+scripts/play.sh                                          # the frontends' loops, with tmux present
+```
+
+**`scripts/play.sh` passes vacuously without tmux.** Every scenario prints
+`SKIPPED` and passes, so check `command -v tmux` first and read the output, not
+the exit code.
+
+**The Bevy `App` is invisible to dumps.** Input routing, run conditions and
+system ordering are held by the in-`App` tests in `orbs/src/shell/plugin/tests.rs`,
+and by a person at a window.
+
+**A comment pass.** `scripts/only-comments.py` lexes every changed `.rs`, `.toml`
+and `.wgsl` file in both versions with comments dropped, and fails if the token
+streams differ:
+
+```bash
+base=$(scripts/only-comments.py snapshot)     # before editing
+scripts/only-comments.py check "$base"        # after: "0 with more than comments changed"
+scripts/only-comments.py self-test            # its negative control
+```
+
+`cargo test --doc` must count the same before and after, and `cargo doc` clean
+catches a broken intra-doc link.
+
+The script has blind spots:
+
+- It cannot lex Markdown, so a docs change is checked by reading.
+- It counts a `text` fence inside a doc comment as code, so fixing a stale
+  example there shows up as a change.
+- It cannot tell a comment that lost its *why* from one that lost only its
+  history. That judgement is the reader's, which is why each box of the pass
+  was capped at about five thousand comment lines.
 

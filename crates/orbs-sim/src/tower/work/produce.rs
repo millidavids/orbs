@@ -20,14 +20,9 @@ use crate::tower::node::{Name, children_of};
 
 /// A thing an instrument was asked to make, as opposed to what it left behind.
 ///
-/// Marks the half of a finished run that the recipe was **for**. Byproducts
-/// carry no marker — §10.1's rule is that every one of them has a use, so
-/// "waste" is a judgement about *this* brew rather than a property of the
-/// reagent.
-///
-/// `siphon` read this and is retired (§19); `tower::panel` still does. The
-/// marker is what makes an instrument show as having finished with something
-/// worth taking, which is a fact about the tool rather than about any verb.
+/// Marks the half of a run the recipe was for; a byproduct is unmarked, since
+/// every one has a use (§10.1). The panel reads it to show a tool has finished
+/// with something worth taking.
 #[derive(Component, Debug, Clone, Copy)]
 pub struct Product;
 
@@ -39,21 +34,10 @@ pub fn contents(world: &mut World, place: Entity) -> Vec<Entity> {
 
 /// Which of a recipe's products this run made.
 ///
-/// A recipe that makes one thing rolls nothing, and the guard is not an
-/// optimisation: every completion passes through here, so drawing
-/// unconditionally would advance
-/// [`RngStream::Archive`](crate::RngStream::Archive) on every grind — coupling
-/// the laboratory to the archive in the direction §19 records fixing once
-/// already.
-///
-/// Once per completion, never per tick: `land::finish` calls `transmute` on the
-/// tick the interval ends and no other, so the number of draws cannot depend on
-/// how the ticks were consumed. Per tick, a `meditate 60` would give a different
-/// world from sixty `meditate 1`s (`heat.rs`).
-///
-/// The archive's stream, because the lectern is the only instrument that draws
-/// and what it draws is an archive yield. A drawing recipe in the laboratory
-/// would make this a per-instrument choice rather than a constant.
+/// A one-product recipe rolls nothing, or every grind would advance
+/// [`RngStream::Archive`](crate::RngStream::Archive) (§19). Once per completion,
+/// never per tick. The archive's stream, because the lectern is the only
+/// instrument that draws.
 fn draw(world: &mut World, choices: &[String]) -> String {
     let [only] = choices else {
         let mut rngs = world.resource_mut::<crate::rng::Rngs>();
@@ -101,15 +85,8 @@ pub(super) fn transmute(world: &mut World, place: Entity) {
         })
     };
 
-    // A recipe that stopped matching mid-run should not be reachable — the lock
-    // sees to that — but leaving the contents alone is the only safe answer if it
-    // ever becomes reachable, because consuming them without producing anything
-    // would destroy the player's reagents for nothing.
-    //
-    // And it must say so: `finish` `continue`s after calling this, so returning
-    // quietly made `transmute` the one path that can end a `Wield` with no
-    // record — the echo, then nothing ever. §14 announces completions, and a run
-    // ending is a completion whether or not it produced anything.
+    // Unreachable while the lock holds; if it ever is, the contents stay and it
+    // is said, since a run ending is a completion (§14).
     let Some((choices, leaves, potion, scroll, count, yields)) = made else {
         let message = world
             .resource::<Prose>()
@@ -144,27 +121,13 @@ pub(super) fn transmute(world: &mut World, place: Entity) {
     } else {
         NounKind::Reagent
     };
-    // The product is marked, the byproduct is not — which is what the panel
-    // reads to say a tool has finished with something worth having. Telling them
-    // apart by **name** would mean the laboratory knowing which reagents are
-    // "waste", which §10.1 explicitly refuses: every byproduct is some other
-    // recipe's input, and route B of the clarified draught is exactly the husks
-    // route A leaves behind.
-    //
-    // A recipe may leave nothing, and then nothing is what it leaves — no node,
-    // no row on `survey`, no substance to explain. Byproducts are the
-    // laboratory's mechanic; the lectern's assembly shed `dust` only because
-    // the field was compulsory.
+    // The product is marked and the byproduct not — see [`Product`]. A recipe
+    // that leaves nothing leaves no node.
     let byproduct = leaves
         .as_ref()
         .map(|leaves| (leaves, NounKind::Reagent, false));
-    // A `fruitful` tool yields one more of what it made and never of what it
-    // left behind — a charm that doubled the husks would double the scouring —
-    // so this rides the `wanted` flag that tells output from byproduct.
-    //
-    // A flat one rather than a chance, deliberately narrower than what was
-    // asked: a chance is a draw, and a draw here runs on a path `meditate` can
-    // take hundreds of times inside one `step`.
+    // A `fruitful` tool yields one more product, never byproduct, and flat
+    // rather than a chance, which would be a draw on a path `meditate` repeats.
     let over = super::super::charmed(world, place, super::super::charm::Kind::Fruitful);
     let batch = yields + u32::from(over);
     for (product, kind, wanted) in std::iter::once((&output, kind, true)).chain(byproduct) {
@@ -232,15 +195,4 @@ pub(super) fn transmute(world: &mut World, place: Entity) {
     );
 }
 
-// `siphon` lived here and is **retired** (§19). It lifted the `Product` out of
-// an instrument and set it on the laboratory floor, which was the fourth move of
-// §10.1's loop back when a stage's output had to be carried by hand.
-//
-// `reachable` searches idle instruments, so the next tool takes the output
-// directly — `digest ground-sage` needs nothing drawn off first — and with
-// `siphon` gone nothing can put a reagent on the floor at all. The bench and the
-// shelf are one place, and `empty` is how a tool is cleared into it.
-//
-// [`Product`] survives it: `tower::panel` reads the marker to show that a tool
-// has finished with something in it, which is a fact about the instrument rather
-// than about any verb.
+// `siphon` is retired (§19): the next tool reaches into an idle one directly.

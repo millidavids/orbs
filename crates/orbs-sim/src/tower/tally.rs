@@ -1,18 +1,9 @@
 //! What has been done, counted (DESIGN.md §11.5).
 //!
-//! Every completion goes through one door. [`done`] is
-//! [`credit`](super::credit) with the *deed* beside the number: what was made,
-//! at which instrument, or what kind of thing happened. Mastery's seven lines
-//! read the tally, so a seam that credits and does not count is a room whose
-//! line never moves — `tower::mastery`'s tests list the seams so a ninth cannot
-//! slip in.
-//!
-//! Counts, not a currency: a tally key is never spent, never weighted, and never
-//! summed into experience. §11.5 keeps experience the one number that buys
-//! anything.
-//!
-//! No stream. A tally is a function of the submissions alone, so it replays from
-//! `(seed, submissions)`; a save carries it only so a restore need not replay.
+//! Every completion goes through one door: [`done`] is
+//! [`credit`](super::credit) with the deed beside the number. Mastery reads the
+//! tally, so a seam that credits without counting freezes a line —
+//! `tower::mastery`'s tests list the seams. Counts, never a currency.
 
 use std::collections::BTreeMap;
 
@@ -128,11 +119,8 @@ impl Work {
 
     /// Also record that this run put `product` on a shelf.
     ///
-    /// For the runs that stock the tower without being a recipe: the menagerie
-    /// fills the garrison or binds demons, the archive shelves a fragment.
-    /// Neither goes through [`made`](Self::made), so both answered [`sold`] no
-    /// and stocked the tower for nothing while the laboratory was paid for the
-    /// same act.
+    /// For runs that stock the tower without a recipe — the menagerie and the
+    /// archive — which otherwise answered [`sold`] no.
     ///
     /// [`sold`]: Self::sold
     #[must_use]
@@ -161,15 +149,8 @@ impl Work {
 
     /// Whether this run put a nameable thing on a shelf.
     ///
-    /// The question renown asks, and asked here because `done` is the one door
-    /// for events too: a mint on the door itself would pay for binding a spell
-    /// and pay a siege twice, since escrow arrives the same way and pays on a
-    /// loss.
-    ///
-    /// A `made:` key is the answer, set by [`made`](Self::made) for recipes and
-    /// [`making`](Self::making) for the runs that stock the tower without being
-    /// one. Anything that shelves nothing answers no — the lens, the pylon, the
-    /// lattice — because none of them makes stock.
+    /// What renown asks, since the door also carries events, and minting on it
+    /// would pay a siege twice. A `made:` key is the answer.
     #[must_use]
     pub fn sold(&self) -> bool {
         self.keys.iter().any(|key| key.starts_with("made:"))

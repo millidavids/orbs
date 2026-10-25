@@ -1,38 +1,20 @@
 //! The satchel, driven through the real parser and the real schedule.
 //!
-//! `tower::satchel`'s own tests prove the queue; these prove the *game* — that
-//! `queue` and `pull` reach it, that a spell can hand another spell a name, and
-//! that a consumer which has caught up with its producer waits rather than
-//! faulting.
-//!
-//! The satchel is the one fixture that exists in every domain under one name,
-//! which makes it the one place where *nameable* and *findable* can come apart
-//! room by room (§19, twice). So most of this file asks the same question from
-//! different rooms.
+//! `queue` and `pull` reach it, a spell hands another a name, a caught-up
+//! consumer waits. One name in every room, so most of this asks from each
+//! (§19).
 
-use orbs_render::{FieldName, Value};
-// `Save` and the two helpers below belong to the debug-gated tests, which is
-// most of this file: `debug_take` buys the channel and `debug_spawn` fills the
-// satchel, and neither word exists in a release build.
+mod common;
+
+use common::{ever_said, run, said, write};
 #[cfg(debug_assertions)]
-use orbs_sim::Save;
+use common::{reloaded, words};
 use orbs_sim::Sim;
-
-fn run(sim: &mut Sim, line: &str) {
-    sim.submit(line);
-    sim.step();
-}
 
 /// A tower standing in `room` with §8's channel bought.
 ///
-/// `debug_take`, not three distillations: `satchel_1` costs 24 experience, about
-/// two hundred ticks of the laboratory in a file about the menagerie. The
-/// shortcut grants the *real* node, so everything downstream sees what a played
-/// tower would.
-///
-/// The gate itself is proved by
-/// [`the_channel_is_bought_at_the_loom`](the_channel_is_bought_at_the_loom),
-/// which is the one test here that must not take it.
+/// `debug_take` grants the real node; the gate is
+/// [`the_channel_is_bought_at_the_loom`](the_channel_is_bought_at_the_loom)'s.
 fn in_room(room: &str) -> Sim {
     let mut sim = Sim::new(11);
     run(&mut sim, &format!("attend {room}"));
@@ -40,48 +22,9 @@ fn in_room(room: &str) -> Sim {
     sim
 }
 
-/// Every sentence the tower has said so far.
-fn said(sim: &Sim) -> Vec<String> {
-    sim.scrollback()
-        .records()
-        .iter()
-        .filter_map(|record| match record.field(FieldName::Message) {
-            Some(Value::Text(text)) => Some(text.to_owned()),
-            _ => None,
-        })
-        .collect()
-}
-
-fn ever_said(sim: &Sim, needle: &str) -> bool {
-    said(sim).iter().any(|line| line.contains(needle))
-}
-
 #[cfg(debug_assertions)]
 fn last(sim: &Sim) -> String {
     said(sim).last().cloned().unwrap_or_default()
-}
-
-/// Every `Name` field the tower has emitted, which is where `survey`'s rows are.
-///
-/// `survey` emits `TableRow`s, not `Message`s, so [`said`] cannot see its answer
-/// — the diagnostic CLAUDE.md records costing three experiments, and
-/// `warding.rs` records two tests passing for the wrong reason on it.
-#[cfg(debug_assertions)]
-fn listed(sim: &Sim) -> Vec<String> {
-    sim.scrollback()
-        .records()
-        .iter()
-        .filter_map(|record| match record.field(FieldName::Name) {
-            Some(Value::Text(text)) => Some(text.to_owned()),
-            _ => None,
-        })
-        .collect()
-}
-
-fn write(sim: &mut Sim, name: &str, lines: &[&str]) {
-    let lines: Vec<String> = lines.iter().map(|line| (*line).to_owned()).collect();
-    sim.write_spell(name, &lines);
-    sim.step();
 }
 
 /// The channel is bought, and until it is the words say where to buy it.
@@ -130,7 +73,7 @@ fn a_queued_name_is_read_back_in_the_order_it_went_in() {
     // A name twice, and the order kept — the whole reason the queue is a
     // component rather than children plus `Stock`, which would report `heed 2`
     // and lose which came first.
-    let rows = listed(&sim);
+    let rows = words(&sim);
     let queued: Vec<&String> = rows
         .iter()
         .rev()
@@ -169,7 +112,7 @@ fn each_room_has_its_own_satchel() {
     run(&mut sim, "queue sage");
     run(&mut sim, "attend menagerie");
     run(&mut sim, "survey satchel");
-    let rows = listed(&sim);
+    let rows = words(&sim);
     assert!(
         rows.iter().any(|row| row == "heed"),
         "the menagerie lost what was queued in it: {rows:?}",
@@ -326,15 +269,9 @@ fn a_malformed_pull_is_refused_by_name() {
     assert!(ever_said(&sim, "pull wants a name"), "{:?}", said(&sim),);
 }
 
-/// The shipped pair, cast for real — `milling` invokes `ordering` and grinds
-/// what it left behind. A dev spell nobody casts is prose, and §19 records that
-/// costing a shipped `chanting.spell` that had stopped compiling while the gate
-/// stayed green.
-///
-/// `bide 2` is the line under test as much as the pipeline is: `advance`
-/// snapshots the running list, so `ordering` starts on the tick *after* it is
-/// invoked, and `repeat until the satchel is empty` is true of an empty one.
-/// Without the pause the loop runs zero times and the spell ends silently.
+/// The shipped pair, cast, since an uncast dev spell rots (§19). `bide 2` is
+/// under test too: `ordering` starts a tick late, and the loop would run zero
+/// times over an empty satchel.
 #[cfg(debug_assertions)]
 #[test]
 fn the_shipped_pair_hands_a_work_list_between_two_spells() {
@@ -371,12 +308,11 @@ fn a_satchel_full_of_names_survives_a_save() {
         run(&mut sim, &format!("queue {word}"));
     }
 
-    let text = sim.snapshot().to_toml().expect("a save renders");
-    let mut restored = Sim::restored(&Save::from_toml(&text).expect("a save reads back"));
+    let mut restored = reloaded(&sim.snapshot());
 
     run(&mut restored, "attend menagerie");
     run(&mut restored, "survey satchel");
-    let rows = listed(&restored);
+    let rows = words(&restored);
     let queued: Vec<&String> = rows
         .iter()
         .rev()

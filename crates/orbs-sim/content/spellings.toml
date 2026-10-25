@@ -1,52 +1,19 @@
 # How people write the things a spell does (DESIGN.md §8, §19 *the scrivener*).
 #
-# Same format as `phrasings.toml`, same loader, same expansion — see
-# `Phrasings::spellings`. What differs is the output space: these canonicals are
-# **spell statements**, not commands.
+# `phrasings.toml`'s format and loader (`Phrasings::spellings`), canonicals
+# being spell statements. Control flow only: command lines train from
+# `phrasings.toml`, one corpus.
 #
-# # Control flow only
-#
-# A spell's *command* lines are the prompt's vocabulary and are already written
-# down next door. A reader for spells trains its command class from
-# `phrasings.toml`; copying two thousand lines here would be one corpus in two
-# files, free to drift apart.
-#
-# # This corpus cannot be grown by adding nouns
-#
-# `phrasings.toml` gets its size from expansion: one `grind {reagent}` template
-# becomes thirty-odd examples because the game names thirty-odd reagents, and
-# `0.13.9` measured that noun substitution *"multiplies the count without adding
-# a single new sentence shape"*. Control flow has almost nothing to expand over —
-# `end` takes no argument at all — so **every phrasing here is authored
-# one-for-one**, and the count in this file is the corpus.
-#
-# # A count must be in the line
-#
-# `bide 10` is only ever offered for a line that *says* ten, as a digit or a
-# number word. *"hang about a while"* has no number in it, and inventing one
-# would be generation — which nothing in this feature does. Such a line is left
-# exactly as the player wrote it.
-#
-# # Write the loose form, never the canonical one
-#
-# A `say` line that is already valid spell syntax teaches the reader to rewrite
-# what needed no rewriting, and the refusals at the bottom are the lines the gate
-# keeps from the reader and the measurement holds untouched. Vary the openers:
-# `when`, `once`, `while`, `as soon as` and `the moment` are all different
-# sentences and the reader has to tell them apart from `if` on very little
-# evidence.
+# Little expands here, so every phrasing is authored one for one. A count must
+# be in the line; nothing generates one. Write the loose form, never the
+# canonical, and vary the openers.
 
 # ---------------------------------------------------------------------------
 # What a free-text slot is filled with. The world has no noun for either.
 #
-# `{name}` is a word the player chose — `let best be north`, `pull herb from
-# satchel`. These are kept **out of the reader's vocabulary** on purpose: a name
-# a player invents reaches the reader as a hash bucket, so the ones it learns from
-# arrive the same way. The holdout's names are its own, so what the reader is
-# measured on is a name it has never seen.
-#
-# `{group}` is a set `for each` walks, and the list is closed: it must be exactly
-# the sets the tower raises, which `tests/scrivener.rs` holds.
+# `{name}` is a player's word, kept out of the vocabulary so it arrives hashed,
+# as an invented one does; the holdout has its own. `{group}` is closed: the
+# sets the tower raises (`tests/scrivener.rs`).
 # ---------------------------------------------------------------------------
 
 names = [
@@ -427,21 +394,10 @@ holdout = [
 # ---------------------------------------------------------------------------
 # Not statements.
 #
-# **The half a corpus of loose lines cannot supply.** A reader shown only
-# phrasings that *should* be rewritten rewrites everything — including lines that
-# were already right, which is how §19's four rewriter defects went unnoticed.
-#
-# **The gate's population, not the reader's.** Nearly every one is a spell
-# statement already in canonical form, so `spell::reads_cleanly` keeps it from
-# the scrivener and `Corpus::spells` drops it before training: these are not
-# taught, by design — the reader is never shown one. What they are for is the
-# population `examples/measure.rs --spells` holds to 100%, which is the claim
-# that a working line is never touched. Sentences a reader *is* shown and must
-# refuse come from `phrasings.toml`.
-#
-# Replacing them with sentences about the tower that a reader would be shown was
-# tried in the review after `0.14.5`, and cost more than it bought — DESIGN.md
-# §19, *The review*.
+# Lines already right, the gate's population, never taught:
+# `spell::reads_cleanly` keeps them from the reader, and `measure.rs --spells`
+# holds them untouched at 100% (§19). Refusals a reader is shown come from
+# `phrasings.toml`.
 # ---------------------------------------------------------------------------
 
 [[refusal]]

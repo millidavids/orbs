@@ -4,35 +4,12 @@
 //! right. Generated from the shipped fonts, so there is no second font to
 //! license and nothing to keep in step with the first.
 
-use bevy::prelude::*;
-use orbs_shell::settings::Pair;
-
 use super::glyphs::Face;
 
-/// How heavy the strokes are — `settings` → `access` → `weight`. Anything but
-/// `heavy` is the font as it ships.
-#[derive(Resource, Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct Weight(bool);
-
-impl From<bool> for Weight {
-    fn from(heavy: bool) -> Self {
-        Self(heavy)
-    }
-}
-
-impl Pair for Weight {
-    const KEY: &'static str = "weight";
-    const WORDS: [&'static str; 2] = ["normal", "heavy"];
-
-    fn raised(self) -> bool {
-        self.0
-    }
-}
-
-impl Default for Weight {
-    fn default() -> Self {
-        Self::remembered()
-    }
+crate::shell::pair! {
+    /// How heavy the strokes are — `settings` → `access` → `weight`. Anything
+    /// but `heavy` is the font as it ships.
+    pub(crate) struct Weight(bool) = "weight", ["normal", "heavy"];
 }
 
 /// The codepage's shades and box drawing, left as they are.
@@ -56,6 +33,8 @@ pub(crate) fn embolden(face: &mut Face) {
 
 #[cfg(test)]
 mod tests {
+    use orbs_shell::settings::Pair;
+
     use super::super::atlas;
     use super::*;
 

@@ -4,17 +4,9 @@ use std::time::{Duration, Instant};
 
 /// Whether the terminal this process was given has gone away.
 ///
-/// A leaked process that idles costs nothing; one that spins takes the machine.
-/// When the pty master closes the slave reports `POLLHUP`, after which
-/// `crossterm::event::poll` answers *ready* for ever and `event::read` loops
-/// inside itself on the EOF rather than returning — so the process burns a
-/// core. 573 of these once took a 32-core machine to a load average of 581, and
-/// `term`'s `SIGHUP` handler cannot reach a child reparented away from a dead
-/// terminal.
-///
-/// Asked of the descriptor, because crossterm has no way to say it, and asked
-/// before the read, because the read that would be counted never returns. Zero
-/// timeout, so an ordinary frame pays one non-blocking `poll`.
+/// After `POLLHUP`, crossterm's read spins on the EOF for ever and burns a
+/// core, which `SIGHUP` cannot stop in a reparented child. Asked of the
+/// descriptor before the read, with a zero timeout.
 pub(crate) fn hung_up() -> bool {
     gone(&rustix::stdio::stdin())
 }
@@ -27,15 +19,9 @@ const HANGUP_CHECK: Duration = Duration::from_millis(500);
 
 /// Watch for the terminal going away, from a thread the loop cannot block.
 ///
-/// A thread because the loop never gets the chance. [`hung_up`] at the top of
-/// each pass is kept, for the tidy exit through `term::leave` while the loop is
-/// still turning — but `crossterm::event::read` on a dead pty never returns, so
-/// a check there cannot run: measured at 82% CPU with one in place.
-///
-/// It exits hard, skipping `term::leave`, because everything `leave` does is a
-/// write to a terminal just established as gone. The risk is a false positive
-/// killing a live session, so `gone` answers only to `HUP`, `ERR` and `NVAL`;
-/// both directions are tested.
+/// A thread, since a read on a dead pty never returns to the loop's
+/// [`hung_up`]. It exits hard, `leave` being writes to a dead terminal; `gone`
+/// answers only to `HUP`, `ERR` and `NVAL`, tested both ways.
 pub(crate) fn watch_for_hangup() {
     let deadline = lifetime().map(|span| Instant::now() + span);
     std::thread::spawn(move || {
@@ -50,15 +36,9 @@ pub(crate) fn watch_for_hangup() {
 
 /// How long this session may live, if something set a limit.
 ///
-/// `ORBS_LIFETIME`, in seconds, absent by default — a real game runs until
-/// somebody stops it and nothing here times a player out mid-brew.
-///
-/// The play harness sets it, closing the half [`watch_for_hangup`] cannot reach:
-/// a terminal perfectly alive while the harness that owned it is not. A detached
-/// tmux server is nobody's child, so `SIGKILL`ing `cargo test` leaves its
-/// sessions drawing at 30fps until something kills the server. An unreadable
-/// value means no limit rather than zero, so a typo cannot exit every game half
-/// a second after it starts.
+/// `ORBS_LIFETIME`, in seconds, absent by default. The play harness sets it,
+/// for a live terminal whose owner died, which [`watch_for_hangup`] cannot
+/// see. Unreadable means no limit, not zero.
 fn lifetime() -> Option<Duration> {
     std::env::var("ORBS_LIFETIME")
         .ok()?

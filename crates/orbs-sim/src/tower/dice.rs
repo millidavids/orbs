@@ -1,12 +1,10 @@
 //! The seven dice, and a roll that is composed before it is resolved (§10).
 //!
-//! A wizard rolling dice in a tower is the joke the whole game is built on, so
-//! they are the ones every player already knows — `d20`, `d100`, `d12`, `d10`,
-//! `d8`, `d6`, `d4` — and nobody has to be taught what a d20 is.
+//! The dice every player already knows, so nobody is taught what a d20 is.
 //!
-//! A [`Roll`] is *assembled* as a value and only then handed to
+//! A [`Roll`] is assembled as a value and only then handed to
 //! [`Roll::resolve`], which draws. Anything wanting to touch the dice touches
-//! the composed value; by the draw there is nothing left to give it.
+//! the composed value.
 //!
 //! ```text
 //! Roll { die: D20, against: 11, modifiers: [ +2 mending, advantage haste ] }
@@ -14,29 +12,17 @@
 //!         └── resolve(&mut Rngs) ──▶ Landed { face: 14, total: 16, tells: true }
 //! ```
 //!
-//! What that buys:
-//!
-//! 1. Arsenal items have somewhere to reach — a potion adding two, a scroll
-//!    rerolling, an enchantment swapping a d8 for a d12. The expensive
-//!    retrofit: with the draw at the call site, every call site changes.
-//! 2. Each modifier carries its source, so the log says *why* (rule 4).
-//! 3. The draw count is a function of the composed roll, never of the outcome,
-//!    so it replays — otherwise §19's `drift` defect.
-//! 4. Odds are testable without a `Sim`: a composed `Roll` is a pure value.
-//! 5. Tuning stays in TOML (rule 6).
-//!
-//! `tower::work`'s `Quickened` is the counter-example, divided at the call site.
-//! It does not generalise: a siege has many sources stacking onto one number.
+//! So a potion or a scroll has somewhere to reach, each modifier names its
+//! source for the log (rule 4), the draw count depends on the composed roll and
+//! never the outcome (§19's `drift`), and odds are testable without a `Sim`.
 
 use rand::RngExt;
 use serde::{Deserialize, Serialize};
 
 use crate::rng::{RngStream, Rngs};
 
-/// One of D&D's seven, and the homage is the point.
-///
-/// A closed table, like `Humour::ALL` and the lens's `SIGILS`: a new die is a
-/// variant and a row, and nothing derives one.
+/// One of D&D's seven, and the homage is the point. A closed table: a new die is
+/// a variant and a row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum Die {
     /// Four faces. The smallest swing in the game.
@@ -51,10 +37,8 @@ pub enum Die {
     D12,
     /// Twenty faces. The attack die, as it is everywhere else.
     D20,
-    /// A hundred faces.
-    ///
-    /// One die, not the percentile pair of d10s: the pair works around a solid
-    /// nobody manufactures, and copying it would spend two draws per number.
+    /// A hundred faces — one die, not the percentile pair, which would spend two
+    /// draws per number.
     D100,
 }
 
@@ -98,10 +82,8 @@ impl Die {
         }
     }
 
-    /// Read one back from its word — how `dice.toml` names a die.
-    ///
-    /// An unknown name fails the content load rather than falling back
-    /// (`materials.toml`'s tint rule): a silent default hides a typo.
+    /// Read one back from its word — how `dice.toml` names a die. An unknown
+    /// name fails the load, since a silent default hides a typo.
     #[must_use]
     pub fn named(word: &str) -> Option<Self> {
         Self::ALL.into_iter().find(|die| die.word() == word)
@@ -117,9 +99,8 @@ impl Die {
 
 /// Why a roll is not what the die alone would say.
 ///
-/// The source travels with the number (rule 4), which makes `peruse siege.log`
-/// a postmortem: a player sees which potion earned its place, and a rate test
-/// sees a modifier that does nothing.
+/// The source travels with the number (rule 4), so the log is a postmortem and
+/// a rate test can see a modifier that does nothing.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Modifier {
     /// What granted it — `mending`, `haste`, `fireball-scroll`.
@@ -210,15 +191,11 @@ impl Roll {
         if self.edge().is_some() { 2 } else { 1 }
     }
 
-    /// Which way the roll leans, if it leans at all.
+    /// Which way the roll leans: `Some(true)` advantage, `Some(false)`
+    /// disadvantage, `None` neither or both.
     ///
-    /// `Some(true)` is advantage, `Some(false)` disadvantage, `None` neither —
-    /// and holding both is `None`.
-    ///
-    /// One predicate, asked by `draws`, `resolve` and `chance` alike. Written
-    /// out six times they have to agree, or the faces drawn, the face kept and
-    /// the odds printed describe three different rolls and `RngStream::Siege`
-    /// desynchronises for the rest of the run.
+    /// One predicate for `draws`, `resolve` and `chance`, or the faces drawn,
+    /// kept and quoted describe three rolls and the stream desynchronises.
     fn edge(&self) -> Option<bool> {
         let up = self
             .modifiers
@@ -231,11 +208,8 @@ impl Roll {
         (up != down).then_some(up)
     }
 
-    /// Draw it.
-    ///
-    /// Every path draws [`draws`](Self::draws) times, with no early return: a
-    /// draw skipped once the question was settled would make the stream depend
-    /// on its own results and diverge every replay past it.
+    /// Draw it — always [`draws`](Self::draws) times, so the stream never
+    /// depends on its own results.
     pub fn resolve(&self, rngs: &mut Rngs) -> Landed {
         let die = self.effective_die();
         let faces: Vec<u32> = (0..self.draws()).map(|_| die.draw(rngs)).collect();
@@ -257,17 +231,10 @@ impl Roll {
         }
     }
 
-    /// The chance this tells, as a percentage, without drawing anything.
-    ///
-    /// Shown before the commitment — the XCOM bargain, and §5.1 wants the skill
-    /// to be reading the board.
-    ///
-    /// Integer arithmetic throughout: counting *faces* is exact and needs no
-    /// cast, where floats cost three truncation-or-sign lints to silence.
+    /// The chance this tells, as a percentage, without drawing anything — shown
+    /// before the commitment (§5.1). In integers, since counting faces is exact.
     #[must_use]
     pub fn chance(&self) -> u32 {
-        // Asked once, so it cannot disagree with itself the day an `Upgrade`
-        // becomes conditional.
         let die = self.effective_die();
         let faces = u64::from(die.faces());
         let bonus = self.bonus();
@@ -286,8 +253,7 @@ impl Roll {
             Some(false) => (telling * telling, faces * faces),
         };
 
-        // Rounded to nearest: the board is a decision aid, and truncating would
-        // understate every choice it is there to inform.
+        // Rounded to nearest: truncating would understate every choice.
         u32::try_from((told * 200 + over) / (over * 2)).unwrap_or(100)
     }
 }
@@ -299,10 +265,8 @@ pub struct Landed {
     pub die: Die,
     /// The face that counted.
     pub face: u32,
-    /// Every face drawn, in order — two under advantage, one otherwise.
-    ///
-    /// Kept so the log can say *"18 and 4, kept 18"*: told only the kept face,
-    /// a player cannot see that a potion did anything.
+    /// Every face drawn, in order, so the log can say *18 and 4, kept 18* and a
+    /// potion is seen to do something.
     pub faces: Vec<u32>,
     /// Face plus bonuses.
     pub total: i32,
@@ -331,14 +295,7 @@ mod tests {
 
     #[test]
     fn every_die_names_itself_and_reads_back() {
-        for die in Die::ALL {
-            assert_eq!(
-                Die::named(die.word()),
-                Some(die),
-                "{} not round-tripped",
-                die.word()
-            );
-        }
+        crate::testing::assert_round_trips(&Die::ALL, Die::word, Die::named);
         assert_eq!(
             Die::named("d7"),
             None,

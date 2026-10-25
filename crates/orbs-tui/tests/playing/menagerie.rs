@@ -5,16 +5,13 @@
 //! board moving when a call is answered, and a spell written at the keyboard
 //! doing the search.
 
-use crate::play::{Game, available};
+use crate::play::Game;
 
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn a_beast_is_drawn_and_the_board_appears_beside_the_transcript() {
-    if !available() {
-        return;
-    }
     // Not gated on a word, as no board is: it draws whenever a beast waits.
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.does("attend menagerie", "/tower/menagerie")
         .does("summon", "gathers at the circle")
         .expect_drawn("keystone")
@@ -30,10 +27,9 @@ fn a_beast_is_drawn_and_the_board_appears_beside_the_transcript() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn a_turned_wire_is_marked_on_the_board() {
-    if !available() {
+    let Some(game) = Game::seeded(181) else {
         return;
-    }
-    let game = Game::seeded(181);
+    };
     game.does("attend menagerie", "/tower/menagerie")
         .does("summon", "gathers at the circle")
         .expect_drawn("blood, ~breath");
@@ -44,10 +40,7 @@ fn a_turned_wire_is_marked_on_the_board() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn a_sealed_games_first_beast_is_lesser() {
-    if !available() {
-        return;
-    }
-    let game = Game::sealed();
+    let Some(game) = Game::sealed() else { return };
     game.does("debug_reach lens_1", "menagerie is yours")
         .does("attend menagerie", "/tower/menagerie")
         .does("summon", "a lesser beast gathers")
@@ -58,12 +51,9 @@ fn a_sealed_games_first_beast_is_lesser() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn limning_and_calling_moves_the_board() {
-    if !available() {
-        return;
-    }
     // The answer row is the half of the board a painter can get wrong, so the
     // proof is that it appears, with a tally, the moment a call is answered.
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.does("attend menagerie", "/tower/menagerie")
         .does("summon", "gathers at the circle")
         .does("limn keystone heed", "keystone is limned heed")
@@ -76,12 +66,9 @@ fn limning_and_calling_moves_the_board() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn a_hold_refills_the_garrison() {
-    if !available() {
-        return;
-    }
     // `debug_circle` answers in silence when it has a beast to limn, as
     // `debug_course` does, so there is nothing of its own to wait for.
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.does("attend menagerie", "/tower/menagerie")
         .does("summon", "gathers at the circle")
         .does("debug_circle", "")
@@ -92,10 +79,7 @@ fn a_hold_refills_the_garrison() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn every_refusal_names_the_way_forward() {
-    if !available() {
-        return;
-    }
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.does("attend menagerie", "/tower/menagerie")
         .does("limn keystone heed", "summon first")
         .does("summon", "gathers at the circle")
@@ -106,12 +90,9 @@ fn every_refusal_names_the_way_forward() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn the_shipped_search_holds_a_beast_from_the_prompt() {
-    if !available() {
-        return;
-    }
     // Invoked, not bound — `bind` costs sixteen this fixture has not earned —
     // and a spell's records go to `menagerie.log`, never the pane (§19).
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.does("attend menagerie", "/tower/menagerie")
         .does("invoke taming", "takes up taming.spell");
     game.meditates(900);

@@ -5,7 +5,7 @@ use bevy::prelude::*;
 
 use orbs_shell::settings::{self, Pair, is_on};
 
-use super::held::{CRT, FOCUS, LINEAR, Naming, SIGHT, Skipping, THEME, VOICE};
+use super::held::{CRT, Naming, Skipping, THEME, VOICE};
 use super::rows::Settable;
 use crate::crt::CrtSettings;
 use crate::render::{Contrast, Theme, Weight, palette};
@@ -35,19 +35,21 @@ pub(crate) fn apply(world: &mut World, setting: &str, value: &str) {
                 theme.0 = phosphor;
             }
         }
-        SIGHT => {
+        settings::SIGHT => {
             if let Some(sight) = crate::sight::Sight::parse(value)
                 && let Some(mut vision) = world.get_resource_mut::<Vision>()
             {
                 vision.0 = sight;
             }
         }
-        LINEAR => {
+        // `orbs-shell`'s word, because both builds bind `F5` and `F4` and both
+        // must write the same key.
+        orbs_shell::LINEAR_SETTING => {
             if let Some(mut linear) = world.get_resource_mut::<orbs_shell::Linear>() {
                 linear.show(is_on(value));
             }
         }
-        FOCUS => {
+        settings::FOCUS => {
             if let Some(mode) = orbs_render::DisplayMode::named(value)
                 && let Some(mut screen) = world.get_resource_mut::<orbs_shell::Screen>()
             {
@@ -120,34 +122,18 @@ fn put<T: Resource<Mutability = Mutable>>(world: &mut World, held: T) {
     }
 }
 
-/// Write a setting down because a function key changed it.
-///
-/// The other half of *one setting seen twice*: `F3` cycles the tube, and this
-/// stops the settings page disagreeing with it on the next launch.
-pub(crate) fn remember(setting: &str, value: &str) {
-    settings::set(setting, value);
-}
-
 /// Keep an open settings page telling the truth.
 ///
-/// The rows are a snapshot taken once by `Standing::open`, and no function key
-/// is gated on the menu being shut — so `F3` over an open tube page steps the
-/// tube to `peak` while the row still says `default`. Worse than cosmetic:
-/// typing `crt` then cycles from the stale value, lands back on `peak`, and the
-/// keystroke does nothing anybody can see.
-///
-/// Refreshed rather than locking the keys out, because a menu is exactly where
-/// somebody reaches for `F3`. Only while the menu is up and only when something
-/// moved — the comparison keeps change detection on `Standing` quiet, so this
-/// does not drag the painter to frame rate for a page nobody is touching.
+/// The rows are a snapshot, and `F3` works over an open page, so refresh them
+/// rather than cycle from a stale value. Only when something moved, so
+/// `Standing` stays unchanged.
 pub(crate) fn follow_the_keys(settable: Settable, mut standing: ResMut<crate::shell::Standing>) {
     let fresh = settable.rows();
-    let Some(menu) = standing.bypass_change_detection().get_mut() else {
-        return;
-    };
-    if menu.settings() == fresh.as_slice() {
-        return;
+    if standing
+        .bypass_change_detection()
+        .get_mut()
+        .is_some_and(|menu| menu.follow(fresh))
+    {
+        standing.set_changed();
     }
-    menu.show_settings(fresh);
-    standing.set_changed();
 }

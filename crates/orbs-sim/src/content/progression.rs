@@ -3,25 +3,15 @@
 //! Authored in `content/progression.toml`, not here (rule 6). This module knows
 //! the *shape* of the two tracks and nothing about their numbers.
 //!
-//! Two tracks, two shapes. The Ley Line is the tower's: one list of stations on
-//! total experience, each a *step* (`grants` something) or a *fork* (`nodes` to
-//! choose one of, taken with `take`), and either may also `opens` a room, a
-//! recipe or a charm. Mastery is per domain: one straight line per room you work
-//! in — six, not §10's seven, since the grimoire left `DOMAINS` (§19) — with a
-//! [`Deed`] on each station and no choices anywhere. §19 records the two names
-//! being attached the other way round when the weave shipped.
+//! Two tracks. The Ley Line is the tower's: stations on total experience, each
+//! a *step* (`grants`) or a *fork* (`nodes`, taken with `take`), either of
+//! which may `opens` something. Mastery is one straight line per room, with a
+//! [`Deed`] on each station and no choices (§19).
 //!
-//! It reaches decisions, so it is not hot-reloadable, unlike
-//! [`Materials`](super::Materials) next door: a weight changes what a run earns
-//! and a threshold gates a verb, and content reaching a decision loads once or
-//! `(seed, submissions)` stops replaying.
-//!
-//! Anything nobody can name is an error. Every name is checked at load —
-//! `[earns]` keys against the instruments, `grants` against the closed set
-//! below, a deed against the recipes and events, an `opens` against the rooms
-//! and charms — because a name matching nothing earns nothing and looks exactly
-//! like a number someone chose. Validated against a [`Catalogue`] rather than
-//! resources, which keeps it pure and lets `Sim::new` decide the order.
+//! It reaches decisions, so it loads once, unlike
+//! [`Materials`](super::Materials). Every name is checked at load against a
+//! [`Catalogue`], since a name matching nothing earns nothing and looks like a
+//! number someone chose.
 
 use std::collections::BTreeMap;
 
@@ -51,13 +41,8 @@ pub const QUINTESSENCE: &str = "quintessence";
 
 /// What work is worth, and what it buys.
 ///
-/// `Default` is the built-in table, not an empty one — `Fuels` and `Materials`
-/// carry the same hand-written impl, because a derived `Default` gives an empty
-/// map and every run silently earns nothing while the file on disk is correct.
-///
-/// Unknown sections fail the load, which is the rule the tracks are defaulted
-/// *for*: with both optional, `[concentration] levels = [16]` parsed happily
-/// into a tower with no curve at all.
+/// `Default` is the built-in table, as `Fuels`' is, or every run earns
+/// nothing. Unknown sections fail the load, since the tracks are optional.
 #[derive(Debug, Clone, Deserialize, Resource)]
 #[serde(deny_unknown_fields)]
 pub struct Progression {
@@ -141,9 +126,7 @@ pub struct Milestone {
 
 /// Everything the file's names are checked against.
 ///
-/// Four lists rather than four resources, so [`Progression::check`] stays a
-/// pure function of content — the same reason it took an instrument list before
-/// there were four things to check.
+/// Lists, not resources, so [`Progression::check`] stays pure.
 #[derive(Debug, Clone, Copy)]
 pub struct Catalogue<'a> {
     /// Everything that runs and may be priced or counted: the recipes'
@@ -168,19 +151,9 @@ impl Default for Progression {
 impl Progression {
     /// This curve, stretched to `length`.
     ///
-    /// Thresholds move; rates do not. `ley_line`'s and `renown`'s `at` and each
-    /// mastery `done` are stretched by index; [`earns`](Self::earns) is left
-    /// exactly as authored, because stretching what a run is *worth* too would
-    /// multiply both sides of the same fraction and cancel the feature with
-    /// every `orbs-balance` rate still passing.
-    ///
-    /// Each line is indexed on its own, so every room opens on the schedule it
-    /// opens on now — flat file order would put the menagerie's first deed a
-    /// third of the way up the ramp for no reason a player could see.
-    ///
-    /// Applied before `check`, whose `ascends` gate survives every length: a
-    /// strictly increasing sequence times a non-decreasing positive one is
-    /// strictly increasing.
+    /// Thresholds move, by index; [`earns`](Self::earns) does not, or both
+    /// sides of the fraction cancel with every balance rate still passing.
+    /// Each line is indexed on its own. `ascends` survives every length.
     #[must_use]
     pub fn stretched(self, length: crate::content::Length) -> Self {
         let ley = self.ley_line.len();
@@ -453,10 +426,8 @@ impl Progression {
 
     /// Every gated product is opened by some station.
     ///
-    /// The other direction, and the half that was missing: `check_opens`
-    /// refuses a key naming nothing, but nothing refused a *product* no key
-    /// names. Since `Opened::start` is everything no station opens, such a
-    /// product is handed to the player at tick 0 with every test green.
+    /// `check_opens`' other direction: a product no key names would be open at
+    /// tick 0 (`Opened::start`).
     fn check_gated(&self, catalogue: &Catalogue<'_>) -> Result<(), super::ContentError> {
         let opened: Vec<&str> = self
             .ley_line
@@ -596,10 +567,8 @@ impl Progression {
 
     /// How many ley steps granting quintessence have been passed.
     ///
-    /// `concentration`'s twin, and a second method rather than a public
-    /// `granting`: the grants are a closed set (`GRANTS`), so exposing the
-    /// iterator would invite a caller to ask about a word it does not hold and
-    /// silently get nought.
+    /// `concentration`'s twin, not a public `granting`, which could be asked
+    /// about a word outside `GRANTS` and answer nought.
     #[must_use]
     pub fn quintessence(&self, experience: u64) -> usize {
         self.granting(QUINTESSENCE)
@@ -628,10 +597,8 @@ impl Progression {
 
 /// Refuse a track whose totals do not strictly ascend.
 ///
-/// The sort is the meaning of the list: every reading counts with `take_while`
-/// and stops at the first total it cannot afford, so `[30, 16]` gates the second
-/// step behind 30 *and* never awards the first at 16 — a track that reads as
-/// authored and behaves as neither.
+/// Readings count with `take_while`, so `[30, 16]` would behave as neither
+/// line.
 fn ascends(track: &str, totals: impl Iterator<Item = u64>) -> Result<(), super::ContentError> {
     let totals: Vec<u64> = totals.collect();
     let Some(pair) = totals.windows(2).find(|two| {

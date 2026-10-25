@@ -2,23 +2,13 @@
 
 /// What one glyph does with the two things it is given.
 ///
-/// Six, and all of them symmetric: the two-input gates whose answer does not
-/// care which input is which — AND, NAND, OR, NOR, XOR and XNOR. Symmetry is
-/// what lets the circle draw a glyph's two inputs without saying which is first,
-/// and what keeps the puzzle a question about logic rather than wiring order; an
-/// implication gate would make every glyph's two wires a second decision.
+/// The six symmetric two-input gates — AND, NAND, OR, NOR, XOR, XNOR — so a
+/// glyph's inputs have no order and the puzzle is logic, not wiring.
 ///
-/// The names are not the logician's. `and`, `or` and `not` are the spell
-/// language's connectives and `either` and `both` its brackets, so a humour
-/// called `or` would be a word no `if` line could say. The rest collide with
-/// each other by construction: `nand` is one edit from `and`, `nor` from `or`,
-/// `xnor` from `xor`. So the canonical register is arcane, as §6 wants anyway,
-/// and `recall <humour>` teaches the logician's name beside it.
-///
-/// Each second word is the first one negated: a yoke pulls only when both pull,
-/// and to spurn the yoke is to answer whenever they do not; to heed is to answer
-/// to either, and to eschew to neither; to oppose is to answer when they differ,
-/// to mirror when they agree. §19 records the sweep and the words it rejected.
+/// Not the logician's names: `and`, `or` and `not` are the spell language's own,
+/// and the rest are one edit apart. `recall <humour>` teaches the logician's
+/// name. Each pair is a gate and its negation: yoke and spurn, heed and eschew,
+/// oppose and mirror (§19).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Humour {
     /// Lit when both are lit. What a logician calls AND.
@@ -148,9 +138,7 @@ mod tests {
 
     #[test]
     fn every_word_reads_back_as_its_humour() {
-        for humour in Humour::ALL {
-            assert_eq!(Humour::from_word(humour.word()), Some(humour));
-        }
+        crate::testing::assert_round_trips(&Humour::ALL, Humour::word, Humour::from_word);
         assert_eq!(Humour::from_word("and"), None);
     }
 

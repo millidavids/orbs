@@ -215,7 +215,7 @@ impl Line {
     /// Walk back through history; `Up`.
     ///
     /// Filtered by what is already typed, which is fish's default and zsh's
-    /// `history-beginning-search-backward`. Against a `move / wield / siphon`
+    /// `history-beginning-search-backward`. Against a `move / wield / empty`
     /// loop, typing `wield ` and pressing `Up` should walk the wields.
     pub fn earlier(&mut self) {
         let anchor = self.anchor();

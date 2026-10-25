@@ -1,36 +1,18 @@
 //! What a burning meter looks like.
 //!
-//! The athanor is the one instrument that is literally a fire (DESIGN.md §10.1),
-//! and its meter reports fuel *remaining* where every other reports ticks
-//! elapsed. So its bar drains, and drawing it as fire gets the story for free:
-//! the flame shrinks and the smoke above it grows, hottest at the base because a
-//! fuel bed glows where the fuel is. The bottom half is solid `█` and carries
-//! its motion in hue; `▓` begins about halfway up, where a real flame breaks up.
-//! Sparks come off the top and cool as they rise.
+//! The athanor's meter is fuel *remaining*, so it drains: the flame shrinks and
+//! the smoke grows (§10.1). Solid `█` below carries motion in hue, `▓` above;
+//! sparks cool as they rise. The frontend passes a phase, and an integer hash,
+//! never an RNG, keeps dumps reproducible.
 //!
-//! Nothing here knows what a second is — a frontend owns the clock and passes a
-//! phase, as for [`tween`] — and an integer hash of position and tick, never an
-//! RNG, keeps `ORBS_DUMP` reproducible and this out of `orbs-sim`'s streams.
+//! Three properties:
 //!
-//! Three properties hold the rest of it together.
-//!
-//! No cell changes faster than [`crate::FLIP_HZ`], by construction. 6 Hz is
-//! inside the 3–30 Hz photosensitive band by a recorded exemption (§19): the
-//! band is for flashes over a substantial part of the visual field, and this is
-//! a bar two cells wide. The two mitigations below are what make that
-//! defensible; remove one and the rate comes down with it.
-//!
-//! Nothing turns over together, and each step is small — every cell's tick
-//! boundaries are offset by a fraction of a tick (the `stagger` below), and the
-//! ramp is compressed enough that a flip is a hue step rather than an on/off
-//! flash. Whole-field modulation is the hazard, not motion.
-//!
-//! The fill boundary survives with no colour at all. The cell ahead of the flame
-//! front is always blank — an absolute pin, sparks included — and behind it is
-//! `█` or `▓`, so the join is at worst 75% against nothing. Giving `░` up to the
-//! smoke emptied the track, which is what bought the one relaxation this rule has
-//! had, `▓` reaching the flame tip. Never allowed is `▓` against `▒`: one dither
-//! step, which the CRT's bloom erases, and the value is read off this join.
+//! - No cell changes faster than [`crate::FLIP_HZ`], 6 Hz by a recorded
+//!   exemption for a bar two cells wide (§19), which rests on the next one.
+//! - Nothing turns over together (`stagger`), and a flip is a hue step, not a
+//!   flash.
+//! - The value survives with no colour: the cell ahead of the front is always
+//!   blank, so the join is never `▓` against `▒`, which bloom erases.
 
 use crate::pulse::{
     PRIME_SPARK, TICKS_PER_CYCLE, drift_noise, hash, noise, rising, shade, shade2, shared_tick,
@@ -216,16 +198,8 @@ fn flame(lane: u16, step: u16, height: u16, burn: Burn) -> (char, Depiction) {
 
 /// How far up the fuel the fire has caught, in cells — the flame's real height.
 ///
-/// Climbs from the base to `filled` as `flare` decays, so `kindle` is a fire
-/// taking hold rather than a full bar changing colour; everything above is
-/// present but not lit. The one place the fire shows less than its value, and
-/// only for the tick after ignition — the trade
-/// [`Reveal`](crate::RecordView::revealing) makes for arriving text, and §14 is
-/// unharmed because the linear stream never sees it.
-///
-/// At least one cell, always, or ignition is a blank frame right when the player
-/// is looking for something to have happened. At rest (`flare == 0`) this is
-/// `filled`, so nothing special-cases a hearth that is simply burning.
+/// Climbs to `filled` as `flare` decays, so `kindle` is a fire taking hold;
+/// the stream never sees it (§14). At least one cell, and `filled` at rest.
 fn caught(filled: u16, flare: f32) -> u16 {
     // No fuel, no flame, floor or no floor: the `max(1)` below put a flame on a
     // spent athanor and on every zero-valued reading the plain meter draws empty.
@@ -313,16 +287,9 @@ fn smoke(lane: u16, step: u16, ahead: u16, phase: f32) -> (char, Depiction) {
     // The plume drifts: subtracting the tick from the position translates the
     // pattern one cell per tick, away from the fire.
     //
-    // The one place `stagger` is deliberately *not* used — a translation only
-    // reads as one if neighbouring cells step together, and staggered it
-    // measured as a coin toss. Safety survives: what moves together here is a
-    // dim glyph on the dim half of the bar, and the flame keeps its stagger,
-    // which is the half where a synchronised flicker would be bright enough to
-    // matter.
-    //
-    // It wraps through [`rising`] rather than by plain subtraction: the cycle
-    // boundary is the one place a *correlated* sequence of ticks can tear. See
-    // `pulse::rising`.
+    // Unstaggered, or the translation reads as noise; it is dim, and the bright
+    // flame keeps its stagger. Through [`rising`], which keeps the cycle
+    // boundary from tearing.
     let drift = rising(step, shared_tick(phase), TICKS_PER_CYCLE);
 
     // A function of `drift` and nothing else, which is what makes it translate
@@ -398,14 +365,8 @@ mod tests {
 
     #[test]
     fn cells_do_not_all_turn_over_together() {
-        // Whole-field modulation is the hazard the rate cap does not cover: a
-        // strip where every cell changed at once would be a flash however slow.
-        // `stagger` prevents it, so this fails if it is ever removed as "an
-        // offset that makes no difference".
-        //
-        // Measured on the flame, not the whole bar: the plume is deliberately
-        // *un*staggered (see `smoke`), so half the bar turning over at once is
-        // the design rather than the defect.
+        // Whole-field modulation, which the rate cap does not cover. On the
+        // flame alone, since the plume is unstaggered by design.
         let (steps, filled) = (20u16, 10u16);
         let mut busiest = 0;
         let mut previous = bar(steps, filled, 0.0);
@@ -798,14 +759,8 @@ mod tests {
 
     #[test]
     fn the_cycle_wraps_without_a_seam() {
-        // The plume has to keep *travelling* through the wrap. The old version
-        // compared `CYCLE_SECS - 0.01` against `0.0`, and `shared_tick` rounds,
-        // so it compared a tick against itself and caught nothing.
-        //
-        // The hazard is specific to a drift: elsewhere consecutive ticks are
-        // uncorrelated hashes, but a translating pattern is deliberately
-        // correlated, so `143 → 0` re-randomised the whole plume once every
-        // twenty-four seconds. See `pulse::rising`.
+        // The plume keeps travelling through the wrap: a correlated drift is
+        // the one pattern `143 → 0` can tear. See `pulse::rising`.
         let wrap = carried(TICKS_PER_CYCLE - 1);
         let interior: Vec<usize> = (10..20u16).map(carried).collect();
         let worst = interior.iter().copied().min().unwrap_or(0);
@@ -818,13 +773,8 @@ mod tests {
 
     #[test]
     fn the_plume_travels_through_every_tick_boundary() {
-        // The wrap above is one boundary out of 144, and singling one out is how
-        // the seam survived the old test. Every boundary, so a change to
-        // `CYCLE_SECS`, `FLIP_HZ` or the span arithmetic has nowhere to hide.
-        //
-        // Judged against the plume's own typical tick: a floor loose enough to
-        // be robust to the noise is loose enough to sit under a torn frame. A
-        // tear is one tick well below the rest, so the rest is the yardstick.
+        // Every boundary, judged against the plume's own typical tick, since a
+        // tear is one tick well below the rest.
         let every: Vec<usize> = (0..TICKS_PER_CYCLE).map(carried).collect();
         let mut sorted = every.clone();
         sorted.sort_unstable();

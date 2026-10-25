@@ -1,29 +1,15 @@
 //! The weave screen's state: what is being looked at, and where the cursor is.
 //!
-//! Knows nothing about Bevy and nothing about panes — the wiring is in
-//! `weaving.rs` and the drawing in `loom.rs`, the editor's three-way split:
-//! what a key *means* and how a pane is laid out change for different reasons.
+//! The editor's split: wiring in `weaving.rs`, drawing in `loom.rs`. On the
+//! Ley Line left/right walks stations and up/down a fork's siblings; on
+//! Mastery up/down picks a room. Nothing on a mastery line is taken.
 //!
-//! Two tracks, two shapes. The Ley Line is the tower's — stations on total
-//! experience, some of them forks with siblings stacked downward, so left/right
-//! walks stations and up/down picks a sibling. Mastery is one line per room, so
-//! up/down picks a *room*, and the status row says which. Nothing on a mastery
-//! line is ever taken.
+//! It opens in command state, since taking a fork is irreversible (§19);
+//! `ley` or `mastery` hands the arrows over, and an arrow at the command line
+//! does nothing.
 //!
-//! It opens in command state, and the way in is a word (§19) — taking a fork
-//! node is irreversible. `ley` and `mastery` go into a track and hand the arrows
-//! over; `<esc>` comes back. An arrow at the command line does nothing on
-//! purpose: one that is sometimes navigation and sometimes nothing read as
-//! *"my first key press was being ignored"*.
-//!
-//! The cursor is an identity, never an index: the world ticks while the screen
-//! is open, so an index would come to point at a different node (§19,
-//! `Editor::reading`). It holds a *mark* and unplaces itself when that mark
-//! leaves the screen.
-//!
-//! A mark, not an id: eight stations grant concentration, so an id cursor
-//! pointed at all eight and could not walk past the fourth. `Node::mark` carries
-//! the total and `Stop::mark` is the id; both are unique across both tracks.
+//! The cursor is a *mark*, never an index, which the ticking world would shift
+//! (§19), and never an id, which eight stations share.
 
 use orbs_sim::{Line, Node, Standing, Station, Stop};
 
@@ -92,10 +78,7 @@ fn shift(at: usize, by: i8, len: usize) -> usize {
 
 /// The word `typed` names, by unambiguous prefix.
 fn word(typed: &str) -> Option<Word> {
-    WORDS
-        .iter()
-        .find(|(name, _)| name.starts_with(typed))
-        .map(|(_, word)| *word)
+    crate::prefix::unique_prefix(WORDS.iter().copied(), typed)
 }
 
 /// What the screen would like the shell to do.
@@ -263,11 +246,21 @@ impl Tapestry {
         })
     }
 
-    /// Take a fresh reading of both tracks.
-    ///
-    /// Pushed in rather than pulled, the screen knowing nothing about the sim —
-    /// `Editor::set_reading`'s direction. Called every frame it is open, so a
-    /// threshold crossed while a player is looking lands while they look.
+    /// Take a fresh reading of both tracks from `sim`. Called every frame the
+    /// screen is open, so a threshold crossed while a player is looking lands
+    /// while they look.
+    pub fn read_from(&mut self, sim: &orbs_sim::Sim) {
+        self.refresh(
+            sim.experience(),
+            sim.renown(),
+            sim.scale(),
+            sim.ley_line(),
+            sim.mastery(),
+        );
+    }
+
+    /// [`read_from`](Self::read_from) with the numbers handed in, for a test
+    /// with no sim.
     pub fn refresh(
         &mut self,
         experience: u64,
@@ -306,9 +299,7 @@ impl Tapestry {
     /// The rooms whose lines can be walked: the open ones with a station on
     /// them.
     ///
-    /// A shut room's line is not drawn — the loom paints an anonymous dotted
-    /// run — so a cursor there was invisible while the details panel read out
-    /// the deed and the room it opens, which everything else withholds.
+    /// Not a shut room's, which is drawn anonymous and would leak its deed.
     fn rows(&self) -> Vec<&Line> {
         self.mastery
             .iter()

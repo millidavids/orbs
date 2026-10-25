@@ -1,14 +1,10 @@
 //! The words the bailey publishes for a spell to ask about (§5.1).
 //!
-//! The arithmetic the language does not have. It has at-least / at-most /
-//! exactly and place-against-place comparison and no ratios, so *"if the enemy
-//! count is twice that of defenders"* is published as the word [`OUTNUMBERED`]
-//! rather than grown into a grammar — the maze's pattern (`spoil`, `exit`,
-//! `back`).
+//! The arithmetic the language does not have: it has no ratios, so *twice the
+//! defenders* is published as [`OUTNUMBERED`], the maze's pattern.
 //!
-//! Nearly every name here was chosen against a collision and the comments say
-//! which: a reading is nameable from *every* room, so a bad one breaks a word in
-//! another domain.
+//! A reading is nameable from every room, so most names here were chosen
+//! against a collision, and the note says which — read it before renaming.
 
 use super::{Intent, POOL};
 use crate::tower::dice::Die;
@@ -23,42 +19,22 @@ pub const OUTNUMBERED: &str = "outnumbered";
 pub const MASSED: &str = "massed";
 /// A side is broken.
 pub const ROUTED: &str = "routed";
-/// The best an area could come to once its dice are rolled.
-///
-/// This is the count reading too, and a separate `pledged` was cut: it said how
-/// many dice were on an area, which `ceiling` implies and `is empty` answers,
-/// and `pledge` is a *prefix* of it — a live verb in front of a noun, which is
-/// §19's `troops`/`troop` again.
+/// The best an area could come to once its dice are rolled — the count reading
+/// too. Not `pledged`, whose prefix is the live verb `pledge`.
 pub const CEILING: &str = "ceiling";
-/// The coming intent will throw away anything pledged here.
-///
-/// `moot`, where the obvious word was `wasted` — 667 against the potion `haste`,
-/// spendable in this room, and 667 against this domain's own `massed`.
+/// The coming intent will throw away anything pledged here. Not `wasted`: 667
+/// against the potion `haste` and this domain's `massed`.
 pub const MOOT: &str = "moot";
 /// The siege has ended, either way.
 ///
-/// `lifted`, where this was `over` — 600-plus against `order`, which is
-/// `deploy`'s plain synonym one verb away, so `order troop` in the bailey could
-/// fuzz to it. It is also the word a siege ends with.
-///
-/// The reading a solver's `repeat until` needs: without it the shipped spell
-/// looped for ever on a *loss*, because `repeat until the enemy has routed`
-/// never comes true when the garrison is the side that broke. `Outcome` is the
-/// question a loop should ask; `routed` is about one band.
+/// What a solver's `repeat until` asks: `until the enemy has routed` looped for
+/// ever on a loss. Not `over`, 600-plus against `deploy`'s synonym `order`.
 pub const LIFTED: &str = "lifted";
-/// How many of a side are standing.
-///
-/// `spears`, where this was `troops` — 834 against the material `troop`, which
-/// prefix-matches it outright, so `deploy troop` with an empty arsenal resolved
-/// to the *reading* and answered *"troops is worth nothing on a wall"*. §19's
-/// `purge grind` → `gained` defect verbatim.
+/// How many of a side are standing. Not `troops`, which the material `troop`
+/// prefix-matches, so `deploy troop` resolved to the reading.
 pub const SPEARS: &str = "spears";
-/// How much fight a side has left.
-///
-/// `mettle`, where this was `vigour` — an exact 1000 against the secret potion
-/// of that name. Three naming sweeps ran before it shipped and none included
-/// *materials*, which is the hole: a reading collides with everything the player
-/// can name, not only with verbs. `tests/naming.rs` sweeps them now.
+/// How much fight a side has left. Not `vigour`, an exact match for the secret
+/// potion; `tests/naming.rs` sweeps materials now.
 pub const METTLE: &str = "mettle";
 /// How many of them there are.
 pub const FOES: &str = "foes";
@@ -66,38 +42,22 @@ pub const FOES: &str = "foes";
 pub const TURNS: &str = "turns";
 /// What is left to spend on dice — and, on a die, what that die costs.
 ///
-/// One word on two kinds of node, deliberately: the coffer's is what you hold
-/// and a die's is what it takes, so `if the coffer has fewer quintessence than
-/// the d20` compares the same reading in two places — a shape the language
-/// already had.
-///
-/// `quintessence`, where §11.5 says `mana`: that scores 750 against `many`,
-/// which lives inside the comparison grammar this reading is written for, and
-/// 750 against `man`. `power` scores 800 against `tower`.
-///
-/// The cost is one abbreviation: `qui` now reaches this rather than
-/// `quickening-scroll`, by 887 to 876. `wield qui` is unaffected — `Workable`
-/// rejects a `Sense` — so only `verify`/`purge`, which take `NounKind::Any`, can
-/// see both.
+/// One word on both, so the coffer and a die compare the same reading. Not
+/// §11.5's `mana` (750 against `many`) or `power` (800 against `tower`). Its cost
+/// is that `qui` reaches this before `quickening-scroll`, which only `verify`
+/// and `purge` can see.
 pub const QUINTESSENCE: &str = "quintessence";
 /// How likely a band's attacks are to tell, as a percentage.
 ///
-/// The odds a hand player already reads off the board. `Roll::chance` was called
-/// only from `Siege::view`, so the number was on screen and unaskable — an
-/// asymmetry with §5.1's *show the odds before the commitment*, since a bound
-/// solver could not see what a person could.
-///
-/// `aim`, and it was nearly `peril` — which fails the *prefix* sweep rather than
-/// the similarity one: `per` reaches `peril` at 940 against `peruse`'s 925, so
-/// the reading would have stolen a live verb's abbreviation. `chance` fails too,
-/// at 667 against `cancel`.
+/// The odds a person reads off the board, askable by a spell too (§5.1). Not
+/// `peril`, whose `per` steals `peruse`'s abbreviation, nor `chance` (667
+/// against `cancel`).
 pub const AIM: &str = "aim";
 
 /// Every reading the bailey publishes.
 ///
-/// Declared, never derived from `Role::Reading`: asking the marker shipped a
-/// defect one domain over, where the lens taught the *archive's* words. A set is
-/// declared by the fixture that owns it.
+/// Declared by the fixture that owns it, never derived from `Role::Reading`,
+/// which once had the lens teach the archive's words.
 #[must_use]
 pub fn readings() -> Vec<&'static str> {
     let mut out = vec![
@@ -113,22 +73,16 @@ pub fn readings() -> Vec<&'static str> {
         TURNS,
         CEILING,
         MOOT,
-        // Appended, never inserted: §6 resolves a noun tie to whichever was
-        // registered first, so a word slipped into the middle silently
-        // re-resolves a name an existing solver uses.
+        // Appended, never inserted: a noun tie resolves to the first registered,
+        // so an insertion re-resolves a name a solver already uses.
         QUINTESSENCE,
         AIM,
     ];
     out.extend(Intent::ALL.into_iter().map(Intent::word));
-    // The dice a wizard holds are readings, because the coffer publishes each
-    // free one by name — `if the coffer has d20` is how a solver asks whether
-    // it still has the gamble in hand.
-    //
-    // `POOL`, not `Die::ALL`: all seven made four words nameable that nothing
-    // can publish, and they collide — `d10` against `d100` scores 962.
+    // Each free die is published by name: `if the coffer has d20`. `POOL`, not
+    // `Die::ALL`, whose other dice nothing publishes and which collide.
     out.extend(POOL.into_iter().map(Die::word));
-    // The roster's, appended for the reason above: the standing garrison at its
-    // most (§19, *Supply*). Its count is `spears`, already here.
+    // The roster's: the standing garrison at its most (§19, *Supply*).
     out.push(super::FULL);
     out
 }

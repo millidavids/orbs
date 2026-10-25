@@ -1,24 +1,12 @@
 //! The laboratory's instrument panel — §10.1's permanent fixture.
 //!
-//! Four bars, drawn beside or above the transcript whenever the player is
-//! standing in the laboratory. DESIGN.md §10.1: *"with four instruments running
-//! you watch and respond"*, and a transcript that scrolls the state away is not
-//! something anyone can watch. Twice a piece of laboratory state was reported as
-//! a bug because the only way to see it was to touch it — banked fuel read as
-//! *"stopping got rid of the charcoal"*, a fouled instrument as *"it will not
-//! start"*. A sentence in `content/prose.toml` tells you once, when you ask; a
-//! bar tells you continuously.
+//! §10.1: *"with four instruments running you watch and respond"*, and a bar
+//! tells you continuously what a sentence tells you once. Twice a state was
+//! reported as a bug because it could only be seen by touching it.
 //!
-//! A pane wider than it is tall gets the panel down its side, bars growing
-//! upward; a pane taller than it is wide gets it across the top, bars growing
-//! rightward. Cells are twice as tall as they are wide
-//! ([`orbs_render::CELL_WIDTH`] against [`orbs_render::CELL_HEIGHT`]), so "wider
-//! than tall" is measured in *pixels* — an 80×22 grid is a wide rectangle.
-//!
-//! §14: four bars drawn with `progress` would push four utterances per frame,
-//! against *"progress announcements: completion only"*. They are drawn with
-//! `meter`, which is silent, and the panel says one line naming only what is
-//! doing something.
+//! Down the side of a pane wider than tall, across the top otherwise — in
+//! pixels, since a cell is twice as tall as wide. Drawn with the silent
+//! `meter`, with one spoken line naming what is busy (§14).
 
 use orbs_render::cp437::box_drawing;
 use orbs_render::{
@@ -72,10 +60,8 @@ pub struct Split {
     pub area: Rect,
     /// Which way it runs — carried, not re-derived.
     ///
-    /// `paint` used to test `rows == instruments.len() + 1`, and a `Side` panel
-    /// is full pane height, which can equal that: five instruments and a six-row
-    /// body made a vertical strip read as horizontal, so `top` drew 17-character
-    /// names into a 16-column column.
+    /// Carried, since a `Side` panel's height can equal what a row count
+    /// would infer.
     pub along: Along,
     /// What the transcript gets.
     pub rest: Rect,
@@ -132,11 +118,8 @@ pub fn split(area: Rect, instruments: &[Instrument]) -> Split {
 
 /// Draw the panel where [`split`] put it.
 ///
-/// `domain` is where the player is standing, for the spoken summary — passed in
-/// because a frontend must not decide a place name (rule 2). It was the literal
-/// `"laboratory"` beside a pane title drawn from the real location, so a second
-/// instrumented room would have a sighted player reading `/tower/workshop` while
-/// a listener heard "laboratory: forge burning".
+/// `domain` names the spoken summary's room, passed in since a frontend must
+/// not decide a place name (rule 2).
 pub fn paint(
     painter: &mut Painter<'_>,
     split: Split,
@@ -156,19 +139,9 @@ pub fn paint(
 
 /// How an instrument's bar is drawn.
 ///
-/// The animated bars do not take the instrument's accent: [`style_of`] colours
-/// the label and the plain gauge, and the picture bars get [`Style::NORMAL`] and
-/// their own vocabulary. Three reasons, none of them a dropped channel.
-///
-/// - On the fire it is not available. `Style::depicted` yields no depiction on
-///   an accented cell (§4 reserves the triad for meaning), so `Style::COST` into
-///   `fire_meter` would delete the flame rather than tint it.
-/// - Nothing is lost. The accent is on the label in both layouts and `speak`
-///   puts the state in the linear stream, so §14's "colour is never the sole
-///   carrier" holds twice over.
-/// - The picture already says it. Fire is what `Burning` means and a full bed of
-///   broken material is what `Ready` means; §3 keeps the triad meaningful by not
-///   spending it on what is already legible.
+/// The picture bars take [`Style::NORMAL`], the accent staying on the label:
+/// an accented cell gets no depiction (§4), the label and `speak` carry the
+/// state (§14), and the picture already says it (§3).
 enum Bar {
     /// The plain `█`/`░` gauge. Anything with no picture of its own yet.
     Plain,
@@ -178,10 +151,8 @@ enum Bar {
     Cold,
     /// The stacks open, and how much of them has been walked.
     ///
-    /// Meterless, unlike [`Plain`](Self::Plain): a lectern with no maze open
-    /// reports no meter, and `Plain` in that state draws *nothing* — the defect
-    /// this file records shipping twice. An unbegun reading is an empty gauge,
-    /// not an absent row.
+    /// Meterless, unlike [`Plain`](Self::Plain), so an unbegun reading is an
+    /// empty gauge rather than an absent row.
     Read,
     /// A mortar: a block being broken down, or a bowl standing.
     Grind {
@@ -229,22 +200,10 @@ impl Bar {
 
 /// Which bar an instrument gets.
 ///
-/// Keyed on [`Craft`], not on the name: the sim says what a thing *does*
-/// (`tower::panel::craft_of`), and a frontend comparing against the literal
-/// `"mortar_and_pestle"` would re-derive what the recipe table knows — twice
-/// over, once in `orbs-tui`.
-///
-/// `Banked` keeps the plain gauge. It is damped with its fuel *kept*, and that
-/// quantity is the most valuable thing this panel shows (one of the two states
-/// reported as a bug for being invisible — see the module header). Smoke would
-/// lose the number; fire would lie about being alight.
-///
-/// Motion is not consulted here. This used to short-circuit to `Bar::Plain` when
-/// animation was off, and `Bar::Plain` is not [`Bar::meterless`], so the three
-/// states with no quantity drew *nothing at all*: turning motion off blanked the
-/// cold hearth and both resting bowls, which is §14's switch costing information
-/// rather than movement. A picture at rest is a picture, not an absence —
-/// `Bench` zeroes the phase and the pour, so it simply stops moving.
+/// Keyed on [`Craft`] (`tower::panel::craft_of`), never a name. `Banked` keeps
+/// the plain gauge, whose kept fuel is the panel's most valuable number.
+/// Motion is not consulted: `Bench` stops the pictures moving rather than
+/// blanking them (§14).
 const fn bar_of(craft: Craft, state: State, heat: bool) -> Bar {
     // One arm per craft, no wildcard. `Craft` is closed for exactly this, and
     // here a fall-through is worse than an idle-looking instrument: `Bar::Plain`
@@ -255,37 +214,19 @@ const fn bar_of(craft: Craft, state: State, heat: bool) -> Bar {
         // Every state, one bar. A maze has no stages — it is open or it is not,
         // and the gauge says how much of it has been seen either way.
         Craft::Reading => Bar::Read,
-        // The prism. A press has a duration the tower knows before it starts —
-        // twelve ticks, every time — which is what the plain meter is for and
-        // what a maze does *not* have (hence the meterless `Bar::Read`).
-        //
-        // What a gauge cannot show is the ward itself: which sigils are aligned,
-        // what has been tried, which sockets settled. That is the board, its own
-        // item drawn beside the transcript the way the maze map is.
-        //
-        // Plain by decision, not omission: a prism between presses is `Empty`
-        // and a gauge with no meter draws nothing at all (`Bar::meterless`).
-        // `Empty` here means *no reading open*, and the board says so.
+        // The prism: a press has a known duration, so a plain meter; the ward
+        // itself is the board's. Between presses it is `Empty`, which the board
+        // explains.
         Craft::Scrying => Bar::Plain,
         // The lattice: the prism's case exactly. Which glyphs are lit and what
         // the residue says are the board, beside the transcript like the sheet;
         // the panel row is a gauge over the settle in flight and nothing more.
         Craft::Imbuing => Bar::Plain,
-        // The pylon: the prism's case with the states swapped. Where three
-        // stacks of wards are resting is the board, so the panel row is a gauge.
-        //
-        // The difference is that the gauge is never blank — between courses the
-        // pylon reports `Unit::Standing` against a whole barrier rather than no
-        // meter, making this the one instrument whose *idle* row still has a bar
-        // in it. An empty column would say the barrier was nothing, the opposite
-        // of what an untouched tower is. See `tower::panel::read`'s pylon arm.
+        // The pylon: a gauge, never blank — idle, it reports the standing
+        // barrier (`tower::panel::read`). The wards are the board's.
         Craft::Warding => Bar::Plain,
-        // A plain gauge. The lectern used to be `Craft::Reading` because it
-        // carried the maze's verb, so a *scroll coming together* drew the
-        // stacks' explored-cells gauge — a different thing entirely. A
-        // twenty-tick run against a known duration is what the plain meter is
-        // for. No picture of its own yet: §10.1 gives each laboratory instrument
-        // one, and the archive's would be its own item.
+        // The lectern: a known duration, so a plain gauge. No picture of its
+        // own yet.
         Craft::Assembling => Bar::Plain,
         Craft::Heating => match state {
             State::Burning => Bar::Fire,
@@ -387,15 +328,8 @@ const fn bar_of(craft: Craft, state: State, heat: bool) -> Bar {
             },
             _ => Bar::Plain,
         },
-        // The alembic is a vessel too, drawing the balneum's picture with its
-        // bubbles breaking at the face — and, where the bar runs upward, getting
-        // out: a distillation is a harder boil than a digestion (`Steep::upward`,
-        // §19). What separates the two is the break, the escape and the colour,
-        // not a second liquid vocabulary.
-        //
-        // Until this arm existed it fell to `Bar::Plain`, which is not
-        // `meterless()`, so a *charged* or *ready* alembic drew nothing at all —
-        // the third time that defect shipped. See `Bar::meterless`.
+        // The alembic draws the balneum's picture, boiling harder
+        // (`Steep::upward`, §19), never `Bar::Plain`, which blanks a charged one.
         Craft::Distilling => match state {
             State::Working if heat => Bar::Bath {
                 motion: Motion::Bubbling,
@@ -460,12 +394,8 @@ const fn stand_in(state: State) -> Meter {
 
 /// Whether the athanor is alight.
 ///
-/// Read off the panel's own slice, not the world: the sim already reports every
-/// instrument's state, and a frontend reaching past that would be a second place
-/// deciding what "lit" means. Found by [`Craft::Heating`] rather than by name or
-/// state, for the reason `bench::hearth` records — `Burning` is the heat
-/// source's word today and a forge would claim it too. It is the bath's whole
-/// distinction; see `bar_of`.
+/// Read off the panel's slice, by [`Craft::Heating`], for `bench::hearth`'s
+/// reason. The bath's whole distinction; see `bar_of`.
 fn burning(instruments: &[Instrument]) -> bool {
     instruments
         .iter()
@@ -474,10 +404,7 @@ fn burning(instruments: &[Instrument]) -> bool {
 
 /// The reading an instrument's bar draws, or `None` if it gets no bar at all.
 ///
-/// Shared by both layouts, which each had their own copy. The fallback is the
-/// subtle part: three states report no meter and are still pictures worth
-/// drawing, so a layout that forgot it would blank a cold hearth in one
-/// orientation and not the other.
+/// Shared by both layouts, so the meterless pictures draw in each.
 fn reading(instrument: &Instrument, kind: &Bar) -> Option<(u32, u32)> {
     let meter = match instrument.meter {
         Some(meter) => meter,
@@ -501,14 +428,8 @@ fn draw(
     along: Along,
     tints: [Option<Wash>; 2],
 ) {
-    // The bar only, never the label. A tint says what is *in* the instrument,
-    // so colouring its name would make `mp` change colour with its contents.
-    // It also keeps the channels apart: a fouled label is `Role::Danger` red and
-    // `tint::resolve` declines on an accent, so both places enforce the rule.
-    //
-    // The flask is the exception and paints its own: its bar is three bands and
-    // only the painter knows where they fall at a given fill, so this must not
-    // lay a fourth over the top.
+    // The bar only, never the label, which keeps the accent. The flask paints
+    // its own three bands.
     if !matches!(kind, Bar::Mix { .. })
         && let Some(wash) = tints[0]
     {
@@ -694,19 +615,8 @@ fn top(painter: &mut Painter<'_>, area: Rect, instruments: &[Instrument], bench:
 fn speak(painter: &mut Painter<'_>, instruments: &[Instrument], domain: &str) {
     use core::fmt::Write as _;
 
-    // One buffer written into rather than a `format!` per instrument plus a
-    // `Vec<String>`, a `join` and an outer `format!` — six allocations a frame
-    // for a sentence that changes at most once a second.
-    //
-    // Only `Empty` is dropped, and `Cold` no longer is. §19: a visual constraint
-    // must not become an informational one, and `Cold` failed it in the
-    // direction nobody checks — `Top` draws the word on its row and `bar_of`
-    // gives it a wisp of smoke, so a sighted player saw the athanor had gone out
-    // and a listener heard nothing. It is also the most actionable state it has:
-    // nothing in the laboratory runs until you kindle it.
-    //
-    // `Empty` stays out as the one state that genuinely means *nothing is
-    // there*; four idle instruments is not news a listener needs once a second.
+    // One buffer, not six allocations a frame. Only `Empty` is dropped: `Cold`
+    // is drawn, so it is spoken too (§19).
     let mut spoken = String::new();
     for instrument in instruments
         .iter()
@@ -733,15 +643,8 @@ fn speak(painter: &mut Painter<'_>, instruments: &[Instrument], domain: &str) {
 /// `Success` for something finished and waiting, `Danger` for an instrument that
 /// will not start, plain for at rest.
 ///
-/// `Fouled` is the accent the panel was built for — *"a fouled instrument read
-/// as it will not start"* is one of the two defects §10.1's panel answers, and
-/// the only state here a player must *act* on before the loop continues. `Cost`
-/// and `Success` describe things going right; this is the one that does not,
-/// which is §4's line for the accent.
-///
-/// It reaches a listener too: `Role::Danger` travels into the linear stream, so
-/// the red is reinforcement rather than the carrier. The picture bars say it a
-/// second way and `speak` a third.
+/// `Fouled` is the state a player must act on, so `Danger`; the role reaches
+/// the linear stream too, so red is reinforcement.
 const fn style_of(state: State) -> Style {
     match state {
         State::Working | State::Scouring | State::Burning => Style::COST,

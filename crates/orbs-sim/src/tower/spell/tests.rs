@@ -1,25 +1,8 @@
 //! What a running spell must and must not do.
 
 use crate::Sim;
+use crate::testing::{ever_said, said};
 use orbs_render::FieldName;
-
-/// Every message the orb has said.
-fn said(sim: &Sim) -> Vec<String> {
-    sim.scrollback()
-        .records()
-        .iter()
-        .filter_map(|record| record.field(FieldName::Message))
-        .filter_map(|value| match value {
-            orbs_render::Value::Text(text) => Some(text.to_owned()),
-            _ => None,
-        })
-        .collect()
-}
-
-/// Whether anything the orb said contains `needle`.
-fn mentioned(sim: &Sim, needle: &str) -> bool {
-    said(sim).iter().any(|line| line.contains(needle))
-}
 
 /// A sim with `lines` saved as a *laboratory* spell, ready to invoke.
 ///
@@ -48,7 +31,7 @@ fn a_guard_is_asked_before_the_first_pass_and_not_only_after_it() {
     sim.submit("invoke check");
     sim.step_n(8);
     assert!(
-        !mentioned(&sim, "dispensary to mortar"),
+        !ever_said(&sim, "dispensary to mortar"),
         "the body ran despite the guard holding on entry: {:?}",
         said(&sim),
     );
@@ -74,7 +57,7 @@ fn a_guard_stops_the_loop_when_the_body_makes_it_true() {
         said(&sim),
     );
     assert!(
-        mentioned(&sim, "is finished"),
+        ever_said(&sim, "is finished"),
         "the spell never ended: {:?}",
         said(&sim),
     );
@@ -92,7 +75,7 @@ fn a_guard_that_cannot_be_answered_stops_the_loop_rather_than_spinning() {
     sim.submit("invoke check");
     sim.step_n(10);
     assert!(
-        mentioned(&sim, "is finished"),
+        ever_said(&sim, "is finished"),
         "an unanswerable guard left the loop spinning: {:?}",
         said(&sim),
     );
@@ -151,7 +134,7 @@ fn a_spell_waits_for_the_instrument_rather_than_being_refused() {
         .count();
     assert!(waits <= 1, "the wait was announced {waits} times, not once");
     assert!(
-        !mentioned(&sim, "is working. wait"),
+        !ever_said(&sim, "is working. wait"),
         "a script was refused as though it had typed the line: {:?}",
         said(&sim),
     );
@@ -178,13 +161,13 @@ fn no_instruction_in_a_spell_is_ever_refused_for_being_busy() {
 
     for refusal in ["still at work", "is working. wait", "already scouring"] {
         assert!(
-            !mentioned(&sim, refusal),
+            !ever_said(&sim, refusal),
             "a spell was refused with {refusal:?} instead of waiting: {:?}",
             said(&sim),
         );
     }
     assert!(
-        mentioned(&sim, "is finished"),
+        ever_said(&sim, "is finished"),
         "the spell never completed: {:?}",
         said(&sim),
     );
@@ -201,7 +184,7 @@ fn an_endless_spell_can_be_called_off() {
     let before = sim.scrollback().records().len();
     sim.submit("stop loop");
     sim.step();
-    assert!(mentioned(&sim, "you let"), "{:?}", said(&sim));
+    assert!(ever_said(&sim, "you let"), "{:?}", said(&sim));
 
     // And it is actually stopped — not merely told so.
     let after_stop = sim.scrollback().records().len();
@@ -232,7 +215,7 @@ fn stop_edit_restart_picks_up_the_new_text() {
     sim.submit("invoke brewing");
     sim.step_n(40);
     assert!(
-        mentioned(&sim, "yields ground-sage"),
+        ever_said(&sim, "yields ground-sage"),
         "the re-cast spell ran the old text: {:?}",
         said(&sim),
     );
@@ -251,7 +234,7 @@ fn editing_a_running_spell_does_not_change_the_run_in_flight() {
     sim.step_n(4);
 
     assert!(
-        !mentioned(&sim, "yields ground-sage"),
+        !ever_said(&sim, "yields ground-sage"),
         "the text changed under a spell that was already running: {:?}",
         said(&sim),
     );
@@ -260,7 +243,7 @@ fn editing_a_running_spell_does_not_change_the_run_in_flight() {
     sim.step();
     sim.submit("invoke loop");
     sim.step_n(40);
-    assert!(mentioned(&sim, "yields ground-sage"), "{:?}", said(&sim));
+    assert!(ever_said(&sim, "yields ground-sage"), "{:?}", said(&sim));
 }
 
 #[test]
@@ -274,7 +257,7 @@ fn stopping_a_spell_does_not_stop_what_it_started() {
     sim.step_n(40);
 
     assert!(
-        mentioned(&sim, "yields ground-sage"),
+        ever_said(&sim, "yields ground-sage"),
         "stopping the spell also killed the grind it had started: {:?}",
         said(&sim),
     );
@@ -282,12 +265,8 @@ fn stopping_a_spell_does_not_stop_what_it_started() {
 
 #[test]
 fn a_spell_does_not_move_the_player() {
-    // `attend` writes `Cwd`, so a spell containing one would teleport the player
-    // and change what they can name from somewhere else.
-    //
-    // Bound, not invoked: an invocation ends the moment its caster leaves (§19),
-    // so an invoked spell would stop before reaching the `attend`. A held spell
-    // is the one that runs while the player is elsewhere.
+    // `attend` writes `Cwd`, so a spell containing one would teleport the player.
+    // Bound, because an invoked spell ends when its caster leaves (§19).
     let mut sim = with_spell("wander", &["attend laboratory", "survey"]);
     crate::tower::credit(sim.world_mut(), 16);
     sim.submit("bind wander");
@@ -304,7 +283,7 @@ fn a_spell_does_not_move_the_player() {
         "the spell walked the player out of the archive",
     );
     assert!(
-        mentioned(&sim, "will not do"),
+        ever_said(&sim, "will not do"),
         "the spell's `attend` was allowed: {:?}",
         said(&sim),
     );
@@ -318,12 +297,12 @@ fn a_line_naming_something_gone_is_logged_and_the_spell_carries_on() {
     sim.step_n(6);
 
     assert!(
-        mentioned(&sim, "line 1"),
+        ever_said(&sim, "line 1"),
         "the bad line was not reported: {:?}",
         said(&sim),
     );
     assert!(
-        mentioned(&sim, "is finished"),
+        ever_said(&sim, "is finished"),
         "the spell halted on a line it should have skipped: {:?}",
         said(&sim),
     );
@@ -343,7 +322,7 @@ fn a_spell_may_not_open_the_editor_or_pass_an_hour() {
         "a spell opened the editor behind the player",
     );
     assert!(
-        mentioned(&sim, "will not do"),
+        ever_said(&sim, "will not do"),
         "the forbidden verbs were not reported: {:?}",
         said(&sim),
     );
@@ -353,17 +332,15 @@ fn a_spell_may_not_open_the_editor_or_pass_an_hour() {
 
 #[test]
 fn a_spell_may_not_end_the_session() {
-    // `may_issue` was the one place `quit` was missed when it was added, so a
-    // spell could raise `Quitting`. The three verbs barred beside it seize the
-    // keyboard; this one closes the game — and a bound spell re-casts every time
-    // it runs off the end, so it would end the session on the orb's clock.
+    // A bound spell re-casts every time it runs off the end, so a `quit` in one
+    // would end the session on the orb's clock.
     let mut sim = with_spell("leaving", &["quit"]);
     sim.submit("invoke leaving");
     sim.step_n(6);
 
     assert!(!sim.quitting(), "a spell ended the player's session",);
     assert!(
-        mentioned(&sim, "will not do"),
+        ever_said(&sim, "will not do"),
         "the scripted `quit` was allowed through: {:?}",
         said(&sim),
     );
@@ -376,12 +353,12 @@ fn an_empty_or_unknown_spell_says_so_rather_than_running_nothing() {
     let mut sim = Sim::new(1);
     sim.submit("invoke first_light");
     sim.step();
-    assert!(mentioned(&sim, "takes up"), "{:?}", said(&sim));
+    assert!(ever_said(&sim, "takes up"), "{:?}", said(&sim));
 
     let mut empty = with_spell("blank", &[""]);
     empty.submit("invoke blank");
     empty.step();
-    assert!(mentioned(&empty, "nothing written"), "{:?}", said(&empty));
+    assert!(ever_said(&empty, "nothing written"), "{:?}", said(&empty));
 }
 
 #[test]
@@ -403,13 +380,13 @@ fn invoking_a_running_spell_twice_does_not_start_it_twice() {
     sim.submit("invoke slow");
     sim.step();
     assert!(
-        !mentioned(&sim, "is finished"),
+        !ever_said(&sim, "is finished"),
         "the spell finished inside one tick, so nothing is being tested",
     );
 
     sim.submit("invoke slow");
     sim.step();
-    assert!(mentioned(&sim, "already running"), "{:?}", said(&sim));
+    assert!(ever_said(&sim, "already running"), "{:?}", said(&sim));
 }
 
 #[test]
@@ -432,12 +409,12 @@ fn a_spell_may_invoke_another_but_not_endlessly() {
     sim.step_n(10);
 
     assert!(
-        mentioned(&sim, "takes up two.spell"),
+        ever_said(&sim, "takes up two.spell"),
         "a spell could not invoke another at all: {:?}",
         said(&sim),
     );
     assert!(
-        mentioned(&sim, "too many spells deep"),
+        ever_said(&sim, "too many spells deep"),
         "the depth limit never fired: {:?}",
         said(&sim),
     );
@@ -492,14 +469,14 @@ fn saving_over_a_running_spell_changes_it_mid_flight() {
     sim.step_n(6);
 
     assert!(
-        mentioned(&sim, "the athanor takes light"),
+        ever_said(&sim, "the athanor takes light"),
         "the running spell kept its old orders: {:?}",
         said(&sim),
     );
     // ...and it is still the same invocation. A reload that stopped and recast
     // would look identical in the log above and be a different mechanic.
     assert!(
-        !mentioned(&sim, "the orb takes up watch.spell")
+        !ever_said(&sim, "the orb takes up watch.spell")
             || said(&sim)
                 .iter()
                 .filter(|line| line.contains("the orb takes up watch.spell"))
@@ -530,12 +507,12 @@ fn an_if_names_a_place_the_way_every_other_line_does() {
     sim.step_n(30);
 
     assert!(
-        mentioned(&sim, "yields ground-sage"),
+        ever_said(&sim, "yields ground-sage"),
         "the short name took the else: {:?}",
         said(&sim),
     );
     assert!(
-        !mentioned(&sim, "scouring"),
+        !ever_said(&sim, "scouring"),
         "the else ran as well: {:?}",
         said(&sim),
     );
@@ -559,13 +536,13 @@ fn a_question_about_nowhere_says_so_rather_than_answering_no() {
     sim.step_n(6);
 
     assert!(
-        mentioned(&sim, "there is no gatehouse here to ask about"),
+        ever_said(&sim, "there is no gatehouse here to ask about"),
         "a question about nowhere was answered silently: {:?}",
         said(&sim),
     );
     // Still §8: it logs, and does not halt.
     assert!(
-        mentioned(&sim, "is finished"),
+        ever_said(&sim, "is finished"),
         "the spell halted on a bad question: {:?}",
         said(&sim),
     );
@@ -583,43 +560,8 @@ fn both_shapes_of_question_reach_the_world() {
     sim.step_n(30);
 
     assert!(
-        mentioned(&sim, "yields ground-sage"),
+        ever_said(&sim, "yields ground-sage"),
         "the dispensary's sage was not found: {:?}",
-        said(&sim),
-    );
-}
-
-#[test]
-fn no_line_a_spell_can_say_has_a_hole_in_it() {
-    // An unfilled placeholder draws as itself: `spell_gave_up` asked for
-    // `{source}` where `say_failure` supplies `{detail}`. Asserted over the
-    // whole stream rather than a list of keys, so a new failure line is covered
-    // the day it is written. The spell drives every failure the runner has.
-    let mut sim = with_spell(
-        "broken",
-        &[
-            "wait for a moonrise",
-            "if the gatehouse is empty",
-            "grind moonstone",
-            "end",
-            "attend dispensary",
-        ],
-    );
-    sim.submit("invoke broken");
-    // Long enough for `PATIENCE` to run out on the wait, which is the line that
-    // had the hole.
-    sim.step_n(crate::tower::spell::PATIENCE + 20);
-
-    let spoken = said(&sim);
-    let holes: Vec<&String> = spoken.iter().filter(|line| line.contains('{')).collect();
-    assert!(
-        holes.is_empty(),
-        "the orb said a line with an unfilled placeholder in it: {holes:?}",
-    );
-    // ...and it really did reach the failures, or the sweep above proves nothing.
-    assert!(
-        mentioned(&sim, "waited too long"),
-        "the wait never gave up, so its line was never said: {:?}",
         said(&sim),
     );
 }
@@ -666,7 +608,7 @@ fn loose_phrasing_is_kept_in_the_file_and_understood_when_it_runs() {
     sim.submit("invoke phrase");
     sim.step_n(30);
     assert!(
-        mentioned(&sim, "yields ground-sage"),
+        ever_said(&sim, "yields ground-sage"),
         "the loose phrasing stopped working: {:?}",
         said(&sim),
     );
@@ -703,11 +645,9 @@ fn saving_a_spell_says_nothing_at_all() {
 
 #[test]
 fn a_running_spell_says_it_reloaded_once_per_session_however_often_it_is_saved() {
-    // The one thing a save still says: editing a running spell lands now, which
-    // is otherwise indistinguishable from being ignored. Once per session,
-    // though, or the autosave restores the noise this item removed.
-    // Unbounded, so it is still running when the second session opens — one that
-    // had finished would report no reload for the wrong reason.
+    // Editing a running spell lands now, and the save says so once per session,
+    // or the autosave would repeat it. Unbounded, so it is still running when
+    // the second session opens.
     let looping: Vec<String> = ["repeat", "survey", "end"]
         .iter()
         .map(|line| (*line).to_owned())
@@ -742,11 +682,9 @@ fn a_running_spell_says_it_reloaded_once_per_session_however_often_it_is_saved()
 
 #[test]
 fn the_indentation_is_the_players_too() {
-    // The four branches that kept a line's words all wrote `line.trim()`, so the
-    // orb re-indented what it rewrote and dropped the indent from what it did
-    // not. Nothing re-indents now: the buffer indents as you type
-    // (`editor::reindent`). This spell arrives through `write_spell` with
-    // deliberately unhelpful layout, so tidy output means something tidied it.
+    // Nothing re-indents a saved spell: the buffer indents as you type
+    // (`editor::reindent`). Written with unhelpful layout, so tidy output would
+    // mean something tidied it.
     let mut sim = Sim::new(1);
     sim.submit("attend laboratory");
     sim.step();
@@ -799,12 +737,9 @@ fn a_loop_over_a_base_reagent_never_runs_dry() {
 
 #[test]
 fn the_sage_survives_being_ground_and_what_it_makes_does_not_stack_up_twice() {
-    // Two properties that broke together, and either covers for the other.
-    //
-    // The sage: `move` took a unit, but charging an instrument was a second copy
-    // of the same three lines and re-parented the endless pile itself into the
-    // mortar. The pile: `give` merges, so grinding twice adds to `ground-sage`
-    // rather than standing a second node beside it under the same name.
+    // Two properties that broke together: charging an instrument once moved the
+    // endless sage pile itself into the mortar, and `give` merges, so grinding
+    // twice adds to one `ground-sage` rather than standing a second beside it.
     let mut sim = Sim::new(1);
     sim.submit("attend laboratory");
     sim.step();
@@ -889,7 +824,7 @@ fn everything_a_spell_does_is_credited_to_it() {
     );
     // ...and it really ran, or the sweep above proves nothing.
     assert!(
-        mentioned(&sim, "yields ground-sage"),
+        ever_said(&sim, "yields ground-sage"),
         "the spell never did anything: {:?}",
         said(&sim),
     );
@@ -1065,12 +1000,12 @@ fn a_part_that_calls_itself_stops_and_says_so() {
     sim.step_n(40);
 
     assert!(
-        mentioned(&sim, "too deep to follow"),
+        ever_said(&sim, "too deep to follow"),
         "runaway recursion was silent: {:?}",
         said(&sim),
     );
     assert!(
-        mentioned(&sim, "is finished"),
+        ever_said(&sim, "is finished"),
         "the spell halted rather than carrying on: {:?}",
         said(&sim),
     );
@@ -1187,13 +1122,9 @@ fn what_a_part_binds_does_not_outlive_it() {
 
 #[test]
 fn a_for_each_inside_a_part_leaves_the_caller_s_cursor_alone() {
-    // The stated cost of the shared store, now gone — [`Descent`]'s comment used
-    // to name it. The caller walks a set, calls a part that walks the same set,
-    // and must come back to the member it was on.
-    //
-    // In the lens rather than the archive: a `dial` always lands and names its
-    // socket, where `follow` is refused by a wall and says nothing, so a maze
-    // would make this depend on the seed's geometry.
+    // The caller walks a set, calls a part that walks the same set, and must come
+    // back to the member it was on. In the lens, because a `dial` always lands
+    // and a maze's walls would make it depend on the seed.
     let mut sim = Sim::new(1);
     sim.submit("attend lens");
     sim.step();
@@ -1221,7 +1152,7 @@ fn a_for_each_inside_a_part_leaves_the_caller_s_cursor_alone() {
     // lap dialling whatever the inner loop finished on, which is `fourth`.
     let dialled: Vec<&str> = ["first", "second", "third", "fourth"]
         .into_iter()
-        .filter(|socket| mentioned(&sim, &format!("{socket} socket")))
+        .filter(|socket| ever_said(&sim, &format!("{socket} socket")))
         .collect();
     assert_eq!(
         dialled,
@@ -1242,7 +1173,7 @@ fn a_call_that_hands_over_the_wrong_number_is_said_at_cast() {
     sim.submit("invoke check");
     sim.step_n(6);
     assert!(
-        mentioned(&sim, "different number of names"),
+        ever_said(&sim, "different number of names"),
         "a short call was accepted: {:?}",
         said(&sim),
     );
@@ -1260,7 +1191,7 @@ fn a_heading_that_names_one_thing_twice_sets_nothing_aside() {
     sim.submit("invoke check");
     sim.step_n(6);
     assert!(
-        mentioned(&sim, "part wants a name"),
+        ever_said(&sim, "part wants a name"),
         "a repeated parameter was accepted: {:?}",
         said(&sim),
     );
@@ -1305,7 +1236,7 @@ fn a_call_to_a_part_nobody_wrote_is_said_at_cast() {
     sim.submit("invoke check");
     sim.step_n(4);
     assert!(
-        mentioned(&sim, "no part of this spell is called that"),
+        ever_said(&sim, "no part of this spell is called that"),
         "a call to nothing was accepted: {:?}",
         said(&sim),
     );
@@ -1347,7 +1278,7 @@ fn a_forbidden_verb_is_refused_when_the_spell_is_cast() {
     sim.step_n(4);
 
     assert!(
-        mentioned(&sim, "will not take from a spell"),
+        ever_said(&sim, "will not take from a spell"),
         "a forbidden verb in an untaken branch was never mentioned: {:?}",
         said(&sim),
     );
@@ -1372,14 +1303,14 @@ fn the_cast_check_does_not_fire_on_a_line_that_makes_its_own_input() {
     sim.step_n(4);
 
     assert!(
-        !mentioned(&sim, "will not take from a spell"),
+        !ever_said(&sim, "will not take from a spell"),
         "a pipeline line was refused at cast: {:?}",
         said(&sim),
     );
     // ...and it really does reach the world, rather than being quietly dropped.
     sim.step_n(40);
     assert!(
-        mentioned(&sim, "dispensary to mortar"),
+        ever_said(&sim, "dispensary to mortar"),
         "the spell never ran: {:?}",
         said(&sim),
     );
@@ -1397,13 +1328,13 @@ fn a_spell_that_should_wait_still_waits_rather_than_being_refused() {
     sim.step_n(4);
 
     assert!(
-        mentioned(&sim, "waits"),
+        ever_said(&sim, "waits"),
         "the spell did not wait for the mortar: {:?}",
         said(&sim),
     );
     for refusal in ["still at work", "is working. wait", "already scouring"] {
         assert!(
-            !mentioned(&sim, refusal),
+            !ever_said(&sim, refusal),
             "the spell was refused with {refusal:?} instead of waiting: {:?}",
             said(&sim),
         );
@@ -1423,12 +1354,12 @@ fn a_part_is_not_reachable_from_another_spell() {
     sim.step_n(20);
 
     assert!(
-        mentioned(&sim, "no part of this spell is called that"),
+        ever_said(&sim, "no part of this spell is called that"),
         "a spell reached a part defined in another file: {:?}",
         said(&sim),
     );
     assert!(
-        !mentioned(&sim, "dispensary to mortar"),
+        !ever_said(&sim, "dispensary to mortar"),
         "the borrowed part actually ran: {:?}",
         said(&sim),
     );

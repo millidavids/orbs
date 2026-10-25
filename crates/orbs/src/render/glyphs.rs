@@ -149,9 +149,8 @@ pub(crate) fn needs_glyph(index: u8) -> bool {
 
 /// Fill blank slots in `face` from `fallback`.
 ///
-/// Every unscii face is missing `∙ ⌂ ⌐ ☼`. A hole in the atlas is a hole on
-/// screen, and it would appear only for characters nobody thought to test, so
-/// the documented fallback fills them rather than leaving them to chance.
+/// Every unscii face is missing `∙ ⌂ ⌐ ☼`, and a hole in the atlas is a hole
+/// on screen.
 ///
 /// Returns how many slots were filled.
 pub(crate) fn fill_gaps(face: &mut Face, fallback: &Face) -> usize {
@@ -214,14 +213,7 @@ mod tests {
             .unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()))
     }
 
-    // ------------------------------------------------------------------
-    // The shipped assets, read through the parsers that actually ship.
-    //
-    // These lived in `orbs-render/tests/` with two hand-rolled duplicate
-    // parsers. `orbs-render` defines the repertoire and never reads a font;
-    // `orbs` is the only crate that parses one. Testing the assets anywhere
-    // else meant a second implementation that could drift from this one.
-    // ------------------------------------------------------------------
+    // The shipped assets, through the parsers that ship.
 
     #[test]
     fn the_spleen_fallback_is_a_complete_codepage() {
@@ -300,10 +292,8 @@ mod tests {
 
     /// The licence guard.
     ///
-    /// `unscii-16-full` merges GPL Unifont and is one word away in name from the
-    /// CC0 `unscii-16` we ship. Whatever the project's own licence, taking it
-    /// would mean shipping a file whose terms and checksums are not the ones
-    /// `PROVENANCE.md` records. This fails the build rather than the submission.
+    /// `unscii-16-full` merges GPL Unifont, a word from the CC0 `unscii-16`
+    /// that `PROVENANCE.md` records.
     #[test]
     fn the_gpl_licensed_variant_is_not_in_the_repository() {
         let directory = assets().join("fonts/unscii");

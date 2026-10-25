@@ -6,25 +6,14 @@
 use std::time::{Duration, Instant};
 
 use crate::launch::Switch;
-use crate::play::{Game, available};
-
-/// From the menu to a tower of this length, at its first prompt.
-fn raise(game: &Game, length: &str) {
-    game.type_raw("play");
-    game.expect_drawn("open a tower");
-    game.type_raw("new");
-    game.expect_drawn("how long a game?");
-    game.type_raw(length);
-    game.expect_drawn("wizard $");
-}
+use crate::play::Game;
 
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn the_manual_opens_before_there_is_a_tower() {
-    if !available() {
+    let Some(game) = Game::at_the_threshold() else {
         return;
-    }
-    let game = Game::at_the_threshold();
+    };
     game.expect_drawn("no tower yet");
     game.type_raw("manual");
     game.expect_drawn("which part?");
@@ -37,10 +26,9 @@ fn the_manual_opens_before_there_is_a_tower() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn back_and_b_go_one_page_back() {
-    if !available() {
+    let Some(game) = Game::at_the_threshold() else {
         return;
-    }
-    let game = Game::at_the_threshold();
+    };
     game.expect_drawn("no tower yet");
     game.type_raw("play");
     game.expect_drawn("open a tower");
@@ -55,11 +43,10 @@ fn back_and_b_go_one_page_back() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn f6_writes_nothing_until_there_is_a_session() {
-    if !available() {
-        return;
-    }
     // At the menu `F6` would write a trace of a session that has not happened.
-    let game = Game::at_the_threshold();
+    let Some(game) = Game::at_the_threshold() else {
+        return;
+    };
     game.expect_drawn("no tower yet");
     game.press("F6");
     std::thread::sleep(Duration::from_millis(1500));
@@ -67,7 +54,7 @@ fn f6_writes_nothing_until_there_is_a_session() {
         !game.has_written("orbs-parse.tsv"),
         "F6 at the menu wrote a trace of a session that has not happened",
     );
-    raise(&game, "short");
+    game.raise("short");
     game.press("F6");
     let trace = game.wrote("orbs-parse.tsv");
     assert!(!trace.is_empty(), "F6 in a tower wrote an empty trace");
@@ -76,19 +63,19 @@ fn f6_writes_nothing_until_there_is_a_session() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn the_boot_card_plays_once() {
-    if !available() {
-        return;
-    }
     // Boot, menu, choose — and not boot again, which the terminal build once
     // did by building every swapped session with a live `Boot`.
-    let game = Game::launch()
+    let Some(game) = Game::launch()
         .booting()
         .motion(Switch::Always)
         .at_the_threshold()
-        .spawn();
+        .spawn()
+    else {
+        return;
+    };
     game.expect_drawn("no tower yet");
     let chosen = Instant::now();
-    raise(&game, "short");
+    game.raise("short");
     assert!(
         chosen.elapsed() < Duration::from_secs(5),
         "the tower took {:?} to arrive — the boot card played a second time",
@@ -104,34 +91,35 @@ fn the_boot_card_plays_once() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn a_length_sets_how_far_the_ley_line_runs() {
-    if !available() {
+    let Some(medium) = Game::at_the_threshold() else {
         return;
-    }
-    let medium = Game::at_the_threshold();
+    };
     medium.expect_drawn("no tower yet");
-    raise(&medium, "medium");
+    medium.raise("medium");
     medium.opens("weave", "0 of 60000");
 
     // Six figures are shortened, so the long line still fits the screen.
-    let long = Game::at_the_threshold();
+    let Some(long) = Game::at_the_threshold() else {
+        return;
+    };
     long.expect_drawn("no tower yet");
-    raise(&long, "long");
+    long.raise("long");
     long.opens("weave", "0 of 250k");
 }
 
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn a_new_game_draws_a_seed_of_its_own() {
-    if !available() {
-        return;
-    }
     // Blank, so nothing names one — as for a player.
-    let game = Game::launch()
+    let Some(game) = Game::launch()
         .at_the_threshold()
         .env("ORBS_SEED", "")
-        .spawn();
+        .spawn()
+    else {
+        return;
+    };
     game.expect_drawn("no tower yet");
-    raise(&game, "short");
+    game.raise("short");
     let screen = game.screen();
     let seed = screen
         .split("orb 0 ")

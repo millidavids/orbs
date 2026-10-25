@@ -1,22 +1,14 @@
 //! The spell editor: three states, and words rather than punctuation.
 //!
-//! The in-game shape of §8's hot-reloaded spellbook, built first so the two
-//! agree — what a save does here is what `:w` in vim will have to do there.
+//! [`Mode::Command`] takes words, [`Mode::Editing`] keystrokes, and
+//! [`Mode::Reading`] shows the buffer as the orb hears it (§19). Opening in
+//! command state means the first keystroke cannot damage anything.
 //!
-//! [`Mode::Command`] takes words, [`Mode::Editing`] takes keystrokes into the
-//! spell, and [`Mode::Reading`] shows the buffer as the orb hears it, which is
-//! where the orb's reading went when saving stopped rewriting the file (§19).
-//! Opening in command state means the first keystroke cannot damage anything.
+//! No `save`: the buffer writes itself a beat after typing stops
+//! ([`Editor::settle`]), so `quit` has nothing to refuse over.
 //!
-//! No `save`: the buffer writes itself out a beat after the typing stops
-//! ([`Editor::settle`]), and a spell can be edited *while it is running* — so
-//! there is nothing to discard and nothing for `quit` to refuse over.
-//!
-//! The buffer is here rather than in `orbs-sim` because a keystroke reaches no
-//! decision; the *save* is the decision, and goes through `Sim::write_spell`.
-//! `orbs-sim` also may not name a layout type (`tests/boundaries.rs`), so a
-//! buffer there could not know its pane height. In `orbs-shell` rather than a
-//! frontend because both map their keystrokes onto `orbs_shell::Key`.
+//! Not in `orbs-sim`: a keystroke reaches no decision, the save does, through
+//! `Sim::write_spell`. Not in a frontend: both map onto `orbs_shell::Key`.
 
 use orbs_render::arriving;
 // One indentation rule, folded here as you type and by the orb on save —
@@ -82,11 +74,8 @@ pub struct Editor {
     running_line: Option<u64>,
     /// How the orb reads the buffer, line for line.
     ///
-    /// Pushed in like [`running_line`](Self::running_line): what a line *means*
-    /// is the sim's decision (rule 2). Refreshed when the buffer settles, not
-    /// every frame — see `editing::autosave`. `reading[i]` belongs to
-    /// `lines[i]`, and an edited buffer may be a line longer than its reading,
-    /// so every use is indexed rather than zipped.
+    /// Pushed in like [`running_line`](Self::running_line), when the buffer
+    /// settles. Indexed, never zipped, since the buffer may be a line longer.
     reading: Vec<orbs_sim::Reading>,
     /// Whether the scribing guide is showing beside the buffer.
     guiding: bool,
@@ -110,9 +99,7 @@ const SETTLE: f32 = 0.6;
 
 /// Something the editor would not do.
 ///
-/// §6 forbids a bare error, so this has a sentence in `prose.toml` saying what
-/// to do instead. One variant: `Unsaved` went when the editor started saving
-/// itself.
+/// Each has a sentence in `prose.toml` saying what to do instead (§6).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Complaint {
     /// A word the editor does not know.
@@ -145,10 +132,8 @@ const WORDS: &[(&str, Word)] = &[
 
 /// The vim shorthand, matched **exactly** and never advertised.
 ///
-/// A separate table from [`WORDS`] because it matches exactly — a
-/// prefix-matched `w` would silently shadow the first future word beginning
-/// with it. `no_shorthand_disagrees_with_the_word_it_abbreviates` keeps the two
-/// agreeing.
+/// Apart from [`WORDS`], or a prefix-matched `w` shadows a future word.
+/// `no_shorthand_disagrees_with_the_word_it_abbreviates` keeps them agreeing.
 const SHORTHAND: &[(&str, Word)] = &[
     ("w", Word::Save),
     ("q", Word::Quit),
@@ -208,6 +193,33 @@ impl Editor {
                 verbs: Vec::new(),
             },
         }
+    }
+
+    /// The editor `scribe` asked for, read and guided before the first
+    /// keystroke: a spell opened with a fault in it says so on the way in, and
+    /// the guide opens on the vocabulary rather than blank.
+    #[must_use]
+    pub fn opened(
+        request: &orbs_sim::Request,
+        sim: &orbs_sim::Sim,
+        scrivener: &dyn orbs_sim::Scrivener,
+    ) -> Self {
+        let mut editor = Self::open(&request.name, &request.domain, &request.lines);
+        editor.set_reading(sim.read_spell_with(
+            &request.name,
+            &request.domain,
+            &request.lines,
+            scrivener,
+        ));
+        editor.refresh(sim);
+        editor
+    }
+
+    /// Read the buffer as the orb will, after a save. Write first and then read,
+    /// so a changed line is read once.
+    pub fn read_back(&mut self, sim: &orbs_sim::Sim, scrivener: &dyn orbs_sim::Scrivener) {
+        let reading = sim.read_spell_with(&self.name, &self.domain, &self.lines, scrivener);
+        self.set_reading(reading);
     }
 
     /// Let `delta` seconds pass, and say whether the spell should be written now.
@@ -381,9 +393,7 @@ impl Editor {
 
     /// Mark the buffer saved.
     ///
-    /// Disarms the settle clock too: it once cleared only `dirty`, so an
-    /// explicit `w` and the debounce both wrote — two program swaps under a
-    /// running invocation.
+    /// Disarms the settle clock too, or `w` and the debounce both write.
     pub const fn saved(&mut self) {
         self.dirty = false;
         self.quiet_for = None;
@@ -425,10 +435,7 @@ impl Editor {
 
     /// The byte offset of character `column` on the current line.
     fn offset(&self, column: usize) -> usize {
-        self.current()
-            .char_indices()
-            .nth(column)
-            .map_or_else(|| self.current().len(), |(at, _)| at)
+        orbs_render::char_index(self.current(), column)
     }
 
     /// Take one character of typing, wherever the mode sends it.
@@ -515,9 +522,8 @@ impl Editor {
     /// How many characters `Backspace` should eat to fall back one level, if the
     /// caret is sitting in a line's leading whitespace.
     ///
-    /// `None` when it is not, which is the ordinary one-character case. Falls
-    /// back to the previous multiple of a level rather than a flat four, so a
-    /// hand-spaced line lands on the grid instead of off it.
+    /// `None` when it is not. To the previous multiple of a level, so a
+    /// hand-spaced line lands on the grid.
     fn outdent(&self) -> Option<usize> {
         let width = INDENT.chars().count();
         if self.column == 0 || width == 0 {
@@ -561,9 +567,7 @@ impl Editor {
 
     /// Delete the character before the caret, joining lines at column zero.
     ///
-    /// In the indent it deletes a whole level — the other half of auto-indent:
-    /// `Enter` inside a block leaves the caret four columns in, and getting back
-    /// out would otherwise cost the four keypresses the indent just saved.
+    /// In the indent it deletes a whole level, auto-indent's other half.
     pub fn backspace(&mut self) {
         match self.mode {
             Mode::Command => {
@@ -728,8 +732,8 @@ fn word(typed: &str) -> Option<Word> {
     SHORTHAND
         .iter()
         .find(|(name, _)| *name == typed)
-        .or_else(|| WORDS.iter().find(|(name, _)| name.starts_with(typed)))
         .map(|(_, word)| *word)
+        .or_else(|| crate::prefix::unique_prefix(WORDS.iter().copied(), typed))
 }
 
 #[cfg(test)]

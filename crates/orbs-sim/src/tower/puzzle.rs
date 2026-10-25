@@ -5,12 +5,9 @@ use bevy_ecs::prelude::*;
 
 /// A puzzle open on a fixture.
 ///
-/// One list, matched exhaustively everywhere the question is asked. A maze, a
-/// ward, a charm, a course and a beast all hold a fixture busy without a
-/// `Working` component — a spell's `summon` or `haul` must never wait on the
-/// puzzle it is solving — so every place that asks *"is anything happening
-/// here"* has to know about each. Two hand-kept lists lost the pylon's arm once
-/// (§19); a variant added here is a compile error in both.
+/// Matched exhaustively wherever *is anything happening here* is asked, since a
+/// puzzle holds its fixture busy without a `Working` component. Two hand-kept
+/// lists once lost the pylon (§19); a new variant is a compile error in both.
 ///
 /// A fixture holds at most one: every puzzle has its own instrument.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

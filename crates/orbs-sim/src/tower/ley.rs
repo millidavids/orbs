@@ -1,19 +1,9 @@
 //! The Ley Line, read (DESIGN.md §11.5, §19).
 //!
-//! One list of stations on total experience. A *step* grants something and
-//! passing it is the grant — nothing to decide and nothing to store, since what
-//! a player has is a function of [`Experience`] against the authored list. A
-//! *fork* offers its nodes and `take` chooses one: opening costs nothing and
-//! taking closes it, which is what lets experience stay unspendable (§11.5)
-//! while still offering a choice.
-//!
-//! A fork's nodes are one each of provision, war and craft, so a choice is
-//! always between kinds of play. What each grants and its lane is
-//! `tower::grant`'s — derived from the id, one parser, no second table.
-//! `Progression::check` refuses a fork with two nodes in one lane.
-//!
-//! This module was `tower::mastery`, and the branching tree it read is the Ley
-//! Line's forks now. Mastery is the per-domain lines — see there.
+//! One list of stations on total experience. Passing a *step* is its grant,
+//! derived from [`Experience`], so nothing is stored. A *fork* offers one node
+//! per lane and `take` chooses one, which keeps experience unspendable (§11.5)
+//! while offering a choice. What a node grants is `tower::grant`'s.
 
 use bevy_ecs::prelude::*;
 
@@ -24,10 +14,8 @@ use super::grant::{Grant, Lane, granted};
 
 /// Which fork nodes the orb has taken.
 ///
-/// A list of ids, not a set of flags: an id is what the content file authors,
-/// what a sentence is keyed by and what a save carries, where a `bool` per node
-/// would be regenerated every time the line grew. `Progression::check` refuses
-/// a duplicate, so a name here means one node.
+/// Ids, not flags: the id is what content authors, a sentence keys and a save
+/// carries. `Progression::check` refuses duplicates.
 #[derive(Resource, Debug, Default, Clone, PartialEq, Eq)]
 pub struct Taken(Vec<String>);
 
@@ -45,9 +33,7 @@ impl Taken {
 
     /// Record one, if it is not held already.
     ///
-    /// Idempotent, so the caller need not check: a double `take` is a player
-    /// pressing Enter twice, and a duplicate id would make `steps_granted` count
-    /// the same node twice and hand out a budget nobody bought.
+    /// Idempotent: a double Enter must not grant one node's steps twice.
     pub(crate) fn hold(&mut self, id: &str) {
         if !self.0.iter().any(|held| held == id) {
             self.0.push(id.to_owned());
@@ -124,11 +110,8 @@ pub struct Node {
     pub standing: Standing,
     /// Whether the tower has earned enough to reach it at all.
     ///
-    /// Not derivable from [`standing`](Self::standing), which is why it is a
-    /// field. `Locked` covers a total not yet reached and a fork whose choice a
-    /// sibling took — the same glyph, because the node cannot be had either
-    /// way, but not the same sentence: *work more* against *you chose
-    /// otherwise*.
+    /// A field, because `Locked` covers both a total not reached and a sibling's
+    /// choice — one glyph, two sentences.
     pub unlocked: bool,
     /// Which lane it sits in. A step has none.
     pub lane: Option<Lane>,
@@ -137,13 +120,8 @@ pub struct Node {
 impl Node {
     /// What a cursor holds to mean *this* node.
     ///
-    /// Not the id: a step's id is what it *grants*, and eight stations grant
-    /// concentration, so a cursor holding `concentration` would point at eight
-    /// nodes and draw all of them aimed. The total tells them apart, and
-    /// `Progression::check` makes the line ascend strictly.
-    ///
-    /// The id stays what it was: the content file's word, the prose key, and
-    /// what `take` names. Only the *cursor* needed a finer identity.
+    /// Not the id, which eight stations share as `concentration`; the total,
+    /// which `Progression::check` makes strictly ascending, tells them apart.
     #[must_use]
     pub fn mark(&self) -> String {
         format!("{}:{}", self.at, self.id)
@@ -165,11 +143,8 @@ pub struct Station {
 
 /// The Ley Line, in order, against what the tower has earned.
 ///
-/// A step is `Taken` or `Locked` and never `Open`: passing one *is* taking it.
-/// A fork whose total has not been reached holds only `Locked` nodes; an open
-/// one holds `Open` nodes until one is taken, after which that one is `Taken`
-/// and its siblings are `Locked` — the choice is spent, and the screen has to
-/// show that it was spent rather than that the others were never there.
+/// A step is `Taken` or `Locked`, never `Open`. A taken fork's siblings are
+/// `Locked`, so the screen shows a choice spent, not nodes never there.
 #[must_use]
 pub fn ley_line(world: &World) -> Vec<Station> {
     let earned = world.resource::<Experience>().get();
@@ -237,15 +212,10 @@ fn standing_of(node: &str, unlocked: bool, spent: bool, taken: &Taken) -> Standi
 
 /// Open what every station between `before` and `after` opens.
 ///
-/// The other half of "passing a step *is* the grant": what a step grants is
-/// derived from the total, but what it *opens* is a set the world holds, so
-/// crossing has to write it. Without this the grimoire and the forge — the two
-/// rooms no deed reaches — were shut for ever in a sealed tower.
-///
-/// Called from [`credit`](super::credit), which is the only thing that moves
-/// the total, so every path that earns arrives here. A half-open range: a
-/// station exactly at `before` was crossed by an earlier call and must not be
-/// announced twice — and `opening` refuses to say a second time in any case.
+/// What a step opens is a set the world holds, not derived, so crossing writes
+/// it — or the grimoire and the forge, which no deed reaches, stay shut. From
+/// [`credit`](super::credit), the one thing that moves the total; half-open, so
+/// a station at `before` is not announced twice.
 pub(crate) fn cross(world: &mut World, before: u64, after: u64) {
     let opens = opens_between(world, before, after);
     if opens.is_empty() {
@@ -256,15 +226,10 @@ pub(crate) fn cross(world: &mut World, before: u64, after: u64) {
 
 /// Open everything the line has already passed, without saying so.
 ///
-/// A restore, not an earning. The total and what passing a station opened are
-/// two records of one fact and only the second is written down, so an older
-/// document comes back with a room shut that the tower paid for long ago — and
-/// nothing would ever open it, because the crossing happens once at an edge in
-/// the past.
-///
-/// Silent, for [`Experience::restore`](super::Experience)'s reason: a load that
-/// congratulated you on yesterday's work would be reporting a lie in voice. It
-/// runs before `seal`, so a room this opens gets its markers cleared.
+/// A restore, not an earning: an older document can come back with a room shut
+/// that was paid for, and its crossing edge is in the past. Silent, as
+/// [`Experience::restore`](super::Experience) is; before `seal`, so its markers
+/// clear.
 pub(crate) fn caught_up(world: &mut World) {
     let earned = world.resource::<Experience>().get();
     for key in opens_between(world, 0, earned) {
@@ -285,27 +250,20 @@ fn opens_between(world: &World, before: u64, after: u64) -> Vec<String> {
 
 /// The next total that reaches anything.
 ///
-/// The "what's next" line, and the reason a locked station is drawn at all: a
-/// screen showing only what you have is a receipt, and §11.5 wants the player to
-/// know what the work is *for*. `None` means nothing more is authored yet, which
-/// is not the same as being finished.
+/// The "what's next" line: a screen of only what you have is a receipt, and
+/// §11.5 wants the work's purpose known. `None` is nothing more authored yet.
 #[must_use]
 pub fn next(world: &World) -> Option<u64> {
-    let earned = world.resource::<Experience>().get();
-    world
-        .resource::<Progression>()
-        .ley_line()
-        .iter()
-        .map(|station| station.at)
-        .find(|at| *at > earned)
+    match toward(world).ahead {
+        super::renown::Ahead::Tier(at) => Some(at),
+        super::renown::Ahead::Unasked | super::renown::Ahead::Nothing => None,
+    }
 }
 
 /// Where the tower's total stands against the next station.
 ///
-/// The gauge's reading, sharing `Toward`'s arithmetic with renown so the two
-/// bars at the top of the pane cannot disagree about what *nearly there* looks
-/// like. Measured from the station behind, which stops it jumping backwards each
-/// time one is passed.
+/// `Toward`'s arithmetic, shared with renown so the two bars agree, measured
+/// from the station behind so it never jumps backwards.
 #[must_use]
 pub fn toward(world: &World) -> super::renown::Toward {
     let earned = world.resource::<Experience>().get();
@@ -320,9 +278,6 @@ pub fn toward(world: &World) -> super::renown::Toward {
 }
 
 /// The last total the line is authored to, for a bar to be measured against.
-///
-/// Derived, where it was a fixed hundred — §19 said the hundred would become
-/// derived once the curve reached it, and the curve now runs past it.
 #[must_use]
 pub fn scale(world: &World) -> u64 {
     world

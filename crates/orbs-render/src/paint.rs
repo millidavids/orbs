@@ -140,25 +140,10 @@ impl<'a> Painter<'a> {
 
     /// Draw a bracketed gauge — `[||||||      ]` — and record `spoken`.
     ///
-    /// A second bar vocabulary, on purpose. [`meter`](Self::meter) draws `█`/`░`
-    /// for anything measuring a *run* — the five instruments, the fire, the grind
-    /// — while this measures a tier, a standing climbed toward rather than a job
-    /// in flight; the two never share a surface. `meter_upward`'s doc warns that
-    /// one meter drawn two ways is a defect, but that was the *same* bar rendered
-    /// differently by pane shape. The brackets tell two kinds of thing apart, and
-    /// make the gauge read as a discrete widget with ends.
-    ///
-    /// Nothing is drawn if the area cannot hold both brackets and a cell between
-    /// them: a gauge with no room for its fill is two characters claiming to be a
-    /// measurement.
-    ///
-    /// The fill's hue ramp is not the caller's to choose — [`Fill::of`] picks the
-    /// step and the fill is drawn as a [`Depiction`], the only channel a colour
-    /// may travel on, since `orbs-shell` may not resolve one and both frontends
-    /// read the ramp from their own theme. So `style` must carry no accent:
-    /// `Style::depicted` yields nothing on an accented cell (§4 reserves the
-    /// triad for meaning), so `Role::Success` would give a green bar at every
-    /// fill and never say why. The brackets take `style` as given.
+    /// A second vocabulary on purpose: [`meter`](Self::meter) measures a run,
+    /// this a tier climbed toward. Nothing drawn without room for a fill cell.
+    /// The hue is [`Fill::of`]'s, as a [`Depiction`], so `style` must carry no
+    /// accent (§4).
     pub fn gauge(&mut self, area: Rect, done: u32, total: u32, style: Style, spoken: &str) {
         self.gauge_hued(area, done, total, Fill::of(done, total), style, spoken);
     }
@@ -232,20 +217,9 @@ impl<'a> Painter<'a> {
 
     /// Draw a meter as a bar, silently.
     ///
-    /// The same glyphs as [`Painter::progress`] with nothing said, for a panel of
-    /// standing meters — §10.1's five instruments — where speaking each one per
-    /// frame would bury the stream in furniture (§14: *"progress announcements:
-    /// completion only"*). A caller owes the listener one summary utterance
-    /// covering the panel ([`Painter::announce`]), or it is a screen a reader
-    /// cannot see.
-    ///
-    /// Integer-only and clamped as [`Painter::progress`] is, for the same reason.
-    ///
-    /// It fills the whole rectangle, as [`Painter::meter_upward`] does. This drew
-    /// a single row however tall the rect was, which [`Painter::fire_meter`] and
-    /// [`Painter::grind_meter`] do not — so one rect would be a two-row bar for
-    /// one instrument and a one-row bar for the next. Every caller passes a single
-    /// row today; this fixes the four painters being able to disagree tomorrow.
+    /// [`Painter::progress`]'s glyphs, unsaid, for a panel of meters (§14); the
+    /// caller owes one [`Painter::announce`]. Fills the whole rectangle, as
+    /// every picture painter does.
     pub fn meter(&mut self, area: Rect, done: u32, total: u32, style: Style) {
         let area = area.intersection(self.area);
         if area.is_empty() {
@@ -262,12 +236,7 @@ impl<'a> Painter<'a> {
     /// A level reads as growing from the floor, which is what §10.1's side panel
     /// wants when the pane is taller than it is wide.
     ///
-    /// Here rather than in a frontend because the alternative already happened:
-    /// the Bevy panel re-derived the fill arithmetic and hand-drew the `█`/`░`
-    /// pair, so one instrument panel drew its bar two ways depending on which way
-    /// the pane had split. Changing the glyphs or the clamping in `meter` would
-    /// have left the side panel on the old ones, and F4 would show the same five
-    /// instruments in two bar vocabularies.
+    /// Here, not in a frontend, so one bar never draws two ways by pane shape.
     pub fn meter_upward(&mut self, area: Rect, done: u32, total: u32, style: Style) {
         let area = area.intersection(self.area);
         if area.is_empty() {
@@ -288,16 +257,10 @@ impl<'a> Painter<'a> {
     /// reports fuel remaining rather than ticks elapsed, so the bar drains — the
     /// flame shrinks and the plume above it grows, with nothing here arranging it.
     ///
-    /// Silent, and the fill boundary is exactly [`Painter::meter`]'s: both take
-    /// their length from the same `filled_of`, so they can never disagree about
-    /// where the value is, and the cell behind the flame front is always `█` with
-    /// the cell ahead always `░`, so the join reads with no colour at all — §14,
-    /// a meter's *value* is never carried by hue.
-    ///
-    /// [`FLIP_HZ`](crate::FLIP_HZ) caps how fast any one cell may change, by
-    /// construction; 3–30 Hz is the photosensitive band. `phase` is elapsed
-    /// seconds from the frontend's own clock — nothing here knows what a second
-    /// is.
+    /// Silent, its length [`Painter::meter`]'s `filled_of`, and the join `█`
+    /// against `░`, so the value needs no hue (§14). [`FLIP_HZ`](crate::FLIP_HZ)
+    /// keeps every cell below the photosensitive band; `phase` is the
+    /// frontend's seconds.
     pub fn fire_meter(&mut self, area: Rect, done: u32, total: u32, burn: fire::Burn) {
         self.burning(area, done, total, burn, Runs::Rightward);
     }
@@ -312,22 +275,9 @@ impl<'a> Painter<'a> {
 
     /// [`Painter::meter`], drawn as a mortar being worked.
     ///
-    /// The bar is what is in the bowl, not how far along: chunks become powder,
-    /// the boundary is where the pestle works, and the whole bar carries
-    /// something at every moment. So a *loaded* mortar and a *finished* one are
-    /// this same picture at nothing-ground and everything-ground, which is what
-    /// lets the panel draw two states the sim reports no meter for at all.
-    ///
-    /// Silent, and the value boundary is exactly [`Painter::meter`]'s: both take
-    /// their length from the same `filled_of`, and the cell against the face is
-    /// always `░` so the join reads with no colour at all.
-    ///
-    /// Nothing here is a tool. An earlier version put a pestle `■` in the working
-    /// gap, and a mark from outside the fill vocabulary reads as an object
-    /// visiting the bar rather than as the material changing state. Four shades
-    /// of one substance is the whole picture, and it is direction-neutral for
-    /// free — §10.1's panel turns horizontal whenever the pane is taller than it
-    /// is wide.
+    /// The bar is what is in the bowl, so loaded and finished are this picture
+    /// at its ends. Silent, its boundary [`Painter::meter`]'s. Four shades of
+    /// one substance and no pestle, which read as an object visiting.
     pub fn grind_meter(&mut self, area: Rect, done: u32, total: u32, work: grind::Grind) {
         self.grinding(area, done, total, work, Runs::Rightward);
     }
@@ -343,15 +293,9 @@ impl<'a> Painter<'a> {
 
     /// [`Painter::meter`], drawn as a water bath.
     ///
-    /// For the balneum mariae (§10.1), which digests gently over the athanor. The
-    /// bar is the liquid in the vessel, not how far along: a charged bath is a
-    /// shallow layer and a finished one is full, so the two states the sim reports
-    /// no meter for are this same picture at its ends rather than special cases.
-    ///
-    /// Silent, and the value boundary is exactly [`Painter::meter`]'s — both take
-    /// their length from the same `filled_of`. The join is solid against blank:
-    /// *all* of the bath's motion is in its colour, so the level survives
-    /// greyscale with nothing to argue about.
+    /// The liquid in the vessel, so charged and finished are its ends. Silent,
+    /// its boundary [`Painter::meter`]'s; the motion is all colour, so the
+    /// level survives greyscale.
     pub fn bath_meter(&mut self, area: Rect, done: u32, total: u32, work: bath::Steep) {
         // The orientation is the painter's to know, not the caller's: one that
         // had to set `upward` itself could set it wrong, and the one thing it
@@ -564,10 +508,8 @@ impl<'a> Painter<'a> {
     /// comfort and never a carrier (§14), and the row it belongs to has already
     /// been announced whole — one utterance per line, not one per word.
     ///
-    /// Clipped to this painter's own region, so a run cannot colour a
-    /// neighbouring pane any more than a glyph can reach one. That matters more
-    /// here than for a tint: the editor's buffer and its guide are two painters
-    /// side by side, and a long line runs at the seam between them.
+    /// Clipped to this painter's region, since the editor's buffer and guide
+    /// meet at a seam.
     pub fn lit(&mut self, area: Rect, kind: Lexeme) {
         let area = area.intersection(self.area);
         self.frame.lit(area, kind);
@@ -580,11 +522,7 @@ impl<'a> Painter<'a> {
     /// centred on the reading, which pans as the reading walks; see
     /// `maze::viewport` for why that replaced refusing outright.
     ///
-    /// Structural and silent, like [`Painter::fill`] and the instrument meters.
-    /// What a listener needs is the four readings and how much has been walked,
-    /// and both are already in the panel's one utterance — a second continuous
-    /// announcement would break §14's *"progress announcements: completion only"*
-    /// from the very surface that most wants to.
+    /// Silent: the panel's one utterance already carries the readings (§14).
     pub fn stacks(&mut self, area: Rect, maze: &Stacks) -> bool {
         let area = area.intersection(self.area);
         let Some((at, from_x, from_y)) = maze::viewport(maze, area) else {
@@ -641,19 +579,8 @@ impl<'a> Painter<'a> {
 
     /// Draw a horizontal rule of `cells`, starting at `at`. Structural: silent.
     ///
-    /// Extracted rather than invented: eight call sites hand-rolled `glyphs(at,
-    /// &"─".repeat(n), style)` — the rail's box separators and its foot, the
-    /// weave's two tracks, and five in the `screens` example — and a repeated
-    /// three-line idiom is how two of them come to disagree about which glyph a
-    /// rule is drawn from. `cp437::box_drawing::HORIZONTAL` is now named once.
-    ///
-    /// Silent like every other structural method, for the reason the rail's own
-    /// comment gives: *"a reader hearing six horizontal lines read out between
-    /// seven domains gets box-drawing noise where a sighted player gets
-    /// separation for free."* A caller needing it spoken owes the listener an
-    /// [`announce`](Self::announce).
-    ///
-    /// Returns the cells drawn, which is `0` past the painter's edge.
+    /// One idiom for every rule, so the glyph is named once. Silent, as all
+    /// structure is. Returns the cells drawn, `0` past the painter's edge.
     pub fn rule(&mut self, at: Pos, cells: u16, style: Style) -> u16 {
         let run = usize::from(cells);
         self.glyphs(
@@ -722,19 +649,9 @@ impl<'a> Painter<'a> {
     /// announce yet, and [`Painter::border`] speaks its title as a heading, which
     /// would put a pane into the linear stream before the pane exists.
     ///
-    /// It grows from all four corners at once, each running clockwise along its
-    /// own side, and they meet on the corners together; `progress` at or above
-    /// 1.0 is exactly [`border`](Self::border) with no title. This replaced a
-    /// single line from the top-left, which reads well and takes four times as
-    /// long as it needs to — at the 80×22 floor one line is 202 cells where the
-    /// longest of four sides is 79. Each side is drawn `progress` of its *own*
-    /// length rather than at a shared cells-per-second, or the short sides would
-    /// finish early and sit waiting, and the shape would stop being four lines
-    /// racing.
-    ///
-    /// Where a frontend gets `progress` from is its own business — nothing in
-    /// this crate knows what a second is. The *path* is geometry, which is why it
-    /// is here.
+    /// From all four corners at once, each side `progress` of its own length,
+    /// so they meet together; at 1.0 it is [`border`](Self::border). The path is
+    /// geometry, so here; `progress` is the frontend's.
     pub fn border_revealed(&mut self, area: Rect, style: Style, progress: f32) {
         let area = area.intersection(self.area);
         if area.cols < 2 || area.rows < 2 {
@@ -866,12 +783,8 @@ impl<'a> Painter<'a> {
 
 /// Which way a picture bar runs, and the axis mapping that follows from it.
 ///
-/// The four picture painters had this written out four times, with the two axes
-/// swapped between the pairs — four places for the fill direction to go wrong
-/// independently, in a module whose own `meter_upward` doc records the panel once
-/// drawing one instrument two ways depending on which way the pane had split.
-///
-/// `step` always counts from the end the bar fills from and `lane` always runs
+/// One mapping for the four picture painters. `step` always counts from the end
+/// the bar fills from and `lane` always runs
 /// across its thickness, so [`fire::cell`] and [`grind::cell`] can be written
 /// once for both orientations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -951,25 +864,10 @@ fn filled_of(steps: u16, done: u32, total: u32) -> u16 {
 
 /// [`filled_of`], crept forward by `advance` of the way to the next reading.
 ///
-/// For bars that fill. The sim turns at 1 Hz (§5.0) and reports whole ticks, so a
-/// meter read straight off it jumps once a second; the tick count is a *sample*
-/// of something continuous, so drawing between samples is closer to the truth.
-/// See [`Grind::advance`](crate::Grind::advance). A bar that *drains* would need
-/// the reading at `done - 1`; the athanor's fuel is the one of those and does not
-/// use this.
-///
-/// A bar creeps only while there is a next sample to creep toward. At rest the
-/// sim reports no quantity at all (`Charged`, `Fouled` and `Ready` all give
-/// `meter: None`), so `shell::panel` stands one in — and a `0/1` stand-in fed to
-/// [`creeping`] predicts the whole bar: an idle bowl grinding itself to
-/// completion and snapping back once a second, a jammed one reading as `ready`
-/// for most of every second, exactly the misreport §10.1's panel exists to
-/// remove. "An eight-tick grind is eight seconds of work" is a claim about a
-/// duration *in progress*, and nothing is in progress in a bowl at rest.
-///
-/// Takes `working` and `advance` loose rather than a `Grind`, because the bath
-/// wants the identical rule and is not one: a bath has no pour and no leavings in
-/// flight, so what the two share is this arithmetic, not a type.
+/// For bars that fill: a tick count samples something continuous, so drawing
+/// between samples is truer ([`Grind::advance`](crate::Grind::advance)). Only
+/// while `working`, or a bowl at rest grinds itself whole each second. Loose
+/// arguments, since the bath shares the rule and not the type.
 fn filling(steps: u16, done: u32, total: u32, working: bool, advance: f32) -> u16 {
     if working {
         creeping(steps, done, total, advance)
@@ -986,11 +884,8 @@ fn creeping(steps: u16, done: u32, total: u32, advance: f32) -> u16 {
 
 /// Whether the fire has fuel the bar has rounded away.
 ///
-/// The one state where the fire and the plain meter disagree, deliberately: a
-/// hearth with a handful of ticks left divides to zero cells, and a bar drawn
-/// empty says *out*. "Still lit" against "cold" is the distinction `kindle` turns
-/// on, so losing it to integer division would fail the one job §10.1 gives the
-/// panel.
+/// Where fire and meter disagree on purpose: a few ticks divide to zero cells,
+/// and *still lit* is what `kindle` turns on.
 const fn guttering(filled: u16, done: u32, burn: fire::Burn) -> bool {
     burn.lit && filled == 0 && done > 0
 }
@@ -1031,12 +926,7 @@ mod tests {
 
     #[test]
     fn every_meter_covers_the_rectangle_it_was_given() {
-        // Four painters draw §10.1's bars and they must agree about *where*, or
-        // the same rect is a two-row bar for one instrument and a one-row bar for
-        // the next. `meter` was the odd one out: it drew a single row however tall
-        // the rect was, while the other three filled their whole area. Caught only
-        // because nothing passes a tall rect today — which is how a divergence
-        // like this survives to the day something does.
+        // Four painters must agree about *where* in one rect.
         let area = Rect::new(1, 1, 8, 3);
         let painted = |draw: &dyn Fn(&mut Painter<'_>)| -> usize {
             let mut frame = Frame::new(GridSize::new(10, 5));
@@ -1087,16 +977,8 @@ mod tests {
 
     #[test]
     fn a_burning_meter_reads_the_same_value_as_a_plain_one() {
-        // The regression this file's own `meter_upward` doc warns about: the panel
-        // once re-derived the fill arithmetic and drew one instrument two ways
-        // depending on which way the pane had split. A fire that computed its own
-        // length would be the same defect wearing a costume — the bar saying one
-        // thing with motion on and another with it off. Both take their length
-        // from `filled_of`, and this is what keeps that a property.
-        //
-        // The two draw their empty halves differently — the plain meter lays down
-        // a `░` track, the fire leaves it clear so the smoke has somewhere to be
-        // — so the join is found as "the first cell that is not lit".
+        // Both take their length from `filled_of`; the join is the first unlit
+        // cell, since their empty halves differ.
         for total in [1u32, 7, 60, 600] {
             for done in [0, total / 3, total / 2, total - 1, total] {
                 for tenths in [0u16, 3, 7, 13] {
@@ -1120,12 +1002,8 @@ mod tests {
 
     #[test]
     fn a_filling_bar_creeps_between_the_worlds_ticks() {
-        // §5.0 turns the world at 1 Hz and reports whole ticks, so a meter read
-        // straight off it moves once a second in one jump; the tick count is a
-        // *sample* of something continuous, so the crept value is closer to the
-        // truth. The two ends have to be exact, or the bar drifts out of step with
-        // the readings it interpolates between: at zero it is the sim's own
-        // answer, at one the answer the sim is about to give.
+        // The two ends exact: the sim's answer now, and the one it is about to
+        // give.
         for total in [6u32, 8, 60] {
             for done in 0..total {
                 let (now, next) = (filled_of(32, done, total), filled_of(32, done + 1, total));
@@ -1145,14 +1023,7 @@ mod tests {
 
     #[test]
     fn a_bowl_at_rest_does_not_creep() {
-        // The regression this file's own layer had no test for. `grind`'s
-        // `a_bowl_at_rest_is_perfectly_still` sweeps `phase` with `filled` handed
-        // in directly, so it never reaches `creeping`, which lives up here and is
-        // driven by `advance` — a different clock. `shell::panel` stands in a
-        // `0/1` meter for the states the sim reports no quantity for, and
-        // `creeping` predicted `1/1` from it: the whole bar. An idle bowl ground
-        // itself to completion and snapped back once a second, and a fouled one
-        // read as `ready` for most of every second.
+        // `creeping` on the panel's `0/1` stand-in once predicted the whole bar.
         let idle = grind::Grind {
             phase: 3.0,
             working: false,
@@ -1191,12 +1062,8 @@ mod tests {
 
     #[test]
     fn a_fire_says_nothing_at_all() {
-        // The whole basis on which `Depiction` is allowed to exist: it carries no
-        // meaning, so it owes the linear stream nothing and must *add* nothing to
-        // it. A frame that spoke differently with the fire on would mean a
-        // listener's screen and a sighted player's had diverged, which §14 does
-        // not permit. Compared against the plain meter rather than emptiness,
-        // because `meter` is silent too and the point is that they match.
+        // `Depiction` carries no meaning, so it adds nothing to the stream
+        // (§14) — compared against the silent plain meter.
         let area = Rect::new(0, 0, 24, 1);
 
         let mut plain = Frame::new(GridSize::new(24, 1));

@@ -1,21 +1,8 @@
 //! Which of the things on screen has the keyboard.
 //!
-//! One enum and one ordering, shared by both frontends, because the ordering is
-//! a *rule* and a second copy of a rule is how the two builds come to disagree.
-//! That is `shortcuts.rs`'s argument and this is the same shape.
-//!
-//! It moved here because the Bevy build spent four resources, four run
-//! conditions and a four-term predicate on the question, and each term is a
-//! place to forget: a surface added without its term does not fail loudly, it
-//! types into an invisible prompt while the player looks elsewhere.
-//! `orbs-tui`'s `surfaces.rs` had already solved it, so this is that solution
-//! ported and shared rather than a third expression of it.
-//!
-//! What it does *not* decide is how a frontend throws a keystroke away. That
-//! genuinely differs: a terminal delivers one key at a time to whoever is
-//! asking, so declining is enough, where Bevy's `MessageReader` carries a cursor
-//! per reader and a system that does not run leaves the keys queued to arrive at
-//! once. §19 records that defect.
+//! One ordering for both frontends, since it is a rule: a surface added
+//! without its term types into an invisible prompt. How a frontend throws a
+//! keystroke away genuinely differs and stays there (§19).
 
 /// What each frontend can answer about its own surfaces.
 ///
@@ -65,10 +52,8 @@ pub enum Focus {
     Manual,
     /// The orb's menu, opened by `quit`.
     ///
-    /// First in the order, and the only one that is not a surface of the tower:
-    /// the four below are places inside a game and cannot coexist, where this is
-    /// the way out and is reached by a word typed at the prompt. Ordered first
-    /// anyway, because if it ever did tie, the way *out* is what a player meant.
+    /// Above every surface inside a game, since the way out is what a player
+    /// means if two ever tie.
     Menu,
     /// A spell, opened by `scribe`.
     Editor,
@@ -78,10 +63,7 @@ pub enum Focus {
     Maze,
     /// The transcript, opened by `unfurl`.
     ///
-    /// There was a `Chant` above this — the menagerie's figure on the arrow keys,
-    /// the fifth surface this module was built for. The menagerie is a logic
-    /// puzzle now (§19) so the variant went, and the module stays, because the
-    /// reason was never the chant: each surface is a term somebody forgets.
+    /// `Chant` stood above this until the menagerie changed (§19).
     Reading,
 }
 
@@ -128,13 +110,9 @@ impl Focus {
 
     /// Whether this surface takes the whole pane, transcript included.
     ///
-    /// The menu, the editor, the weave screen and the maze are **deliberate
-    /// modes** rather
-    /// than layout accidents, and three things follow from it that are otherwise
-    /// easy to get wrong: `prompt::paint` returns early for them, `F5`'s linear
-    /// mirror does not run over them (§14 — a known hole, recorded rather than
-    /// fixed), and a `play.sh` scenario must wait on a *screen* rather than on a
-    /// command block, because the answer to the word has painted over the block.
+    /// A deliberate mode: `prompt::paint` returns early, `F5`'s mirror does not
+    /// run over it (§14, a known hole), and a `play.sh` scenario waits on a
+    /// screen, not a command block.
     #[must_use]
     pub const fn takes_the_pane(self) -> bool {
         matches!(
@@ -208,10 +186,7 @@ mod tests {
 
     /// The tie-break, pinned in the order the two frontends agreed on.
     ///
-    /// This cannot happen — a surface is entered with a word and the prompt is
-    /// dead while one is open — but *"a silent tie would be the harder bug to
-    /// find"*, so the resolution is a fact rather than an accident of the `if`
-    /// chain's order.
+    /// It cannot happen, but a silent tie would be the harder bug.
     #[test]
     fn an_impossible_tie_resolves_to_the_earlier_surface() {
         let all = Open {

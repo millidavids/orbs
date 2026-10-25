@@ -14,42 +14,29 @@ pub const COFFER: &str = "coffer";
 
 /// The dice a wizard starts a siege holding.
 ///
-/// Three against four areas, so one part of the wall gets nothing every round.
-///
-/// Different sizes, deliberately: a `d20` pledged to `sortie` might roll 2 and
-/// waste the round, where a low roll on `succour` merely heals less. A set
-/// rather than three of a kind asks *where variance is cheapest* as well as
-/// where the strength goes.
+/// Different sizes, so the turn asks where variance is cheapest as well as
+/// where strength goes: a `d20` on `sortie` may waste the round, a low roll on
+/// `succour` only heals less.
 pub const POOL: [Die; 3] = [Die::D6, Die::D8, Die::D20];
 
 /// A part of the wall a die can be pledged to.
 ///
-/// Four, and each intent makes a different one urgent — which is what turns
-/// §5.1's telegraph into the thing the turn is spent on. A volley cannot be
-/// answered, so [`Line`](Self::Line) is wasted against one; an onslaught is
-/// everyone at +2, so [`Buckler`](Self::Buckler) is worth most.
+/// Each intent makes a different one urgent, which turns §5.1's telegraph into
+/// the turn: a volley wastes the [`Line`](Self::Line), an onslaught makes the
+/// [`Buckler`](Self::Buckler) worth most.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Area {
-    /// Added to every attack the garrison makes.
-    ///
-    /// Worth nothing against a volley — the garrison does not swing.
+    /// Added to every attack the garrison makes; nothing against a volley.
     Line,
-    /// Added to what the enemy must beat.
-    ///
-    /// The only area that is never wasted — they attack on every intent.
+    /// Added to what the enemy must beat. Never wasted.
     Buckler,
     /// Mettle put back at the end of the round.
     ///
-    /// Resolves *before* the outcome is decided, so a good roll can save a
-    /// siege that was otherwise lost: `Band::mend` brings troops back with the
-    /// fight, and a garrison wounded to nothing stands again at one. Deliberate
-    /// — it is what makes defence a real alternative to killing faster — and
-    /// the manual says so too, after a review asked whether it was a bug.
+    /// Before the outcome is decided, so a good roll can stand a garrison
+    /// wounded to nothing back up at one. Deliberate: it makes defence a real
+    /// alternative to killing faster.
     Succour,
-    /// Mettle spent for damage now.
-    ///
-    /// The one that can lose you the siege, and why there are four areas rather
-    /// than three: an option you can rarely afford.
+    /// Mettle spent for damage now — the one that can lose you the siege.
     Sortie,
 }
 
@@ -59,9 +46,8 @@ impl Area {
 
     /// The word `pledge` takes and the board prints.
     ///
-    /// `buckler` and `succour`, not the obvious `shield` and `rally`: `shield`
-    /// scores 667 against the live verb `wield`, `rally` 600 against the maze's
-    /// `wall`. Both are in register for a game with an `athanor` in it.
+    /// Not `shield` (667 against `wield`) or `rally` (600 against the maze's
+    /// `wall`).
     #[must_use]
     pub const fn word(self) -> &'static str {
         match self {
@@ -78,10 +64,8 @@ impl Area {
         Self::ALL.into_iter().find(|area| area.word() == word)
     }
 
-    /// Whether a die pledged here does anything under `intent`.
-    ///
-    /// Only the line is ever wasted, and saying so lets the board warn before
-    /// the commitment — §5.1's fairness rule applied to allocation.
+    /// Whether a die pledged here does anything under `intent` — so the board
+    /// can warn before the commitment (§5.1).
     #[must_use]
     pub const fn answers(self, intent: Intent) -> bool {
         !matches!(self, Self::Line) || intent.answered()
@@ -113,11 +97,8 @@ impl Strengths {
         }
     }
 
-    /// One area's strength, to add to.
-    ///
-    /// `pub(super)` because [`Siege::resolve`](super::Siege::resolve) is a file
-    /// away now. Wider than `siege` would put a write handle on a round's
-    /// arithmetic in the tower's API.
+    /// One area's strength, to add to — for
+    /// [`Siege::resolve`](super::Siege::resolve) and nothing outside `siege`.
     pub(super) const fn of_mut(&mut self, area: Area) -> &mut u32 {
         match area {
             Area::Line => &mut self.line,
@@ -130,9 +111,8 @@ impl Strengths {
 
 /// How much of a sortie's strength lands on the enemy.
 ///
-/// Favourable, but paid in the resource that keeps you alive. The garrison has
-/// less mettle than the enemy, so a 1:1 trade would never be worth pledging
-/// to; this ratio is efficient and still expensive.
+/// Better than 1:1, which the smaller garrison could never afford, and still
+/// paid in the mettle that keeps you alive.
 pub const SORTIE_DEALT: u32 = 2;
 
 /// How much of a sortie's strength the garrison pays.

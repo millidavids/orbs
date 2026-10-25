@@ -4,19 +4,16 @@
 //! only ones that start where a player starts, and they are the See-it line for
 //! Phase 10's sealed rooms as a *played* thing rather than a still one.
 
-use crate::play::{Game, available};
+use crate::play::Game;
 
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn a_fresh_game_refuses_the_archive_and_a_clarity_opens_it() {
-    if !available() {
-        return;
-    }
     // Earned the way a player earns it, at a tester's pace. One clarity is the
     // laboratory's first station and the archive is what it opens; `debug_spawn`
     // skips the four runs before the still and `meditate` skips the minute the
     // still takes — the difference between a scenario and an afternoon.
-    let game = Game::sealed();
+    let Some(game) = Game::sealed() else { return };
     game.does("attend archive", "the archive is not yours yet")
         .does("attend laboratory", "/tower/laboratory")
         .does("kindle charcoal", "takes light")
@@ -29,14 +26,11 @@ fn a_fresh_game_refuses_the_archive_and_a_clarity_opens_it() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn the_towers_own_line_opens_the_grimoire() {
-    if !available() {
-        return;
-    }
     // Two clarities is sixteen, and sixteen is the tower's line rather than any
     // room's. The grimoire and the forge are the only rooms that open that way,
     // and nothing applied a Ley step's `opens` until a review found it — every
     // test there was drove the mastery track.
-    let game = Game::sealed();
+    let Some(game) = Game::sealed() else { return };
     game.does("attend grimoire", "the grimoire is not yours yet")
         .does("attend laboratory", "/tower/laboratory")
         .does("kindle charcoal", "takes light")
@@ -52,10 +46,7 @@ fn the_towers_own_line_opens_the_grimoire() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn the_towers_listing_names_only_what_is_open() {
-    if !available() {
-        return;
-    }
-    let game = Game::sealed();
+    let Some(game) = Game::sealed() else { return };
     game.does("attend /tower", "/tower").send("survey");
     game.expect("laboratory");
     game.refute_after(2, "archive");

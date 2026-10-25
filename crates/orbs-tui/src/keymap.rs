@@ -37,29 +37,16 @@ pub(crate) fn as_key(code: KeyCode) -> Option<Key> {
 
 /// The longest gap that still counts as one held arrow rather than two presses.
 ///
-/// The fallback only, for where auto-repeat and a deliberate press are the same
-/// event and only spacing tells them apart; where the terminal reports
-/// `KeyEventKind::Repeat` the answer is exact.
-///
-/// Sixty, and it was a hundred and twenty. Auto-repeat lands every 30-40 ms, so
-/// sixty catches it with room to spare — while 120 swallowed *scripted* input:
-/// `scripts/tui.sh key` spaces presses 100 ms apart, so `key Escape Up Up` lost
-/// both arrows. A repeat rate slower than this (`xset r rate 660 2`) breaks
-/// through, which only a key-release event could fix.
+/// The fallback where no `KeyEventKind::Repeat` arrives. Sixty catches 30-40 ms
+/// auto-repeat and spares `scripts/tui.sh`'s 100 ms presses; a slower repeat
+/// rate breaks through.
 const HELD_OVER: Duration = Duration::from_millis(60);
 
 /// When a surface last handed the keyboard back, while arrows keep arriving.
 ///
-/// `HeldOver`, for a terminal with no key-up to hang it on: escape the maze
-/// with a finger still on an arrow and key repeat keeps delivering presses,
-/// and an arrow at the prompt means *recall history*, so `wander` reappears
-/// on the command line. The winit fix drops keys whose *press* went
-/// elsewhere until they are *released*, and a terminal sends no release.
-///
-/// What it does give is *timing*: auto-repeat arrives every 30-40 ms and a
-/// person cannot press an arrow twice inside [`HELD_OVER`], so an unbroken
-/// run of arrows out of a handover is a held key and the first gap is the
-/// release.
+/// `HeldOver` for a terminal, which sends no release: an unbroken run of
+/// arrows out of a handover is a held key, and the first gap past
+/// [`HELD_OVER`] is the release.
 #[derive(Debug, Default)]
 pub(crate) struct HeldOver {
     since: Option<Instant>,

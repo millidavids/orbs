@@ -1,23 +1,17 @@
-//! A load's one tidy: a puzzle the document carried and the load refused.
+//! Every puzzle domain's per-puzzle answers, matched exhaustively over
+//! [`Open`]: what it publishes, how a stopped one is let go, and a load's one
+//! tidy — a puzzle the document carried and the load refused.
 //!
-//! Every puzzle travels twice — as a component on its fixture, and as the
-//! readings it published, which are nodes of their own. A restore that refuses
-//! the component brings the readings back without it: `survey keystone` names a
-//! humour with nothing waiting, and `if the circle is empty` is false.
-//!
-//! One pass over [`Open::ALL`], matched exhaustively, which is `puzzle::Open`'s
-//! own rule. The circle and the pylon each grew a `settle` of their own, and a
-//! third puzzle would have needed a third nobody was reminded to write. A
-//! variant added to `Open` is a compile error here until it says what its
-//! readings are and what publishes them.
-//!
-//! A whole save is left exactly as saved. Republishing issues new ids, so a
-//! fixture is touched only when it has no puzzle and still says something about
-//! one, which no whole save can be.
+//! A puzzle travels as a component and as its published readings, so a load
+//! that refuses the component must tidy the readings. Exhaustive, so a new
+//! `Open` is a compile error here until it says what it publishes. A whole
+//! save is left as saved, since republishing issues new ids.
 
 use bevy_ecs::prelude::*;
+use orbs_render::Role;
 
 use super::readings::{reading, room_of};
+use crate::parser::Verb;
 use crate::tower::{self, circle::Glyph, maze, puzzle::Open};
 
 /// Which of a fixture's own children belong to its puzzle.
@@ -70,6 +64,48 @@ fn publish(world: &mut World, open: Open, fixture: Entity) {
         Open::Course => super::muster::publish(world, fixture),
         Open::Beast => super::summon::publish(world, fixture),
     }
+}
+
+/// Republish `open`'s fixture where the player is standing.
+pub(crate) fn refresh(world: &mut World, open: Open) {
+    if let Some(fixture) = super::readings::fixture(world, open.operation()) {
+        publish(world, open, fixture);
+    }
+}
+
+/// Let the puzzle on `at` go, for `stop`, and say whether anything went.
+pub(super) fn abandon(world: &mut World, open: Open, at: Entity) -> bool {
+    match open {
+        Open::Maze => {
+            world.entity_mut(at).remove::<tower::Maze>();
+            refresh(world, open);
+            abandoned(world, at, "research_abandoned");
+            true
+        }
+        // A course the same, because `muster_already` promises it: *"haul it
+        // across, or stop the pylon"* is §6's way forward.
+        Open::Course => {
+            world.entity_mut(at).remove::<tower::Course>();
+            refresh(world, open);
+            abandoned(world, at, "muster_abandoned");
+            true
+        }
+        // Without this `stop circle` said the circle was not working while `if
+        // the circle is working` said it was.
+        Open::Beast => super::summon::release(world, at),
+        // A gap, not a decision: what letting an open ward or a part-bound charm
+        // go costs is open in §19.
+        Open::Ward | Open::Binding => false,
+    }
+}
+
+/// Say that `stop` let the puzzle on `at` go, filed to its domain's log.
+fn abandoned(world: &mut World, at: Entity, key: &str) {
+    let source = world
+        .get::<tower::Name>(at)
+        .map(|name| name.0.clone())
+        .unwrap_or_default();
+    super::readings::filed(world, &source, Verb::Stop, key, &[], Role::Cost);
 }
 
 /// Clear what every puzzle fixture with no puzzle open still says about one.

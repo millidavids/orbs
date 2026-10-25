@@ -4,15 +4,8 @@
 //! cargo run --release -p orbs-sim --example bench_steps
 //! ```
 //!
-//! 29,000 steps is rule 8's stated worst case — *"offline catch-up is ~29k
-//! `step()` calls, which is milliseconds"* — and this is what makes that a
-//! measurement rather than a claim. It is also the loop `orbs-balance` will
-//! sweep in Phase 2, so a regression here is a regression in every sweep.
-//!
-//! It exists because a review proposed caching the `QueryState`s that
-//! `tower::burn` and `tower::finish` build per tick. The whole catch-up is
-//! ~120 ms at ~4 µs a step, so those four constructions are noise at this
-//! entity count. Re-run it before believing otherwise.
+//! Rule 8's 29,000-step catch-up, measured: ~120 ms. Re-run it before caching
+//! a `QueryState`.
 
 fn main() {
     const STEPS: u64 = 29_000;

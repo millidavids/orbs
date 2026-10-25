@@ -1,18 +1,8 @@
 //! The ward as a sheet of paper — what a code-breaker keeps beside them.
 //!
-//! Every press, with what it answered, and the aperture as it stands. Drawn
-//! beside the transcript whenever a reading is open and never gated on a word —
-//! the archive map's rule, because watching and doing are different activities.
-//!
-//! It carries nothing the readings lack (rule 2). Every row is one press's
-//! answer, which `probe` already said and `survey prism` will say again — §19's
-//! test, *"a player with squared paper could have drawn it themselves"*. What it
-//! adds is history: five presses the transcript has scrolled past, side by side.
-//! It infers nothing, because `tower::ward` infers nothing.
-//!
-//! §14 forbids meaning that lives only in hue, so each sigil is a distinct CP437
-//! glyph and the tint is enrichment on top — the board survives greyscale and a
-//! dump, which is where it will mostly be looked at.
+//! Every press and its answer, drawn beside the transcript, never gated on a
+//! word. Nothing the readings lack (rule 2, §19): it adds history and infers
+//! nothing. Each sigil is its own glyph, so it survives greyscale (§14).
 
 use crate::geometry::Rect;
 use crate::style::{Style, Tint};
@@ -39,15 +29,8 @@ pub struct Board {
     /// 1296 codes — so two sockets holding the same glyph is an ordinary figure
     /// rather than a bug in the painter.
     pub aperture: [usize; 4],
-    // `settled` and `marks` are gone. The first said which sockets the *orb* had
-    // proved, which is the one thing Mastermind never tells you; the second was
-    // a per-sigil tally the player can keep themselves. §19 records the change.
-    /// What the sockets are called, left to right.
-    ///
-    /// Handed in by the sim: `dial second borax` names a socket by word, so
-    /// unlabelled columns are ones a player counts along before typing — and the
-    /// words are content (`tower::ward::SOCKETS`), which rule 6 keeps out of a
-    /// painter.
+    /// What the sockets are called, left to right: content, so handed in by the
+    /// sim (rule 6).
     pub sockets: [&'static str; 4],
     /// What the sigils are called, in [`SIGILS`] order.
     ///
@@ -77,13 +60,7 @@ pub const TINTS: [Tint; 6] = [
     Tint::Red,
 ];
 
-// `HELD` (`■`) and `LOOSE` (`·`) drew the settle marks under the aperture, gone
-// with the mechanic: they were the orb answering *"is this position correct?"*,
-// the one question Mastermind never answers (§19).
-//
-// Keeping what they cost to learn: `■` is CP437 0xFE, and `▪` — the obvious
-// choice — is not in the repertoire. Check the next glyph added here the same
-// way.
+// Check a glyph added here against CP437: `▪`, the obvious square, is not in it.
 
 /// The pegs an answer is drawn with.
 ///
@@ -111,24 +88,13 @@ const PEG: u16 = 2;
 impl Board {
     /// Columns the board wants.
     ///
-    /// It was ten — `☼○♂♀  ••○ ` in a pane 104 wide — and unreadable: nothing
-    /// said which column was which socket, so a player counted along before
-    /// typing `dial second borax`, and nothing said which sigil `♦` was.
-    ///
-    /// Fixed at 39, because every row being the same shape is what lets a reader
-    /// compare two presses down a column, which is why a sheet beats scrollback.
+    /// Fixed, so presses compare down a column.
     pub const COLS: u16 = GUTTER + SOCKET * 4 + PEG * 4;
 
     /// The most presses a sheet shows at once.
     ///
-    /// A cap, because an uncapped sheet disappears: `split` refuses a picture
-    /// taller than the pane, so it vanished with no explanation part-way through
-    /// the long solve it exists to make watchable. The writable spell averages
-    /// 11.9 presses with a worst of 21.
-    ///
-    /// Twelve covers a person: the worst hand-played solve over all 1296 codes
-    /// is nine. Older rows are the spell's and live in `lens.log` — a sheet is a
-    /// working surface, not an archive.
+    /// A cap, or `split` refuses a long solve's sheet. Twelve covers a person's
+    /// worst of nine; older rows are in `lens.log`.
     pub const SHOWN: usize = 12;
 
     /// The presses the sheet draws: the most recent [`SHOWN`](Self::SHOWN).
@@ -143,11 +109,8 @@ impl Board {
 
     /// The most recent `cap` presses, for a pane with less room than `SHOWN`.
     ///
-    /// A shorter window, not a lost comparison. `split`'s argument for refusing
-    /// whole — *"a sheet showing four of six presses has lost the two a player
-    /// was about to compare"* — is right about columns and wrong about rows,
-    /// because [`SHOWN`] already makes this a window on the recent end. Ten of
-    /// fifty-one is the same kind of view as twelve of fifty-one.
+    /// A shorter window, since [`SHOWN`] already is one; only columns must be
+    /// whole.
     ///
     /// [`SHOWN`]: Self::SHOWN
     #[must_use]

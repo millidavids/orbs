@@ -1,19 +1,9 @@
 //! The tint, from the sim's own world through to a resolved colour.
 //!
-//! The only test that crosses all three crates, which is where this can fail
-//! with every single-crate test still green: `materials.toml` says sage is
-//! green, [`super::tint`] says what green is, and `orbs_shell::panel` connects
-//! them. Each half passes alone while the bar draws in the base hue — an
-//! invisible failure, because an untinted material draws in the base hue too.
-//!
-//! It lives here rather than beside the painter because it reaches
-//! [`super::palette`] and [`super::tint`], which resolve a `Style` to a
-//! `bevy::Color` and are this frontend's alone (rule 2).
-//!
-//! It is `#[cfg(test)]` rather than `crates/orbs/tests/` because `orbs` is a
-//! binary crate — `src/main.rs` and no `lib.rs` — so an integration test cannot
-//! link it. CLAUDE.md records that trap for `orbs-balance`, which is why its
-//! tests drove `Sim` by hand and asserted nothing about the harness.
+//! The one test across all three crates — content, [`super::tint`] and
+//! `orbs_shell::panel` — whose failure looks like an untinted bar. Here, since
+//! the resolvers are this frontend's (rule 2), and inline, since a binary
+//! crate takes no integration test.
 
 #[cfg(test)]
 mod tests {

@@ -1,15 +1,7 @@
 //! The weave screen's place in the shell: opening it, feeding it keys.
 //!
-//! [`Tapestry`] is the screen and knows nothing about Bevy. This is the wiring,
-//! and it is a separate file for the reason `editing.rs` is: what an arrow key
-//! *means* on a tree and which keys are stale chords are different concerns.
-//!
-//! Exactly one surface takes a keystroke, and four can own the keyboard: the
-//! prompt, the editor, the unfurled transcript and this. §19 records the shape —
-//! the prompt runs and declines, because *"a system that does not run keeps its
-//! message cursor"*, so keys typed while another surface held the keyboard
-//! otherwise arrived in a burst. So this is gated by a run condition and
-//! `type_into_line` is not, the same asymmetry the editor has.
+//! The wiring for [`Tapestry`]. Gated by a run condition, where the prompt runs
+//! and declines, since a reader that does not run keeps its cursor (§19).
 
 use bevy::input::ButtonState;
 use bevy::input::keyboard::KeyboardInput;
@@ -19,42 +11,7 @@ use super::{Tapestry, WeaveOutcome};
 use crate::sim::Tower;
 
 /// The weave screen, if it is open.
-///
-/// A resource rather than a component, for the reason `Editing` gives: there is
-/// one screen, it is modal, and an entity would invite a second.
-#[derive(Resource, Debug, Default)]
-pub(crate) struct Loom(Option<Tapestry>);
-
-impl Loom {
-    /// The open screen.
-    pub(crate) const fn get_mut(&mut self) -> Option<&mut Tapestry> {
-        self.0.as_mut()
-    }
-
-    /// Whether the screen has the keyboard.
-    #[must_use]
-    pub(crate) const fn is_open(&self) -> bool {
-        self.0.is_some()
-    }
-
-    /// Put a screen up, replacing whatever was there.
-    ///
-    /// The one way the modal is entered, so tests reach it through the same door
-    /// `open_requested` uses rather than a second one that could drift.
-    pub(crate) fn open(&mut self, screen: Tapestry) {
-        self.0 = Some(screen);
-    }
-
-    /// Take it down.
-    pub(crate) fn close(&mut self) {
-        self.0 = None;
-    }
-}
-
-/// Whether the screen has the keyboard.
-pub(crate) fn weaving(loom: Res<Loom>) -> bool {
-    loom.is_open()
-}
+pub(crate) type Loom = super::modal::Modal<Tapestry>;
 
 /// Open the screen when `weave` has asked for one.
 ///
@@ -79,20 +36,11 @@ pub(crate) fn open_requested(mut tower: ResMut<Tower>, mut loom: ResMut<Loom>) {
 ///
 /// Unconditional while it is open, because the world ticks behind it: a
 /// threshold crossed while a player is looking at the track should land while
-/// they are looking. Pushed in rather than pulled, because the screen knows
-/// nothing about the sim.
+/// they are looking.
 pub(crate) fn refresh(mut loom: ResMut<Loom>, tower: Res<Tower>) {
-    let Some(screen) = loom.get_mut() else {
-        return;
-    };
-    let sim = tower.sim();
-    screen.refresh(
-        sim.experience(),
-        sim.renown(),
-        sim.scale(),
-        sim.ley_line(),
-        sim.mastery(),
-    );
+    if let Some(screen) = loom.get_mut() {
+        screen.read_from(tower.sim());
+    }
 }
 
 /// Feed keys to the open screen.
@@ -103,18 +51,12 @@ pub(crate) fn type_into_loom(
     mut loom: ResMut<Loom>,
     mut tower: ResMut<crate::sim::Tower>,
 ) {
-    // A held chord is skipped; a stale one is not. `chord_is_stale` says the
-    // modifier is a ghost — latched from an alt-tab the window never saw
-    // released — so it means *accept this keystroke as plain text*. The first
-    // version read it as "drop this keystroke", which swallowed one key every
-    // time the screen was opened after a pause.
-    let stale_chord = super::input::chord_is_stale(quiet.gap());
-    let chord = held.any_pressed([
-        KeyCode::ControlLeft,
-        KeyCode::ControlRight,
-        KeyCode::SuperLeft,
-        KeyCode::SuperRight,
-    ]);
+    // A held chord is skipped; a stale one is not. A stale chord is a ghost —
+    // latched from an alt-tab the window never saw released — so it means
+    // *accept this keystroke as plain text*. The first version read it as
+    // "drop this keystroke", which swallowed one key every time the screen was
+    // opened after a pause.
+    let chord = super::input::Chord::read(&held, &quiet);
 
     let mut outcome = None;
     {
@@ -126,9 +68,7 @@ pub(crate) fn type_into_loom(
             if event.state != ButtonState::Pressed {
                 continue;
             }
-            // A chord the player aimed at their operating system must not reach
-            // this screen on the way past.
-            if chord && !stale_chord {
+            if chord.swallows() {
                 continue;
             }
             // `orbs-shell`'s table, which the terminal build also calls.

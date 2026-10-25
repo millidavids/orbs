@@ -1,19 +1,7 @@
 //! The caret's blink.
 //!
-//! Purely how a cell is drawn, never what appears: the caret's *position* is
-//! carried by the `Frame`, and a blink adds no information a static block does
-//! not already have. That is what architectural rule 2 permits a frontend to do
-//! on its own — `orbs-tui` gets the terminal's own cursor and is none the
-//! poorer for it.
-//!
-//! The rate is a safety constraint rather than a taste one. §14 and the CRT port
-//! (§19) landed on the same number — 3–30 Hz is the photosensitive band, and the
-//! tube's original "60Hz-ish" flicker was 19.1 Hz, squarely inside it. A caret
-//! is small and dim where that was the whole screen, but the rule is not worth
-//! relearning, so this blinks at well under 1 Hz.
-//!
-//! Driven from `Time`, never from the tick: the sim must not be able to observe
-//! it, or replay would depend on how long a frame took.
+//! Enrichment adding nothing to the Frame's caret (rule 2). Well under 1 Hz,
+//! clear of the photosensitive band (§14, §19). From `Time`, never the tick.
 
 use bevy::prelude::*;
 
@@ -59,17 +47,8 @@ impl Blink {
 
     /// Carry the phase forward by `seconds`.
     ///
-    /// Divided, not looped. Draining whole half-cycles with
-    /// `while elapsed >= HALF_CYCLE { elapsed -= HALF_CYCLE; … }` iterates once
-    /// per half-cycle of elapsed time, so a frame arriving after a long stall — a
-    /// breakpoint, a laptop lid, `Time`'s `max_delta` raised as `sim::clock` does
-    /// — spins proportionally to the stall to reach a phase two arithmetic
-    /// operations give directly. Repeated float subtraction also accumulates the
-    /// error a single remainder does not.
-    ///
-    /// Separate from [`tick`] so it is testable without an `App`: the test that
-    /// covered this used to re-run the loop inline and would have passed whatever
-    /// the system did.
+    /// Divided, not looped, so a long stall costs two operations and no error
+    /// accrues. Separate from [`tick`] to test without an `App`.
     pub(crate) fn advance(&mut self, seconds: f32) {
         self.elapsed += seconds;
         let cycles = (self.elapsed / HALF_CYCLE).floor();

@@ -1,30 +1,14 @@
 //! An instrument's own verb fetches what it needs — §10.1's collapse, pinned.
 //!
-//! §19 records that an instrument's own verb collapses `move` and `wield`:
-//! `grind sage` *is* both. What it does not say, and nothing asserted, is where
-//! the fetch may reach from — the whole difference between a loop with `move`
-//! in it and one without.
-//!
-//! `pipeline::reachable` is the rule: every instrument in the room that is not
-//! busy, in raise order, and then the store. So a stage can take its input
-//! straight out of the instrument that made it.
-//!
-//! Not a line in the balance harness: `BY_HAND` does brew a clarity with no
-//! `move`, but it `empty`s the mortar first, so the ground-sage comes from the
-//! shelf — it would go on passing with the tool-to-tool fetch removed.
-//!
-//! `move` stays. It is the only way finished work leaves the room that made it,
-//! and the only way to reach an instrument's `charged` state, which three
-//! animation See-it lines need. What is wrong is teaching it as part of the
-//! brewing loop (§19).
+//! Where `grind sage`'s fetch may reach (§19): `pipeline::reachable`, every
+//! idle instrument in raise order, then the store. The harness cannot hold
+//! it, since `BY_HAND` empties first. `move` stays, just out of the loop.
 
+mod common;
+
+use common::run;
 use orbs_render::{FieldName, Value};
 use orbs_sim::Sim;
-
-fn run(sim: &mut Sim, line: &str) {
-    sim.submit(line);
-    sim.step();
-}
 
 /// Every `Source` the orb has reported, which is where a fetch came *from*.
 fn sources(sim: &Sim) -> Vec<String> {
@@ -120,12 +104,8 @@ fn a_whole_brew_needs_no_move() {
 
 #[test]
 fn move_is_still_the_only_way_finished_work_leaves_the_room() {
-    // The reason the verb stays: nothing else carries between domains.
-    //
-    // §10.1's chain brewed properly, with no debug door in it. It used to open
-    // with `debug_spawn clarified-draught`, which is `cfg(debug_assertions)`, so
-    // under `--release` the line was unresolvable and this passed judgement on a
-    // world that was never built.
+    // Why `move` stays: nothing else carries between domains. Brewed with no
+    // debug door, so it runs in release.
     let mut sim = Sim::new(1);
     for line in [
         "attend laboratory",

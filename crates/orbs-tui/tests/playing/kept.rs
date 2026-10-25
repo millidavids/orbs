@@ -5,28 +5,18 @@
 //! the one-per-machine warning all live beside the save.
 
 use crate::launch::{Kept, Switch};
-use crate::play::{Game, available};
+use crate::play::Game;
 
 /// The orb's menu, in a game that keeps its towers in `kept`. The `motion` row
 /// decides, since what a relaunch remembers is the subject here.
-fn at_the_menu(kept: &Kept) -> Game {
+fn at_the_menu(kept: &Kept) -> Option<Game> {
     let game = Game::launch()
         .at_the_threshold()
         .kept_in(kept)
         .motion(Switch::BySetting)
-        .spawn();
+        .spawn()?;
     game.expect_drawn("no tower yet");
-    game
-}
-
-/// A short tower raised from the menu, at its first prompt.
-fn raised(game: &Game) {
-    game.type_raw("play");
-    game.expect_drawn("open a tower");
-    game.type_raw("new");
-    game.expect_drawn("how long a game?");
-    game.type_raw("short");
-    game.expect_drawn("wizard $");
+    Some(game)
 }
 
 /// Put the orb down from inside a tower — `quit` asks once — and wait for the
@@ -48,19 +38,20 @@ fn access_page(game: &Game) {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn settings_are_remembered_across_launches() {
-    if !available() {
-        return;
-    }
     let kept = Kept::default();
     {
-        let game = at_the_menu(&kept);
+        let Some(game) = at_the_menu(&kept) else {
+            return;
+        };
         access_page(&game);
         game.expect_drawn("motion anything moving [on]");
         game.type_raw("motion off");
         game.expect_drawn("motion anything moving [off]");
     }
     // A new process, reading only the file the first one wrote.
-    let game = at_the_menu(&kept);
+    let Some(game) = at_the_menu(&kept) else {
+        return;
+    };
     access_page(&game);
     game.expect_drawn("motion anything moving [off]");
 }
@@ -68,16 +59,17 @@ fn settings_are_remembered_across_launches() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn abandon_asks_once() {
-    if !available() {
-        return;
-    }
     let kept = Kept::default();
     {
-        let game = at_the_menu(&kept);
-        raised(&game);
+        let Some(game) = at_the_menu(&kept) else {
+            return;
+        };
+        game.raise("short");
         put_down(&game);
     }
-    let game = at_the_menu(&kept);
+    let Some(game) = at_the_menu(&kept) else {
+        return;
+    };
     game.type_raw("play");
     game.expect_drawn("1 wizard, a short game, 0 earned");
     game.type_raw("abandon 1");
@@ -89,17 +81,18 @@ fn abandon_asks_once() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn loading_another_leaves_the_first_as_it_was() {
-    if !available() {
-        return;
-    }
     let kept = Kept::default();
     {
-        let game = at_the_menu(&kept);
-        raised(&game);
+        let Some(game) = at_the_menu(&kept) else {
+            return;
+        };
+        game.raise("short");
         game.does("attend laboratory", "/tower/laboratory");
         put_down(&game);
     }
-    let game = at_the_menu(&kept);
+    let Some(game) = at_the_menu(&kept) else {
+        return;
+    };
     game.type_raw("play");
     game.expect_drawn("1 wizard, a short game");
     game.type_raw("1");
@@ -108,7 +101,7 @@ fn loading_another_leaves_the_first_as_it_was() {
     // A second tower, beside the first: raising it writes the first.
     game.send("menu");
     game.expect_drawn("the tower waits");
-    raised(&game);
+    game.raise("short");
     game.expect_off_screen("/tower/laboratory");
 
     // ...and the first comes back where it was left, the second written too.
@@ -127,14 +120,14 @@ fn loading_another_leaves_the_first_as_it_was() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn a_new_tower_takes_the_chosen_name() {
-    if !available() {
-        return;
-    }
     // Blank, so the setting decides: an exported `ORBS_WIZARD` outranks it.
-    let game = Game::launch()
+    let Some(game) = Game::launch()
         .at_the_threshold()
         .env("ORBS_WIZARD", "")
-        .spawn();
+        .spawn()
+    else {
+        return;
+    };
     game.expect_drawn("no tower yet");
     game.type_raw("settings");
     game.expect_drawn("what would you set?");
@@ -158,17 +151,18 @@ fn a_new_tower_takes_the_chosen_name() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn the_health_warning_is_said_once_per_machine() {
-    if !available() {
-        return;
-    }
     let kept = Kept::default();
     {
-        let game = at_the_menu(&kept);
+        let Some(game) = at_the_menu(&kept) else {
+            return;
+        };
         game.expect_drawn("if moving light troubles you: settings, access, motion off");
     }
     // It goes up with the menu's first frame, so the menu being drawn without it
     // is the whole claim — there is nothing later to wait for.
-    let game = at_the_menu(&kept);
+    let Some(game) = at_the_menu(&kept) else {
+        return;
+    };
     let screen = game.screen();
     assert!(
         !screen.contains("moving light troubles you"),

@@ -6,18 +6,9 @@
 /// Only the symbols the painters actually use are listed; anything else is left
 /// alone.
 ///
-/// The borders and the bars stay out although `─ │ ═ ║ ╔ ╗ ╚ ╝` and `█ ▓ ▒` all
-/// measure East Asian Ambiguous (only `░` is Neutral), on the bet that a
-/// terminal widening box drawing would break every full-screen program on the
-/// system. So the wide-ambiguous path is partial: `term::PROBE` firing means
-/// the symbols are safe, not the screen.
-///
-/// Every substitution is distinct (§14): the glyph carries the identity where
-/// the colour cannot. The first version mapped `•` and `·` both to `.`, merging
-/// *taken* into *locked* on a surface made entirely of those glyphs, and
-/// invisibly — the row still lines up.
-/// `every_substitution_is_its_own_character` holds the map injective, and
-/// `blit::scan` holds that every Ambiguous glyph a painter draws is in it.
+/// Not the borders or bars, though Ambiguous, on the bet that a terminal
+/// widening them breaks everything. Every substitution distinct (§14):
+/// `every_substitution_is_its_own_character`, and `blit::scan` for coverage.
 const SUBSTITUTIONS: [(char, char); 26] = [
     // The rail's fault marker and its "this room is automated" arrow.
     ('‼', '!'),

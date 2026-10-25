@@ -1,72 +1,36 @@
 //! The orb's menu in the Bevy shell: opening it, feeding it keys.
 //!
-//! [`Menu`] is the screen and knows nothing about Bevy. This is the wiring, and
-//! it is a separate file for the reason `weaving.rs` is.
+//! The wiring for [`Menu`]. `menu` opens it; `quit` leaves, asking once (§19).
 //!
-//! `menu` opens it; `quit` leaves, asking once. `quit` did both for one
-//! iteration — superseded (§19).
-//!
-//! [`type_into_menu`] runs whenever a key arrives, not only while the menu is
-//! up, and is ordered before [`open_requested`]: a gated reader keeps its
-//! cursor, so the first time this ran it typed the word that opened the menu
-//! back into it and `quit` left the orb. It runs, declines and *clears*.
+//! [`type_into_menu`] runs on every key, before [`open_requested`], and
+//! clears what it declines, or the opening word is read into the menu.
 
 use bevy::input::ButtonState;
 use bevy::input::keyboard::KeyboardInput;
 use bevy::prelude::*;
 
-use orbs_shell::{Menu, MenuOutcome};
+use orbs_shell::{Menu, MenuOutcome, Raising};
 
 /// The menu, if it is up.
-///
-/// A resource rather than a component, for the reason `Loom` gives: there is one
-/// screen, it is modal, and an entity would invite a second.
-#[derive(Resource, Debug, Default)]
-pub(crate) struct Standing(Option<Menu>);
+pub(crate) type Standing = super::modal::Modal<Menu>;
 
 impl Standing {
-    /// The open menu.
-    pub(crate) const fn get(&self) -> Option<&Menu> {
-        self.0.as_ref()
-    }
-
-    /// The open menu, to type into.
-    pub(crate) const fn get_mut(&mut self) -> Option<&mut Menu> {
-        self.0.as_mut()
-    }
-
-    /// Whether the menu has the keyboard.
-    #[must_use]
-    pub(crate) const fn is_open(&self) -> bool {
-        self.0.is_some()
-    }
-
-    /// Put it up, replacing whatever was there.
+    /// Put the menu up, replacing whatever was there.
     ///
     /// `stance` is whether there is a tower behind it, which decides whether the
     /// menu can be closed at all. `driver` is what is in effect right now, held
     /// by the frontend rather than the settings file, so the page can mark it.
-    pub(crate) fn open(
+    pub(crate) fn open_menu(
         &mut self,
         stance: orbs_shell::Stance,
         driver: orbs_shell::Driver,
         rows: Vec<orbs_shell::settings::Row>,
     ) {
-        let mut menu = Menu::at(stance);
+        let mut menu = Menu::open_at(stance, driver, rows);
         if stance.is_threshold() {
             menu.warn_once();
         }
-        menu.show_driver(driver);
-        // What is in effect, asked of the things that hold it, never read back
-        // from the settings file: `ORBS_SAVE=off` has no file and still has a
-        // tube, and `ORBS_CRT=off` outranks it.
-        menu.show_settings(rows);
-        self.0 = Some(menu);
-    }
-
-    /// Take it down.
-    pub(crate) fn close(&mut self) {
-        self.0 = None;
+        self.open(menu);
     }
 }
 
@@ -91,36 +55,11 @@ pub(crate) fn open_requested(
     }
     // The `menu` verb is typed at a prompt, so there is always a tower behind
     // this one. The threshold's menu is opened by `thresholding` instead.
-    standing.open(
+    standing.open_menu(
         orbs_shell::Stance::InTower,
         settable.driver(),
         settable.rows(),
     );
-}
-
-/// Which tower the menu asked for.
-///
-/// An enum rather than two optional fields: `Option<PathBuf>` beside
-/// `Option<Length>` spells four states for three meanings.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum Raising {
-    /// Open the tower already in this file.
-    ///
-    /// A path, not a slot number: the game being left is written to the file it
-    /// came from, and a number resolved twice disagrees if `ORBS_SAVE` changes.
-    Load(std::path::PathBuf),
-    /// Begin a tower at this length — installed first, when
-    /// [`Installs`](super::Installs) says so.
-    Begin {
-        /// Where it will be kept, and written back to — or [`None`] for a
-        /// session that keeps nothing (`ORBS_SAVE=off`), which is the ordinary
-        /// case for every instrument here.
-        keep: Option<orbs_shell::Keep>,
-        /// How long it is to be.
-        length: orbs_sim::content::Length,
-    },
-    /// The installation has woken this tower: raise it, never install it.
-    Installed(orbs_shell::Raise),
 }
 
 /// A setting the menu changed, waiting to be honoured.
@@ -165,14 +104,8 @@ pub(crate) fn type_into_menu(
     mut reading: Option<ResMut<super::manualling::Reading>>,
     tower: Option<Res<crate::sim::Tower>>,
 ) {
-    // The manual sits over the menu and owns the keyboard: without the guard,
-    // `q` at a chapter prefix-matched the menu's `quit` and left the game.
-    //
-    // Open *or* it answered this frame and then shut — `type_into_manual` runs
-    // first, so `is_open` alone missed the Escape that leaves the manual and the
-    // menu closed too. `Reading::took_the_keys` carries that across the gap.
-    //
-    // Cleared, not skipped, which is this system's whole shape — see below.
+    // The manual sits over the menu and owns the keys, including the Escape
+    // that just shut it (`Reading::took_the_keys`). Cleared, not skipped.
     let manual_answered = reading
         .as_mut()
         .is_some_and(|reading| reading.is_open() || reading.took_the_keys());
@@ -182,13 +115,7 @@ pub(crate) fn type_into_menu(
     }
     // A held chord is skipped; a *stale* one is not — `type_into_loom` records
     // the keystroke swallowed by reading this the other way round.
-    let stale_chord = super::input::chord_is_stale(quiet.gap());
-    let chord = held.any_pressed([
-        KeyCode::ControlLeft,
-        KeyCode::ControlRight,
-        KeyCode::SuperLeft,
-        KeyCode::SuperRight,
-    ]);
+    let chord = super::input::Chord::read(&held, &quiet);
 
     let mut outcome = None;
     {
@@ -207,7 +134,7 @@ pub(crate) fn type_into_menu(
             if event.state != ButtonState::Pressed {
                 continue;
             }
-            if chord && !stale_chord {
+            if chord.swallows() {
                 continue;
             }
             let Some(key) = super::input::pressed(event) else {
@@ -224,15 +151,9 @@ pub(crate) fn type_into_menu(
             exit.write(AppExit::Success);
         }
         // Not done here. A swap needs `&mut World`; `swap` below has it.
-        Some(MenuOutcome::Load(path)) => {
+        Some(MenuOutcome::Raise(raising)) => {
             swapping.write(SwapMessage {
-                raising: Raising::Load(path),
-                seed: orbs_shell::new_game_seed(),
-            });
-        }
-        Some(MenuOutcome::Begin { keep, length }) => {
-            swapping.write(SwapMessage {
-                raising: Raising::Begin { keep, length },
+                raising,
                 seed: orbs_shell::new_game_seed(),
             });
         }
@@ -314,60 +235,39 @@ pub(crate) fn swap(world: &mut World) {
         .as_ref()
         .is_some_and(|kept| crate::sim::keep_now(world.resource::<crate::sim::Tower>(), kept));
 
-    let seed = asked.seed;
-    // The name held in memory rather than read back from the file, so a name
-    // chosen where nothing can be written still names the tower.
-    let wizard = orbs_shell::wizard_named(
-        world
-            .get_resource::<super::setting::Naming>()
-            .and_then(|naming| naming.0.as_deref()),
-    );
-    let installs = world
-        .get_resource::<super::Installs>()
-        .is_some_and(|installs| installs.0);
-    let mut installing = None;
-    let (mut tower, kept) = match asked.raising {
-        Raising::Begin { keep, length } => {
-            let begun = orbs_shell::Raise {
-                keep,
-                length,
-                seed,
-                wizard,
+    // 2 and 5. Read only now, after the write above — or refused, if it failed.
+    let raised = asked.raising.raise(orbs_shell::Swapping {
+        kept: kept.as_ref().and_then(crate::sim::Kept::path),
+        written,
+        seed: asked.seed,
+        wizard: orbs_shell::wizard_named(
+            world
+                .get_resource::<super::setting::Naming>()
+                .and_then(|naming| naming.0.as_deref()),
+        ),
+        installs: world
+            .get_resource::<super::Installs>()
+            .is_some_and(|installs| installs.0),
+    });
+    let orbs_shell::Raised { begun, missed } = match raised {
+        Ok(raised) => raised,
+        Err((path, why)) => {
+            if let Some(menu) = world.resource_mut::<Standing>().get_mut() {
+                menu.refused(&path, why);
             }
-            .begin(installs);
-            installing = begun.install;
-            (crate::sim::Tower::raised(begun.sim), begun.keep)
-        }
-        Raising::Installed(raise) => {
-            let woken = raise.wake();
-            (crate::sim::Tower::raised(woken.sim), woken.keep)
-        }
-        // 2. Read only now, after the write above — or refused, if it failed.
-        Raising::Load(path) => {
-            let kept_at = kept.as_ref().and_then(crate::sim::Kept::path);
-            match orbs_shell::loaded(&path, kept_at, written) {
-                Ok(loaded) => (crate::sim::Tower::raised(loaded), Some(path)),
-                Err(why) => {
-                    bevy::log::error!("the tower in {} was not opened: {why:?}", path.display());
-                    if let Some(menu) = world.resource_mut::<Standing>().0.as_mut() {
-                        menu.refused(&path, why);
-                    }
-                    return;
-                }
-            }
+            return;
         }
     };
-    // 5. A new world holds the built-in prose; the watcher only fires on an edit.
-    crate::sim::apply_content(&mut tower);
+    crate::sim::say_missed_content(&missed);
 
     // 3.
     super::plugin::reset_for_swap(world);
     // 4. Together, and nothing between them can observe one without the other.
-    world.insert_resource(tower);
-    world.insert_resource(crate::sim::Kept::at(kept));
+    world.insert_resource(crate::sim::Tower::raised(begun.sim));
+    world.insert_resource(crate::sim::Kept::at(begun.keep));
     // After the reset, which blanks it.
-    if let Some(install) = installing {
-        world.insert_resource(super::Installing::begun(install));
+    if let Some(install) = begun.install {
+        world.insert_resource(super::Installing::up(install));
     }
     // 6.
     world.resource_mut::<Standing>().close();
@@ -387,7 +287,7 @@ mod tests {
         assert!(!standing.is_open());
         assert!(standing.get().is_none());
 
-        standing.open(
+        standing.open_menu(
             orbs_shell::Stance::InTower,
             orbs_shell::Driver::default(),
             Vec::new(),
@@ -471,7 +371,7 @@ mod tests {
         app.world_mut()
             .resource_mut::<crate::shell::Loom>()
             .open(orbs_shell::Tapestry::default());
-        app.world_mut().resource_mut::<Standing>().open(
+        app.world_mut().resource_mut::<Standing>().open_menu(
             orbs_shell::Stance::InTower,
             orbs_shell::Driver::default(),
             Vec::new(),
@@ -763,7 +663,7 @@ mod tests {
         std::fs::write(&two, "this is not a save").expect("a file");
 
         let mut app = app(77, one);
-        app.world_mut().resource_mut::<Standing>().open(
+        app.world_mut().resource_mut::<Standing>().open_menu(
             orbs_shell::Stance::InTower,
             orbs_shell::Driver::default(),
             Vec::new(),

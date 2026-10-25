@@ -10,13 +10,8 @@ use super::{MAX_MEDITATE, is_live};
 use crate::Sim;
 use crate::parser::Verb;
 use crate::session::Skip;
+use crate::testing::{drawn, run};
 use crate::tick::Tick;
-
-/// Type a line and let the tick that runs it pass.
-fn run(sim: &mut Sim, line: &str) {
-    sim.submit(line);
-    sim.step();
-}
 
 /// Everything nameable from where the player is standing.
 fn here(sim: &mut Sim) -> Vec<String> {
@@ -31,26 +26,11 @@ fn here(sim: &mut Sim) -> Vec<String> {
         .collect()
 }
 
-fn drawn(sim: &Sim) -> Vec<String> {
-    sim.scrollback()
-        .records()
-        .iter()
-        .map(|record| record.to_line())
-        .collect()
-}
-
 #[test]
 fn a_dark_verb_only_acknowledges_and_a_live_one_does_not() {
-    // `is_live` is a hand-written restatement of `execute`'s match, and
-    // `tower::boot`'s scaffold tutorial believes it.
-    //
-    // A live verb must reach the world from typed input, not merely have a
-    // match arm — §15's playability gate as an assertion.
-    //
-    // A dark verb must do no work of its own. Darkness has three shapes —
-    // acknowledged, unresolved, hijacked — equally empty for a player, so the
-    // check is what they share: the verb's own name never appearing as a
-    // completion.
+    // `is_live` restates `execute`'s match by hand. A live verb must reach the
+    // world from typed input (§15); a dark one — acknowledged, unresolved or
+    // hijacked — never completes under its own name.
     for verb in Verb::ALL {
         let mut sim = Sim::new(1);
         // §7 scopes a domain's belongings to inside it, so stand where the
@@ -101,9 +81,8 @@ fn a_dark_verb_only_acknowledges_and_a_live_one_does_not() {
 
 /// Where to stand, and a whole command line that works from there.
 ///
-/// Written out per verb rather than generated: `sift` takes two slots and
-/// `attend` names a place it is not standing in, so a generator would grow
-/// those cases anyway, less legibly.
+/// Written out per verb, since a generator would grow `sift`'s and `attend`'s
+/// cases anyway, less legibly.
 fn sample(verb: Verb) -> (&'static str, &'static str) {
     match verb {
         Verb::Attend => ("tower", "attend archive"),
@@ -138,16 +117,11 @@ fn sample(verb: Verb) -> (&'static str, &'static str) {
         // changed, feeding a noun to a verb with no slot for it.
         Verb::Research => ("archive", "research"),
         Verb::Scribe => ("tower", "scribe night_watch"),
-        // A spell the tower actually has. `night_watch` does not exist, so once
-        // `bind` went live the refusal was *"no such spell"* rather than the
-        // verb working. It still refuses at concentration 0, but *"the orb
-        // cannot hold a spell yet"* is the world answering.
+        // A spell the tower has, so a refusal at concentration 0 is the world
+        // answering, not *no such spell*.
         Verb::Bind => ("tower", "bind first_light"),
-        // A spell that exists, for the reason `bind` above names. This drifted
-        // the other way: with four dev ladders shelved, `invoke night_watch`
-        // turned from unresolved into ambiguous — a numbered prompt of `Echo`
-        // records, which this filters out, so the verb looked dead. Reach for
-        // `purge` when you want an ambiguity fixture (§19).
+        // A spell that exists, as for `bind`; a missing one can turn ambiguous
+        // and look dead. `purge` is the ambiguity fixture (§19).
         Verb::Invoke => ("tower", "invoke first_light"),
         Verb::Unfurl => ("tower", "unfurl"),
         Verb::Quit => ("tower", "quit"),
@@ -267,10 +241,8 @@ fn empty_will_not_raid_a_running_instrument() {
 
 #[test]
 fn an_instruments_verb_is_only_a_word_where_the_instrument_is() {
-    // §7's rule applied to verbs: `mix` means the flask and rod, and the
-    // archive has none, so one domain's vocabulary cannot capture another's
-    // typos. But it still answers — `grind` is two edits from `find`, which
-    // `sift` claims, so scoping alone offered `sift sage archive.log`.
+    // §7 for verbs: one domain's vocabulary cannot capture another's typos —
+    // but it still answers, rather than offering `sift`.
     let mut sim = Sim::new(1);
     run(&mut sim, "attend archive");
 
@@ -398,10 +370,7 @@ fn the_scrollback_is_a_file_you_can_read() {
 
 #[test]
 fn a_spell_is_read_as_a_script_and_a_log_as_a_log() {
-    // §3 names three diagnostic surfaces and this one had no producer. Both
-    // reads go through one `emit_lines`, which was handed `LogLine` for
-    // everything — so a spell listing linearised as `row  tick: 11, message:
-    // follow north`, a table row under a world clock that are neither.
+    // §3's script surface: a spell listing is not a log line under a clock.
     let mut sim = Sim::new(1);
     run(&mut sim, "peruse first_light.spell");
 
@@ -527,10 +496,8 @@ fn survey_with_no_place_still_lists_where_you_are() {
 
 #[test]
 fn surveying_an_empty_place_still_answers() {
-    // `survey` pushes every record inside the loop over what is there, so an
-    // empty place answered with silence. The sanctum made that the common case
-    // — a station publishes `potency` only while it holds a ward. Asserted on
-    // a scoured mortar, because the hole is `survey`'s, not the sanctum's.
+    // An empty place once answered with silence. On a scoured mortar, since
+    // the hole was `survey`'s.
     let mut sim = Sim::new(1);
     run(&mut sim, "attend laboratory");
     let before = sim.scrollback().records().len();
@@ -610,13 +577,9 @@ fn a_domain_log_holds_what_happened_in_that_domain() {
 
 #[test]
 fn an_empty_file_reads_as_empty_rather_than_as_success() {
-    // A cheerful completion over an unread file is worse than an error: §6
-    // forbids a bare error so a player is never left guessing, and false
-    // confidence leaves them guessing anyway.
-    //
-    // A search that matches nothing, rather than an empty log: this used to
-    // `peruse laboratory.log` and passed only because that log was always
-    // empty, so it asserted the bug.
+    // A cheerful completion over an unread file leaves a player guessing (§6).
+    // A search matching nothing, since a log that is always empty would
+    // assert the bug.
     let mut sim = Sim::new(1);
     run(&mut sim, "attend laboratory");
     let before = sim.scrollback().records().len();
@@ -635,6 +598,203 @@ fn an_empty_file_reads_as_empty_rather_than_as_success() {
         "an unread file reported content",
     );
     assert_ne!(completion.role(), Role::Success, "false success");
+}
+
+/// Prime the tower one experience short of its next concentration, so the next
+/// paid completion announces a level.
+#[cfg(debug_assertions)]
+fn one_short_of_a_level(sim: &mut Sim) {
+    let world = sim.world_mut();
+    let now = world.resource::<crate::tower::Experience>().get();
+    let next = world
+        .resource::<crate::content::Progression>()
+        .next_concentration(now)
+        .expect("a level above the start");
+    world
+        .resource_mut::<crate::tower::Experience>()
+        .restore(next - 1);
+}
+
+/// Every record's `(name, message)` from `from` on, in order.
+#[cfg(debug_assertions)]
+fn named_lines(sim: &Sim, from: usize) -> Vec<(String, String)> {
+    let text = |record: &orbs_render::Record<'_>, field| match record.field(field) {
+        Some(Value::Text(text)) => text.to_owned(),
+        _ => String::new(),
+    };
+    sim.scrollback()
+        .records()
+        .iter()
+        .skip(from)
+        .map(|record| {
+            (
+                text(&record, FieldName::Name),
+                text(&record, FieldName::Message),
+            )
+        })
+        .collect()
+}
+
+/// The snaps that light the forge's waiting lattice.
+#[cfg(debug_assertions)]
+fn lighting_snaps(sim: &mut Sim) -> Vec<String> {
+    let world = sim.world_mut();
+    let solution = world
+        .query::<&crate::tower::lattice::Binding>()
+        .iter(world)
+        .next()
+        .expect("imbue put a lattice up")
+        .lattice
+        .solution();
+    crate::tower::lattice::COLUMNS
+        .into_iter()
+        .zip(solution)
+        .filter(|(_, press)| *press)
+        .map(|(column, _)| format!("snap {column}"))
+        .collect()
+}
+
+/// The `follow` lines that walk the archive's open maze to its way out.
+#[cfg(debug_assertions)]
+fn the_way_out(sim: &mut Sim) -> Vec<String> {
+    use crate::tower::maze::{Maze, Way};
+
+    let world = sim.world_mut();
+    let maze = world
+        .query::<&Maze>()
+        .iter(world)
+        .next()
+        .expect("research put a maze up")
+        .clone();
+    let (width, squares) = (maze.width(), maze.squares());
+    let height = squares.len() / width;
+    let beyond = |from: usize, way: Way| {
+        let (x, y) = (from % width, from / width);
+        let (x, y) = match way {
+            Way::North => (x, y.checked_sub(1)?),
+            Way::South => (x, y + 1),
+            Way::East => (x + 1, y),
+            Way::West => (x.checked_sub(1)?, y),
+        };
+        (x < width && y < height).then_some(y * width + x)
+    };
+    // Breadth first, remembering how each square was reached.
+    let mut came: Vec<Option<(usize, Way)>> = vec![None; squares.len()];
+    let mut queue = std::collections::VecDeque::from([maze.at()]);
+    while let Some(from) = queue.pop_front() {
+        for way in Way::ALL {
+            if let Some(next) = beyond(from, way)
+                && !squares[next].wall
+                && next != maze.at()
+                && came[next].is_none()
+            {
+                came[next] = Some((from, way));
+                queue.push_back(next);
+            }
+        }
+    }
+    let mut lines = Vec::new();
+    let mut at = maze.exit();
+    while let Some((from, way)) = came[at] {
+        lines.push(format!("follow {}", way.word()));
+        at = from;
+    }
+    lines.reverse();
+    lines
+}
+
+#[test]
+#[cfg(debug_assertions)]
+fn every_domain_says_its_work_before_the_level_it_bought() {
+    // A level bought by a run is a consequence of it (`work::produce`'s rule),
+    // so the sentence about the run comes first at every site that pays.
+    // `(seed, setup, finishing, what the work's sentence says)`: `finishing`
+    // plays what pays nothing and returns the lines that pay.
+    let sites: [(u64, &[&str], fn(&mut Sim) -> Vec<String>, &str); 8] = [
+        (
+            3,
+            &["attend laboratory"],
+            |_| vec!["grind sage".into()],
+            "yields ground-sage",
+        ),
+        (
+            3,
+            &["attend lens", "probe", "debug_ward"],
+            |_| vec!["probe".into()],
+            "the seal gives",
+        ),
+        (
+            1,
+            &["attend sanctum", "muster", "debug_course"],
+            |_| vec!["haul conduit barrier".into()],
+            "the last ward seats",
+        ),
+        (
+            1,
+            &["attend menagerie", "summon", "debug_circle"],
+            |_| vec!["summon".into()],
+            "the circle holds",
+        ),
+        // Bound as a demon: the hold's other paying branch.
+        (
+            3,
+            &["attend menagerie", "summon", "debug_circle"],
+            |_| vec!["summon golem".into()],
+            "the circle holds",
+        ),
+        (
+            11,
+            &["attend bailey", "defend", "debug_siege"],
+            |_| vec!["hold".into(); 6],
+            "the enemy breaks",
+        ),
+        (
+            3,
+            &["attend forge", "imbue mortar_and_pestle hurried"],
+            |sim| {
+                for snap in lighting_snaps(sim) {
+                    run(sim, &snap);
+                }
+                vec!["anneal".into()]
+            },
+            "every glyph holds",
+        ),
+        (
+            1,
+            &["attend archive", "research"],
+            the_way_out,
+            "the stacks give up fragment",
+        ),
+    ];
+    for (seed, setup, finishing, sentence) in sites {
+        let mut sim = Sim::new(seed);
+        for line in setup {
+            run(&mut sim, line);
+        }
+        let finish = finishing(&mut sim);
+        one_short_of_a_level(&mut sim);
+        let from = sim.scrollback().records().len();
+        for line in &finish {
+            run(&mut sim, line);
+        }
+        for _ in 0..40 {
+            sim.step();
+        }
+
+        let lines = named_lines(&sim, from);
+        let level = lines
+            .iter()
+            .position(|(name, _)| name == "concentration")
+            .unwrap_or_else(|| panic!("{sentence:?}: no level was bought: {lines:#?}"));
+        let work = lines
+            .iter()
+            .position(|(_, message)| message.contains(sentence))
+            .unwrap_or_else(|| panic!("{sentence:?} was never said: {lines:#?}"));
+        assert!(
+            work < level,
+            "{sentence:?} came after the level it bought: {lines:#?}",
+        );
+    }
 }
 
 #[test]

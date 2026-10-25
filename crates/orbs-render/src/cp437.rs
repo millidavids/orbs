@@ -1,21 +1,8 @@
 //! The glyph repertoire: code page 437.
 //!
-//! §4 fixes the font as a CP437-style bitmap at 8×16, and §13 splits the two
-//! frontends: the Bevy build draws from an embedded CP437 atlas, the terminal
-//! build uses the user's font and the U+2500 box-drawing block.
-//!
-//! The split this crate makes is between repertoire and encoding:
-//!
-//! - The repertoire — which glyphs may appear at all — belongs here, because
-//!   `orbs-render` decides what appears. It is the intersection of what both
-//!   frontends can draw, and a [`crate::Frame`] must never hold anything else.
-//! - The encoding belongs to the frontend. A [`crate::Cell`] holds a Unicode
-//!   `char`; the Bevy build turns that into an atlas index with
-//!   [`cp437_index`], and the terminal build writes the `char` out directly.
-//!
-//! Storing the codepage index would have forced the terminal frontend to own a
-//! reverse table, and storing arbitrary Unicode would have let prose reach the
-//! atlas with no glyph behind it.
+//! The repertoire is here, what both frontends can draw (§4, §13); the encoding
+//! is the frontend's. A [`crate::Cell`] holds a `char`, which the Bevy build
+//! maps with [`cp437_index`] and the terminal writes as is.
 
 /// Code page 437 in index order, as Unicode scalars.
 ///
@@ -95,14 +82,8 @@ pub fn is_renderable(glyph: char) -> bool {
 
 /// The first character of `line` that cannot be drawn, with its byte offset.
 ///
-/// For linting authored prose. DESIGN.md §13 puts every string the game shows
-/// into hot-reloadable data files, and a writer reaching for the typographic
-/// characters a word processor produces — `—`, `’`, `“` — will silently get
-/// [`REPLACEMENT`] on screen. This is what a content pipeline calls to turn that
-/// into an error at load time instead of a `?` mid-siege.
-///
-/// Pass **one line at a time**: `'\n'` is not a drawable glyph and is reported
-/// like any other, because line breaking belongs to the caller.
+/// For linting content at load, so `—` or `’` is an error rather than a
+/// [`REPLACEMENT`] on screen. One line at a time: `'\n'` is reported too.
 #[must_use]
 pub fn first_unrenderable(line: &str) -> Option<(usize, char)> {
     line.char_indices()

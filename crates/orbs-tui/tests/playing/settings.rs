@@ -5,7 +5,7 @@
 //! it could not write.
 
 use crate::launch::Switch;
-use crate::play::{Game, available};
+use crate::play::Game;
 
 /// A settings page, from the menu a tower opens.
 fn page(game: &Game, which: &str) {
@@ -28,10 +28,7 @@ fn resume(game: &Game) {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn skip_on_stays_on_when_another_row_moves() {
-    if !available() {
-        return;
-    }
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     page(&game, "habits");
     game.expect_drawn("the boot sequence");
     game.type_raw("skip on");
@@ -44,10 +41,7 @@ fn skip_on_stays_on_when_another_row_moves() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn echo_changed_leaves_a_plain_echo_out() {
-    if !available() {
-        return;
-    }
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     page(&game, "access");
     game.expect_drawn("the line read back");
     game.type_raw("echo changed");
@@ -62,13 +56,12 @@ fn echo_changed_leaves_a_plain_echo_out() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn motion_off_stills_the_fire() {
-    if !available() {
-        return;
-    }
     // The athanor's cells, two captures apart: a burning fire changes between
     // them and a still one does not. The row decides, not `ORBS_MOTION`, or the
     // fire is still before the row is touched and this proves nothing.
-    let game = Game::launch().motion(Switch::BySetting).settled();
+    let Some(game) = Game::launch().motion(Switch::BySetting).settled() else {
+        return;
+    };
     game.does("attend laboratory", "/tower/laboratory")
         .does("kindle charcoal", "fuel for 600 ticks");
     let moving = game.ink(95, 103);
@@ -96,15 +89,15 @@ fn motion_off_stills_the_fire() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn the_menu_keeps_secrets() {
-    if !available() {
-        return;
-    }
     // Answered, never offered. `ORBS_DATE` poses a day, since a menu reads the
     // clock.
-    let game = Game::launch()
+    let Some(game) = Game::launch()
         .at_the_threshold()
         .env("ORBS_DATE", "2026-10-31")
-        .spawn();
+        .spawn()
+    else {
+        return;
+    };
     game.expect_drawn("no tower yet");
     game.type_raw("xyzzy");
     game.expect_drawn("nothing happens");

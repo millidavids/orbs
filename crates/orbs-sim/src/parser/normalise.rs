@@ -2,44 +2,25 @@
 //!
 //! §6. Three things make this less trivial than it sounds:
 //!
-//! - Filler cannot be stripped before the verb is matched. `to`, `for`, `of`,
-//!   `do` and `it` are filler in an argument and load-bearing in a verb phrase —
-//!   `go to`, `look for`, `get rid of`, `how do i`, `take it back`. So
-//!   [`Tokens::split`] keeps everything and [`strip_filler`] runs afterwards, on
+//! - Filler is load-bearing in a verb phrase — `go to`, `look for`, `take it
+//!   back` — so [`Tokens::split`] keeps everything and [`strip_filler`] runs on
 //!   the argument tail only.
-//! - Punctuation is not uniformly noise: `?` is a synonym for `recall` and `./`
-//!   one for `invoke`, while `feed.log` and `/tower/laboratory` need their
-//!   separators intact.
-//! - Lowercasing must not destroy the input.
-//!   [`NounKind::Pattern`](super::NounKind::Pattern) is free text, so `sift
-//!   ERROR feed.log` has to search for `ERROR`. Every token carries both forms —
-//!   `raw` as typed and `matching` folded — travelling together as a [`Word`] so
-//!   filtering filler cannot desynchronise them.
+//! - Punctuation is not uniformly noise: `?` and `./` are synonyms, and
+//!   `feed.log` needs its dot.
+//! - Lowercasing must not destroy the input: `sift ERROR feed.log` searches for
+//!   `ERROR`. A [`Word`] carries both forms together, so filtering cannot
+//!   desynchronise them.
 //!
 //! Quoted runs are held together, so `sift "march north" feed.log` searches for
-//! a two-word phrase rather than for `"march`.
+//! a two-word phrase.
 
-/// Words that carry no meaning in an argument.
+/// Words that carry no meaning in an argument, stripped only after the verb
+/// phrase is consumed.
 ///
-/// Applied only after a verb phrase has been consumed, never before.
-/// `from` is here for §10.1's `move <reagent> from <source> to <destination>`.
-/// `to` was already filler, and leaving `from` out meant it landed in a slot and
-/// broke the phrasing the verb was named for.
-///
-/// The cost, which is real: an unquoted `sift from feed.log` now searches for
-/// nothing, because filler is stripped before slots are filled. That was already
-/// true of `to`, `in`, `on` and `of`; quoting is the answer, and the pattern slot
-/// keeps what the player typed.
-/// Words dropped before matching, because they carry no slot.
-///
-/// `and` is here, and it is the conjunction. `mix sage-tincture and ground-salt`
-/// fills `Mix`'s two reagent slots positionally once `and` is gone — the
-/// mechanism `move sage to mortar_and_pestle` has always used, `to` and `from`
-/// being on this list for the same reason. A conjunction node in the parser
-/// would be a second way to say what slot order already says.
-///
-/// It cannot swallow part of a name: `mortar_and_pestle` and `flask_and_rod` are
-/// single whitespace-delimited tokens, and this runs on tokens.
+/// `from`, `to` and `and` let slots fill positionally — `move sage from X to
+/// Y`, `mix A and B` — with no conjunction node. The cost: an unquoted `sift
+/// from feed.log` searches for nothing; quoting is the answer. It runs on
+/// tokens, so `mortar_and_pestle` is safe.
 const FILLER: &[&str] = &[
     "the", "a", "an", "some", "my", "please", "that", "this", "of", "to", "from", "for", "at",
     "in", "on", "with", "up", "it", "and",
@@ -146,12 +127,9 @@ pub fn is_filler(word: &str) -> bool {
 
 /// How many leading words to skip before looking for a verb.
 ///
-/// `please go to the laboratory` opens with filler, and the verb matcher only looks
-/// at the head of the input — so this runs *before* matching while
-/// [`strip_filler`] runs *after*. Safe because no synonym phrase begins with a
-/// filler word, which `no_synonym_starts_with_filler` asserts.
-///
-/// Returns 0 when everything is filler, so the input is never emptied.
+/// Runs *before* matching, where [`strip_filler`] runs after, so `please go
+/// to` finds `go to`. Safe while no synonym opens on filler
+/// (`no_synonym_starts_with_a_filler_word`). 0 when everything is filler.
 #[must_use]
 pub fn skip_leading_filler(words: &[Word<'_>]) -> usize {
     words
@@ -169,10 +147,8 @@ pub fn strip_filler<'a>(words: &[Word<'a>]) -> Vec<Word<'a>> {
         .filter(|word| !is_filler(word.matching))
         .collect();
 
-    // "attend the" should not become "attend". If filler was all there was, the
-    // player did name something, and reporting an empty argument would send the
-    // parser down the "no argument given" path instead of the "I could not find
-    // that" path — a worse message for the same mistake.
+    // "attend the" keeps its `the`, so the answer is "I could not find that"
+    // rather than "no argument given".
     if stripped.is_empty() {
         words.to_vec()
     } else {

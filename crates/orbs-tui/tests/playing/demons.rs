@@ -1,6 +1,6 @@
 //! Demons, played: the circle's second function binds a hold into the arsenal.
 
-use crate::play::{Game, available};
+use crate::play::Game;
 
 /// A golem bound from a held beast — four within par.
 fn bind_a_golem(game: &Game) {
@@ -12,10 +12,7 @@ fn bind_a_golem(game: &Game) {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn a_golem_is_bound_and_deployed() {
-    if !available() {
-        return;
-    }
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.does("attend menagerie", "/tower/menagerie");
     bind_a_golem(&game);
     bind_a_golem(&game);
@@ -29,10 +26,7 @@ fn a_golem_is_bound_and_deployed() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn too_few_golems_will_not_flow() {
-    if !available() {
-        return;
-    }
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.does("attend menagerie", "/tower/menagerie");
     bind_a_golem(&game);
     game.does("attend bailey", "/tower/bailey")
@@ -43,12 +37,9 @@ fn too_few_golems_will_not_flow() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn a_sealed_tower_knows_no_demon_yet() {
-    if !available() {
-        return;
-    }
     // A station opens each demon; at a lesser circle none is open, so the name
     // does not resolve at all.
-    let game = Game::sealed();
+    let Some(game) = Game::sealed() else { return };
     game.does("debug_reach lens_1", "menagerie is yours")
         .does("attend menagerie", "/tower/menagerie")
         .does("summon", "a lesser beast gathers")
@@ -58,12 +49,11 @@ fn a_sealed_tower_knows_no_demon_yet() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn plain_english_stops_a_supply() {
-    if !available() {
-        return;
-    }
     // `grammar` is deterministic and reads `phrasings.toml`, where `stub` holds
     // six laboratory lines and nothing about a wall.
-    let game = Game::launch().env("ORBS_AUGURY", "grammar").settled();
+    let Some(game) = Game::launch().env("ORBS_AUGURY", "grammar").settled() else {
+        return;
+    };
     game.does("attend bailey", "/tower/bailey")
         .does("defend", "come up the road")
         .does("debug_spawn warding 6", "all along")

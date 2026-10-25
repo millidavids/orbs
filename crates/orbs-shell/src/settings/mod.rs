@@ -15,6 +15,7 @@
 mod keys;
 mod name;
 mod pair;
+pub mod rows;
 mod store;
 mod values;
 
@@ -26,5 +27,5 @@ pub use keys::{
 pub use name::{LONGEST_NAME, NAME, NameFault, checked_name, chosen_name};
 pub use pair::Pair;
 pub(crate) use store::FILE;
-pub use store::{get, keep, load, set};
+pub use store::{get, keep, load, seeded, set};
 pub use values::{Category, LEVELS, OFF, ON, Row, SWITCH, Secret, is_on, loudness, switched};

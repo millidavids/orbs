@@ -3,18 +3,9 @@
 //! Authored in `content/recipes.toml`, not here (rule 6). This module knows the
 //! *shape* of a recipe and nothing about which ones exist.
 //!
-//! The material's state chooses the recipe, not the player. §10.1: *"a
-//! material's state decides which recipes can fire — so the material suggests
-//! the next operation rather than the player memorising a sequence."* State is
-//! carried by the reagent's name — `sage`, `ground-sage`, `sage-tincture` —
-//! rather than by a separate field, so the tower's own contents are the state,
-//! `survey` shows it without a special view, and there is no second
-//! representation to drift.
-//!
-//! Unlike [`Prose`](super::Prose), recipes reach decisions, so swapping this
-//! file mid-session would stop `(seed, submissions)` replaying to the same
-//! world. Hot-reload is deliberately not wired up; recipes are read once, at
-//! construction.
+//! The material's state chooses the recipe (§10.1), carried by its name —
+//! `sage`, `ground-sage` — so `survey` shows it and nothing can drift. Recipes
+//! reach decisions, so unlike [`Prose`](super::Prose) they load once.
 
 use std::collections::BTreeMap;
 
@@ -39,25 +30,17 @@ pub struct Recipe {
     /// What *may* come out, for a recipe whose product is drawn rather than
     /// fixed.
     ///
-    /// The lectern is the only one: four fragments are four fragments however
-    /// they were won, so what they assemble into is the archive's roll rather
-    /// than a fact about the inputs. A list rather than several recipes because
-    /// [`matching`](Recipes::matching) returns the *first* recipe whose inputs
-    /// match — three `[[lectern]]` blocks all wanting four fragments would
-    /// leave two permanently unreachable, and nothing would say so.
+    /// The lectern's: what four fragments make is the archive's roll. A list,
+    /// since [`matching`](Recipes::matching) takes the first recipe that
+    /// matches and would leave the others unreachable.
     #[serde(default)]
     outputs: Vec<String>,
     /// The byproduct left behind, if the process leaves one. §10.1: every one
     /// of these has a use.
     ///
-    /// Optional, because byproducts are the laboratory's mechanic. §10.1 builds
-    /// the *waste has a use* loop around brewing — husks become a weak
-    /// tincture, dregs become salt, ash becomes potash — and the laboratory is
-    /// where a second route to the same draught can exist. Replicating it into
-    /// every other domain costs each one a substance nobody has decided
-    /// anything about: the lectern's assembly left `dust` only because the
-    /// field was compulsory, and the dust had nothing to become that `ash` did
-    /// not already become. So a recipe may leave nothing — omit the key.
+    /// Optional: *waste has a use* is the laboratory's mechanic, and forcing it
+    /// elsewhere invents substances nobody designed. Omit the key to leave
+    /// nothing.
     #[serde(default)]
     pub leaves: Option<String>,
     /// How long it takes. A placeholder the balance CLI sweeps.
@@ -65,35 +48,22 @@ pub struct Recipe {
     /// Whether the output is a finished potion rather than more crafting stock.
     ///
     /// The line between [`Essence`](crate::parser::NounKind::Essence) and
-    /// [`Reagent`](crate::parser::NounKind::Reagent), and the end of §10.1's
-    /// pipeline. In the content file rather than inferred from "nothing
-    /// consumes it", because a byproduct nobody has found a use for yet would
-    /// otherwise silently become a potion.
+    /// [`Reagent`](crate::parser::NounKind::Reagent). Authored, not inferred,
+    /// or an unused byproduct becomes a potion.
     #[serde(default)]
     pub potion: bool,
     /// Whether the output is a scroll — finished work, like a potion, but read
     /// rather than drunk.
     ///
-    /// A third kind rather than a second flavour of `potion`, because the two
-    /// are different nouns: an [`Essence`](crate::parser::NounKind::Essence) is
-    /// §10.1's *quality* a recipe yields, a
-    /// [`Scroll`](crate::parser::NounKind::Scroll) is an object you spend. A
-    /// recipe setting both is refused at load, or `kind_of` would answer
-    /// whichever branch came first.
+    /// A third kind, since a [`Scroll`](crate::parser::NounKind::Scroll) is an
+    /// object you spend, not a quality. Setting both is refused at load.
     #[serde(default)]
     pub scroll: bool,
     /// How many of *each* input this consumes. One unless the file says so.
     ///
-    /// A count rather than the input repeated, because
-    /// `inputs = ["fragment", "fragment", ...]` cannot work: what an instrument
-    /// holds is a *node per name* with a [`Stock`](crate::tower::Stock) count
-    /// on it, so four fragments are one entry. Expanding a held stack into one
-    /// name per unit would break what already works — an instrument may hold
-    /// two sage against a one-sage recipe and still be `charged`.
-    ///
-    /// So the recipe says how many it wants and the match asks for *at least*
-    /// that many. Two sage still fires a one-sage recipe and leaves one behind;
-    /// two fragments do not fire a four-fragment one.
+    /// A count, since an instrument holds a node per name with a
+    /// [`Stock`](crate::tower::Stock) count. The match asks for *at least*
+    /// that many.
     #[serde(default = "one")]
     pub count: u32,
     /// How many of the output one run makes. The byproduct is always one.
@@ -104,33 +74,16 @@ pub struct Recipe {
     pub yields: u32,
     /// Whether this needs the athanor alight (§10.1).
     ///
-    /// In the content file, for the same reason `potion` is. This was a
-    /// `matches!(instrument, "balneum_mariae" | "alembic")` in the executor
-    /// while `recipes.toml` recorded the fact one line away as a *comment*, so
-    /// a designer adding a sixth heated instrument would have shipped a recipe
-    /// that silently runs cold. Rule 6 puts authored facts in the data; nothing
-    /// cross-checks a `matches!` against the TOML beside it.
-    ///
-    /// Per recipe rather than per instrument, because it is the *process* that
-    /// wants heat: an instrument may well gain a cold recipe later.
+    /// Authored (rule 6), and per recipe, since the process wants heat, not
+    /// the instrument.
     #[serde(default)]
     pub heat: bool,
     /// Whether the player has to *find* this before it will fire (§10, `lens/`).
     ///
-    /// Content, not player state: this says a recipe *is* discoverable,
-    /// [`Learned`](crate::tower::Learned) says whether it has been discovered.
-    /// Keeping them apart lets `Recipes` stay immutable, which it must be
-    /// because a recipe reaches a decision and swapping one mid-session would
-    /// break replay from `(seed, submissions)`.
-    ///
-    /// Only two questions consult it: whether a recipe fires
-    /// ([`matching`](Recipes::matching), [`gathering`](Recipes::gathering)) and
-    /// whether its product is a word the player can say (`tower::scene`).
-    /// Everything else here is a *content* query and must stay unfiltered —
-    /// `debug_spawn` reaches every material by design, and `execute::scroll`'s
-    /// verdant unlock derives base reagents as *"in the vocabulary and made by
-    /// nothing"*, so a filtered `outputs` would drop an undiscovered potion out
-    /// of "made" and offer it as an endless herb.
+    /// Content, where [`Learned`](crate::tower::Learned) is player state, so
+    /// `Recipes` stays immutable. Consulted only for whether a recipe fires
+    /// and whether its product is sayable; every other query stays
+    /// unfiltered — see [`outputs`](Recipes::outputs).
     #[serde(default)]
     pub secret: bool,
     /// Quintessence taken when a run starts, on top of the inputs. Stillness is
@@ -139,17 +92,10 @@ pub struct Recipe {
     pub quintessence: u32,
     /// Whether the player has to *earn* this before it will fire (§11.5).
     ///
-    /// The other door: a secret is *found* — rolled on a broken ward, in the
-    /// lens — and a gated product is *earned* by reaching a station on a room's
-    /// mastery line. `tower::Opened` holds what has been earned, as
-    /// [`Learned`](crate::tower::Learned) holds what has been found; a recipe
-    /// may not be both.
-    ///
-    /// Per output, never per recipe: `gated = true` gates everything the recipe
-    /// makes, `gated = ["quickening-scroll"]` only that product. The lectern is
-    /// one recipe with three outputs, and a recipe-level gate on two would seal
-    /// the third — so a recipe fires if *any* of its outputs is known, and the
-    /// draw picks among the known ones.
+    /// A secret is found in the lens; a gated product is earned on a mastery
+    /// line (`tower::Opened`). Not both. Per output: `gated = true` gates all,
+    /// `gated = ["quickening-scroll"]` one, and a recipe fires if any output
+    /// is known.
     #[serde(default)]
     gated: Gate,
 }
@@ -196,9 +142,7 @@ const fn one() -> u32 {
 impl Recipe {
     /// What this recipe consumes, however it was written.
     ///
-    /// `input = "sage"` and `inputs = ["a", "b"]` are the same thing to everyone
-    /// downstream; the two spellings exist so a one-in recipe does not have to
-    /// be written as a list of one in the content file.
+    /// `input = "sage"` and `inputs = ["a", "b"]` are one thing downstream.
     #[must_use]
     pub fn inputs(&self) -> Vec<&str> {
         if self.inputs.is_empty() {
@@ -210,13 +154,8 @@ impl Recipe {
 
     /// Everything this recipe can produce, however it was written.
     ///
-    /// The counterpart of [`inputs`](Self::inputs), and the same two spellings
-    /// for the same reason: a recipe that makes one thing says `output = "x"`
-    /// rather than a list of one. A recipe that **draws** says `outputs`, and
-    /// every name in it is a real product — so this is what the vocabulary, the
-    /// scene's topics, `recall`'s routes and `kind_of` all read. Anything asking
-    /// *"can this make x"* has to consider all of them or a rolled product would
-    /// be a word the parser does not know.
+    /// [`inputs`](Self::inputs)' two spellings. Every drawn product is real,
+    /// so the vocabulary, topics, routes and `kind_of` all read this.
     #[must_use]
     pub fn outputs(&self) -> Vec<&str> {
         if self.outputs.is_empty() {
@@ -257,9 +196,7 @@ impl Recipes {
     ///
     /// [`ContentError`](super::ContentError) if the text is not valid TOML of
     /// the expected shape, if a recipe produces nothing, or if it claims to
-    /// produce two kinds of thing at once. Both parse perfectly and are
-    /// unusable — `Materials::parse` refuses an unknown colour in the same
-    /// place for the same reason.
+    /// produce two kinds of thing at once — both parse and are unusable.
     pub fn parse(text: &str) -> Result<Self, super::ContentError> {
         let parsed: Self = super::load::parse(FILE, text)?;
         for (instrument, recipe) in parsed
@@ -318,19 +255,10 @@ impl Recipes {
 
     /// The first recipe `instrument` can run on exactly `held`.
     ///
-    /// Order in the file is the tie-break, matching how §6 resolves a scoring
-    /// tie to whatever was registered first — so which recipe fires is a
-    /// property of the content, never of iteration luck.
-    ///
-    /// Matching is on the *multiset* of what is in the instrument: a recipe
-    /// wanting `[a, b]` fires on `[b, a]` and does not fire when a third thing
-    /// is also there, which is what makes clearing an instrument part of the
-    /// loop rather than an optional tidy.
-    /// `held` carries each name once with how many units are there — see
-    /// [`Recipe::count`] for why the count is carried rather than the name
-    /// repeated. `known` is what the player has found and earned; a recipe they
-    /// have neither does not fire and the instrument reads `fouled`, which is
-    /// honest: as far as they know, they hold two things that make nothing.
+    /// File order is the tie-break. On the multiset held, so a third thing
+    /// stops it — clearing is part of the loop. `held` is a name and count
+    /// ([`Recipe::count`]); a recipe not `known` does not fire and the
+    /// instrument reads `fouled`, which is honest.
     #[must_use]
     pub fn matching(
         &self,
@@ -366,15 +294,8 @@ impl Recipes {
 
     /// Whether what is held is *part* of a recipe rather than none of one.
     ///
-    /// The complement of [`matching`](Self::matching), and the panel needs
-    /// both: an instrument holding nothing a recipe wants is fouled, one
-    /// holding a proper subset is collecting a set, and telling the player it
-    /// will not start is exactly wrong. The lectern is the first instrument
-    /// this can happen to — it wants four distinct shards, so three of them
-    /// matched nothing — but any multi-input recipe has it.
-    ///
-    /// Two ways to be part-way there, and the lectern reaches both: fewer
-    /// *kinds* than a recipe names, or every kind but not enough of one.
+    /// [`matching`](Self::matching)'s complement, for the panel: a proper
+    /// subset is collecting, not fouled — fewer kinds, or too few of one.
     #[must_use]
     pub fn gathering(
         &self,
@@ -414,10 +335,8 @@ impl Recipes {
 
     /// Every instrument the recipes name, alphabetically.
     ///
-    /// The authority on what an instrument is, for content that has to agree
-    /// with this file — `progression.toml` prices work by instrument, and a key
-    /// there matching nothing here would earn nothing while looking deliberate.
-    /// A `BTreeMap`, so an error message reads the same every run.
+    /// The authority on what an instrument is, which `progression.toml`'s keys
+    /// are checked against. Sorted, so an error reads the same every run.
     #[must_use]
     pub fn instruments(&self) -> Vec<&str> {
         self.by_instrument.keys().map(String::as_str).collect()
@@ -433,10 +352,8 @@ impl Recipes {
 
     /// *Every* way to make `output`, in file order.
     ///
-    /// More than one is the point: §10.1's exit criterion is that the same goal
-    /// has two different right answers depending on what the laboratory is
-    /// holding, and a single route can only ever have one. `recall` shows this,
-    /// so the difference is readable before an instrument is committed to it.
+    /// More than one is §10.1's point: the same goal, two right answers, which
+    /// `recall` shows.
     #[must_use]
     pub fn routes(&self, output: &str) -> Vec<(&str, &Recipe)> {
         self.by_instrument
@@ -452,11 +369,8 @@ impl Recipes {
 
     /// Every reagent name the laboratory knows, consumed or produced.
     ///
-    /// The vocabulary, not the stock: a reagent's *name* is a fixed fact about
-    /// the recipes, whether any is on the shelf right now is not. That is what
-    /// `scribe::dropped_argument` needs, to tell `grind sage` typed when the
-    /// sage happens to be spent from `look around`, where the extra word never
-    /// named anything.
+    /// The vocabulary, not the stock: a name is fixed whether or not any is on
+    /// the shelf.
     #[must_use]
     pub fn vocabulary(&self) -> Vec<&str> {
         let mut out: Vec<&str> = self
@@ -478,18 +392,9 @@ impl Recipes {
 
     /// Every substance the laboratory has a *word* for.
     ///
-    /// The union of [`vocabulary`](Self::vocabulary) and the fuels, rather than
-    /// either half: `vocabulary` misses fuel, because the athanor transforms
-    /// nothing and so has no recipe — and that is the reagent a tester reaches
-    /// for first.
-    ///
-    /// A word, not a thing on a shelf. `ground-sage` is a word the laboratory
-    /// knows whether or not any exists right now, which is what lets the parser
-    /// tell *"there is none here"* from *"you have mistyped something"* — see
-    /// `Scene::knowing`. It was telling neither, and `digest ground-sage` on an
-    /// empty shelf quietly digested `ground-salt` instead: two characters apart
-    /// in eleven, well inside the typo band, and a wrong action rather than a
-    /// refusal (§19).
+    /// [`vocabulary`](Self::vocabulary) and the fuels, which have no recipe. A
+    /// word, not a thing on a shelf, so the parser tells *none here* from a
+    /// typo (`Scene::knowing`, §19).
     #[must_use]
     pub fn substances(world: &bevy_ecs::world::World) -> Vec<String> {
         let mut names: Vec<String> = world
@@ -520,15 +425,9 @@ impl Recipes {
 
     /// What kind of noun `name` is when it exists in the world.
     ///
-    /// The rule `produce` applies, asked by name instead of by recipe: a
-    /// finished potion is an [`Essence`](crate::parser::NounKind::Essence) —
-    /// §10.1's *quality* a recipe yields — a scroll is a
-    /// [`Scroll`](crate::parser::NounKind::Scroll), and everything else is
-    /// crafting stock. `produce` has the recipe it just ran in hand; anything
-    /// working from a name alone (`debug_spawn`) has to ask.
-    ///
-    /// A name no recipe produces is stock: every input and every byproduct,
-    /// which is most of the vocabulary.
+    /// `produce`'s rule, asked by name: a potion is an
+    /// [`Essence`](crate::parser::NounKind::Essence), a scroll a
+    /// [`Scroll`](crate::parser::NounKind::Scroll), everything else stock.
     #[must_use]
     pub fn kind_of(&self, name: &str) -> crate::parser::NounKind {
         let made_by = |wanted: fn(&Recipe) -> bool| {
@@ -548,15 +447,9 @@ impl Recipes {
 
     /// Whether the player may fire this recipe at all.
     ///
-    /// One place, asked by both [`matching`](Self::matching) and
-    /// [`gathering`](Self::gathering): two expressions of one rule disagreeing
-    /// would show as an instrument reading `gathering` for a set it will never
-    /// assemble.
-    ///
-    /// Any output known, not every one. A recipe that draws among several
-    /// products fires as soon as one may be made and `produce::draw` picks
-    /// among the known ones; requiring all would seal the lectern behind the
-    /// last scroll its line opens.
+    /// One rule for [`matching`](Self::matching) and
+    /// [`gathering`](Self::gathering). Any output known, not every one, or the
+    /// lectern waits for its last scroll.
     fn reachable(&self, recipe: &Recipe, known: &crate::tower::Known<'_>) -> bool {
         recipe.outputs().iter().any(|made| known.knows(self, made))
     }
@@ -596,10 +489,7 @@ impl Recipes {
 
     /// Whether a name is one the player has to find before they can make it.
     ///
-    /// Every route to it must be secret. A name one recipe hides and another
-    /// gives away freely is not a secret, and hiding it would hide a product
-    /// the player can already make by the other route — §10.1's *"the same
-    /// goal, two right answers"*.
+    /// Every route to it must be secret, or it is not one (§10.1).
     #[must_use]
     pub fn is_secret(&self, name: &str) -> bool {
         let mut routes = self
@@ -635,11 +525,9 @@ impl Recipes {
 
     /// Every distinct output any instrument can produce.
     ///
-    /// Unfiltered, deliberately — see [`Recipe::secret`]. This is a content
-    /// query: `debug_spawn` reaches every material through it, and
-    /// `execute::scroll`'s verdant unlock subtracts it from the vocabulary to
-    /// find base reagents, so filtering would offer an undiscovered potion as
-    /// an inexhaustible herb.
+    /// Unfiltered by [`Recipe::secret`]: `debug_spawn` reaches every material
+    /// through it, and the verdant unlock subtracts it to find base reagents,
+    /// so filtering would grow an undiscovered potion as an herb.
     #[must_use]
     pub fn outputs(&self) -> Vec<&str> {
         let mut out: Vec<&str> = self
@@ -872,13 +760,8 @@ mod tests {
 
     #[test]
     fn every_byproduct_has_at_least_one_use() {
-        // §10.1's rule, as a test. A byproduct that is only ever litter makes
-        // `purge` into tidying — the feeling this item exists to remove.
-        //
-        // A recipe that leaves nothing is not a recipe that leaves litter, so
-        // it is skipped rather than counted as one: leaving something is the
-        // laboratory's mechanic and no other domain replicates it (see
-        // [`Recipe::leaves`]).
+        // §10.1's rule: a byproduct only ever litter makes `purge` tidying. A
+        // recipe that leaves nothing is skipped (see [`Recipe::leaves`]).
         let recipes = Recipes::builtin();
         let mut byproducts: Vec<&str> = recipes
             .by_instrument

@@ -5,19 +5,10 @@
 //! *when*. Driven from `Time`, never from the tick — the sim must not be able
 //! to observe it, or replay would depend on how long a frame took.
 //!
-//! One clock, not one per instrument: they share `orbs_render`'s tick grid,
-//! which is where the photosensitivity guarantee lives. What differs is the
-//! *view* this hands out — [`Bench::burn`], [`Bench::grind`].
-//!
-//! It is off when the tube is off. §14 requires motion be disableable, and
-//! nothing else in the game flashes, so a shimmering meter on the laboratory's
-//! permanent fixture needs a switch a player can reach. It rides the frontend's
-//! own motion switch, passed to [`Bench::advance`] and read explicitly rather
-//! than derived — `crt::settings` has why. F3 cycles to `OFF`, and that stops
-//! the fire too.
-//!
-//! `ORBS_FIRE=0` is for scripted runs, not for players; the per-effect toggle
-//! belongs to the settings item in `ROADMAP.md`.
+//! One clock on `orbs_render`'s tick grid, where the photosensitivity
+//! guarantee lives; each instrument gets its own view. Off with the frontend's
+//! motion switch (§14), passed to [`Bench::advance`]. `ORBS_FIRE=0` is for
+//! scripted runs.
 
 use bevy_ecs::prelude::Resource;
 use orbs_render::{Burn, Grind, Motion, Steep, Stir};
@@ -51,10 +42,8 @@ pub struct Bench {
     was_lit: bool,
     /// How far through the current world tick, `0.0..1.0`.
     ///
-    /// Read from the fixed scheduler rather than counted here: a second copy
-    /// drifts the moment the clock hitches, and drift shows as a bar reaching
-    /// the next cell off the tick it is meant to land on. The sim ticks in
-    /// `FixedUpdate`, so this *is* that tick's position by construction.
+    /// Read from the fixed scheduler the sim ticks in, never counted here,
+    /// which would drift.
     advance: f32,
     /// Whether the effect runs at all. See the module header.
     enabled: bool,
@@ -147,10 +136,8 @@ impl Bench {
     /// The same clock as [`Self::burn`] and [`Self::grind`], and the same
     /// reduce-motion switch.
     ///
-    /// No pour, deliberately: the load is one timer on one edge
-    /// (`observe_bowl`, which finds its instrument by [`Craft::Grinding`]), so
-    /// sharing it would make charging the mortar pour the bath. The bath is a
-    /// *picture* at rest, so a load is visible without an animation.
+    /// No pour: the load timer is the mortar's ([`Craft::Grinding`]), and a
+    /// bath at rest already shows its load.
     #[must_use]
     pub const fn steep(
         &self,
@@ -232,14 +219,9 @@ impl Bench {
 
     /// Carry the phase forward by `seconds`.
     ///
-    /// Wrapped, not accumulated: an `f32` counting real seconds has lost its
-    /// fraction by the third hour, and the fire would coarsen and stop with
-    /// nothing on screen to say why. Separate from [`Bench::advance`] so it is
-    /// testable without an `App`.
-    ///
-    /// Forward only, because `ORBS_FIRE_PHASE` is a number a person types and a
-    /// negative one ran both decays in reverse — drawing an ignition and a load
-    /// no state in the game could produce.
+    /// Wrapped, since an `f32` of seconds loses its fraction by the third hour.
+    /// Forward only, or a typed negative phase draws states the game cannot
+    /// reach. Testable without an `App`.
     pub fn tick(&mut self, seconds: f32) {
         let seconds = seconds.max(0.0);
         self.phase = (self.phase + seconds).rem_euclid(orbs_render::CYCLE_SECS);
@@ -316,12 +298,8 @@ fn bowl(panel: &super::glance::Panel) -> Option<bool> {
 
 /// Whether the athanor in the current room is alight, if there is one.
 ///
-/// Found by [`Craft`], exactly as [`bowl`] is. Searching by *state* worked only
-/// while no other instrument reported `Burning` — a forge with a `Burning`
-/// state would have flared the athanor when it caught.
-///
-/// `Charged` answers `None`: an athanor loaded but unlit is neither alight nor
-/// out, and [`Bench::observe_hearth`] leaves the previous answer standing.
+/// Found by [`Craft`], as [`bowl`] is, never by state another instrument could
+/// share. `Charged` answers `None`, neither alight nor out.
 fn hearth(panel: &super::glance::Panel) -> Option<bool> {
     panel
         .instruments

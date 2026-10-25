@@ -18,33 +18,22 @@ pub(crate) struct Tower(Sim);
 
 /// The readers that answer lines the orb cannot read itself (§6), if any.
 ///
-/// Both registers under one setting: a player who asked to be read that way
-/// meant their whole session, and a second toggle for spells would be one
-/// nobody finds and one that can disagree with the first.
-///
-/// `orbs_shell::augury` and `orbs_shell::scrivener` are the single readers of
-/// the two switches, so this build and the terminal one cannot disagree.
+/// Both registers under one setting, loaded once by
+/// [`orbs_shell::Readers::from_environment`] for both builds.
 #[derive(Resource, Default)]
 pub(crate) struct Readers {
-    /// The prompt's reader, if the player wants one.
-    ///
-    /// Loaded once and kept even under `plain`: switching drivers is a menu
-    /// choice that must take effect on the next line typed, and rebuilding or
-    /// dropping the reader would put a file read on a keystroke.
-    reader: Option<Box<dyn orbs_sim::Augur>>,
-    /// The spell reader, on the same terms.
-    scribe: Option<Box<dyn orbs_sim::Scrivener>>,
+    /// The two readers, loaded once.
+    loaded: orbs_shell::Readers,
     /// Whether the player wants them consulted.
     driver: orbs_shell::Driver,
 }
 
 impl Readers {
-    /// Whatever `ORBS_AUGURY` asked for.
+    /// Whatever `ORBS_AUGURY` and `ORBS_SCRIVENER` asked for.
     ///
-    /// Every reader is chosen in `orbs_shell::augury`, including the trained
-    /// one: a dump builds no `App`, so a reader living in a Bevy resource is
-    /// invisible to `scripts/dumps.sh`. The shell takes an optional
-    /// `orbs-augury` behind a feature instead, and `orbs-tui` leaves it off.
+    /// Every reader is chosen in `orbs_shell`, including the trained one: a dump
+    /// builds no `App`, so a reader living in a Bevy resource is invisible to
+    /// `scripts/dumps.sh`.
     pub(crate) fn from_environment() -> Self {
         // Never under `cargo test`: weights are a gitignored build artefact, so
         // a reader installed here would make every test that adds `SimPlugin`
@@ -54,30 +43,19 @@ impl Readers {
             return Self::default();
         }
         Self {
-            reader: orbs_shell::augury(),
-            scribe: orbs_shell::scrivener(),
+            loaded: orbs_shell::Readers::from_environment(),
             driver: orbs_shell::settings::driver(),
         }
     }
 
     /// The reader, for handing to the sim — or nothing, if `plain` is chosen.
-    ///
-    /// Two switches: `ORBS_AUGURY` says what this build offers (a developer's
-    /// override), the driver says whether the player wants it consulted. `off`
-    /// leaves nothing to gate.
     pub(crate) fn reader(&self) -> Option<&dyn orbs_sim::Augur> {
-        match self.driver {
-            orbs_shell::Driver::Plain => None,
-            orbs_shell::Driver::Augury => self.reader.as_deref(),
-        }
+        self.loaded.reader(self.driver)
     }
 
     /// The spell reader, on exactly the same terms.
     pub(crate) fn scrivener(&self) -> Option<&dyn orbs_sim::Scrivener> {
-        match self.driver {
-            orbs_shell::Driver::Plain => None,
-            orbs_shell::Driver::Augury => self.scribe.as_deref(),
-        }
+        self.loaded.scrivener(self.driver)
     }
 
     /// Read lines this way from now on.
@@ -101,8 +79,7 @@ impl Readers {
     #[cfg(test)]
     pub(crate) fn holding(reader: Box<dyn orbs_sim::Augur>) -> Self {
         Self {
-            reader: Some(reader),
-            scribe: None,
+            loaded: orbs_shell::Readers::new(Some(reader), None),
             driver: orbs_shell::Driver::Augury,
         }
     }
@@ -111,8 +88,7 @@ impl Readers {
     #[cfg(test)]
     pub(crate) fn copying(scribe: Box<dyn orbs_sim::Scrivener>) -> Self {
         Self {
-            reader: None,
-            scribe: Some(scribe),
+            loaded: orbs_shell::Readers::new(None, Some(scribe)),
             driver: orbs_shell::Driver::Augury,
         }
     }
@@ -168,36 +144,25 @@ impl Tower {
         self.0.say_save_failed();
     }
 
-    /// Hand a finished line to the sim.
-    ///
-    /// The only other way the frontend touches the world, and it does not
-    /// advance it: echoes immediately, queues any resolved command for the next
-    /// `step()`. See `orbs_sim::session`.
+    /// [`submit_with`](Self::submit_with) with no reader, for the tests.
+    #[cfg(test)]
     pub(crate) fn submit(&mut self, line: &str) {
         self.0.submit(line);
     }
 
     /// Hand a finished line to the sim, letting `augur` read it if the orb cannot.
     ///
-    /// A separate method, and a separate resource rather than a constructor
-    /// argument: a reader is not part of what a tower is, and all four
-    /// constructors build the same world whether or not one is installed.
-    ///
-    /// `None` is [`submit`](Self::submit) exactly — see
-    /// [`Sim::submit_reading`](orbs_sim::Sim::submit_reading) for the tiers.
+    /// Echoes now and queues for the next `step()`, advancing nothing. The
+    /// reader is no part of a tower, so an argument; see
+    /// [`Sim::submit_reading`](orbs_sim::Sim::submit_reading).
     pub(crate) fn submit_with(&mut self, line: &str, augur: Option<&dyn orbs_sim::Augur>) {
-        match augur {
-            Some(augur) => self.0.submit_reading(line, augur),
-            // Through [`submit`](Self::submit) rather than past it, so there is
-            // one place this façade reaches the world with a typed line.
-            None => self.submit(line),
-        }
+        self.0.submit_with(line, augur);
     }
 
     /// Take a mastery node the weave screen chose.
     ///
     /// A third verb-shaped method rather than `sim_mut` — see
-    /// [`Tower::opening`] for why. Like `submit` it queues, so the choice lands
+    /// [`Tower::opening`] for why. Like `submit_with` it queues, so the choice lands
     /// on the next tick rather than off a tick boundary.
     pub(crate) fn take(&mut self, id: &str) {
         self.0.take(id);
@@ -329,23 +294,6 @@ impl Tower {
             .write_spell_reading(name, lines, scrivener.unwrap_or(&orbs_sim::Verbatim));
     }
 
-    /// Read the buffer of the spell called `name` the way the editor draws it,
-    /// with a reader if there is one.
-    pub(crate) fn read_spell_with(
-        &self,
-        name: &str,
-        domain: &str,
-        lines: &[String],
-        scrivener: Option<&dyn orbs_sim::Scrivener>,
-    ) -> Vec<orbs_sim::tower::spell::Reading> {
-        self.0.read_spell_with(
-            name,
-            domain,
-            lines,
-            scrivener.unwrap_or(&orbs_sim::Verbatim),
-        )
-    }
-
     /// Replace the orb's authored voice (CLAUDE.md rule 6).
     ///
     /// Called from `content::reload` in `FixedUpdate`, so the swap lands on a
@@ -361,6 +309,12 @@ impl Tower {
     /// re-assembles the book: the edit lands, the scroll position does not jump.
     pub(crate) fn set_manual(&mut self, manual: orbs_sim::content::Manual) {
         self.0.set_manual(manual);
+    }
+
+    /// Pour `ORBS_CONTENT` in, as every frontend does ([`orbs_shell::load`]),
+    /// returning what did not load.
+    pub(crate) fn load_content(&mut self) -> Vec<&'static str> {
+        orbs_shell::load(&mut self.0)
     }
 
     /// Advance one tick, for a test that needs the world to have moved.

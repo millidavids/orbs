@@ -20,30 +20,10 @@ const RAMP: f32 = 0.6;
 /// How dark a clouded glass goes, as a share of its brightness.
 const CLOUDED: f32 = 0.45;
 
-/// Whether the glass clouds while the player looks away. Anything but `dim`
-/// is off: nothing changes.
-#[derive(Resource, Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct Away(bool);
-
-impl From<bool> for Away {
-    fn from(dims: bool) -> Self {
-        Self(dims)
-    }
-}
-
-impl Pair for Away {
-    const KEY: &'static str = "away";
-    const WORDS: [&'static str; 2] = ["off", "dim"];
-
-    fn raised(self) -> bool {
-        self.0
-    }
-}
-
-impl Default for Away {
-    fn default() -> Self {
-        Self::remembered()
-    }
+super::setting::pair! {
+    /// Whether the glass clouds while the player looks away. Anything but `dim`
+    /// is off: nothing changes.
+    pub(crate) struct Away(bool) = "away", ["off", "dim"];
 }
 
 /// Whether the player has looked away, and how far the glass has clouded.

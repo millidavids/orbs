@@ -36,12 +36,18 @@ const FRAME: Duration = Duration::from_millis(33);
 /// absence belongs to offline progression, which is Phase 11a's.
 const CATCH_UP: u32 = 5;
 
-/// Play, until the player leaves.
+/// Play, until the player leaves, adding to `missed` the live content files a
+/// swapped-in tower could not load.
 ///
 /// # Errors
 ///
 /// If the terminal cannot be read from or written to.
-pub(crate) fn run(sim: Sim, threshold: Threshold, engine: String) -> std::io::Result<()> {
+pub(crate) fn run(
+    sim: Sim,
+    threshold: Threshold,
+    engine: String,
+    missed: &mut Vec<&'static str>,
+) -> std::io::Result<()> {
     let narrow = term::symbols_are_narrow().unwrap_or(true);
     let grid = term::grid()?;
     // No path at the threshold, which is the structural guarantee:
@@ -72,14 +78,8 @@ pub(crate) fn run(sim: Sim, threshold: Threshold, engine: String) -> std::io::Re
     loop {
         let result = play(&mut session, &dying);
 
-        // Every way out converges here, which is why the loop is a function of
-        // its own. Five exits — the menu's `quit`, `F10`, `Ctrl-C`/`Ctrl-D`, an
-        // `io::Error` off the terminal, and a swap — and only the first goes
-        // through the `Quitting` flag, so saving at each `return` would have
-        // covered one in five and looked complete. (The Bevy build reads
-        // `AppExit` in `Last` for the same reason.) Before the swap below, so
-        // the tower being left is written to the path it came from while
-        // `session` still holds both.
+        // All five exits converge here, as `AppExit` does in the Bevy build.
+        // Before the swap, so the tower left is written to its own path.
         session.keep();
 
         let Some(asked) = session.take_swap() else {
@@ -87,7 +87,7 @@ pub(crate) fn run(sim: Sim, threshold: Threshold, engine: String) -> std::io::Re
         };
         // An error off the terminal is not a thing to swap through.
         result?;
-        if let Some(next) = session.raise(asked) {
+        if let Some(next) = session.raise(asked, missed) {
             session = next;
         }
     }
@@ -109,17 +109,9 @@ fn play(session: &mut Session, dying: &AtomicBool) -> std::io::Result<()> {
         }
         // ── 1. The world, before anything the player did this iteration ──
         //
-        // This order is load-bearing, and the reason is `walk`, not `submit`. A
-        // typed line is queued to the next `step` whatever order this loop runs
-        // in, so its placement is latency, not replay.
-        //
-        // `Sim::walk` executes immediately, and `Sim::replay`'s contract is that
-        // a `Submission::Walked` *"already ran, during its tick, after that
-        // tick's step"*. Drain an arrow before stepping and it runs before tick
-        // N's step while recorded against tick N, so a replay applies it after —
-        // nothing fails, and the two frontends replay one seed into two worlds.
-        //
-        // Step first. The maze arrives in step D and this is already right for it.
+        // Step first, for `walk`: a `Submission::Walked` ran after its tick's
+        // step (`Sim::replay`), so an arrow drained before would replay into
+        // a different world.
         let now = Instant::now();
         // Holding `ticked` at `now` while the clock is stopped keeps the
         // catch-up below from replaying the boot card or the menu as a burst.
@@ -161,19 +153,10 @@ fn play(session: &mut Session, dying: &AtomicBool) -> std::io::Result<()> {
         }
         if crossterm::event::poll(until_tick.min(until_frame))? {
             match crossterm::event::read()? {
-                // Nothing is typed during boot — §19 removed the keypress skip
-                // because the first thing a player does to the game should not
-                // be dismissing it. *Leaving* is the exception, because raw mode
-                // takes away the window manager's way out: `Ctrl-C` is ours to
-                // answer or nobody's, and it ends the session rather than
-                // jumping to the game, so it is not a skip.
-                //
-                // `Repeat` as well as `Press`, or auto-repeat is lost. crossterm
-                // reports a third kind when keyboard-enhancement flags are
-                // pushed — which this build never does, but the flags live on a
-                // *terminal* stack, so a crashed editor leaves them set for
-                // everything after it. In that state holding Backspace deleted
-                // one character, and `HeldOver` was dead code.
+                // Nothing is typed during boot (§19), but `Ctrl-C` still leaves,
+                // since raw mode removes every other way out. `Repeat` too: a
+                // crashed program can leave enhancement flags set, and auto-
+                // repeat then arrives as its own kind.
                 Event::Key(key)
                     if matches!(key.kind, KeyEventKind::Press | KeyEventKind::Repeat) =>
                 {

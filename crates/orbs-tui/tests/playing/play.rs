@@ -1,17 +1,7 @@
 //! A game, played through a real terminal, with the screen read back.
 //!
-//! Assertions anchor on the *last block*, never on the screen. The transcript
-//! keeps its history, so waiting for a substring anywhere is wrong twice over,
-//! both measured:
-//!
-//! - **Stale matches.** The clarity chain empties the mortar twice, six steps
-//!   apart; the second wait returned in 1 ms against the first one's line.
-//! - **Saturation.** Counting occurrences deadlocks: the pane holds 8 command
-//!   blocks at 120×45, so from the ninth repeat each new line pushes an old one
-//!   off, and the tail over `Records::drawn` runs *backwards*.
-//!
-//! So a match is scoped by position: everything since the last `wizard $`
-//! header. It is self-pacing too — the result lands next tick.
+//! Assertions anchor on the last block, everything since the last `wizard $`,
+//! since a screen-wide match finds stale lines and a count saturates.
 //!
 //! The parsing depends on the screen's shape:
 //!
@@ -33,8 +23,6 @@ use std::time::{Duration, Instant};
 
 use crate::launch::{Launch, Switch};
 use crate::tmux::{reap, tmux};
-
-pub use crate::tmux::available;
 
 /// The prompt name, pinned. It falls back to `$USER` otherwise, which would make
 /// every block header machine-dependent.
@@ -95,22 +83,23 @@ impl Game {
         Launch::default()
     }
 
-    /// Start a game at the standard grid on the quiet seed.
+    /// Start a game at the standard grid on the quiet seed. Every constructor is
+    /// `None` when tmux is not installed.
     #[must_use]
-    pub fn start() -> Self {
+    pub fn start() -> Option<Self> {
         Self::launch().settled()
     }
 
     /// Start a game on a chosen seed — for the scenarios that want a particular
     /// maze, ward or scroll draw.
     #[must_use]
-    pub fn seeded(seed: u64) -> Self {
+    pub fn seeded(seed: u64) -> Option<Self> {
         Self::launch().seed(seed).settled()
     }
 
     /// Start a game at a chosen size, for the layout scenarios.
     #[must_use]
-    pub fn sized(cols: u16, rows: u16) -> Self {
+    pub fn sized(cols: u16, rows: u16) -> Option<Self> {
         Self::launch().sized(cols, rows).settled()
     }
 
@@ -118,7 +107,7 @@ impl Game {
     ///
     /// No wait for a prompt: the point is the time before there is one.
     #[must_use]
-    pub fn booting() -> Self {
+    pub fn booting() -> Option<Self> {
         // Moving, since the live card is the point; still holds it at its end.
         Self::launch().booting().motion(Switch::Always).spawn()
     }
@@ -127,14 +116,14 @@ impl Game {
     ///
     /// No wait for a prompt: there is not one.
     #[must_use]
-    pub fn at_the_threshold() -> Self {
+    pub fn at_the_threshold() -> Option<Self> {
         Self::launch().at_the_threshold().spawn()
     }
 
     /// Start a game at the orb's menu **with the installation on**, so `new`
     /// reaches the practice tower rather than a tower.
     #[must_use]
-    pub fn installing() -> Self {
+    pub fn installing() -> Option<Self> {
         Self::launch()
             .at_the_threshold()
             .installs(Switch::Always)
@@ -145,7 +134,7 @@ impl Game {
     /// installation, as a player's game does. `ORBS_SAVE=off` keeps no settings
     /// file, so it starts on, and the menu can turn it off for the session.
     #[must_use]
-    pub fn at_the_threshold_by_setting() -> Self {
+    pub fn at_the_threshold_by_setting() -> Option<Self> {
         Self::launch()
             .at_the_threshold()
             .installs(Switch::BySetting)
@@ -155,8 +144,19 @@ impl Game {
     /// Start a game **as a fresh game starts**: a laboratory and nothing else
     /// (§11.5), which every other scenario skips by opening the whole tower.
     #[must_use]
-    pub fn sealed() -> Self {
+    pub fn sealed() -> Option<Self> {
         Self::launch().sealed().settled()
+    }
+
+    /// From the orb's menu, raise a new tower of `length` and wait for its first
+    /// prompt.
+    pub fn raise(&self, length: &str) {
+        self.type_raw("play");
+        self.expect_drawn("open a tower");
+        self.type_raw("new");
+        self.expect_drawn("how long a game?");
+        self.type_raw(length);
+        self.expect_drawn("wizard $");
     }
 
     /// Wait for a file the game itself wrote into its working directory.

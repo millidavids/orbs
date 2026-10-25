@@ -1,19 +1,9 @@
 //! The save, as a file — the half `orbs-sim` deliberately cannot do.
 //!
-//! `orbs-sim` turns a world into a [`Save`] document and back and touches no
-//! filesystem; `tests/boundaries.rs` there enforces it. Finding the file,
-//! writing it, reading it and stamping the wall clock are all here — the split
-//! `prose` already uses for content.
-//!
-//! Nothing here may take the session down, for `shortcuts::export_trace`'s
-//! reason: *"a failed export must not take the session down with it — the tester
-//! whose run it was recording is still playing."* A save that cannot be read
-//! starts a new tower; one that cannot be written says so once and plays on.
-//!
-//! But a failure must be *said*. There is no `save` verb (§19), so a player never
-//! asks for one and never sees one refused — and a write failing every minute for
-//! an hour on a read-only Steam directory would cost a whole session in silence.
-//! [`write()`] returns the error and the frontend says it once.
+//! `orbs-sim` makes the [`Save`] document; the file and the wall clock are
+//! here. Nothing here may take the session down: an unreadable save starts a
+//! new tower. But a failure is *said*, once — with no `save` verb (§19) a
+//! player would never notice an hour of failed writes.
 
 use std::io;
 use std::path::{Path, PathBuf};
@@ -40,28 +30,19 @@ pub const SAVE_PATH: &str = "orbs-save.toml";
 /// The directory the orb keeps its towers and settings in, under the platform's
 /// own application-data root.
 ///
-/// One level, named for the game, because `dirs::data_dir` is the *shared* root
-/// — `~/.local/share`, `Application Support`, `AppData\Roaming` — and writing
-/// `orbs-save.toml` straight into it would be a file in everybody's way.
+/// One level down, since `dirs::data_dir` is the shared root.
 pub const DIRECTORY: &str = "orbs";
 
 /// Set by [`seal`]: this process may not reach a save at all.
 ///
-/// An `AtomicBool` rather than a parameter, because what has to be stopped is a
-/// *global* read: [`path`] reaches the environment from wherever it is called,
-/// and the menu calls it from three places a dump can drive with `ORBS_MENU`. A
-/// dump listed the player's real towers into a capture, and `abandon 1` twice
-/// renamed one.
+/// An `AtomicBool`, since [`path`] is read globally, including from menu paths
+/// a dump drives.
 static SEALED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// This process keeps nothing, whatever the environment says.
 ///
-/// Called by the dump when `ORBS_SAVE` names no path, which makes `dump.rs`'s
-/// claim — *"a dump neither loads nor saves unless `ORBS_SAVE` names a path"* —
-/// true of the whole process rather than of the one line that reads the world.
-///
-/// One-way on purpose: a dump never becomes a game half way through, and a switch
-/// that can be turned back off is one something else could turn back off.
+/// Called by the dump when `ORBS_SAVE` names no path. One-way, so nothing can
+/// turn it back off.
 pub fn seal() {
     SEALED.store(true, std::sync::atomic::Ordering::Relaxed);
 }
@@ -74,31 +55,18 @@ pub fn sealed() -> bool {
 
 /// Whether [`SAVE_VAR`] names a value at all.
 ///
-/// An exported-but-empty `ORBS_SAVE=` is not naming one, said in one place.
-/// [`chosen`] has always trimmed and rejected empty; the dump asked
-/// `var_os(..).is_some()` instead, so with `ORBS_SAVE=` it skipped [`seal`] *and*
-/// resolved through `chosen` to the real app-data directory — reading the
-/// player's tower, setting it aside, and writing a scratch save over it.
-///
-/// The same hole this release closed in `crt::seeded` and `sight::seeded`, found
-/// in a third place a day later. One rule now, and both callers use it.
+/// An exported-but-empty `ORBS_SAVE=` names nothing, said once for [`chosen`]
+/// and the dump, which once disagreed and overwrote a player's tower.
 #[must_use]
 pub fn named() -> bool {
-    std::env::var(SAVE_VAR).is_ok_and(|value| !value.trim().is_empty())
+    crate::environment::switched(SAVE_VAR).is_some()
 }
 
 /// Where the save is, or `None` if this session keeps none: `ORBS_SAVE`, then the
 /// app-data directory, then the working directory.
 ///
-/// The middle leg is where a player's towers live now. They sat in the working
-/// directory, which §13 and `PRIVACY_POLICY.md` both promised would change *"with
-/// the settings screen"* — and [`write()`] recorded the cost the whole time: a
-/// Steam install directory can be read-only.
-///
-/// The last leg is kept rather than removed. A platform that names no data
-/// directory still gets a game that saves — a portable build on a stick — and it
-/// is what every `cargo test` falls back to, so nothing in the suite reaches a
-/// developer's real towers.
+/// App-data, since a Steam install directory can be read-only (§13). The
+/// working directory is kept for a platform with no data directory.
 #[must_use]
 pub fn path() -> Option<PathBuf> {
     resolved(
@@ -133,11 +101,8 @@ pub fn app_data() -> Option<PathBuf> {
 /// The rule [`path`] applies, without reaching for the environment or the
 /// platform.
 ///
-/// Split out so it can be *tested*. A test that set `ORBS_SAVE` would set it for
-/// every other test in the binary — the environment is per-process, `cargo test`
-/// runs threads — and with the app-data leg in place would read and write the
-/// developer's own towers. Both halves are parameters here, so nothing in the
-/// suite can reach a real machine's save directory.
+/// Split out so it can be tested without setting the per-process environment
+/// or reaching a real save directory.
 fn chosen(value: Option<&str>, app_data: Option<PathBuf>) -> Option<PathBuf> {
     match value.map(str::trim) {
         Some(value) if value.eq_ignore_ascii_case(OFF) => None,
@@ -148,9 +113,7 @@ fn chosen(value: Option<&str>, app_data: Option<PathBuf>) -> Option<PathBuf> {
 
 /// What was waiting where the save lives.
 ///
-/// Three answers, not two. *No save* and *a save that would not open* both end in
-/// a new tower, but they are not the same thing to say: the first is a first
-/// launch, the second a tower that did not come back, and somebody is owed the
+/// Three answers: *no save* is a first launch, *would not open* is owed a
 /// reason.
 #[derive(Debug)]
 pub enum Opened {
@@ -160,10 +123,7 @@ pub enum Opened {
     Restored(Box<Save>),
     /// Something was there and could not be read.
     ///
-    /// The file is kept, not deleted. A save this build cannot read may be one a
-    /// later build can — the format refuses a *newer* file precisely so it is not
-    /// half-read — and the next autosave overwrites it anyway. Losing a tower is
-    /// bad; losing it silently and destroying the evidence is worse.
+    /// The file is kept, since a later build may read it.
     Unreadable,
 }
 
@@ -184,12 +144,7 @@ pub fn read() -> Opened {
 #[must_use]
 pub fn read_from(path: &Path) -> Opened {
     match load(path) {
-        // Set aside, because the next autosave is sixty ticks away and used to
-        // take it — a fresh tower, and the old one overwritten a minute later.
-        //
-        // Renamed rather than copied, so no window has two files claiming to be
-        // the save. A failed rename leaves the original, which is no worse than
-        // before — hence best-effort rather than fatal.
+        // Set aside before the next autosave takes it — renamed, best-effort.
         Opened::Unreadable => {
             keep_aside(path);
             Opened::Unreadable
@@ -200,11 +155,8 @@ pub fn read_from(path: &Path) -> Opened {
 
 /// Read `path` and say what was there. **Renames nothing.**
 ///
-/// The split is the point. [`saves`] reads every slot to build a listing, and a
-/// listing that renamed what it listed would set a whole directory aside the
-/// first time a build could not read one — turning "one tower did not come back"
-/// into "none of them are where they were". So the rename lives in
-/// [`read_from`], the *loading* door, out of the listing's reach.
+/// So [`saves`]' listing renames nothing; the rename is [`read_from`]'s, the
+/// loading door.
 fn load(path: &Path) -> Opened {
     let text = match std::fs::read_to_string(path) {
         Ok(text) => text,
@@ -229,9 +181,7 @@ fn load(path: &Path) -> Opened {
 
 /// Move a save this build cannot read out of the way of the next autosave.
 ///
-/// Named rather than dated: one unreadable save is the case that happens, and a
-/// directory of `orbs-save.toml.1` through `.9` is a worse answer to a problem
-/// the player has once. An existing set-aside file is left alone — the *first*
+/// Named, not dated; an existing set-aside file is kept, since the first
 /// failure holds the tower worth keeping.
 fn keep_aside(path: &std::path::Path) {
     let aside = path.with_extension("toml.unreadable");
@@ -250,14 +200,9 @@ fn keep_aside(path: &std::path::Path) {
 
 /// Write the save, stamping the wall clock on the way past.
 ///
-/// The stamp is the frontend's: §19 records that a wall-clock reading inside a
-/// sim record *"would make two runs of one seed differ"*, and the sim must not
-/// acquire a clock, so `Away::unix` is filled in here.
-///
-/// Written to one side and renamed. A save lands every sixty ticks, so a crash
-/// catching a half-written file is not theoretical; the rename makes the swap
-/// atomic everywhere this ships, turning "the tower is corrupt" into "the tower
-/// is one minute stale".
+/// `Away::unix` is stamped here, since the sim has no clock (§19). Written to
+/// one side and renamed, so a crash leaves a minute-stale tower, not a corrupt
+/// one.
 ///
 /// # Errors
 ///
@@ -272,10 +217,8 @@ pub fn write(save: &Save) -> io::Result<()> {
 
 /// Write the save to `path`, stamping the wall clock on the way past.
 ///
-/// The pair of [`read_from`], and what makes more than one game possible: the
-/// path travels with the caller rather than being asked for at the moment of
-/// writing. A process-global *current save* would be read by the autosave at a
-/// moment nobody chose — which is how loading a second game destroys the first.
+/// [`read_from`]'s pair: the path travels with the caller, since a global
+/// *current save* would let loading a second game destroy the first.
 ///
 /// # Errors
 ///
@@ -288,14 +231,8 @@ pub fn write_to(path: &Path, save: &Save) -> io::Result<()> {
         .to_toml()
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error.to_string()))?;
 
-    // The directory first, because on a fresh machine there is not one.
-    // `~/.local/share/orbs` does not exist until something makes it, and without
-    // this the first autosave fails, says so once, and then keeps nothing for the
-    // rest of the session — which looks exactly like saving.
-    //
-    // Best-effort: an existing directory is not an error, and a *failure* here
-    // falls through to the write below, which names the real problem rather than
-    // blaming a directory when the place is read-only.
+    // The directory first, which a fresh machine lacks. Best-effort: a failure
+    // falls through to the write, which names the real problem.
     if let Some(parent) = path
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
@@ -310,24 +247,14 @@ pub fn write_to(path: &Path, save: &Save) -> io::Result<()> {
 
 /// The file that says the towers beside the binary have already been brought in.
 ///
-/// A marker rather than a per-slot *copy if absent*, which would resurrect a
-/// stale tower from the old directory into a slot `free_slot` had just offered
-/// somebody who abandoned theirs. One file, written once, makes the question
-/// *has this happened* instead of *does this slot look empty*.
+/// A marker, not *copy if absent*, which would resurrect an abandoned slot.
 const MIGRATED: &str = ".migrated";
 
 /// Bring towers and settings beside the binary into the app-data directory.
 ///
-/// Copied, never moved, as `abandon` and `keep_aside` do one level down: the old
-/// directory is left exactly as it was, so a player who goes back to an older
-/// build finds their towers where it looks for them. They exist twice for a
-/// while, which beats a move that fails part-way and splits a player's games
-/// across two directories with neither complete.
-///
-/// It does nothing unless there is something to do: skipped when `ORBS_SAVE`
-/// names a path or says `off`, when the platform will not name a data directory,
-/// when the two are the same place, and when the marker says it has already run.
-/// So no instrument in the project reaches it, and neither does a second launch.
+/// Copied, never moved, so an older build still finds its towers and a failed
+/// move cannot split them. Skipped under `ORBS_SAVE`, with no data directory,
+/// when the two are one, or once the marker exists.
 pub fn migrate() {
     // `ORBS_SAVE` naming a path means the player has said where their towers are;
     // moving other ones in beside them is not what they asked for. `off` means
@@ -346,12 +273,7 @@ pub fn migrate() {
     let from = PathBuf::from(SAVE_PATH);
     let old_settings = PathBuf::from(crate::settings::FILE);
 
-    // Any slot, not slot 1. This asked `from.exists()`, and `from` *is* slot 1 by
-    // construction — `slot_path` returns the base unchanged below 2. So a player
-    // whose slot 1 was missing lost the whole migration: slots 2 to 6 and their
-    // settings stayed put, the play page said "no towers yet", and no marker was
-    // written, so it retried every launch and never succeeded. `abandon` made
-    // that easy to reach: it renames slot 1 to `orbs-save.toml.abandoned`.
+    // Any slot, not slot 1, which `abandon` can have renamed away.
     let anything = (1..=SLOTS).any(|slot| slot_path(&from, slot).exists()) || old_settings.exists();
     if !anything {
         return;
@@ -423,12 +345,8 @@ pub const SLOTS: usize = 6;
 
 /// Where slot `slot` lives, given the path slot 1 is at.
 ///
-/// Slot 1 *is* the base path, so `orbs-save.toml` keeps being what it has always
-/// been and no existing tower moves. The rest sit beside it as `orbs-save-2.toml`
-/// and so on — one directory, nothing to migrate.
-///
-/// The extension is preserved rather than assumed, because `ORBS_SAVE` can name
-/// any file and a player who pointed it at `tower.bak` should get `tower-2.bak`.
+/// Slot 1 *is* the base path; the rest sit beside it as `orbs-save-2.toml`.
+/// The extension is kept, since `ORBS_SAVE` can name any file.
 #[must_use]
 pub fn slot_path(base: &Path, slot: usize) -> PathBuf {
     if slot <= 1 {
@@ -506,11 +424,8 @@ pub struct Slot {
     /// The tower in it — or [`None`] when there is a file there this build
     /// cannot read.
     ///
-    /// An unreadable slot is listed rather than skipped — the case
-    /// [`Opened::Unreadable`] says must be **said**. Dropped, the slot looked
-    /// empty and typing its number answered *"there is no tower in 3"* about a
-    /// file sitting right there with somebody's game in it, and `new` could then
-    /// be offered the slot and write over it.
+    /// An unreadable slot is listed, not skipped, or it looks empty and `new`
+    /// writes over it ([`Opened::Unreadable`]).
     pub held: Option<Held>,
 }
 
@@ -524,10 +439,7 @@ impl Slot {
 
 /// Every slot the orb is keeping something in, in slot order.
 ///
-/// Empty when this session keeps no save at all (`ORBS_SAVE=off`), which
-/// `scripts/dumps.sh` and the played-game suite pin: a listing that read the
-/// working directory anyway would make a dump depend on what was lying beside
-/// it, and a baseline that varies is not one.
+/// Empty under `ORBS_SAVE=off`, so a dump is a baseline.
 ///
 /// Reads through the private `load`, never [`read_from`] — see `load` for why.
 #[must_use]
@@ -558,19 +470,9 @@ pub fn saves() -> Vec<Slot> {
 
 /// Set the tower in `path` aside, so the slot it was in comes free.
 ///
-/// Renamed, never unlinked, as `keep_aside` does: a player who types the wrong
-/// slot number loses nothing they cannot get back by moving a file. The orb stops
-/// listing it, `free_slot` offers the slot again, and the tower is still on disk
-/// under `.abandoned`.
-///
-/// The only destructive word in the menu, which is why it asks twice before
-/// reaching here — `quit`'s shape, and §19's argument that the confirmation is a
-/// word rather than a screen.
-///
-/// An existing `.abandoned` file is overwritten, unlike `keep_aside`'s: that
-/// guards a tower the *build* could not read, where the first failure is the one
-/// worth keeping. This is deliberate, repeated deliberately, and a directory of
-/// `.abandoned.1` files is the worse answer.
+/// Renamed to `.abandoned`, never unlinked, so a wrong slot is recoverable.
+/// Asked twice first (§19). An existing `.abandoned` is overwritten, unlike
+/// `keep_aside`'s: this one is deliberate.
 ///
 /// # Errors
 ///
@@ -612,13 +514,8 @@ fn now() -> u64 {
 
 /// How long the orb was dark, if the save can say.
 ///
-/// `None` where the stamp is missing (a save written before the field existed, or
-/// by a machine with no clock) or where the clock has gone *backwards* — a player
-/// who moved timezones is not one who was away for minus three hours.
-///
-/// Nothing acts on this yet, deliberately. §5 opens *"initially there is no
-/// offline progression — the tower ticks only while the window is open"* and puts
-/// accrual in Phase 11a. What a frontend does with this today is *say* it.
+/// `None` with no stamp or a clock gone backwards. Nothing accrues offline yet
+/// (§5); a frontend only says it.
 #[must_use]
 pub fn away_for(save: &Save) -> Option<u64> {
     let departed = save.away.unix;
@@ -653,14 +550,7 @@ mod tests {
 
     #[test]
     fn a_sealed_process_reaches_no_save_whatever_the_environment_says() {
-        // Reproduced: a dump with no `ORBS_SAVE` listed the player's real towers
-        // into the capture, and `ORBS_MENU=$'play\nabandon 1\nabandon 1'` renamed
-        // one — the menu's play page calls `save::path()`, `saves()` and
-        // `abandon()` itself, so the dump's "neither loads nor saves" was true of
-        // one line and nothing else.
-        //
-        // The seal outranks every other leg, including a named path, or the
-        // switch has a hole shaped like its own argument.
+        // The seal outranks every leg, a named path included.
         let somewhere = app_data_is("/home/somebody/.local/share");
         for value in [None, Some("off"), Some("/tmp/named.toml"), Some("")] {
             assert_eq!(
@@ -681,12 +571,8 @@ mod tests {
 
     #[test]
     fn an_empty_value_is_not_a_path_anybody_named() {
-        // Got wrong in three places in two days, each the same way: an
-        // exported-but-empty variable read as *"somebody asked for this"*.
-        // `crt::seeded` and `sight::seeded` discarded a saved accessibility
-        // choice over it; `dump.rs` skipped `seal()` and overwrote the player's
-        // tower. `named` cannot be tested here without setting the variable for
-        // every other test in the binary, so this holds the rule it agrees with.
+        // A blank variable asks for nothing. `named` reads the environment, so
+        // this holds the rule it agrees with.
         let somewhere = app_data_is("/home/somebody/.local/share");
         for value in ["", "   ", "\t"] {
             assert_eq!(
@@ -699,12 +585,7 @@ mod tests {
 
     #[test]
     fn off_is_the_only_value_that_keeps_no_save() {
-        // The value `scripts/dumps.sh` and the played-game suite both pin. If
-        // this stops meaning "no persistence", one captured screen writes a save
-        // the next fifty-five read, and a baseline stops being one. `off`
-        // outranks the data directory too: an instrument keeping a tower in a
-        // real player's save directory is worse than one keeping it in the
-        // checkout.
+        // What every instrument pins, outranking the data directory.
         for app_data in [None, app_data_is("/home/somebody/.local/share")] {
             assert_eq!(chosen(Some("off"), app_data.clone()), None);
             assert_eq!(

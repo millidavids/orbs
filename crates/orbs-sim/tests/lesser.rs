@@ -5,31 +5,13 @@
 //! only there — `Sim::new` is the open tower every other test, dump and balance
 //! policy uses, and it must never draw one.
 
-use orbs_render::{FieldName, Value};
+mod common;
+
+use common::run;
+#[cfg(debug_assertions)]
+use common::{ever_said, said};
 use orbs_sim::Sim;
 use orbs_sim::save::Save;
-
-fn run(sim: &mut Sim, line: &str) {
-    sim.submit(line);
-    sim.step();
-}
-
-/// Every sentence the tower has said so far.
-fn said(sim: &Sim) -> Vec<String> {
-    sim.scrollback()
-        .records()
-        .iter()
-        .filter_map(|record| match record.field(FieldName::Message) {
-            Some(Value::Text(text)) => Some(text.to_owned()),
-            _ => None,
-        })
-        .collect()
-}
-
-/// Whether anything said so far contains `needle`.
-fn ever_said(sim: &Sim, needle: &str) -> bool {
-    said(sim).iter().any(|line| line.contains(needle))
-}
 
 /// A sealed tower with the menagerie open, standing in it.
 #[cfg(debug_assertions)]

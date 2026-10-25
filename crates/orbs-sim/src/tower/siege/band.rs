@@ -1,7 +1,7 @@
 //! What is standing, what it intends, and what one round did to it (§5.1).
 //!
-//! The two sides of a siege and the shape of a turn — everything except the
-//! [`Siege`](super::Siege) that holds them, which is [`battle`](super::battle).
+//! The two sides and the shape of a turn; the [`Siege`](super::Siege) holding
+//! them is in [`battle`](super::battle).
 
 use serde::{Deserialize, Serialize};
 
@@ -24,9 +24,8 @@ pub const ASSIGNED: u32 = 6;
 
 /// The smallest enemy that ever comes up the road.
 ///
-/// The floor never moves, at any standing: fame lengthens the *tail* rather
-/// than the whole band, so a player who has lost three fights is never handed a
-/// fourth they cannot win (§11.5).
+/// Fixed at any standing: fame lengthens the tail, so a player who has lost
+/// three fights is never handed a fourth they cannot win (§11.5).
 pub const FEWEST: u32 = 5;
 
 /// The largest enemy a tower nobody has heard of will meet.
@@ -34,15 +33,12 @@ pub const BASE_MOST: u32 = 9;
 
 /// The largest enemy anyone will ever meet.
 ///
-/// A written ceiling rather than a drawn one: the garrison opens at
-/// [`ASSIGNED`] six and `Siege::outnumbered` is `enemy >= garrison * 2`, so
-/// twelve is exactly where that reading — the rung three solvers branch on —
-/// becomes true at the opening.
+/// Twelve because `outnumbered` is `enemy >= garrison * 2` against an opening
+/// garrison of six: exactly where the rung three solvers branch on comes true.
 pub const MOST: u32 = 12;
 
-/// How many ranks of standing buy one more foe.
-///
-/// Ten ranks over three foes: [`BASE_MOST`] at nought, [`MOST`] at the top.
+/// How many ranks of standing buy one more foe: ten ranks over three foes,
+/// [`BASE_MOST`] at nought and [`MOST`] at the top.
 pub const RANKS_PER_FOE: usize = 3;
 
 /// How much fight one troop has.
@@ -56,28 +52,21 @@ pub const THIN: u32 = 2;
 
 /// At or below this share of its vigour, the garrison reads [`HURT`](super::HURT).
 ///
-/// A half rather than a quarter: a warning that fires too late to act on is not
-/// a warning, and a decision tree hangs its `quaff` rung on this.
+/// A half, because a warning that fires too late to act on is none, and a
+/// decision tree hangs its `quaff` rung on it.
 pub const WEARY: u32 = 2;
 
 /// How long the road stays empty after a siege, in ticks.
 ///
-/// §11.5 fixes the siege provocation cadence at *"every 20–30 min at a normal
-/// push rate"*, and at one tick a second twenty minutes is 1200. Until §5.3's
-/// trace provokes them, this stands in for that gate.
-///
-/// The most load-bearing number in the domain. Without it `defend` is free and
-/// unlimited: `orbs-balance` measured back-to-back sieges at 4.70 experience a
-/// tick against clarity's 0.140, which says *ignore every other room*. The
-/// escrow was not the thing to tune — a siege paying 105 for thirteen rounds is
-/// right, fighting three hundred of them in two hours is not.
+/// §11.5's *every 20–30 min*, at one tick a second. The most load-bearing number
+/// here: without it back-to-back sieges paid 4.70 experience a tick against
+/// clarity's 0.140, which says *ignore every other room*.
 pub const CADENCE: u64 = 1200;
 
 /// What a lost siege takes off the barrier.
 ///
-/// Never ruinous, only slower (§11.5): larger than the menagerie's collapse
-/// because a siege is a longer commitment, and still far short of
-/// [`STANDING`](crate::tower::erosion::STANDING).
+/// Never ruinous, only slower (§11.5): more than the menagerie's collapse, far
+/// short of [`STANDING`](crate::tower::erosion::STANDING).
 pub const DEFEAT_WEAR: u32 = 20;
 
 /// How much a won siege puts back.
@@ -85,10 +74,8 @@ pub const VICTORY_MEND: u32 = 12;
 
 /// What the enemy will do next round, announced a round ahead.
 ///
-/// Telegraphing is the borrow, not determinism. Into the Breach declares exact
-/// intent a turn ahead, turning the player's turn into prevention; here the
-/// intent is telegraphed and the *outcome is rolled* — XCOM's bargain, under
-/// its fairness rule of odds before the commitment and the roll after it.
+/// The intent is telegraphed and the outcome rolled: odds before the commitment,
+/// the roll after it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Intent {
     /// Close on the wall. Ordinary damage, ordinary numbers.
@@ -119,8 +106,8 @@ impl Intent {
         match self {
             Self::Advance => count,
             Self::Onslaught => count,
-            // A volley is fewer bodies, which is what makes it the intent you
-            // can afford to eat while you fix something else.
+            // Fewer bodies: the intent you can afford to eat while fixing
+            // something else.
             Self::Volley => count.div_ceil(2),
         }
     }
@@ -137,9 +124,8 @@ impl Intent {
 
     /// Whether the garrison strikes back this round.
     ///
-    /// A volley is answered by nobody, which is why the three intents are a
-    /// decision rather than three damage numbers: it is the cheap one to absorb
-    /// and the one you can never trade against.
+    /// Nobody answers a volley, which makes the three intents a decision rather
+    /// than three damage numbers.
     #[must_use]
     pub const fn answered(self) -> bool {
         !matches!(self, Self::Volley)
@@ -147,9 +133,8 @@ impl Intent {
 
     /// Draw one.
     ///
-    /// `pub(super)` because the split moved its two callers a file away, and not
-    /// `pub` because a caller outside `siege` drawing an intent would advance
-    /// the `Siege` stream and desynchronise every replay.
+    /// Not `pub`: a caller outside `siege` drawing an intent would advance the
+    /// `Siege` stream and desynchronise every replay.
     pub(super) fn drawn(rngs: &mut Rngs) -> Self {
         use rand::RngExt;
         let roll = rngs
@@ -186,31 +171,21 @@ impl Band {
 
     /// Take `hits` off, dropping troops as vigour runs out.
     ///
-    /// Vigour is shared across the band and the count follows it, rather than
-    /// each troop carrying its own pool: that keeps the board two numbers
-    /// instead of a list, and §14 has to read it aloud.
-    ///
-    /// `pub(super)` since the split; see [`Intent::drawn`] for why not `pub`.
+    /// Vigour is shared and the count follows it, so the board is two numbers
+    /// §14 can read aloud rather than a list.
     pub(super) fn wound(&mut self, hits: u32) {
         self.vigour = self.vigour.saturating_sub(hits);
-        // Ceiling division: a band with any vigour left has at least one
-        // standing, and a band at nought vigour has nobody.
+        // Any vigour left is at least one standing.
         self.count = self.count.min(self.vigour.div_ceil(VIGOUR));
     }
 
     /// Put `points` of fight back, never above `ceiling`, bringing troops with it.
     ///
-    /// The cap has to come from outside. Capping at `self.count * VIGOUR` was
-    /// the defect: [`wound`](Self::wound) derives `count` back *down* from
-    /// `vigour`, so after any damage the cap is the band's current strength and
-    /// a wounded line could be healed by at most two points — which made
-    /// `succour` and the `mending` potion nearly inert.
-    ///
-    /// The count comes back with the vigour, capped at what the band was
-    /// mustered at: healing that left troops down would read as thin for ever
-    /// however much fight the band has. Never past `bodies`, the garrison's
-    /// most (§19, *Supply*), and never fewer than it had: an older save's line
-    /// can stand above today's most, and a heal must not kill.
+    /// The cap comes from outside: [`wound`](Self::wound) derives `count` down
+    /// from `vigour`, so a cap of `count * VIGOUR` let a wounded line heal by two
+    /// points at most. Troops return with the vigour, never past `bodies` (§19,
+    /// *Supply*) and never fewer than it had — an older save's line can stand
+    /// above today's most, and a heal must not kill.
     pub(super) fn mend(&mut self, points: u32, ceiling: u32, bodies: u32) {
         self.vigour = (self.vigour + points).min(ceiling);
         let mended = self
@@ -248,11 +223,8 @@ pub struct Round {
     pub dealt: u32,
     /// What each area came to once its dice were rolled.
     pub strengths: Strengths,
-    /// Extra hits a sortie put on the enemy.
-    ///
-    /// Separate from [`dealt`](Self::dealt): a sortie is a thing the player
-    /// *chose*, so the round has to say what the choice bought. Folded in, the
-    /// sentence read *"take 2"* for a round that had dealt twelve.
+    /// Extra hits a sortie put on the enemy — apart from `dealt`, so the round
+    /// says what the player's choice bought.
     pub sortied: u32,
     /// What the sortie cost the garrison.
     pub spent: u32,

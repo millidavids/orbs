@@ -1,56 +1,22 @@
 # How people say the things the orb does (DESIGN.md §6, §19 *the augury*).
 #
-# **Templates, not sentences.** A `{slot}` is expanded over everything of that
-# kind the scene holds, so one line here becomes as many examples as there are
-# reagents — which is what makes a corpus large enough to train on something one
-# person can actually write and keep true.
+# Templates: a `{slot}` expands over every noun of that kind the scene holds.
 #
 #   canonical = "grind {reagent}"
 #   say       = [ "smash the {reagent}", ... ]      ← the corpus, and the grammar
 #   holdout   = [ "pound the {reagent}", ... ]      ← never given to either
 #
-# **The holdout is the whole experiment.** A grammar built from `say` matches
-# `say` perfectly and proves nothing; a model trained on `say` does nearly as
-# well. What is worth knowing is how each does on phrasings it has never seen,
-# so `holdout` is measured and never taught. Write holdout lines the way a
-# person who has not read this file would write them, not as variations of the
-# ones above.
+# The holdout is the experiment, measured and never taught: write it as someone
+# who never read this file. A coverage lint, not §15's gate.
 #
-# **This is not §15's gate.** ROADMAP is explicit that a number produced in-house
-# *"would be worse than no number"*, because someone who knows the vocabulary is
-# measuring their memory. What this measures is which *authored* phrasings the
-# parser misses — a coverage lint, and the cheapest source of synonym-table
-# fixes there is.
+# A marker is a `NounKind` label to expand over — `{place}`, `{file}`,
+# `{topic}`, `{essence}`, `{reagent}`, `{vessel}`, `{scroll}`, `{script}`,
+# `{reading}` — not the verb's slot; counts and coined names are written out. A
+# `canonical` must read outright, as a test asserts.
 #
-# **A marker names what to expand over, not the verb's declared slot.** `purge`
-# takes free text, but `purge {reagent}` is right here: the generator fills it
-# from the reagents the scene holds and the verb accepts the result. Markers are
-# `NounKind` labels — `{place}`, `{file}`, `{topic}`, `{essence}`, `{reagent}`,
-# `{vessel}`, `{scroll}`, `{script}`, `{reading}`. A count or a coined name is
-# written out, because nothing in the world enumerates them.
-#
-# A `canonical` must be a command the parser reads outright — a test asserts it,
-# because a template whose own canonical form does not resolve is measuring
-# nothing.
-#
-# # Distinct phrasings are the lever, not more nouns
-#
-# `0.13.9` measured it: the corpus expands to eleven thousand examples but the
-# verb head only ever sees **the number of ways a command has been written
-# down**. Noun substitution multiplies the count without adding a single new
-# sentence shape, so it teaches the tagger and nothing else. **More templates
-# raise the verb rate; more reagents do not.**
-#
-# So each entry carries as many genuinely different ways of asking as can be
-# thought of — imperative and polite, question and statement, terse and
-# rambling, verb-first and object-first — rather than near-copies of one shape.
-#
-# # Watch for two entries collapsing into one pattern
-#
-# `what is in the {place}` and `what is {topic}` were the same template once the
-# grammar dropped filler, and `survey` swallowed every `recall`. Function words
-# are kept now (§19), but two entries opening on the same three words are still
-# two entries a reader has to separate on very little evidence. Vary the openers.
+# Distinct phrasings are the lever, not nouns, which teach only the tagger
+# (§19): imperative and polite, question and statement, terse and rambling.
+# Vary the openers, so two entries do not collapse into one pattern.
 
 # ---------------------------------------------------------------------------
 # Getting about.
@@ -2108,12 +2074,8 @@ holdout = [
     "show me what i can learn next",
 ]
 
-# **Every line here reaches a reader in the menagerie** (§19). The orb answers a
-# line it can read before any reader is asked, so a phrasing that opens on
-# another verb's word — `start` and `get` are the laboratory's, `set` and `see`
-# fuzz to `dial`'s, `bring` to `grind`'s, `test` to `rest`, and `let` is the spell
-# language's — teaches a reader a sentence it is never shown. They were measured
-# out rather than guessed at.
+# Every line here reaches a reader in the menagerie (§19): none opens on a word
+# the orb reads first, which would teach a sentence the reader is never shown.
 [[entry]]
 canonical = "summon"
 say = [
@@ -2414,17 +2376,9 @@ holdout = [
 # The lens, the archive's maze, and the four domains that had no templates at
 # all.
 #
-# **Seventeen of the forty-six verbs were never written down here** (§19), and
-# the hole did not look like one: the reader answered *every* sentence with one
-# of the twenty-nine it had been taught, confidently, because a verb with no
-# examples cannot be predicted and a refusal head trained on sentences that ask
-# for *nothing* has no way to refuse a sentence that asks for something
-# unteachable. `send the wolves to the gate` came back `move gate`.
-#
-# **The two-slot shapes here are deliberately few.** `haul`, `pledge` and
-# `imbue` each square their place count on expansion, which is what made `move`
-# 47% of the corpus; the trainer caps a template's expansion now, so the shape
-# can be written honestly without the count following it.
+# A verb with no examples cannot be predicted, and the reader answers with a
+# taught one instead (§19). Two-slot shapes are few, though the trainer now
+# caps a template's expansion.
 # ---------------------------------------------------------------------------
 
 [[entry]]
@@ -2717,16 +2671,9 @@ holdout = [
 ]
 
 # ---------------------------------------------------------------------------
-# The menagerie's circle. **Two shapes, as `dial` has one and `haul` the other**:
-# a glyph and the humour to limn it with, and a glyph alone to step. Plain English
-# names a glyph's humour however it likes, and none of these may lean on `and` or
-# `or` as the gate — both are words the spell grammar owns.
-#
-# **And none may open on a word the orb reads first**, the summoning's rule above:
-# `put` is `dial`'s, `try` is `probe`'s, `move` and `rotate` are `move`'s, `let`
-# is the spell language's, and `carve`, `etch`, `fix`, `switch`, `gate` and `wire`
-# each fuzzed to a verb of another room. Every one of those answered in the
-# menagerie without a reader being asked.
+# The circle's two shapes: a glyph and a humour, or a glyph alone to step. No
+# `and` or `or` as the gate, the spell grammar's words, and no opening on a
+# word the orb reads first.
 # ---------------------------------------------------------------------------
 
 [[entry]]
@@ -3207,20 +3154,9 @@ holdout = [
 # ---------------------------------------------------------------------------
 # Not commands.
 #
-# **Half the job, and the half a corpus of commands cannot supply.** A reader
-# shown only commands has never seen a sentence it should refuse, and answers
-# one anyway — `what should i do next` came back as `recall`, which is the dead
-# end §15 weighs heaviest. Twenty of these took the refusal rate from 0.0% to
-# 94.0% (§19).
-#
-# These have no `canonical`: that is the point of them. They expand over the
-# same nouns as everything else, so a refusal is not learnable as *"a sentence
-# with no game words in it"* — the hard ones are the sentences that name a
-# reagent and still ask for nothing.
-#
-# `holdout` here is measured the opposite way round from a command's: the score
-# is how many the reader **refuses**, and a command holdout's score is how many
-# it does not.
+# The half commands cannot supply: twenty took refusals from 0% to 94% (§19).
+# No `canonical`, and they expand over the same nouns, so a refusal is not
+# "no game words". Their holdout scores what the reader refuses.
 # ---------------------------------------------------------------------------
 
 [[refusal]]

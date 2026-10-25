@@ -9,28 +9,10 @@
 //! `debug_spawn` is the door in, so these are debug-only.
 #![cfg(debug_assertions)]
 
-use orbs_render::{FieldName, Value};
+mod common;
+
+use common::{ever_said, run, said};
 use orbs_sim::{Sim, tower};
-
-fn run(sim: &mut Sim, line: &str) {
-    sim.submit(line);
-    sim.step();
-}
-
-fn said(sim: &Sim) -> Vec<String> {
-    sim.scrollback()
-        .records()
-        .iter()
-        .filter_map(|record| match record.field(FieldName::Message) {
-            Some(Value::Text(text)) => Some(text.to_owned()),
-            _ => None,
-        })
-        .collect()
-}
-
-fn ever_said(sim: &Sim, needle: &str) -> bool {
-    said(sim).iter().any(|line| line.contains(needle))
-}
 
 fn quintessence(sim: &Sim) -> u32 {
     sim.world().resource::<tower::Quintessence>().get()

@@ -1,31 +1,20 @@
 //! The forge, scripted — and whether the lattice can be solved by a spell at all.
 //!
-//! `tests/enchanting.rs` proves the game, `tower::lattice` the puzzle over all
-//! 512 boards, `tests/solvers.rs` that the shipped spells run. None asks whether
-//! a person could *write* a forge spell, or whether every state they would need
-//! is emitted.
-//!
-//! The forge's answer needs the whole table — eight rungs of compound conditions
-//! across three subjects — so three things could make it unscriptable with the
-//! suite still green: a residue nothing publishes, `and` not chaining across
-//! subjects, or a reading published too late for a spell to see. Each gets a
-//! test. The first rots silently: `many_at` answers an absent reading with
-//! nought, so a dead rung gets a confident wrong answer rather than an error.
+//! Whether a person could write a forge spell: every residue published, `and`
+//! across subjects, and in time to see — an absent reading reads nought.
 
-use orbs_render::{FieldName, Value};
+mod common;
+
+#[cfg(debug_assertions)]
+use common::said;
+use common::{assert_all_published, attended, cast, complaints, run, words};
+use orbs_render::Value;
 use orbs_sim::tower::charm::Kind;
 use orbs_sim::tower::lattice::{COLUMNS, Lattice};
 use orbs_sim::{Sim, tower};
 
-fn run(sim: &mut Sim, line: &str) {
-    sim.submit(line);
-    sim.step();
-}
-
 fn at_the_forge(seed: u64) -> Sim {
-    let mut sim = Sim::new(seed);
-    run(&mut sim, "attend forge");
-    sim
+    attended(seed, "forge")
 }
 
 /// The mortar, from wherever the player is standing.
@@ -35,54 +24,6 @@ fn at_the_forge(seed: u64) -> Sim {
 fn mortar(sim: &Sim) -> bevy_ecs::entity::Entity {
     tower::find_by_path(sim.world(), "/tower/laboratory/mortar_and_pestle")
         .expect("the laboratory has a mortar")
-}
-
-/// Every `Message` the orb has said.
-fn said(sim: &Sim) -> Vec<String> {
-    sim.scrollback()
-        .records()
-        .iter()
-        .filter_map(|record| match record.field(FieldName::Message) {
-            Some(Value::Text(text)) => Some(text.to_owned()),
-            _ => None,
-        })
-        .collect()
-}
-
-/// Every bare word `survey` has printed — a reading with no number on it.
-fn words(sim: &Sim) -> Vec<String> {
-    sim.scrollback()
-        .records()
-        .iter()
-        .filter_map(|record| match record.field(FieldName::Name) {
-            Some(Value::Text(text)) => Some(text.to_owned()),
-            _ => None,
-        })
-        .collect()
-}
-
-/// Write a spell into the forge and cast it.
-///
-/// Through `write` and `invoke`, never by poking a `Program` into the world —
-/// that proves the runner works, not that a person could have got there.
-fn cast(sim: &mut Sim, name: &str, lines: &[&str]) {
-    let body: Vec<String> = lines.iter().map(|line| (*line).to_owned()).collect();
-    sim.write_spell(name, &body);
-    sim.step();
-    run(sim, &format!("invoke {name}"));
-}
-
-/// Whether a spell the orb was given reads clean.
-fn complaints(sim: &Sim) -> Vec<String> {
-    said(sim)
-        .into_iter()
-        .filter(|line| {
-            line.contains("means nothing")
-                || line.contains("cannot read")
-                || line.contains("is not a")
-                || line.contains("no part of this")
-        })
-        .collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -141,15 +82,7 @@ fn every_reading_the_domain_declares_is_one_some_state_reaches() {
         seen.extend(words(&bound));
     }
 
-    let missing: Vec<&str> = tower::charm::readings()
-        .into_iter()
-        .filter(|word| !seen.iter().any(|got| got == word))
-        .collect();
-    assert!(
-        missing.is_empty(),
-        "the domain declares readings no state ever publishes, so a spell asking \
-         for one gets nought for ever: {missing:?}",
-    );
+    assert_all_published(tower::charm::readings(), seen);
 }
 
 /// All eight residues are reachable. One that never comes up is a rung a player

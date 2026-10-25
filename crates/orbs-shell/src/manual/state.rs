@@ -30,7 +30,7 @@ pub enum Showing {
 /// The book travels with it: the reader does not read a file, ask a `Sim` or
 /// know what a chapter is made of. The frontend assembles one — `manual.toml`
 /// plus `prose.toml`'s manual keys — and hands it over, which is
-/// `Menu::show_settings`' rule one surface along.
+/// `Menu::open_at`'s rule one surface along.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Reader {
     /// Every chapter, in the order the contents lists them.
@@ -51,17 +51,12 @@ pub struct Reader {
     pub(super) height: usize,
     /// How far down the *contents* is.
     ///
-    /// Not in `Showing::Contents`, so it survives reading a chapter: coming back
-    /// to the top of the list is a book that loses your thumb. The contents used
-    /// to be one screen by construction, until nineteen chapters and the 80x22
-    /// floor silently hid the last five.
+    /// Not in `Showing::Contents`, so it survives reading a chapter.
     pub(super) contents_top: usize,
     /// The chapter last wrapped, and at what width.
     ///
-    /// A cache: the painter re-wrapped a two-thousand-word chapter sixty times a
-    /// second while the reader sat still. Keyed on chapter and width, so a
-    /// resize re-wraps and [`restock`](Self::restock) invalidates it with the
-    /// book.
+    /// A cache, keyed on chapter and width, so a chapter is not re-wrapped
+    /// every frame; [`restock`](Self::restock) invalidates it.
     wrapped: Option<Wrapped>,
 }
 
@@ -143,13 +138,9 @@ impl Reader {
 
     /// Swap the book under an open reader, keeping the reader's place.
     ///
-    /// For `ORBS_CONTENT`, and what makes rule 6 true here: the book is
-    /// assembled once at open, so a hot-reloaded `manual.toml` reached an
-    /// already-open reader not at all.
-    ///
-    /// Kept by name, not by index, or a writer who adds or reorders a chapter
-    /// while reading one is thrown into whichever chapter inherited the number.
-    /// A chapter that is gone falls back to the contents.
+    /// For `ORBS_CONTENT` (rule 6). Kept by name, not index, so reordering
+    /// keeps the reader's chapter; a chapter that is gone falls back to the
+    /// contents.
     pub fn restock(&mut self, book: Vec<Chapter>) {
         if let Showing::Chapter { at, top } = self.showing.clone() {
             let name = self.book.get(at).map(|chapter| chapter.name.clone());
@@ -254,16 +245,19 @@ impl Reader {
         if typed.is_empty() {
             return None;
         }
-        if BACK.starts_with(typed.as_str()) || typed.starts_with(BACK) {
+        // Before the chapters, so a chapter sharing a prefix with `back` cannot
+        // be opened by it: `begin` shipped second on the contents page and `b`
+        // closed the manual instead.
+        if crate::prefix::is_back(&typed) {
             return self.back();
         }
         // Prefix-matched, like the menu's words and the lengths — `content`
         // holds that no two chapters share a first letter.
-        let Some(at) = self
-            .book
-            .iter()
-            .position(|chapter| chapter.name.starts_with(&typed))
-        else {
+        let chapters = self.book.iter().enumerate();
+        let Some(at) = crate::prefix::unique_prefix(
+            chapters.map(|(at, chapter)| (chapter.name.as_str(), at)),
+            &typed,
+        ) else {
             self.complaint = Some(typed);
             return None;
         };
@@ -295,19 +289,10 @@ impl Reader {
 
     /// Scroll `rows` down, or up when `down` is false.
     ///
-    /// Clamped to whatever is showing, so paging past the end stops at the end
-    /// rather than scrolling into blank pane.
-    ///
-    /// The contents scrolls too, and used not to: *"one screen by
-    /// construction"* was false the moment a sixteenth chapter was added, and
-    /// `paint` simply broke out of the loop.
+    /// Clamped to whatever is showing, the contents included.
     pub fn scroll(&mut self, rows: usize, down: bool) {
-        // `height == 0` means *not measured yet*, not *nothing to show*: a dump
-        // runs its whole `ORBS_MANUAL` script before the single paint, so a
-        // `<pgdn>` arrives before anything is wrapped, and clamping to nought
-        // made it a no-op. A chapter always has lines (`content::manual` holds
-        // that), so nought cannot mean an empty one; left unclamped,
-        // [`measured`] pulls it back on the way past.
+        // `height == 0` is *not measured yet* — a dump's script runs before its
+        // one paint — and is left unclamped for [`measured`] to pull back.
         //
         // [`measured`]: Self::measured
         let furthest = self.height.saturating_sub(self.rows);
@@ -337,24 +322,10 @@ impl Reader {
     }
 }
 
-/// The word that steps one level up, on either page.
-///
-/// Prefix-matched like the menu's, and it outranks a chapter — [`enter`] tests
-/// it first, so a chapter sharing a prefix with it cannot be opened by that
-/// prefix: `begin` shipped second on the contents page and typing `b` closed the
-/// manual instead. It is `entering` now.
-///
-/// [`the_way_out_cannot_be_shadowed_by_a_chapter`] holds it, checking the
-/// *whole* prefix rather than the first letter, because `ba` and `bac` shadowed
-/// it too.
-///
-/// [`enter`]: Reader::enter
-/// [`the_way_out_cannot_be_shadowed_by_a_chapter`]: tests::the_way_out_cannot_be_shadowed_by_a_chapter
-pub(super) const BACK: &str = "back";
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::prefix::BACK;
 
     /// The real book, generated chapters and all.
     fn book() -> Vec<Chapter> {

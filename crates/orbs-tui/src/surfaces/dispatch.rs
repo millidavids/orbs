@@ -4,7 +4,7 @@ use crossterm::event::KeyCode;
 use orbs_shell::{Editor, EditorOutcome, MenuOutcome, Scroll};
 use orbs_sim::Sim;
 
-use super::state::{Owner, Surfaces, Swap};
+use super::state::{Owner, Surfaces};
 use crate::keymap::as_key;
 
 impl Surfaces {
@@ -82,10 +82,7 @@ impl Surfaces {
             // half.
             Some(MenuOutcome::PutDown) => self.leaving = true,
             // ...and the same for a swap, which needs a whole new `Session`.
-            Some(MenuOutcome::Load(path)) => self.swapping = Some(Swap::Load(path)),
-            Some(MenuOutcome::Begin { keep, length }) => {
-                self.swapping = Some(Swap::Begin { keep, length });
-            }
+            Some(MenuOutcome::Raise(raising)) => self.swapping = Some(raising),
             // Carried to the session, the only thing that can honour it: every
             // setting this build offers is one it holds in the session, and the
             // menu has already written it down. See [`Surfaces::setting`] for
@@ -153,8 +150,7 @@ impl Surfaces {
             self.walking = false;
             return;
         }
-        // The arrow-to-`Way` table is `orbs-shell`'s. It was written three
-        // times — once per frontend and once more in `dump.rs`.
+        // The arrow-to-`Way` table is `orbs-shell`'s, and the dump's too.
         let Some(way) = as_key(code).as_ref().and_then(orbs_shell::apply_to_maze) else {
             return;
         };
@@ -170,24 +166,13 @@ impl Surfaces {
 /// One call, carrying the whole buffer — the editor's entire contribution to a
 /// replay.
 ///
-/// `Sim::write_spell` records the submission now and queues the write for the
-/// next tick, because effects land on tick boundaries.
-///
-/// And the reading, on the same beat and after the write — on every save, not
-/// only the pause's. Refreshed on the settle beat alone, a `w` typed before the
-/// pause left the marks a few keystrokes stale and the settle beat then had
-/// nothing to save. Reading a buffer parses it and resolves every name against
-/// the room, which is why it is not per tick; after the write, so a changed line
-/// is read once.
+/// `Sim::write_spell` records now and writes next tick. The reading follows on
+/// every save, after the write, so the marks are never stale.
 pub(super) fn save(editor: &mut Editor, sim: &mut Sim, scrivener: &dyn orbs_sim::Scrivener) {
-    let (name, domain, lines) = (
-        editor.name().to_owned(),
-        editor.domain().to_owned(),
-        editor.lines().to_vec(),
-    );
+    let (name, lines) = (editor.name().to_owned(), editor.lines().to_vec());
     editor.saved();
     sim.write_spell_reading(&name, &lines, scrivener);
-    editor.set_reading(sim.read_spell_with(&name, &domain, &lines, scrivener));
+    editor.read_back(sim, scrivener);
 }
 
 /// The transcript, while `unfurl` has the keyboard — the shared table, which

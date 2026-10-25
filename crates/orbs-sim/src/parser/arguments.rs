@@ -24,12 +24,8 @@ const LEFTOVER_PENALTY: u32 = 120;
 /// A required slot that nothing in the input could fill.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct Missing {
-    /// Its position in the verb's signature.
-    ///
-    /// Carried so the enumeration in `resolve` can put a candidate noun *into
-    /// that slot* rather than rebuilding the argument list from scratch — which
-    /// used to discard every slot that had already resolved and shift the rest
-    /// into the wrong positions.
+    /// Its position in the verb's signature, so `resolve` can put a candidate
+    /// noun into that slot and keep the rest.
     pub index: usize,
     /// What the slot wants.
     pub kind: NounKind,
@@ -49,20 +45,15 @@ pub(super) struct Filled {
     pub missing: Option<Missing>,
     /// Words the reading could not account for, once every slot was filled.
     ///
-    /// Separate from [`score`](Self::score), which folds it in. A fuzzy noun
-    /// match and an unexplained word both pull the score down, and the augury
-    /// (§6) must route them oppositely: `brew clarty` is a typo the matcher
-    /// reaches `clarity` from, while `put the sage in the mortar and grind it`
-    /// is six words too long for any reading. Score cannot tell those apart.
+    /// Separate from [`score`](Self::score): a fuzzy noun and an unexplained
+    /// word both lower it, and the augury (§6) must route them oppositely.
     pub leftover: usize,
     /// An optional last slot that was handed a word and could use none of what
     /// it was handed, after an earlier slot filled.
     ///
-    /// Not [`missing`](Self::missing), because the bare verb is legal — which is
-    /// the trouble. `limn keystone` and `dial first` step round to the next
-    /// humour or sigil, so `limn keystone xyzzy` dropping `xyzzy` did not run
-    /// the asked-for command less well: it ran a different one and changed the
-    /// circle. `resolve` asks for the slot instead (§19).
+    /// Not [`missing`](Self::missing), since the bare verb is legal — and a
+    /// different act: `limn keystone` steps the glyph. `resolve` asks for the
+    /// slot instead (§19).
     pub refused: Option<Missing>,
 }
 
@@ -99,16 +90,10 @@ pub(super) fn fill(verb: Verb, words: &[Word<'_>], scene: &Scene) -> Filled {
     for (index, slot) in signature.iter().enumerate() {
         let is_last = index + 1 == signature.len();
 
-        // An optional slot steps aside when taking a word would starve the
-        // required slots behind it. Every slot but the last consumes exactly one
-        // word, so "starve" is countable: if what is left only just covers the
-        // required slots still to come, this one gets nothing.
-        //
-        // This is what lets `move sage mortar_and_pestle` and `move husks alembic
-        // dispensary` share one signature — `<reagent> [source] <destination>`.
-        // Without it the two-word form fed `mortar_and_pestle` to the *source*
-        // and then reported the destination missing, which is the opposite of
-        // what the player said.
+        // An optional slot steps aside when what is left only just covers the
+        // required slots behind it — every slot but the last takes one word.
+        // So `move sage mortar` and `move husks alembic dispensary` share
+        // `<reagent> [source] <destination>`.
         if !slot.required {
             let required_after = signature[index + 1..].iter().filter(|s| s.required).count();
             if remaining.len() <= required_after {
@@ -124,10 +109,8 @@ pub(super) fn fill(verb: Verb, words: &[Word<'_>], scene: &Scene) -> Filled {
         match fill_one(slot.kind, index, head, scene) {
             Some(fit) => {
                 // Words the slot was handed and did not account for. The last
-                // slot is handed everything, so this is where a sentence with a
-                // command at the front becomes visible: `attend laboratory and
-                // then start the mortar` fills `Place` from one word at full
-                // score and leaves four behind, while `remaining` is empty.
+                // slot is handed everything, so a sentence with a command at the
+                // front shows here.
                 unused += head.len().saturating_sub(fit.used);
                 slots[index] = Some(fit.argument);
                 scores.push(fit.score);
@@ -140,11 +123,9 @@ pub(super) fn fill(verb: Verb, words: &[Word<'_>], scene: &Scene) -> Filled {
                         kind: slot.kind,
                     });
                 }
-                // Only the last slot, and only after one filled. A first
-                // optional slot explaining nothing is `resolve`'s older rule
-                // (`verify gibberish`), and a middle one steps aside for the
-                // required slot behind it, which is `move`'s design. Filler and
-                // bare punctuation are not a word handed over.
+                // Only the last slot, and only after one filled: a first slot
+                // is `resolve`'s rule, a middle one steps aside. Filler and bare
+                // punctuation are not a word handed over.
                 let said_something = head.iter().any(|word| {
                     word.matching.chars().any(char::is_alphanumeric)
                         && !super::normalise::is_filler(word.matching)
@@ -165,10 +146,8 @@ pub(super) fn fill(verb: Verb, words: &[Word<'_>], scene: &Scene) -> Filled {
         }
     }
 
-    // An optional slot left empty is not a failure — `survey` with no place is
-    // the commonest thing a player types. Scoring it zero dragged the whole
-    // reading below the acceptance floor and made bare `survey` unresolvable the
-    // moment the verb itself was fuzzy-matched.
+    // An optional slot left empty is not a failure — bare `survey` is the
+    // commonest thing a player types.
     let mean = if scores.is_empty() {
         if missing.is_none() { EXACT } else { 0 }
     } else {
@@ -196,10 +175,8 @@ struct Fit {
     score: u32,
     /// How many of the offered words it accounted for.
     ///
-    /// The last slot is handed everything left, so a slot can be given four
-    /// words and explain one of them at full score — which is a sentence
-    /// wearing a command's shape, and the only place that difference is
-    /// visible. See [`Filled::leftover`].
+    /// A slot given four words can explain one at full score — a sentence in a
+    /// command's shape. See [`Filled::leftover`].
     used: usize,
 }
 
@@ -227,10 +204,8 @@ fn fill_one(kind: NounKind, slot: usize, words: &[Word<'_>], scene: &Scene) -> O
             // A pattern is whatever was typed, so it explains all of it.
             used: words.len(),
         }),
-        // A name the player is coining: one word, and the raw one. A spell
-        // called `night_watch` must keep its underscore and case, and taking the
-        // whole tail the way `Pattern` does would make `scribe my new spell` a
-        // file with spaces in it.
+        // A name the player is coining: one raw word, keeping its underscore
+        // and case, and never a file name with spaces in it.
         NounKind::Name => Some(Fit {
             argument: Argument {
                 kind,
@@ -352,10 +327,7 @@ mod tests {
 
     #[test]
     fn a_required_slot_with_nothing_to_fill_it_is_reported() {
-        // This is what turns into the numbered prompt of §6.
-        // `invoke`, not `divine`: `divine` took a fragment while it was a
-        // twelve-tick command that consumed one. It opens the stacks now and
-        // takes nothing, so it stopped being an example of a required slot.
+        // What turns into §6's numbered prompt.
         let filled = fill(Verb::Invoke, &words(&[]), &tower());
         assert_eq!(filled.missing.map(|m| m.kind), Some(NounKind::Script));
         assert!(filled.arguments().is_empty());
@@ -385,10 +357,8 @@ mod tests {
 
     #[test]
     fn an_optional_middle_slot_steps_aside_for_the_required_one_behind_it() {
-        // §10.1's `move <reagent> [source] <destination>`. Two words means the
-        // source was left out, and the destination is what the player named —
-        // positional filling used to hand it to the *source* and then report the
-        // destination missing, which is the opposite of what they said.
+        // §10.1's `move <reagent> [source] <destination>`: two words leave the
+        // source out.
         let filled = fill(Verb::Move, &words(&["sage", "laboratory"]), &tower());
         assert!(filled.missing.is_none(), "{filled:?}");
         let arguments = filled.arguments();
@@ -408,10 +378,8 @@ mod tests {
         assert_eq!(filled.arguments().len(), 3);
     }
 
-    /// A word an optional last slot could not use is refused, not dropped: `dial
-    /// first qqqq` turning the socket to its next sigil was a different command
-    /// from the one typed. Bare, and with filler after it, is still the bare
-    /// verb.
+    /// A word an optional last slot could not use is refused, not dropped.
+    /// Bare, and with filler after it, is still the bare verb.
     #[test]
     fn an_optional_last_slot_handed_a_word_it_cannot_use_is_refused() {
         let scene = tower().with(NounKind::Place, "/tower/lens/first");

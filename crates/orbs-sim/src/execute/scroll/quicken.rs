@@ -15,10 +15,8 @@ use crate::tower;
 
 /// Set the laboratory working `by` times quick for `ticks`.
 ///
-/// `opening` also hurries what is already running — one rule, not two, or
-/// opening the supply mid-brew would look like it had done nothing. Divided
-/// from *now*, once, and never re-derived per tick, which keeps `meditate 60`
-/// identical to sixty `meditate 1`s.
+/// `opening` also hurries what is running. Divided from *now*, once, so
+/// `meditate 60` is sixty `meditate 1`s.
 pub(super) fn window(world: &mut World, name: &str, by: u64, ticks: u64, opening: bool) {
     let Some(domain) = laboratory(world) else {
         refuse(world, name, "scroll_nowhere");

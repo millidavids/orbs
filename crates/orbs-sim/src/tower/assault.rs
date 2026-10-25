@@ -8,23 +8,12 @@
 //! | Surfaces | Environmental only — never scripts, schedules or logs | All four (§8.1) |
 //! | Response | Repair occupies a pane | Diagnose and repair under pressure |
 //!
-//! Adversarial aberrations are siege-only, which is what makes Phase A safe
-//! (pillar 4). `sabotage::substitution` is the calm layer and is untouched
-//! here; nothing in this module runs outside a siege.
+//! Siege-only, on a resolved round and never a tick, so the calm layer is safe
+//! (pillar 4) and an open siege waits for the player (§19).
 //!
-//! It runs on a resolved round and never on a tick, so an open siege waits for
-//! the player however long they take (§19).
-//!
-//! This is the premise's last clause. Two surfaces reach a *script* — its text
-//! and its clock — so the intervention loop is debugging, which is what makes
-//! scrying load-bearing; the third is a log. `verify` is the diagnosis, and
-//! *which surface do I inspect first* is §5.1's binding constraint.
-//!
-//! Telegraphed: the round that sabotages says so without saying **what** it
-//! touched, so the look that finds the lie is the decision the cooldown prices.
-//!
-//! One draw, unconditionally, before anything can return. The target comes from
-//! that roll's quotient, never a second draw — §19's `drift` defect.
+//! Two surfaces reach a script — its text and its clock — so the response is
+//! debugging, and `verify` is the diagnosis. The round says it sabotaged without
+//! saying what, so finding the lie is the decision.
 
 use bevy_ecs::prelude::*;
 
@@ -33,17 +22,13 @@ use super::sabotage::{Log, Poisoned};
 use super::spell::Bound;
 use crate::rng::{RngStream, Rngs};
 
-/// How often a round sabotages something, as one chance in this many.
-///
-/// Not every round: §5.1 caps aberration arrival *"so repairs cannot spiral"*,
-/// and a siege that lied every round leaves the player auditing instead of
-/// fighting.
+/// How often a round sabotages something, as one chance in this many — capped
+/// so repairs cannot spiral (§5.1).
 pub const ODDS: u32 = 3;
 
 /// A bound spell whose schedule an enemy has retimed.
 ///
-/// The subtlest of the four surfaces: a retimed spell's *text* is perfect, so
-/// `peruse` shows exactly what the player wrote and only `verify` finds it.
+/// The subtlest surface: the text is perfect, and only `verify` finds it.
 #[derive(Component, Debug, Clone)]
 pub struct Retimed {
     /// How many extra ticks each of its steps now costs.
@@ -52,9 +37,8 @@ pub struct Retimed {
 
 /// A spell whose text an enemy has rewritten.
 ///
-/// The true lines are kept, as `Substituted` does: destroying the player's own
-/// writing would be theft rather than the misdirection §5.1 has scrying see
-/// through, and it is what makes the repair a repair.
+/// The true lines are kept, as `Substituted` does: misdirection, not theft, and
+/// what makes the repair a repair.
 #[derive(Component, Debug, Clone)]
 pub struct Rewritten {
     /// What the player actually wrote.
@@ -77,27 +61,22 @@ pub enum Reached {
 
 /// Roll for sabotage, and do it. Called once per resolved round.
 ///
-/// The draw is unconditional and comes first, before any check that could
-/// return, and the target is that roll's *quotient* rather than a second draw.
-///
-/// What it breaks stays broken after the siege, until the player purges it
-/// (§19).
+/// One draw, first and unconditionally; the target is that roll's quotient,
+/// never a second draw (§19's `drift` defect). What it breaks stays broken
+/// until the player purges it (§19).
 pub fn strike(world: &mut World) -> Option<Reached> {
     let roll: u32 = {
         let mut rngs = world.resource_mut::<Rngs>();
-        // A wide draw, so the quotient below has room to choose a target from.
+        // Wide, so the quotient has room to choose a target.
         rand::RngExt::random_range(rngs.stream(RngStream::Siege), 0..u32::from(u16::MAX))
     };
 
     if !roll.is_multiple_of(ODDS) {
         return None;
     }
-    // The quotient chooses, never a second draw (§19's `drift` defect), which
-    // is how `substitution` picks its pile too.
     let choice = roll / ODDS;
 
-    // A spell only counts if a line of it can be corrupted, or the round would
-    // say it rewrote one and `verify` would find nothing.
+    // Only a spell with a corruptible line, or `verify` would find nothing.
     let mut scripts = pool::<(With<Held>, Without<Rewritten>)>(world);
     scripts.retain(|node| {
         world
@@ -119,23 +98,20 @@ pub fn strike(world: &mut World) -> Option<Reached> {
         return None;
     }
 
-    // The roll picks the surface among those with something on them, then the
-    // node from what is left of it. A fixed order starved the log: every tower
-    // starts holding spells, so it was reached only once all were rewritten.
+    // The surface first, then the node: a fixed order starved the log, reached
+    // only once every spell was rewritten.
     let choice = choice as usize;
     let (reached, nodes) = &surfaces[choice % surfaces.len()];
     let node = nodes[(choice / surfaces.len()) % nodes.len()];
-    // A `shielded` node is struck and holds. Skipped *after* the choice:
-    // filtering it out would change which node the same roll reaches and move
-    // every seed's world.
+    // A `shielded` node is struck and holds — skipped after the choice, so the
+    // same roll reaches the same node.
     if held(world, node) {
         return None;
     }
     match reached {
         Reached::Clock => {
-            // From the same roll again, so this function takes exactly one draw,
-            // and from the part the surface and the node did not use: `choice %
-            // 3` is the surface itself when there are three, so it was always 1.
+            // From the part of the roll the surface and node did not use, so one
+            // draw still covers it.
             let drag = (choice / surfaces.len() / nodes.len() % 3) as u64 + 1;
             world.entity_mut(node).insert(Retimed { drag });
             super::poison(world, node);
@@ -193,21 +169,12 @@ fn rewrite(world: &mut World, node: Entity) {
     let at = candidates[from % candidates.len()];
 
     let mut lines = held.0.clone();
-    // The last *word*, not the line: that is what makes it sabotage rather than
-    // vandalism. Whole-line corruption produced `repeat 3-` and `end-`, which
-    // fault at `Role::Danger` and give the game away; `grind sage-` parses,
-    // runs, and quietly does nothing.
+    // The last word: `grind sage-` parses, runs and quietly does nothing, where
+    // a struck line would fault and give the game away.
     lines[at] = corrupt(&lines[at]);
 
-    // Both, since `spell::compile` reads `Read`: corrupting only `Held` would
-    // show a broken line while the orb ran the clean one, with `purge`
-    // repairing nothing. Copied rather than re-read, because this runs inside
-    // `step` where rules 1 and 3 apply.
-    //
-    // That one line of the reading and no other — writing the whole corrupted
-    // text into `Read` threw away the orb's reading of every untouched line, so
-    // a repair put back what was typed rather than what ran. The reader's name
-    // stays on it, and the struck line is keyed by its corrupted text.
+    // `Read` too, since that is what compiles — and that one line of it, so a
+    // repair restores what ran rather than what was typed.
     let reading = world.get::<super::Read>(node).map_or_else(
         || super::Read::verbatim(&held.0),
         |read| read.aligned(&held.0),
@@ -226,13 +193,8 @@ fn rewrite(world: &mut World, node: Entity) {
 
 /// Append the substitution sigil to a line's last word.
 ///
-/// Lines with no argument are left alone: suffixing a bare `probe`, `end` or
-/// `else` breaks the parse instead of the meaning.
-///
-/// Split at the last word's own offset, so everything before it survives byte
-/// for byte. `words.join(" ")` reflowed the line — `    grind    sage` came
-/// back as `    grind sage-` — which is the player's formatting changed on top
-/// of the one-word lie.
+/// A line with no argument is left alone, since suffixing `end` breaks the
+/// parse. Split at the word's own offset, so the player's spacing survives.
 fn corrupt(line: &str) -> String {
     let mut words = line.split_whitespace();
     let Some(last) = words.next_back() else {
@@ -241,8 +203,6 @@ fn corrupt(line: &str) -> String {
     if words.next().is_none() {
         return line.to_owned();
     }
-    // After the early returns, because `claimed` allocates and the two returns
-    // above discard it.
     let lie = super::sabotage::claimed(last);
     let Some(at) = line.rfind(last) else {
         return line.to_owned();
@@ -252,20 +212,9 @@ fn corrupt(line: &str) -> String {
 
 /// Whether a line has an argument worth corrupting.
 ///
-/// A corrupted line must parse, run and quietly do nothing; a lie the player is
-/// told about is not misdirection, and a control word on its own has nothing to
-/// misdirect anyway.
-///
-/// Word count and a trailing digit were not enough — `part look()-` printed
-/// three complaints, `is idle-` skipped the whole guarded block — so the last
-/// word is also refused when it is:
-///
-/// - a state — asked of `SpellState::WORDS` rather than copied, so a ninth
-///   spelling cannot drift out of this;
-/// - bracketed — the brackets *are* the notation, and suffixing one loses the
-///   name matching definition to call;
-/// - a set — `for each way-` binds a cursor over nothing, so the body never
-///   runs at all rather than running against a lie.
+/// A corrupted line must parse, run and quietly do nothing. So the last word is
+/// refused when it is a count, a state (`SpellState::WORDS`), bracketed, or the
+/// set of a `for each` — each breaks the line rather than lying to it.
 fn corruptible(line: &str) -> bool {
     // A comment compiles to nothing, so corrupting one changes nothing.
     if line.trim_start().starts_with('#') {
@@ -288,17 +237,14 @@ fn corruptible(line: &str) -> bool {
     !crate::parser::SpellState::WORDS.contains(&last) && !last.contains(['(', ')'])
 }
 
-/// Give a rewritten spell its own words back.
-///
-/// The mirror of `sabotage::restore`, which makes notice → `verify` → `purge` a
-/// repair loop here too.
+/// Give a rewritten spell its own words back — `sabotage::restore`'s mirror,
+/// which makes notice → `verify` → `purge` a loop.
 pub fn unwrite(world: &mut World, node: Entity) -> bool {
     let Some(Rewritten { was, read }) = world.get::<Rewritten>(node).cloned() else {
         return false;
     };
-    // The reading goes back with the text: `rewrite` corrupted both, so
-    // restoring one leaves the tower running the enemy's line while `peruse`
-    // shows the player their own.
+    // Both back, or the tower runs the enemy's line while `peruse` shows the
+    // player's.
     world.entity_mut(node).insert(Held(was));
     world.entity_mut(node).insert(read);
     world.entity_mut(node).remove::<Rewritten>();

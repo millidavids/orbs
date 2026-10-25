@@ -1,21 +1,12 @@
 //! Tampering, and how a player finds it.
 //!
-//! DESIGN.md §8.1 is the specification, and its central rule is that tells are
-//! never colour-only (§14). So every tampering has two channels: a structural
-//! visual signature — *"spacing, glyph substitution, alignment drift, malformed
-//! record boundaries"* — and `verify <target>`, §5.1's one-command diagnosis. A
-//! seen-only tell is a puzzle a blind player cannot play; a `verify`-only one
-//! makes looking pointless.
+//! §8.1. Tells are never colour-only (§14): every tampering has a structural
+//! signature and `verify <target>`, so neither sight nor the command alone is
+//! the puzzle.
 //!
-//! The log is the surface because §15 exercises log poisoning against *brewing*
-//! logs with `peruse`, `sift` and `verify`.
-//!
-//! The tell is not corrupted stored text. §3: *"the renderer corrupts it; the
-//! model records it faithfully"* — a rewritten log could not be recovered,
-//! compared or `verify`ed. A poisoned line is re-emitted with a field dropped
-//! and the tampered presentation set, which the record model already draws as a
-//! gap. `Presentation::Tampered` is refused nowhere: §3's exemption covers only
-//! the *eldritch* register.
+//! Stored text is never corrupted — the renderer corrupts, the model records
+//! faithfully (§3) — so a poisoned line is re-emitted with a field dropped and
+//! `Presentation::Tampered` set, which the record model draws as a gap.
 
 use bevy_ecs::prelude::*;
 use orbs_render::{FieldName, Presentation, RecordKind, Records, Role};
@@ -56,13 +47,8 @@ pub fn verify(world: &mut World, target: Entity) {
         .get::<Name>(target)
         .map_or_else(String::new, |name| name.0.clone());
 
-    // A place answers for what is standing in it, which is what makes the
-    // *world* a surface rather than only the log: §8.1's world-state row is
-    // *"reagents swapped, entity substituted"*, and a substitution is on the
-    // pile, not the shelf.
-    //
-    // One level, deliberately: `verify` is §5.1's *one command, instantly and
-    // cheaply*, and the recursive audit is `verify --all`.
+    // A place answers for what stands in it, one level down — a substitution is
+    // on the pile, not the shelf. Deeper is `verify --all`'s.
     let substituted: Vec<String> = super::children_of(world, target)
         .into_iter()
         .filter(|node| poisoned(world, *node))
@@ -103,27 +89,15 @@ pub fn verify(world: &mut World, target: Entity) {
 
 /// Swap what a pile of stock says it is, without moving it.
 ///
-/// §8.1's world-state tampering: *"reagents swapped, glyphs corrupted, entity
-/// substituted"*, whose tell is *"substituted entities fail ID check →
-/// `Referent missing`"*.
-///
-/// The name changes and the identity does not: a spell resolved the reagent to
-/// a stable id at cast, so the id still points here and the *name* no longer
-/// matches — §8's missing-referent fault, arriving for the reason §8.1 says it
-/// should rather than through a typo.
-///
-/// Like a poisoned log, nothing stored is destroyed, so the tampering is
-/// recoverable and `verify`-able. Deleting the pile would be theft rather than
-/// sabotage: §5.1 keeps *misdirection* as the thing scrying sees through.
+/// §8.1's world-state surface: the name changes and the identity does not, so a
+/// spell meets §8's missing-referent fault for the reason §8.1 intends.
+/// Nothing is destroyed — misdirection, not theft (§5.1).
 pub fn substitute(world: &mut World, node: Entity, as_named: &str) {
     let Some(mut name) = world.get_mut::<Name>(node) else {
         return;
     };
-    // The true name is kept, or this is destruction rather than sabotage.
-    // `purge` removes `Poisoned` and reports `cleansed`, which left the pile
-    // permanently misnamed and eligible for a second swap to `charcoal--`.
-    // Three endless reagents, so three rolls killed every heated recipe in the
-    // game: unwinnable, quietly, about an hour in.
+    // The true name is kept: without it a purge left the pile misnamed, and
+    // three swaps made the tower unwinnable an hour in.
     let was = std::mem::replace(&mut name.0, as_named.to_owned());
     let since = *world.resource::<Tick>();
     world.entity_mut(node).insert(Substituted { was, since });
@@ -132,12 +106,9 @@ pub fn substitute(world: &mut World, node: Entity, as_named: &str) {
 
 /// The name a pile is *made to claim* when the swap takes it.
 ///
-/// A real word, or the tell reads as corruption rather than substitution: its
-/// own name with a sigil struck through it is the cheapest honest lie.
-///
-/// One function because the parser reads the shape too — the lie is a strict
-/// *extension* of the truth, so `parser::scene`'s abbreviation rule would
-/// otherwise hand the pile straight back to the spell that named it.
+/// Its own name with a sigil, the cheapest honest lie. One function, because the
+/// parser reads the shape too, or its abbreviation rule would hand the pile back
+/// to the spell that named it.
 #[must_use]
 pub fn claimed(was: &str) -> String {
     format!("{was}-")
@@ -171,22 +142,10 @@ pub fn restore(world: &mut World, node: Entity) -> Option<String> {
 
 /// How long a lie holds before the pile settles back to its own name.
 ///
-/// The repair loop is human-only by construction: a spell names things with
-/// literals, so it cannot say *"purge whatever the dispensary is lying about"*
-/// — it would have to name `sage-`, a word nobody knew when the spell was
-/// written. Only a person who reads the lie off the screen can repair it.
-///
-/// Without an expiry an unattended tower was terminal rather than harassed:
-/// `orbs-balance` measured the standing grind loop falling from 0.100/tick to
-/// 0.058 and staying there. §5.1 caps aberration arrival *"so repairs cannot
-/// spiral"*.
-///
-/// The number is swept, not chosen. Downtime is `WEARS_OFF / SWAP_INTERVAL`
-/// without vigilance, which only makes it smaller, so
-/// the two constants are set together: (1200, never) lost an unattended tower
-/// 42% of its rate permanently, (1200, 1800) lost 60% of every window. 300
-/// against 3600 is 8% — short enough that waiting one out is never better than
-/// `purge`.
+/// Repair is human-only — a spell cannot name `sage-` — so without an expiry an
+/// unattended tower was terminal rather than harassed (§5.1). Swept with
+/// `SWAP_INTERVAL`: 300 against 3600 is 8% downtime, short enough that waiting
+/// one out never beats `purge`.
 const WEARS_OFF: u64 = 300;
 
 /// Let a lie that nobody caught settle back to the truth.
@@ -243,18 +202,10 @@ pub fn substitution(
     // removed, kept so every seed's swap schedule, and every replay, holds (§19).
     let _: u64 = rngs.stream(RngStream::Threat).random();
 
-    // Endless base stock only. A first pass took any pile at all and swapped
-    // `ground-sage` sitting between a grind and a digestion, which destroys work
-    // in flight rather than misdirecting — §5.1 keeps environmental damage in
-    // the calm layer, and §11.5's rule is that a cost is the resource and never
-    // progress.
-    //
-    // A base reagent is the honest target for the same reason it is endless:
-    // the tower always has more, so a swap costs the *spell that named it* and
-    // nothing half-made. It is also what a spell names most.
-    //
-    // The roll comes first, unconditionally: drawing after an early return
-    // would make the stream's position depend on how many piles were left.
+    // Endless base stock only: swapping work in flight destroys progress, which
+    // §11.5 forbids, where a base reagent costs only the spell that named it.
+    // The roll first, unconditionally, so the stream does not depend on the
+    // piles.
     let roll: u64 = rngs.stream(RngStream::Threat).random();
 
     // The Ley Line's `vigilance` widens the interval. The draw is unchanged, so
@@ -268,14 +219,8 @@ pub fn substitution(
     let mut piles: Vec<(Entity, &Name, NodeId)> = stock
         .iter()
         .filter(|(_, _, _, stock)| matches!(stock, super::Stock::Endless))
-        // Fuel is exempt, for the paragraph above: charcoal is named by no
-        // recipe at all, and it is the tower's power supply, so swapping it
-        // stops every heated stage in every domain at once.
-        //
-        // `orbs-balance` found this on the first sweep after the surface
-        // shipped: `charcoal` sorts before `rock-salt` and `sage`, so the first
-        // swap of every session took the fire and clarity's rate fell from
-        // 0.140 to 0.074 — half the laboratory, on every seed.
+        // Fuel is exempt: swapping charcoal stops every heated stage at once,
+        // and it halved clarity's rate on every seed.
         .filter(|(_, name, _, _)| fuels.get(&name.0).is_none())
         .map(|(node, name, id, _)| (node, name, *id))
         .collect();

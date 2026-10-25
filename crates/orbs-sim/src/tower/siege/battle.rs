@@ -1,8 +1,8 @@
 //! [`Siege`] itself — the state, the readings' arithmetic, and `resolve` (§5.1).
 //!
 //! Everything else in the domain is instant; [`Siege::resolve`] is what `hold`
-//! calls, and §5.0's *"no per-command tick cost"* rests on it being the only
-//! thing here that advances the world.
+//! calls, and §5.0's *no per-command tick cost* rests on it being the only thing
+//! here that advances the world.
 
 use bevy_ecs::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -32,8 +32,8 @@ const fn is_nought(count: &u32) -> bool {
 
 /// What happened when a die was pledged.
 ///
-/// Three answers rather than a `bool`: a die already pledged is a mistake on
-/// the board, a die you cannot pay for is the decision the domain is about.
+/// Three answers: a die already pledged is a mistake on the board; one you
+/// cannot pay for is the decision the domain is about.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Pledged {
     /// It went down, at this cost.
@@ -50,10 +50,8 @@ pub enum Pledged {
     },
 }
 
-/// Whether a siege is being fought anywhere in the tower.
-///
-/// Asked of the world rather than of `Cwd`, because a siege runs whether or not
-/// the player is standing in the bailey.
+/// Whether a siege is being fought anywhere in the tower — asked of the world,
+/// since it runs wherever the player stands.
 #[must_use]
 pub fn besieged(world: &mut World) -> bool {
     world.query::<&Siege>().iter(world).any(Siege::running)
@@ -61,8 +59,8 @@ pub fn besieged(world: &mut World) -> bool {
 
 /// A siege in progress.
 ///
-/// A component on the rampart rather than a resource, so it saves through the
-/// path every node saves through and `survey rampart` can read it.
+/// A component on the rampart, so it saves as every node does and `survey
+/// rampart` can read it.
 #[derive(Component, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Siege {
     /// How many rounds have resolved.
@@ -77,31 +75,21 @@ pub struct Siege {
     pub arrived: u32,
     /// What the tower's standing was when the enemy came up the road.
     ///
-    /// An opening snapshot like [`arrived`](Self::arrived): renown moves as the
-    /// rounds resolve *and* once at the end, so a total read only at `settle`
-    /// would omit what the exchanges cost. Measured against rather than
-    /// accumulated into, so there is no running sum to keep in step.
-    ///
-    /// `Option` because an older save has no snapshot, and `settle` measures
-    /// `now - standing` — nought reported the tower's whole renown as the
-    /// winnings of a siege that was *lost*.
+    /// A snapshot measured against, since renown moves every round and again at
+    /// the end. `None` in an older save, where nought reported the tower's whole
+    /// renown as a lost siege's winnings.
     #[serde(default)]
     pub standing: Option<u64>,
-    /// What the garrison has ever had, counting reinforcements.
-    ///
-    /// The denominator: how worn a side is measures against what it once had,
-    /// as the enemy's `completion` measures against `arrived`. Without it
-    /// `hurt` was unreachable above two troops and shadowed by `few` below
-    /// them, so the solver's `quaff mending` rung was dead code.
+    /// What the garrison has ever had, counting reinforcements — the denominator
+    /// `hurt` measures against, as `completion` uses `arrived`.
     #[serde(default)]
     pub mustered: u32,
     /// Fight the garrison can hold above what it mustered: what a fortify
     /// supply holds this round, and any [`kept`](Self::kept) room.
     #[serde(default)]
     pub fortified: u32,
-    /// Room an older document's vigour bought for the rest of its siege,
-    /// before a fortify supply held its room a round at a time. Kept, since
-    /// that is what was paid for. Nought in every siege fought since.
+    /// Room an older document's vigour bought for the rest of its siege, kept
+    /// since it was paid for. Nought in every siege fought since.
     #[serde(default, skip_serializing_if = "is_nought")]
     pub kept: u32,
     /// How many bodies the tower sent to the wall. Survivors come home up to
@@ -112,46 +100,32 @@ pub struct Siege {
     /// opened. Nothing refills or mends the line past it.
     #[serde(default = "room")]
     pub room: u32,
-    /// How fresh each arsenal store was when the enemy arrived (§19,
-    /// *Supply*). A siege reads the better of this and now, so a player who
-    /// takes an hour over a round loses nothing to the clock.
+    /// How fresh each arsenal store was when the enemy arrived (§19, *Supply*).
+    /// A siege reads the better of this and now, so a slow round costs nothing.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub freshness: std::collections::BTreeMap<String, crate::tower::Freshness>,
-    /// Modifiers the player has staged for the coming round.
-    ///
-    /// Cleared when the round resolves: an advantage that persisted would make
-    /// the first turn the only one that mattered.
+    /// Modifiers the player has staged for the coming round, cleared when it
+    /// resolves.
     pub staged: Vec<Modifier>,
-    /// Dice pledged to areas for the coming round.
-    ///
-    /// Cleared when the round resolves, as [`staged`](Self::staged) is — what
-    /// is scarce is the *round*, not the die.
+    /// Dice pledged to areas for the coming round, cleared when it resolves —
+    /// what is scarce is the round, not the die.
     #[serde(default)]
     pub pledges: Vec<Pledge>,
-    /// The tower's standing bonus on every answering roll — the Ley Line's
-    /// `edge` grant, read once when the siege begins.
-    ///
-    /// On the siege rather than read per round, so the board's odds and the
-    /// round's rolls read one number and a node taken mid-fight lands on the
-    /// next siege.
+    /// The Ley Line's `edge` grant on every answering roll, read once when the
+    /// siege begins, so the board's odds and the rolls read one number.
     #[serde(default)]
     pub edge: i32,
     /// What a format-8 save recorded as this siege's private pool.
     ///
-    /// A field rather than a lookup because `document::migrate` reads
-    /// `node.siege` off the already-deserialised save, and without
-    /// `deny_unknown_fields` serde would discard the format-8 value first.
-    ///
-    /// Read only by the 8 → 9 migration, which lifts it into
+    /// A field because `document::migrate` reads the deserialised save, and serde
+    /// would discard an unknown one first. Read only by the 8 → 9 migration into
     /// [`tower::Quintessence`](crate::tower::Quintessence). Keep until 1.0.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub quintessence: Option<u32>,
     /// Set once the siege is over.
     pub outcome: Option<Outcome>,
-    /// The tick the road is clear again, once this one has ended.
-    ///
-    /// On the siege rather than in a resource, so it travels in the save and a
-    /// player cannot clear the cadence by quitting (§19).
+    /// The tick the road is clear again, once this one has ended — on the siege,
+    /// so quitting cannot clear the cadence (§19).
     #[serde(default)]
     pub clear_at: Option<u64>,
 }
@@ -159,24 +133,22 @@ pub struct Siege {
 impl Siege {
     /// Begin one. The garrison is always [`ASSIGNED`]; the enemy is drawn.
     ///
-    /// A siege grants nothing: the pool is the tower's, so enchanting during
-    /// one costs something rather than spending an allowance that expires.
+    /// A siege grants nothing: the pool is the tower's, so enchanting during one
+    /// costs something.
     #[must_use]
     pub fn begin(rngs: &mut Rngs) -> Self {
         Self::begin_against(rngs, BASE_MOST)
     }
 
-    /// Open a siege whose enemy may be drawn as large as `most`.
+    /// Open a siege whose enemy may be drawn as large as `most`, clamped into
+    /// [`FEWEST`]..=[`MOST`].
     ///
-    /// Consumed *inside* the first draw rather than before it, so it cannot
-    /// move either draw's position in the stream (§19); `begin(rngs)` is the
-    /// old behaviour whole. `most` is clamped into [`FEWEST`]..=[`MOST`].
+    /// Consumed inside the first draw, so it moves no draw in the stream (§19).
     #[must_use]
     pub fn begin_against(rngs: &mut Rngs, most: u32) -> Self {
         use rand::RngExt;
         let most = most.clamp(FEWEST, MOST);
-        // Drawn before the intent, unconditionally: order is part of the replay
-        // contract, and swapping these two changes every existing seed.
+        // Before the intent, always: swapping the two changes every seed.
         let enemy = rngs.stream(RngStream::Siege).random_range(FEWEST..=most);
         let intent = Intent::drawn(rngs);
         Self {
@@ -185,8 +157,7 @@ impl Siege {
             enemy: Band::new(enemy),
             intent,
             arrived: enemy,
-            // Filled by `defend` from the world, as `edge` is: `begin` is a pure
-            // function of the stream and the tower's standing is not in it.
+            // Filled by `defend` from the world, as `edge` is.
             standing: None,
             mustered: ASSIGNED,
             fortified: 0,
@@ -217,18 +188,15 @@ impl Siege {
 
     /// The garrison is wounded — at or below half of what it ever had.
     ///
-    /// Against [`mustered`](Self::mustered), never the current count: measured
-    /// against `count` this was unreachable above two troops and shadowed by
-    /// `few` below them.
+    /// Against [`mustered`](Self::mustered): against the current count it was
+    /// unreachable above two troops and shadowed by `few` below them.
     #[must_use]
     pub const fn hurt(&self) -> bool {
         self.garrison.count > 0 && self.garrison.vigour * 2 <= self.mustered * VIGOUR
     }
 
-    /// The enemy has at least twice the garrison's numbers.
-    ///
-    /// A ratio the language cannot express, published as a word — why the
-    /// readings exist rather than an arithmetic grammar.
+    /// The enemy has at least twice the garrison's numbers — a ratio the
+    /// language cannot express, published as a word.
     #[must_use]
     pub const fn outnumbered(&self) -> bool {
         self.enemy.count >= self.garrison.count * 2 && self.garrison.count > 0
@@ -242,9 +210,8 @@ impl Siege {
 
     /// Which dice are still in the coffer — pledged to nothing.
     ///
-    /// Held, not affordable. [`affordable`](Self::affordable) is the narrower
-    /// question a spell gets, so the refusal can say *"you have it, you cannot
-    /// pay for it"* rather than pretending the die is gone.
+    /// Held, not affordable, so a refusal can say *you have it, you cannot pay
+    /// for it*.
     #[must_use]
     pub fn coffer(&self) -> Vec<Die> {
         POOL.into_iter()
@@ -254,13 +221,9 @@ impl Siege {
 
     /// Which dice are in the coffer *and* within what is left to spend.
     ///
-    /// Published as a word because the natural sentence — `if the coffer has
-    /// more quintessence than the d20` — is wrong: `watch.rs`'s comparison
-    /// against another place is strict, so it excludes the die you can exactly
-    /// afford. Derived, `if the coffer has d20` means *"I hold it and can pay
-    /// for it"*.
-    ///
-    /// `pool` is handed in, which keeps this module `World`-free.
+    /// A word, because the natural `if the coffer has more quintessence than the
+    /// d20` is strict and excludes the die you can exactly afford. `pool` is
+    /// handed in, keeping this module `World`-free.
     #[must_use]
     pub fn affordable(&self, pool: u32) -> Vec<Die> {
         self.coffer()
@@ -291,10 +254,8 @@ impl Siege {
             .collect()
     }
 
-    /// The best and worst `area` could come to, before anything is rolled.
-    ///
-    /// §5.1 carried from the dice to the allocation: a player choosing where to
-    /// gamble has to see what they are gambling. `(0, 0)` where nothing is.
+    /// The best and worst `area` could come to, before anything is rolled —
+    /// §5.1's rule that a gamble is seen. `(0, 0)` where nothing is.
     #[must_use]
     pub fn range(&self, area: Area) -> (u32, u32) {
         self.pledged(area)
@@ -304,13 +265,9 @@ impl Siege {
 
     /// Pledge `die` to `area`, spending its cost.
     ///
-    /// Two refusals the caller must tell apart — a die already pledged and a die
-    /// you cannot pay for are different sentences (§6). Nothing here draws: the
-    /// dice are rolled at [`resolve`](Self::resolve), in pledge order.
-    ///
-    /// The caller spends; `pool` is only what the tower holds. The resource
-    /// lives in `tower::Quintessence`, shared with the forge, and taking from
-    /// it here would need a `World`.
+    /// Nothing is drawn: the dice roll at [`resolve`](Self::resolve), in pledge
+    /// order. The caller spends, since the pool is `tower::Quintessence` and
+    /// taking from it here would need a `World`.
     pub fn pledge(&mut self, die: Die, area: Area, pool: u32) -> Pledged {
         if !self.free(die) {
             return Pledged::Spent;
@@ -325,8 +282,7 @@ impl Siege {
 
     /// Roll everything pledged, and say what each area came to.
     ///
-    /// One draw per pledged die, in `pledges` order: that order is part of the
-    /// replayed submissions, and rolling *by area* would tie the draw order to
+    /// In `pledges` order, which replays; by area would tie the draws to
     /// `Area::ALL` and change every replay the day an area is added.
     fn resolve_pledges(&self, rngs: &mut Rngs) -> Strengths {
         let mut strengths = Strengths::default();
@@ -354,7 +310,7 @@ impl Siege {
 
     /// End the siege with both sides standing — stillness.
     ///
-    /// Returns what was pledged and staged for the round that will now never
+    /// Returns what was pledged and staged for the round that will never
     /// resolve, so the caller can hand it back.
     pub fn still(&mut self) -> (Vec<Pledge>, Vec<Modifier>) {
         self.outcome = Some(Outcome::Stilled);
@@ -364,10 +320,8 @@ impl Siege {
         )
     }
 
-    /// How far through the siege the player got, as a percentage.
-    ///
-    /// What escrow is paid against (§11.5), so losing at 60% keeps something
-    /// worth having. Measured by what the enemy has lost.
+    /// How far through the siege the player got, as a percentage of the enemy
+    /// felled — what escrow pays against (§11.5).
     #[must_use]
     pub const fn completion(&self) -> u32 {
         if self.arrived == 0 {
@@ -379,9 +333,8 @@ impl Siege {
 
     /// Leave the enemy one round from breaking — `debug_siege`'s shortcut.
     ///
-    /// It thins the enemy and touches nothing else, so what follows is a real
-    /// round the garrison can still lose. A shortcut that *ended* the siege
-    /// would be testing the shortcut.
+    /// Only the enemy is thinned, so what follows is a real round that can
+    /// still be lost.
     #[cfg(debug_assertions)]
     pub const fn give_away(&mut self) {
         self.enemy = Band {
@@ -405,8 +358,8 @@ impl Siege {
     #[must_use]
     pub fn garrison_roll(&self) -> Roll {
         let mut roll = Roll::new(Die::D20, AGAINST);
-        // The Ley Line's edge first, named, so `peruse bailey.log` says the
-        // wizard's own standing moved a roll before any potion did.
+        // The edge first, named, so the log shows the wizard's standing moved a
+        // roll before any potion did.
         if self.edge != 0 {
             roll = roll.plus("edge", Effect::Bonus(self.edge));
         }
@@ -416,15 +369,13 @@ impl Siege {
         roll
     }
 
-    /// The same roll, with a resolved `line` behind it.
-    ///
-    /// The bonus carries the area's name, so `peruse bailey.log` says *why* a
-    /// swing landed (rule 4).
+    /// The same roll, with a resolved `line` behind it, named so the log says
+    /// why a swing landed (rule 4).
     #[must_use]
     fn garrison_roll_with(&self, line: u32, intent: Intent) -> Roll {
         let mut roll = self.garrison_roll();
-        // Nothing when the garrison does not swing: writing the bonus in anyway
-        // would have the log claim an advantage that never applied.
+        // Not when the garrison does not swing, or the log claims an advantage
+        // that never applied.
         if line > 0 && Area::Line.answers(intent) {
             roll = roll.plus(
                 Area::Line.word(),
@@ -438,41 +389,34 @@ impl Siege {
     #[must_use]
     fn enemy_roll_against(&self, buckler: u32) -> Roll {
         let mut roll = self.enemy_roll();
-        // A buckler raises the target rather than lowering their die, which is
-        // the same arithmetic and the honest description: the wall is higher.
+        // The wall is higher: the same arithmetic as lowering their die.
         roll.against += i32::try_from(buckler).unwrap_or(0);
         roll
     }
 
     /// Resolve one round — the only thing in this domain that advances state.
     ///
-    /// Returns every roll made, in order, so the caller can log each with its
-    /// die and face (rule 4) and `peruse bailey.log` is a postmortem.
-    ///
-    /// Both sides always roll their full complement, with no early return: a
-    /// draw skipped because the round was already decided would make the stream
-    /// depend on its own results.
+    /// Returns every roll in order, so each is logged with its die and face
+    /// (rule 4). Both sides always roll in full: a draw skipped once the round
+    /// was decided would make the stream depend on its own results.
     pub fn resolve(&mut self, rngs: &mut Rngs) -> Round {
         let intent = self.intent;
 
-        // The pledged dice roll first: they set the round's terms, and rolling
-        // here rather than in the loops keeps the draw order a function of
-        // `pledges`.
+        // The pledged dice first: they set the round's terms.
         let strengths = self.resolve_pledges(rngs);
 
         let enemy_roll = self.enemy_roll_against(strengths.buckler);
         let garrison_roll = self.garrison_roll_with(strengths.line, intent);
 
-        // The enemy strikes first, because the intent was announced last round
-        // and the player has already had their turn to answer it.
+        // The enemy first: its intent was announced and the player has answered.
         let attacking = intent.attackers(self.enemy.count);
         let mut struck = Vec::new();
         for _ in 0..attacking {
             struck.push(enemy_roll.resolve(rngs));
         }
 
-        // ...and the garrison answers, unless this was a volley. The rolls are
-        // still drawn and discarded, so the intent cannot reorder later draws.
+        // Drawn even under a volley and discarded, so the intent cannot reorder
+        // later draws.
         let answering = self.garrison.count;
         let mut answered = Vec::new();
         for _ in 0..answering {
@@ -492,8 +436,7 @@ impl Siege {
         self.garrison.wound(taken);
         self.enemy.wound(dealt);
 
-        // A sortie, the only thing here that wounds your own side on purpose.
-        // Favourable but paid in mettle: see `SORTIE_DEALT`.
+        // A sortie wounds your own side on purpose — see `SORTIE_DEALT`.
         let sortied = strengths.sortie / SORTIE_DEALT;
         let spent = strengths.sortie / SORTIE_COST;
         if strengths.sortie > 0 {
@@ -501,12 +444,8 @@ impl Siege {
             self.garrison.wound(spent);
         }
 
-        // Succour last, after everything that wounds and before the outcome:
-        // earlier would heal damage that had not happened, later would mean a
-        // pledged succour could never be a last stand. See [`Area::Succour`].
-        //
-        // What it put back is measured, not assumed — `mend` caps at full, so a
-        // big roll on a nearly-whole line is mostly wasted.
+        // Succour after every wound and before the outcome, so it can be a last
+        // stand — see [`Area::Succour`]. Measured, since `mend` caps at full.
         let before = self.garrison.vigour;
         if strengths.succour > 0 {
             self.garrison
@@ -518,9 +457,8 @@ impl Siege {
         self.pledges.clear();
         self.turns += 1;
 
-        // Drawn unconditionally, before the outcome is checked: an intent drawn
-        // only while the siege continues would make the stream depend on
-        // whether it ended.
+        // Before the outcome is checked, so the stream does not depend on
+        // whether the siege ended.
         self.intent = Intent::drawn(rngs);
 
         if self.enemy.routed() {

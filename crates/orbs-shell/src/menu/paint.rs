@@ -26,14 +26,9 @@ const TALLEST: u16 = SLOT_ROWS + 4;
 
 /// The smallest pane this can honestly be drawn in.
 ///
-/// Two borders, the lead, a blank, the page, a blank, the line, and a row under
-/// it for a complaint. Below this it says the pane is too small rather than
-/// drawing a menu with a choice missing from it — the answer the weave already
-/// gives, and the same reason: **a choice you cannot see is one you do not
-/// have**, and one of these choices is how you get out.
-///
-/// Sized for the tallest page rather than the one showing, so the menu does not
-/// fit when you open it and stop fitting when you ask for the listing.
+/// Below it the pane says it is too small, since a choice you cannot see is one
+/// you do not have. Sized for the tallest page, so the menu never stops fitting
+/// as you move.
 const MIN_ROWS: u16 = 7 + TALLEST;
 
 /// How many settings rows a page has room for at the floor.
@@ -47,45 +42,25 @@ const MIN_ROWS: u16 = 7 + TALLEST;
 pub const SETTINGS_ROWS: u16 = TALLEST - 3;
 const MIN_COLS: u16 = 34;
 
-/// The caret's lead-in, and what the typed line is indented by.
-const LEAD: &str = "> ";
-
 /// Draw the menu into `pane`.
-///
-/// The caret is set after the painter is done, the way `sheet::paint` hands one
-/// back: a `Painter` holds the `Frame`, so the two cannot be reached at once.
 pub fn paint(frame: &mut Frame, menu: &Menu, pane: Rect, prose: &Prose) {
-    if pane.is_empty() {
-        return;
-    }
-    let caret = {
-        let mut painter = frame.painter(pane);
-        let area = painter.area();
-        painter.border(area, Some(&prose.line("menu_title", &[])), Style::DIM);
-        let inner = area.inset(1);
-        if inner.is_empty() {
-            return;
-        }
-        if area.rows < MIN_ROWS || area.cols < MIN_COLS {
-            // Two forms, because the advice differs: over a tower the answer is
-            // `F4`, since one pane is taller than two. At the threshold there is
-            // no second pane to fold away, so saying `F4` would be a dead end on
-            // the only screen there is.
-            let said = if menu.stance().is_threshold() {
-                "menu_too_small_threshold"
-            } else {
-                "menu_too_small"
-            };
-            painter.paragraph(inner, &Span::new(&prose.line(said, &[])));
-            None
-        } else {
-            Some(body(&mut painter, menu, inner, prose))
-        }
+    // Two forms, because the advice differs: over a tower the answer is `F4`,
+    // since one pane is taller than two. At the threshold there is no second
+    // pane to fold away, so saying `F4` would be a dead end on the only screen
+    // there is.
+    let too_small = if menu.stance().is_threshold() {
+        "menu_too_small_threshold"
+    } else {
+        "menu_too_small"
     };
-    // `None` when the pane is too small to type into: a caret is the game's one
-    // promise about where a keystroke lands, and drawing it over a message that
-    // says there is no room would be a lie about exactly that.
-    frame.set_cursor(caret);
+    crate::framed::paint(
+        frame,
+        pane,
+        &prose.line("menu_title", &[]),
+        (MIN_ROWS, MIN_COLS),
+        &prose.line(too_small, &[]),
+        |painter, inner| body(painter, menu, inner, prose),
+    );
 }
 
 /// The menu's rows, and where the caret ends up.
@@ -120,32 +95,8 @@ fn body(painter: &mut Painter<'_>, menu: &Menu, inner: Rect, prose: &Prose) -> P
     // The line, with a caret. Unlike the weave — which has a browsing mode and
     // draws none — there is exactly one thing to do here and it is typing, so
     // the caret is always honest.
-    painter.span(
-        Pos::new(inner.col, y),
-        &Span::new(&format!("{LEAD}{}", menu.command())),
-    );
-
-    if let Some(complaint) = menu.complaint() {
-        painter.span(
-            Pos::new(inner.col, y.saturating_add(1)),
-            &Span::new(&said(complaint, prose)).with_style(Style::DIM),
-        );
-    }
-
-    // Clamped to the pane, which `sheet.rs` has always done and this did not: a
-    // long enough line put the caret past the right border — into the tower rail
-    // at 120×45, and off the grid a few characters later.
-    let typed = LEAD
-        .chars()
-        .count()
-        .saturating_add(menu.command().chars().count());
-    Pos::new(
-        inner
-            .col
-            .saturating_add(u16::try_from(typed).unwrap_or(u16::MAX))
-            .min(inner.col.saturating_add(inner.cols).saturating_sub(1)),
-        y,
-    )
+    let complaint = menu.complaint().map(|complaint| said(complaint, prose));
+    crate::framed::typed_line(painter, inner, y, menu.command(), complaint.as_deref())
 }
 
 /// The top page's words — the ones this stance offers.
@@ -184,11 +135,8 @@ fn gloss(name: &str, menu: &Menu, prose: &Prose) -> String {
 
 /// The towers the orb is keeping, one row each — and the way to raise another.
 ///
-/// Both answers on one page, which is what this page is for: *open one you have*
-/// and *begin one* were two words a level up, and a player meeting the orb for
-/// the first time had to tell them apart before anything said there was a
-/// difference. `new` is drawn even with no towers, which is the case it was
-/// written for — a first launch, where it is the only thing to do.
+/// Both answers on one page; `new` is drawn even with no towers, a first
+/// launch's only move.
 fn listing(painter: &mut Painter<'_>, menu: &Menu, inner: Rect, mut y: u16, prose: &Prose) -> u16 {
     // Only when there *could* be towers: a session that keeps none says so
     // through `Complaint::Unkept` below, and *no towers yet* on top of that
@@ -429,14 +377,9 @@ mod tests {
     /// names the ceiling so the day one does, it fails here.
     #[test]
     fn a_settings_page_may_hold_this_many_rows() {
-        // This compared two constants in this file and could not fail: its doc
-        // claimed to guard the frontend's row lists, which this crate cannot see
-        // by design. What is held here is the arithmetic — the capacity a page
-        // has, given the floor — and the real check lives in `orbs` beside the
-        // rows, as `no_settings_page_is_taller_than_the_menu_can_draw`.
-        //
-        // A `const` block, because a runtime `assert!` over two constants is
-        // not a test.
+        // The arithmetic only; the rows are checked in `orbs`
+        // (`no_settings_page_is_taller_than_the_menu_can_draw`). A `const`
+        // block, since a runtime `assert!` over constants tests nothing.
         const {
             assert!(
                 SETTINGS_ROWS == TALLEST - 3,

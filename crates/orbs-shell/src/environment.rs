@@ -3,14 +3,9 @@
 //! The seed has a module of its own, `seed`, since a game and an instrument want
 //! different ones.
 //!
-//! All read *outside* the sim: the environment is not deterministic, and
-//! reaching for it from a world that must replay from a seed is a habit worth
-//! not starting.
-//!
-//! Here rather than in a frontend's `main` because two rules for deriving the
-//! prompt name is the divergence this crate exists to stop — `orbs-tui` reading
-//! `USER` itself would agree with the Bevy build on a developer's machine and
-//! disagree on Windows, in CI, or with `USER` blank.
+//! Read outside the sim, which must replay from a seed. Here rather than in
+//! each `main`, or the frontends disagree on Windows, in CI or with `USER`
+//! blank.
 
 /// Who the wizard of a new tower is, as the settings file says.
 ///
@@ -24,14 +19,8 @@ pub fn wizard() -> Option<String> {
 /// Who the wizard of a new tower is: the switch, then the player's choice,
 /// then the machine's login.
 ///
-/// `ORBS_WIZARD` first, so a capture is the same on every machine, as every
-/// other switch outranks its setting. `USERNAME` is not optional: §13 ships
-/// Windows through Steam, so without it the platform most players are on
-/// always falls back to `orbs $ `.
-///
-/// A blank value is rejected, so an exported-but-empty `USER` falls through to
-/// the next candidate instead of naming the wizard nothing. So is a login the
-/// menu would refuse if typed.
+/// `ORBS_WIZARD` first, so a capture matches everywhere; `USERNAME` for
+/// Windows (§13). A blank value, or one the menu would refuse, falls through.
 #[must_use]
 pub fn wizard_named(chosen: Option<&str>) -> Option<String> {
     let (switch, login) = machine_names();
@@ -73,7 +62,7 @@ fn as_name(login: Option<String>) -> Option<String> {
 }
 
 /// `key`'s value, unless it is unset or blank.
-fn switched(key: &str) -> Option<String> {
+pub(crate) fn switched(key: &str) -> Option<String> {
     std::env::var(key)
         .ok()
         .filter(|name| !name.trim().is_empty())
@@ -81,32 +70,22 @@ fn switched(key: &str) -> Option<String> {
 
 /// The switch that decides whether a fresh tower begins sealed.
 ///
-/// `1` seals it; `0` opens it; unset takes the caller's default. The game
-/// defaults to sealed and a dump to open, for the reason `ORBS_BOOT=0` exists:
-/// ~200 See-it lines attend rooms directly (§19).
-///
-/// Blank falls through to the default, as a blank `USER` does above — reading
-/// it as `0` would hand a player the open tower with nothing saying so.
+/// `1` seals, `0` opens, unset or blank takes the caller's default: sealed for
+/// the game, open for a dump, since See-it lines attend rooms directly (§19).
 pub const SEALED: &str = "ORBS_SEALED";
 
 /// The switch that decides how long a fresh game is.
 ///
 /// `short`, `medium`, `long` — or `baseline`, the curve exactly as authored.
-/// Unset takes the caller's default, split as [`SEALED`] is: the game defaults
-/// to medium, a dump to baseline, or all 138 captures would move the day a
-/// default changed.
-///
-/// Blank falls through to the default, for [`SEALED`]'s reason. So does an
-/// unrecognised word: a typo should give a player the default game rather than
-/// refuse to start one, and there is nowhere this early in the boot to say so.
+/// Unset, blank or unrecognised takes the caller's default, split as
+/// [`SEALED`] is: medium for the game, baseline for a dump, so captures never
+/// move with it.
 pub const LENGTH: &str = "ORBS_LENGTH";
 
 /// A fresh tower, sealed or open and long or short as the environment says — or
 /// as `sealed` and `length` say when it does not.
 ///
-/// The one caller of these constructors from a frontend: three fresh-world
-/// sites across two frontends and the dump, and three readings of one switch is
-/// how a rule comes to differ per build.
+/// The one place a frontend or dump reads these switches.
 #[must_use]
 pub fn fresh(seed: u64, sealed: bool, length: orbs_sim::content::Length) -> orbs_sim::Sim {
     let wanted = std::env::var(SEALED)
@@ -148,9 +127,8 @@ const SCRIVENER: &str = "ORBS_SCRIVENER";
 
 /// The scrivener named by `ORBS_SCRIVENER`, or the trained reader by default.
 ///
-/// On unless turned off, the same shape as [`augury`]: without it a player
-/// types `crush the sage` at the prompt, watches it work, puts it in a spell
-/// and gets *Referent missing*.
+/// On unless turned off, as [`augury`] is, or what works at the prompt fails
+/// in a spell.
 ///
 /// | | |
 /// |---|---|
@@ -159,11 +137,9 @@ const SCRIVENER: &str = "ORBS_SCRIVENER";
 /// | `off`, `0`, `none` | no reader. The spell compiles exactly what was typed |
 /// | `stub` | [`Copyist::worked`](orbs_sim::Copyist::worked), a fixed table — what a capture pins |
 ///
-/// A capture cannot pin a trained reader: weights are a gitignored artefact
-/// that changes on every run, which is why `dumps.sh` runs the prompt's reader
-/// as `stub` and `grammar` rather than `model`.
+/// A capture cannot pin trained weights, so `dumps.sh` uses `stub`.
 #[must_use]
-pub fn scrivener() -> Option<Box<dyn orbs_sim::Scrivener>> {
+pub(crate) fn scrivener() -> Option<Box<dyn orbs_sim::Scrivener>> {
     match std::env::var(SCRIVENER).unwrap_or_default().trim() {
         "" => copying(false),
         "model" => copying(true),
@@ -179,8 +155,7 @@ pub fn scrivener() -> Option<Box<dyn orbs_sim::Scrivener>> {
 /// The trained spell reader, if this build has one and this checkout has
 /// weights.
 ///
-/// [`trained`]'s sibling, and `asked` means the same thing: whether the player
-/// named it, which is the whole difference between the two silences.
+/// [`trained`]'s sibling; `asked` is whether the player named it.
 #[cfg(feature = "augury")]
 fn copying(asked: bool) -> Option<Box<dyn orbs_sim::Scrivener>> {
     match orbs_augury::Copying::cpu() {
@@ -220,32 +195,16 @@ fn copying(asked: bool) -> Option<Box<dyn orbs_sim::Scrivener>> {
 /// | `stub` | [`Fixture::worked`], a fixed table — what `dumps.sh` pins |
 /// | `grammar` | [`Grammar::builtin`](orbs_sim::Grammar::builtin), the authored templates in `content/phrasings.toml` |
 ///
-/// Unset is silent and `model` is not: weights are a gitignored build artefact,
-/// so a fresh clone has none and the default must degrade quietly — but asking
-/// for `model` by name and getting silence would look like the reader working.
-///
-/// `scripts/dumps.sh` passes `off` from its `run` helper so a capture stays
-/// reproducible from a clean checkout; a block that wants a reader names one
-/// after it, and the later value wins.
-///
-/// `grammar` is a real reader, not a demonstration: on phrasings it was never
-/// taught it reads 9.4% where the matcher alone reads 15.6%, and the two
-/// together reach 25.0% — they overlap on nothing. `--bench` prints all three.
-///
-/// `stub` stays after a trained reader exists, because `ORBS_DUMP`,
-/// `scripts/dumps.sh` and `scripts/play.sh` can hold no GPU and no weights.
-/// Without a reader they can reach, every divined surface is gated on one
-/// person typing one sentence into one window — CLAUDE.md's *"the blindness
-/// looks exactly like stability"*. It is also what a real reader is measured
-/// against.
-///
-/// An unrecognised value is `off` and says so: with the reader on by default, a
-/// typo now costs you the feature you were getting.
+/// Unset is silent, since a fresh clone has no weights; `model` by name is
+/// not. `scripts/dumps.sh` passes `off` and a block names a reader after it.
+/// `grammar` is a real reader, overlapping the matcher on nothing
+/// (`--bench`). `stub` stays so the instruments, which hold no weights, can
+/// reach every divined surface. An unrecognised value is `off`, and says so.
 ///
 /// [`Sim::submit`]: orbs_sim::Sim::submit
 /// [`Fixture::worked`]: orbs_sim::Fixture::worked
 #[must_use]
-pub fn augury() -> Option<Box<dyn orbs_sim::Augur>> {
+pub(crate) fn augury() -> Option<Box<dyn orbs_sim::Augur>> {
     match std::env::var(AUGURY).unwrap_or_default().trim() {
         // Answered here so a headless dump can reach it: `ORBS_DUMP` builds no
         // `App`, so a reader chosen in a Bevy resource is one `dumps.sh` could
@@ -283,10 +242,8 @@ fn trained(asked: bool) -> Option<Box<dyn orbs_sim::Augur>> {
 
 /// No reader at all, for a build with `burn` left out.
 ///
-/// Nothing in the workspace lands here now: `orbs-tui` did while the reader
-/// needed `wgpu`, but inference is `ndarray` and the GPU sits behind
-/// `orbs-augury`'s `train` feature. This arm is for a build that turns the
-/// feature off on purpose.
+/// For a build that turns the feature off on purpose; nothing in the
+/// workspace does.
 #[cfg(not(feature = "augury"))]
 fn trained(asked: bool) -> Option<Box<dyn orbs_sim::Augur>> {
     if asked {
@@ -295,11 +252,60 @@ fn trained(asked: bool) -> Option<Box<dyn orbs_sim::Augur>> {
     None
 }
 
+/// The two readers a session can consult — the prompt's and the spell's — and
+/// the rule for when it does.
+///
+/// Loaded once and kept even under `plain`, so switching drivers never puts a
+/// file read on a keystroke.
+#[derive(Default)]
+pub struct Readers {
+    reader: Option<Box<dyn orbs_sim::Augur>>,
+    scribe: Option<Box<dyn orbs_sim::Scrivener>>,
+}
+
+impl Readers {
+    /// Whatever `ORBS_AUGURY` and `ORBS_SCRIVENER` asked for.
+    #[must_use]
+    pub fn from_environment() -> Self {
+        Self::new(augury(), scrivener())
+    }
+
+    /// These two, chosen directly.
+    #[must_use]
+    pub fn new(
+        reader: Option<Box<dyn orbs_sim::Augur>>,
+        scribe: Option<Box<dyn orbs_sim::Scrivener>>,
+    ) -> Self {
+        Self { reader, scribe }
+    }
+
+    /// The prompt's reader under `driver`, or nothing for `plain`.
+    ///
+    /// Two switches answering different questions: the environment says what
+    /// this build offers (a developer's override), the driver whether the
+    /// player wants it consulted.
+    #[must_use]
+    pub fn reader(&self, driver: crate::Driver) -> Option<&dyn orbs_sim::Augur> {
+        match driver {
+            crate::Driver::Plain => None,
+            crate::Driver::Augury => self.reader.as_deref(),
+        }
+    }
+
+    /// The spell reader, on exactly the same terms.
+    #[must_use]
+    pub fn scrivener(&self, driver: crate::Driver) -> Option<&dyn orbs_sim::Scrivener> {
+        match driver {
+            crate::Driver::Plain => None,
+            crate::Driver::Augury => self.scribe.as_deref(),
+        }
+    }
+}
+
 /// The compiler that built this binary, captured by `build.rs`.
 ///
-/// `env!("CARGO_PKG_RUST_VERSION")` is empty here, the workspace floor is not
-/// the compiler in use, and `rust-toolchain.toml` pins a third number again.
-/// The POST card must not report an invented version.
+/// Not `CARGO_PKG_RUST_VERSION` or the toolchain pin, which can differ, so the
+/// POST card reports the real one.
 pub const RUSTC: &str = env!("ORBS_RUSTC");
 
 #[cfg(test)]

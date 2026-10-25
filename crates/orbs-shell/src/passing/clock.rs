@@ -123,13 +123,8 @@ impl Passing {
 
     /// The game arriving out of the boot card.
     ///
-    /// An arriving half only: `Stage::Close` has already taken the card away, so
-    /// this starts at the midpoint. The furniture pushes in from the edges it
-    /// lives against — the rail from the right, the gauges from the top.
-    ///
-    /// Called every live frame and does something once. Latching is cheaper than
-    /// making a system remember, and cannot fire twice on a hitch the way an
-    /// edge test could.
+    /// An arriving half, after `Stage::Close`; the furniture pushes in from its
+    /// edges. Latched, so it fires once however frames hitch.
     pub fn wake(&mut self) {
         if self.woken {
             return;
@@ -154,10 +149,7 @@ impl Passing {
 
     /// Let `delta` seconds pass, and learn whether motion is on.
     ///
-    /// `motion` is `None` where a caller has no switch to hand over, which leaves
-    /// whatever was last set rather than defaulting to off. A missing switch is
-    /// not a switch set to off, and `shell::motion` records what treating them
-    /// alike cost the fire.
+    /// `motion` `None` keeps the last setting: a missing switch is not off.
     pub fn advance(&mut self, delta: f32, motion: Option<bool>) {
         if let Some(on) = motion {
             // The cached read, not a fresh one: `ORBS_PASSAGE=0` is a scripted

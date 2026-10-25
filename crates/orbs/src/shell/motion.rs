@@ -1,9 +1,6 @@
 //! Driving the bench from Bevy's clocks, and asking the tube whether to move.
 //!
-//! [`Bench`] is pure `f32` arithmetic and knows nothing
-//! about an engine. This is the five lines that find the two clocks and the
-//! motion switch — the one place the shell reaches the GPU side at all, and
-//! therefore the one part of the bench a terminal build cannot use.
+//! [`Bench`] is engine-free; this finds its clocks and the motion switch.
 
 use bevy::prelude::*;
 
@@ -41,12 +38,8 @@ impl Default for Stillness {
 
 /// Whether anything may move: the `motion` row, and every tube on.
 ///
-/// The one combiner, so no two clocks can disagree about whether a player asked
-/// for motion. `None` is *nobody has said* — no tube yet and the row allowing
-/// it — which `Bench` and `Passing` read as leaving their own switch alone.
-///
-/// Any tube off is still: two disagreeing is not a situation the game creates,
-/// and the quieter reading is the only safe one to pick if it ever does.
+/// The one combiner, so no two clocks disagree. `None` is *nobody has said*.
+/// Any tube off is still, the safe reading.
 pub(crate) fn moving<'a>(
     tubes: impl IntoIterator<Item = &'a CrtSettings>,
     stillness: Option<&Stillness>,
@@ -69,14 +62,9 @@ pub(crate) fn moving_at_launch() -> bool {
 /// Advance the fire, the crossing and the rolling numbers, and stop them when
 /// the tube is off or the player asked for stillness.
 ///
-/// One system because it is one decision, and the clocks it drives are the
-/// things §14 makes disableable: none of `Bench`, `Passing` or `Climb` has any
-/// business knowing what a `CrtSettings` is on a frame it is not being driven.
-///
-/// The crossing's clock is advanced in `revealing::drive_passing`, not here.
-/// What this hands it is the switch — the one thing a terminal cannot supply —
-/// and both get it from the same read, so the fire and the crossing can never
-/// disagree about whether a player asked for motion.
+/// One decision over §14's disableable clocks, none of which knows a
+/// `CrtSettings`. The crossing's clock advances in `revealing::drive_passing`;
+/// this hands it the switch, from the same read.
 pub(crate) fn advance(
     time: Res<Time>,
     world_tick: Res<Time<Fixed>>,
@@ -87,14 +75,8 @@ pub(crate) fn advance(
     mut passing: ResMut<Passing>,
     mut climb: ResMut<Climb>,
 ) {
-    // No camera yet: `None`, which leaves whatever `ORBS_FIRE` said. A missing
-    // switch is not a switch set to off, and reading it as off would make the
-    // fire invisible for the frames before the camera spawns.
-    //
-    // A `Query`, not `Option<Single>`: `Single` yields `None` for two or more
-    // matches as readily as for none, so a second camera would land in the
-    // "no switch" branch and leave the motion running for a player who turned
-    // it off. `crt::settings` records that defect once already.
+    // No camera yet is `None`, not off. A `Query`, not `Option<Single>`,
+    // which reads two cameras as none.
     let motion = moving(tubes.iter(), stillness.as_deref());
 
     // The same `Time<Fixed>` the sim runs on (`sim::plugin` installs it at
@@ -152,13 +134,8 @@ mod tests {
 
     #[test]
     fn killing_the_tube_kills_the_fire() {
-        // §14's disableable requirement, wired to a switch a player can reach.
-        // F3 cycles the CRT to `OFF`; a player who does that has said they do
-        // not want motion, and a shimmering meter ignoring them is the defect
-        // `crt::settings` documents — a switch something else can flip back on.
-        //
-        // Asserted through the *system*, not through `set_enabled`: the risk was
-        // never that the flag fails to work, it is that nothing sets it.
+        // §14: the tube off stills the meters. Through the system, since the
+        // risk is that nothing sets the flag.
         let mut app = App::new();
         app.add_plugins(MinimalPlugins)
             .init_resource::<Bench>()
@@ -194,13 +171,8 @@ mod tests {
 
     #[test]
     fn killing_the_tube_stops_the_crossings() {
-        // §14 again, for the other clock this system drives — and the
-        // `DESIGN.md:9182` trap with it: reduce-motion must cut, never freeze a
-        // half-drawn screen. Three animations learned that independently.
-        //
-        // Through the *system*, for `killing_the_tube_kills_the_fire`'s reason:
-        // the risk is never that the flag fails to work, it is that nothing sets
-        // it.
+        // The other clock: reduce-motion cuts, never freezes a half-drawn
+        // screen. Through the system, as `killing_the_tube_kills_the_fire`.
         let mut app = App::new();
         app.add_plugins(MinimalPlugins)
             .init_resource::<Bench>()

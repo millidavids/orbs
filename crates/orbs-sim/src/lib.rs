@@ -18,6 +18,8 @@ mod rng;
 pub mod save;
 mod schedule;
 mod sim;
+#[cfg(test)]
+mod testing;
 mod tick;
 
 pub use augur::{Augur, Copyist, Fixture, Grammar, Scrivener, Verbatim};

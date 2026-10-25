@@ -99,8 +99,8 @@ that provides it rather than inventing a debug affordance nobody will maintain.
 A step is not done until all three have happened together:
 
 1. Its checkbox in `docs/ROADMAP.md` is ticked, with a **See it** line that works.
-2. The workspace version in `Cargo.toml` is bumped — `0.<phase>.<step>`, patch per step, minor per
-   phase. It is player-visible on the POST card.
+2. The workspace version in `Cargo.toml` is bumped — `0.<feature>.<iteration>`: the minor names
+   the feature in hand, the patch a box ticked within it. It is player-visible on the POST card.
 3. Anything decided along the way is in `DESIGN.md` §19.
 
 A correction folded into an existing step advances nothing.
@@ -132,7 +132,7 @@ One paragraph: the feature and what it changes for a player.
 ### Verification
 The gate:
     cargo fmt --all --check
-    cargo clippy --workspace --all-targets -- -D warnings
+    cargo clippy --workspace --all-targets --features orbs-augury/train -- -D warnings
     cargo test --workspace
     RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
     cargo build -p orbs

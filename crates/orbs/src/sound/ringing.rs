@@ -21,14 +21,8 @@ pub(crate) struct RingMessage(pub(crate) Voice);
 
 /// Environment variable that prints every cue instead of only playing it.
 ///
-/// You cannot diff a sound, and `dumps.sh` is blind to this subsystem by
-/// construction — so without a switch the only gate audio has is a person with
-/// speakers, which is §15's *"debug affordance nobody will maintain"* when
-/// invented late and *"the instrument before the thing it measures"* when not.
-///
-/// `bevy_log` caps the subscriber at `INFO`, so the `trace!` below is invisible
-/// in an ordinary run; this writes to stderr directly for the reason the dump
-/// does — it is the half of this that works with no sound card and no window.
+/// Audio's gate, since a sound cannot be diffed (§15). To stderr, past
+/// `bevy_log`'s `INFO` cap, so it works with no sound card.
 ///
 /// ```bash
 /// ORBS_SOUND=1 cargo run -p orbs 2>&1 | grep '^sound:'

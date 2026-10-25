@@ -1,13 +1,8 @@
 //! The shadow buffer, and writing only what changed.
 //!
-//! Only the differences are written: a full 120×45 repaint is 5,400 cells of
-//! escape sequences thirty times a second, which is nothing over a local pty
-//! and a visible smear over `ssh`. A shadow buffer holds what is on screen.
-//!
-//! The diff key is `(glyph, ink)`, not `Cell`, which derives `PartialEq` and
-//! would look right: a tint is a *region*, so a cell can be byte-identical
-//! while the wash over it changed. The flask's `green+bone` band growing is one
-//! `█` at a time, same glyph, new colour. Resolve first, then compare.
+//! Only differences are written, since a full repaint smears over `ssh`. The
+//! key is `(glyph, ink)`, not `Cell`: a cell can be unchanged while its wash
+//! changed, so resolve, then compare.
 
 use std::io::Write;
 
@@ -70,14 +65,8 @@ impl Screen {
     /// Forget everything, because the terminal is a different size or has been
     /// scribbled on.
     ///
-    /// Every resize calls this: the diff is addressed by `(col, row)`, so a
-    /// buffer sized for the old grid writes this frame's cells at last frame's
-    /// coordinates.
-    ///
-    /// The terminal is wiped too, because "every cell is blank" is a lie about
-    /// the screen: cells the new frame leaves blank compare equal and are
-    /// skipped while the old glyph is still showing. Queued into the same flush
-    /// as the redraw, so no frame in between is empty.
+    /// On every resize. The terminal is wiped too, or blank cells compare equal
+    /// over old glyphs; in the redraw's flush, so no frame is empty.
     pub(crate) fn resize(&mut self, grid: GridSize) {
         self.grid = grid;
         self.cells.clear();

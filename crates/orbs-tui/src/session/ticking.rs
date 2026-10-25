@@ -4,14 +4,6 @@ use super::Session;
 use super::state::scribing;
 use crate::carried::settings;
 
-/// How often the tower writes itself out, in world ticks.
-///
-/// The Bevy build's `sim::persist` picks the same number: §8 asks for *"every N
-/// ticks and on significant events"*, and a minute is the most a crash may cost
-/// in a game whose slowest single action is 94 ticks. One cadence for both, or
-/// a player moving between them loses four times as much in one.
-const AUTOSAVE_TICKS: u64 = 60;
-
 impl Session {
     /// Advance the world by one tick, and re-read what the painters cache.
     ///
@@ -27,7 +19,7 @@ impl Session {
         }
         // §8 permits a save at a tick boundary and nowhere else, and this is one
         // — `step` has returned, so `Pending` is drained and `Skip` is spent.
-        if self.sim.tick().get().is_multiple_of(AUTOSAVE_TICKS) {
+        if orbs_shell::autosave_due(self.sim.tick().get()) {
             self.keep();
         }
         // `quit` lands here, not at `submit`, and the delay is not worth
@@ -66,19 +58,14 @@ impl Session {
             &mut self.scroll,
             self.page,
             held,
-            scribing(self.held.driver, self.scribe.as_deref()),
+            scribing(&self.readers, self.held.driver),
         );
     }
 
     /// Act on what a surface asked for, and say whether the loop goes on.
     ///
-    /// Not inside [`tick`](Self::tick) any more: the clock does not run before
-    /// a tower is chosen, so neither does `tick`, and the menu could raise a
-    /// swap nothing ever looked at — the lengths page stayed on screen for ever.
-    /// Found by playing it, because a dump hosts no loop;
-    /// `routing::the_threshold_reaches_a_tower` looks at it now. Once per pass
-    /// rather than once per tick, so a swap or a `quit` lands on the frame the
-    /// key arrived.
+    /// Once per pass, not in [`tick`](Self::tick), which does not run before a
+    /// tower (`routing::the_threshold_reaches_a_tower`).
     pub(crate) fn answered(&mut self) -> bool {
         // Taken here rather than in the surface, for `Surfaces::driving`'s
         // reason: the reader belongs to the session. Unlike leaving and swapping
@@ -116,10 +103,8 @@ impl Session {
             .is_some_and(orbs_shell::Menu::showing_settings)
         {
             let fresh = settings(&self.carrying());
-            if let Some(menu) = self.surfaces.menuing.as_mut()
-                && menu.settings() != fresh.as_slice()
-            {
-                menu.show_settings(fresh);
+            if let Some(menu) = self.surfaces.menuing.as_mut() {
+                menu.follow(fresh);
             }
         }
 
@@ -133,10 +118,11 @@ impl Session {
                 "the threshold's menu was closed and had to be put back up; \
                  something reached `MenuOutcome::Close` at `Stance::Threshold`",
             );
-            let mut menu = orbs_shell::Menu::at(orbs_shell::Stance::Threshold);
-            menu.show_driver(self.held.driver);
-            menu.show_settings(settings(&self.carrying()));
-            self.surfaces.menuing = Some(menu);
+            self.surfaces.menuing = Some(orbs_shell::Menu::open_at(
+                orbs_shell::Stance::Threshold,
+                self.held.driver,
+                settings(&self.carrying()),
+            ));
         }
 
         // The menu's own `quit` leaves the loop the same way, and so does a
@@ -151,19 +137,7 @@ impl Session {
     /// attempted every sixty ticks, so a line per attempt is sixty an hour.
     pub(crate) fn keep(&mut self) {
         // This tower's own path, never `save_path()` — see `Session::kept`.
-        let Some(path) = self.kept.clone() else {
-            self.save_failed = false;
-            return;
-        };
-        let Err(error) = orbs_shell::write_save_to(&path, &self.sim.snapshot()) else {
-            self.save_failed = false;
-            return;
-        };
-        if !self.save_failed {
-            self.save_failed = true;
-            // The terminal is in raw mode and the screen is ours, so this cannot
-            // go to stdout. `tracing` is where the other build's goes too.
-            tracing::error!("the tower could not be written out: {error}");
+        if orbs_shell::keep(&self.sim, self.kept.as_deref(), &mut self.save_failed) {
             // And in voice: the terminal is in raw mode, so `tracing` reaches
             // nobody until the session is over.
             self.sim.say_save_failed();

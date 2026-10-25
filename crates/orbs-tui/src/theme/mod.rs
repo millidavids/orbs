@@ -1,19 +1,8 @@
 //! Where a `Style` finally becomes a colour, on this side of rule 2.
 //!
-//! `orbs-render` decides *what* appears and never emits a hue; everything here
-//! decides *how* it is drawn. The counterpart of the Bevy build's
-//! `render::palette`, with sixteen ANSI colours instead of a solved palette.
-//!
-//! Indexed ANSI 0–15, inheriting the user's terminal theme (§19), so there is no
-//! palette to tune and no contrast to verify — the numbers belong to whoever
-//! configured the terminal. That holds for the syntax hues too, which is why
-//! they are indices here and `Srgba` in the Bevy build.
-//!
-//! What it costs is §14's guarantee: sixteen colours we do not own cannot be
-//! held to the Bevy palette's solved contrast. So the glyph carries the identity
-//! and the colour is a hint — a meter is read off a `█`/`▓` boundary against
-//! `░`, the ward's six sigils are six shapes, and every `Role` reaches the
-//! linear stream beside its text.
+//! `render::palette`'s counterpart: ANSI 0–15, the user's own theme (§19), so
+//! nothing to tune and no contrast held. The glyph carries identity and the
+//! colour hints (§14).
 //!
 //! Four accepted degradations:
 //!

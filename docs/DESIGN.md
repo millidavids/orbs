@@ -1,7 +1,8 @@
 # O.R.B.S. — Operational Relic Bewitching System
 
 **Blackhearth Studios — Game Design Document**
-Status: draft 8 · 2026-08-16 · **in production — Phases 0, 0.5 and 1 closed**
+Status: draft 8 · 2026-08-16 · **in production — the game plays; see ROADMAP.md
+for what is closed and open**
 
 Drafts 2, 4, and 6 each incorporate an independent staff-level design review.
 Draft 6 settled the tick model as duration-based, removed the offline clamp, gave
@@ -143,8 +144,9 @@ state — vignette pulses as threat rises, flicker on strain, flash on breach.
 plus a 242-line shader** (of which ~530 lines are the separately-credited
 accessibility pipeline):
 
-- **Cross-version.** court_wizard pins Bevy 0.18.1; O.R.B.S. targets 0.19. The
-  WGSL ports; the render-graph Rust is Bevy's most volatile surface.
+- **Cross-version.** court_wizard pins Bevy 0.18.1; O.R.B.S. targeted 0.19 and is
+  on 0.20 now. The WGSL ports; the render-graph Rust is Bevy's most volatile
+  surface.
 - **Unproven over text.** Barrel distortion + RGB subpixel mask + scanlines over
   1px glyph stems is a moiré and legibility hazard. **Legibility is the product,
   not an aesthetic.**
@@ -839,15 +841,12 @@ Three mechanisms, all present:
    bounded, so automation multiplies a scarce thing rather than duplicating a free
    one — a script running the brew does not consume the attention you need
    elsewhere.
-3. **Script speed advantage.** A script-executed action *completes faster* than the
-   same action typed (invariant 3). The orb does it better than you.
+3. ~~**Script speed advantage.**~~ **Struck with invariant 3** (§19). A bound
+   spell runs at manual speed, and speed is a thing you buy — the Ley Line's
+   `haste` grant. What automation sells is running while you are elsewhere.
 
-   Denominated in **duration**, not mana. Mana does not bind in the tower (§11.5),
-   which is precisely where automation lives — so a mana discount would have had
-   teeth nowhere at all.
-
-Together these guarantee automation dominates for a present player — which pillar
-3 requires and which draft 3 failed to deliver.
+Together the first two make automation dominate — which pillar 3 requires and
+which draft 3 failed to deliver.
 
 ### Cast-time canonicalisation
 
@@ -920,15 +919,14 @@ flag folds into the same script-hygiene loop as drift and sabotage.
 spellbook in vim or VS Code, which makes the filesystem premise literally true and
 speaks directly to the Zachtronics half of the audience (§15).
 
-**Files store canonical commands with ID annotations** — `ward --upon
-north_gate#7f2a`. This keeps the file human-readable and editable while anchoring
-each reference to a stable entity.
+> **Superseded (§19).** A file holds the player's lines exactly as typed, and
+> names are read at cast, against the world the spell is about to run in. The ID
+> anchor was withdrawn with the rewriter. Sabotage is not laundered, because a
+> substituted name fails to resolve at cast and `Referent missing` fires.
 
-**On reload, only lines the player actually changed are re-resolved by name;
-untouched lines stay bound by ID.** Without that rule, opening your spellbook and
-saving it would silently rebind every reference to current world state — which
-would **launder sabotage**, quietly re-pointing a script at an entity the enemy
-substituted and ensuring `Referent missing` never fires.
+~~**Files store canonical commands with ID annotations** — `ward --upon
+north_gate#7f2a`.~~ ~~**On reload, only lines the player actually changed are
+re-resolved by name; untouched lines stay bound by ID.**~~
 
 **Reloads queue to the next tick boundary**, the same rule that governs saves, so a
 file cannot change under a script mid-execution.
@@ -1600,7 +1598,7 @@ shipped, and swapped).
 | | |
 |---|---|
 | **The Ley Line** | One line on total experience. A station is a **step** — `grants` concentration or quintessence, and **passing it is the grant** — or a **fork**: one node each of three lanes, *provision* (more resources), *war* (better combat), *craft* (a faster orb), and `take` chooses one. The fork opening costs nothing and taking a node closes it |
-| **Mastery** | Seven straight lines, one per room, **no choices anywhere**. A station is a *deed* — brew a clarity, walk the stacks five times, close a figure — and is reached when the one before it is reached and the deed's count is met. Reaching it *is* the grant |
+| **Mastery** | Straight lines, one per room — six since the grimoire left the rail at `0.11.3` — **no choices anywhere**. A station is a *deed* — brew a clarity, walk the stacks five times, close a figure — and is reached when the one before it is reached and the deed's count is met. Reaching it *is* the grant |
 
 **Both may open something** — a room, a recipe, a charm, or the wall — and that
 is how the tower grows: a fresh game is a laboratory and nothing else, brewing a
@@ -1885,12 +1883,13 @@ so slippage is measurable rather than discovered in Phase 14.
 | **ECS** | `bevy_ecs` — used standalone in `orbs-sim`, and via `bevy` in the frontend |
 | **Rendering** | Custom cell-grid text renderer + ported CRT post-process. **Not** `bevy_text`/`bevy_ui` |
 | **Serialisation** | `serde` + `toml` (readable saves, §7) |
-| **RNG** | `rand` 0.9, seeded, per-subsystem streams |
+| **RNG** | `rand` 0.10 with ChaCha8, seeded, per-subsystem streams |
 | **Errors** | `thiserror` |
 | **Logging** | `tracing` |
 | **Paths** | `dirs` |
 | **CLI (balance harness)** | `clap` |
-| **Steam** | `bevy-steamworks`, with `steamworks`/`steamworks-sys` exact-pinned |
+| **Steam** | `bevy-steamworks`, with `steamworks`/`steamworks-sys` exact-pinned — not yet a dependency; it arrives with *Ship* |
+| **The augury** | `burn` 0.21: inference on `ndarray`, training on `wgpu` behind a `train` feature |
 
 ### Workspace layout
 
@@ -1905,6 +1904,8 @@ orbs/
 │   │                   the headless dump. orbs-sim + orbs-render + bevy_ecs
 │   ├── orbs/           Bevy frontend: GPU cell renderer, CRT, audio, Steam
 │   ├── orbs-tui/       Terminal frontend: crossterm, raw mode, ANSI
+│   ├── orbs-augury/    The trained readers (§6, §19 *the augury*); training
+│   │                   and its GPU stack behind a `train` feature
 │   └── orbs-balance/   CLI harness driving orbs-sim (§11.5 sweeps)
 ├── assets/
 ├── docs/
@@ -1951,7 +1952,7 @@ keeps the terminal build a *possibility* rather than a rewrite.
 | Box drawing | CP437 codepage | Unicode U+2500 block |
 | Colour | Curated phosphor themes (§4) | **Indexed ANSI 0–15 — inherits the user's terminal theme** |
 | CRT effects | Full (§4) | None |
-| Fidelity tiers | Yes (§9) | N/A — the terminal is whatever size the user made it |
+| Grid | One fixed 120×45 picture, scaled to the window (§19, superseding §9's tiers) | The terminal is whatever size the user made it |
 | Audio | Full | **Luxury, unscheduled.** Not forced out — a TUI binary could link `rodio` independently of Bevy — but it must never hold up development |
 | Steam | Native | Via Steam launch option |
 
@@ -2263,7 +2264,7 @@ in the suite would have caught it, and none was ever written that could have.
 | **4. Defense** ✅ | The `sanctum/` domain: a course of wards, drawn and assembled. **Reflex-avoidance mechanism decided first** — it is the Tower of Hanoi, which has no clock in it, so the accessible-mode item moved to Phase 8 (§19) | ~5k | 3 mo | A pressure survived by choosing, not by reacting |
 | **5. Summoning** ✅ | The `menagerie/` domain (derived): allocation → a unit with a standing rule. *Built as a chant (`0.5`); rebuilt as a circle of logic gates (`0.15`, §19)* | ~4k | 2 mo | A summoned thing acts without being told to that tick |
 | **9. Enchanting** | The `forge/` domain (derived): a **lattice** — Lights Out on three columns — plus a quintessence cost → a decaying charm on a tool. **Shared-engine extraction**, pulled forward from 12a | ~4k | 2 mo | A buffed instrument is visibly faster and the buff runs out |
-| **10. Progression** | The two tracks re-strung: **the Ley Line** with a choice at each fork, **Mastery** as seven per-domain lines of deeds, and rooms, recipes and charms opening along both. A sealed fresh tower, the rail's percentage, the domain's road, the line authored to the soft ending | ~4k | 2 mo | A fresh tower is a laboratory, and the rest is earned |
+| **10. Progression** | The two tracks re-strung: **the Ley Line** with a choice at each fork, **Mastery** as per-domain lines of deeds (seven, then six at `0.11.3`), and rooms, recipes and charms opening along both. A sealed fresh tower, the rail's percentage, the domain's road, the line authored to the soft ending | ~4k | 2 mo | A fresh tower is a laboratory, and the rest is earned |
 | **11. One machine** | Reagents cross domains, **Focus-slot reservation**, pane addressing, the authored edges between domains | ~3k | 2 mo | The tower runs itself across rooms |
 | **8. Siege** ✅ | Autobattler on the seven dice, adversarial aberrations closing §8.1's four surfaces, escrow economy, one siege type, the cadence. **Pane addressing struck from this row** — it is Phase 11's, and listing it in both is what made it read as a siege prerequisite (§19). Trait composition, the backlog and difficulty tiers are deferred with reasons in ROADMAP | ~15k | 4 mo | Sieges are tense and scripts visibly matter |
 | **12a. Breadth** | Discovery/research, full drift, **offline progression + its unlock**. *(The five domains and the shared-engine extraction moved to the domain phases.)* | ~4k | 2 mo | Discovery closed |
@@ -2407,7 +2408,7 @@ re-audited by hand.
 | Seven domains + remote hosts spreads thin | High | Concrete-first with a budgeted Phase 12 extraction; cut line |
 | CRT over text is illegible | High | Phase 0 worst-case test at min resolution and max font scale |
 | Sabotage feels unfair rather than solvable | High | Every surface has a structural tell AND a one-command `verify`; log poisoning always leaves a trustworthy source |
-| Bevy 0.19 goes stale over two years | Medium | ~4-month cadence means shipping 5–6 versions behind; one deliberate upgrade window in Phase 12, budgeted |
+| The pinned Bevy goes stale over two years | Medium | ~4-month cadence means shipping 5–6 versions behind; one deliberate upgrade window in Phase 12, budgeted |
 | Second frontend divides effort | Low-Medium | Bevy is the product and never waits. `orbs-render` owns presentation, so the boundary is cheap and reusable. Ship-quality TUI is cut-line item 3 |
 | Solo continuity — illness, burnout, life | Medium | Cut line defined in advance; minimum shippable state named; per-phase scope buffers |
 | Market: text-only is hard to sell | Medium | CRT *motion* is the hook — trailer over capsule; demo as primary conversion tool |
@@ -2468,6 +2469,588 @@ they are re-pointed at the phases that now need them rather than quietly dropped
    price-shop — Exapunks is $19.99.
 
 ## 19. Decisions log
+
+### The tower swept (`0.20`)
+
+**Rule: one copy of each rule, and a comment says why in a line or two.** Twenty
+minors in, a pass over the whole tree. Scans first, then three audits (sim;
+shell and frontends; tests and comments), then a staff review of the plan.
+
+| Measured at `0.19.13` | |
+|---|---|
+| Shipped code | 49.7k lines. 1.8% of it in a repeated 8-line window, 3 dead `pub` items. The waste is two expressions of one rule, and frontend logic written twice |
+| Comments on it | 35.3k lines — 71 per 100 of code. A sample of 30 blocks: ~40% *why*, ~30% history, ~15–20% restating §19, ~10–15% restating the code |
+| Tests | 57k lines, no shared helpers: 21 copies of `run`, 31 of `said`, 12 of `ever_said` across `orbs-sim`'s 42 binaries |
+
+| Question | Decision |
+|---|---|
+| A minor of its own | Yes, and one patch per box, `0.20.0`–`0.20.22` |
+| Order | Corrections first, so every refactor after them can be held to *nothing changes*. Test helpers before the refactors, so an API change edits one helper rather than 42 files. Comments after code, docs last — each layer settles before the next edits the same lines |
+| The gate for a refactor | `scripts/dumps.sh` byte-identical bar the POST card's version. Plus the sweep for the sim, and for the shell and window the `screens` example, `scripts/play.sh` with tmux present, and the in-`App` tests — a dump builds no `App` |
+| Cut from the plan | A `Worded` trait: `word()` is a `const fn` the tower's `const` tables call, and a trait method cannot be. An `Authored` trait and a `content_file!` macro: `content::load` already is the shared loader. A `testing` feature: it would lint test helpers as shipped code. Collapsing the 42 test binaries: ~88 See-it lines name `--test <file>` |
+| Left alone | ROADMAP's shared-engine extraction (enabling work for a feature, not bloat); `WardSave` mirroring `Ward` (a format bump); SEEING-IT.md (read a section at a time, and its warnings have no instrument to protect them); this log's existing entries |
+
+#### What the audit found broken (`0.20.0`)
+
+| Found | Fix |
+|---|---|
+| The forge credited a lit fall before saying it | `tower::done` after `forge_set`, as the other paying sites already did. `every_domain_says_its_work_before_the_level_it_bought` drives all eight `tower::done` sites, the archive's solve and the demon-bound hold among them, one experience short of a level, so it fails when no level line appears — a test that passes with nothing to order would hold nothing |
+| `archive.log` held neither the opening nor the solve | `files::in_domain` matches `Source`, `Path` or `Origin`. `quietly` had learned to file the stacks; `say` and `finish_walk` had not, which `quietly`'s own doc admitted. `say` and `quietly` file it through one body, and `wander` through `say`; `finish_walk` and the gleaning line stamp the stacks beside the fields a solve carries. `stop`'s abandon line files its fixture, so the sanctum's reaches `sanctum.log` too |
+| `dev_spells.toml` errors said `spells.toml` | `Spells::builtin_from` names the file, and `a_broken_dev_file_is_named_as_itself` breaks the text `spells()` parses. Dev-only |
+| The window's content reload ran by hand | The launch and every swap load through `orbs_shell::load`, the swap inside `Raising::raise`, and warn only for a missing directory, since `read` already says why a file failed. The terminal has no `tracing` subscriber, so it prints what missed once it gives the terminal back. Dev-only |
+| *Dismissed:* the terminal saving at tick 0 | It cannot: `Session::tick` asks after `step`, which always advances. The two copies of `AUTOSAVE_TICKS` are a refactor, at `0.20.5` |
+
+#### Test helpers, shared (`0.20.1`)
+
+| Question | Decision |
+|---|---|
+| Two homes | `tests/common` for the integration binaries, `src/testing.rs` for the inline modules. A binary cannot see `cfg(test)` items, and a feature would lint the helpers as shipped code |
+| What moved | Only copies that did the same thing: `run`, `run_all`, `said` (eight more were it under the name `messages`), `ever_said`, `words`, `write`, `cast`, `complaints`, `meter`, `the_siege`, `attended`, `reloaded`, `replayed`. A variant keeps a name of its own: `naming_things`'s every-field reader is `said_anywhere`, and `recall`'s `drawn` keeps the record's kind |
+| The proof | Every test passes, the same count. With `said` reading the wrong field and `reloaded` handing back a fresh tower, 215 fail |
+| A played game | `Launch::spawn` asks for tmux and returns `Option<Game>`, so a scenario cannot start a game without asking. 216 four-line guards became one `let … else`. `Game::raise` is the menu-to-tower walk four files wrote for themselves |
+
+#### One plumbing for the puzzle domains (`0.20.2`)
+
+`settle.rs` was already the one exhaustive table over `puzzle::Open`. It now
+also holds `refresh(world, open)` and `stop`'s `abandon`, so a sixth puzzle is a
+compile error in one file rather than a search across five.
+
+| Merged | Into |
+|---|---|
+| Five domain `say`s, the same eleven lines apart from `Source` | `readings::filed`. The note at the top of `readings.rs` said the parameter list would outweigh the body; it is six parameters against eleven lines, five times. The archive keeps its own, which files `Source` only while the stacks are found |
+| Four `refresh`es by `Cwd`, and the `refresh_pylon`/`refresh_circle` aliases | `settle::refresh`. Inside a domain the caller already holds the fixture and calls `publish` |
+| `stop`'s per-puzzle arms and their `abandoned` | `settle::abandon`, still exhaustive. Ward and Binding stay a gap, not a decision |
+| `research::stacks`/`stacks_in`, a third copy of the fixture walk | `readings::fixture`/`beside` |
+| `mastery::advance` and `caught_up`, the same walk of the lines twice | `mastery::due` |
+| `renown::reached` and `rank`; `ley::next` | `renown::held`; `ley::toward().ahead` |
+| The bailey's renown sentence, `renown::say` with a `Source` | `renown::say(…, Some(RAMPART))` |
+| The scene's eight vocabulary loops | One loop over the eight `readings` in tie-break order |
+| `land`'s four special completions, each ending the same three lines | One `match` |
+| The lens's two quiet-line blocks; `answered`'s `detail`, always `None` | `overheard`; the parameter goes |
+
+| *Not merged* | Why |
+|---|---|
+| The four `fixture` wrappers | Each already is one call to `readings::fixture`; the wrapper names the rampart or the lattice |
+| The sixteen *"not here"* guards | A helper per domain costs the lines it saves |
+| A `complete()` for the paying sites | Eight sites, each with a record of its own. The one rule they share, the sentence before the level, is held by `every_domain_says_its_work_before_the_level_it_bought`, which drives every one |
+| The lattice's board into `tower::lattice` | A move, not a second copy |
+
+#### `build.rs` reads its names from the models (`0.20.3`)
+
+The menagerie's tables already named their glyphs through `Glyph::word`, so a
+rename could not leave the tower and `limn` disagreeing. Every other domain
+spelled its places out by hand. Five `const fn`s (`domain`, `place`, `fixture`,
+`reading`, `station`) now build every branch but the athanor, the dispensary and
+the arsenal,
+from `lattice::COLUMNS`, `charm::Kind`, `siege::Area`, `siege::POOL`, `Way`,
+`ward::SOCKETS`/`SIGILS` and `pylon::STATIONS`. `build.rs` is 1,557 lines → 1,245.
+
+| Also | |
+|---|---|
+| `operated`, `declared`, `fixture_of` | One `branches()` walk, which `operation_of` reads too |
+| `scry::verb_for` | Gone. It matched four instrument names by hand, so a rename in `recipes.toml` fell through to `wield` in silence; `tower::operation_of` asks the table |
+| `Way::named` | The reverse lookup three files wrote |
+| `Sense::ALL` | Built from `word()` |
+| `assert_round_trips` | One helper for seven per-enum *reads back* tests. The forge's two tests of one property are one |
+| Deleted | `ward::PRESS_TICKS`, whose doc said pricing a press again would be one line — nothing read it; `ward::COUNTS`; `Install::has_done` |
+| *Not done:* `Errand::ALL` from `word()`, `Humour::next` from `ALL` | `Errand::word` is an `Option`, so the table would need an unwrap in a `const`; `next` is an exhaustive `const` match that a test already holds to `ALL`'s order |
+
+#### Debug words and handshakes (`0.20.4`)
+
+| Was | Is |
+|---|---|
+| Eleven `cfg(debug_assertions)` blocks in `Sim::submit`, one parser each, five of them the same four lines | `DebugWord::read` and `execute::open_door`. `debug_spell` stays apart and stays `Sim`'s: it writes a spell through the reader, and records the write rather than the line |
+| Twelve `debug_*` bodies in `sim.rs`, eleven opening with the same echo, three ending with the same answer | `execute/debug/` — `word`, `door`, `progress`, `shortcut`, `spawn`. `sim.rs` is 2,515 lines → 2,009 |
+| `Unfurling`, `Wandering`, `Weaving`, `Menuing`: four copies of a take-once flag | `Handshake<M>`, with the four names as aliases, so no frontend changed. `Quitting` and `Opening` carry more than a flag and stay their own |
+| `say_save_failed`/`moved`/`unreadable`, one body three times | One `say_save` behind the three names |
+| Four `match reader { Some → submit_reading, None → submit }` | `Sim::submit_with`. The window's `Tower::submit` is the tests' now |
+| `Sim::here_with` | `tower::here_with`, which the debug words read too |
+
+#### One shell for both frontends (`0.20.5`)
+
+The window's 1,233 lines of in-`App` tests moved first, unchanged, to
+`shell/plugin/tests.rs`: they are what holds this box and box 8, and
+`plugin.rs` is registration only now.
+
+| Written twice or more | Once, in `orbs-shell` |
+|---|---|
+| Prefix matching for the editor, the weave, the menu's words, the settings rows, a row's values, a page, a chapter, a length — first-wins in six, exact-then-unique in two | `prefix::unique_prefix`, exact-then-unique. Every first-wins vocabulary already has a test that no two words share a first letter, so for any one letter the two rules agree; `""` and an ambiguous prefix are pinned |
+| `back`, defined twice and tested twice | `prefix::BACK` and `is_back` |
+| Opening the editor, and reading a buffer back after a save | `Editor::opened`, `Editor::read_back`. The window still skips the re-read on `wq`: the editor is about to close |
+| The weave read from the sim, five times | `Tapestry::read_from` |
+| Opening the menu, four times; refreshing an open settings page, twice | `Menu::open_at`, `Menu::follow`. The window still says §14's warning at open and the terminal on the first frame that draws it, for the boot card's reason |
+| `Raising` and `Swap`; each frontend's raise, refusal and content reload; the two menu-to-swap conversions | `orbs_shell::Raising` and `Raising::raise`, which the menu hands over as `MenuOutcome::Raise`. Each frontend still tears down its own |
+| Which readers answer under which driver | `orbs_shell::Readers` |
+| Nine settings rows | `settings::rows` |
+| `AUTOSAVE_TICKS` and the complain-once write | `autosave::{AUTOSAVE_TICKS, autosave_due, keep}` |
+| An env switch outranking a saved setting, for the tube and for sight | `settings::seeded`, over `environment::switched`, the blank-is-unset rule `save::named` and `sky::tonight` read too |
+| `dump.rs`'s own key tables for the maze, the menu, the weave and the manual | `keystrokes` into the shared `apply_to_*`. Each surface names the tokens it reads, so `ORBS_MENU='<down>'` still types the word and draws the menu's complaint |
+| Four hand copies of a character index | `orbs_render::char_index` |
+
+| *Kept apart* | Why |
+|---|---|
+| `Boot::is_live` and `Stage::world_runs` | They agree today and answer different questions |
+| `F3`'s cycle | It logs `peak threat`, which a test pins and the switch does not take |
+| The dump's editor script | Its Enter goes between lines, not after each |
+| `Scroll::unfurl` | Two lines each, and the window measures its page between them |
+| The three `ECHOES[1]` comparisons, byte-to-character counts, the threshold's safety net | One line each, or a different shape in each frontend |
+
+#### `orbs-shell` internals (`0.20.6`)
+
+| Was | Is |
+|---|---|
+| The menu's and the manual's painters, each with the same border, too-small check, caret and typed line, and a `LEAD` apiece | `framed::paint` and `framed::typed_line` |
+| The maze map's `Split`, the same two fields as `beside::Split` | `beside::Split` |
+| `serde` in `orbs-shell`'s manifest | Gone; nothing used it |
+
+| *Not done* | Why |
+|---|---|
+| A `CommandLine` for the four surfaces | What they share is a control-character filter and a `pop`. The rest is each surface's own — the editor and the weave type into different places by mode — and the complaints are three different types |
+| The prompt's six board blocks as one loop | Each board paints with arguments of its own — the sheet's presses, the rampart's climb — so a loop needs a trait the six would carry for this one caller |
+
+#### The window's internals (`0.20.7`)
+
+A dump builds no `App` and no render pass, so the fullscreen pass was held by
+`ORBS_CAPTURE` across both tube states and `peak`, in both sights. The old binary
+captured twice differs from itself by 1–2 levels wherever the tube is on — its
+`time` uniform moves the roll and the flicker — and the new one differs from it
+by the same; with the tube off the pictures are identical.
+
+| Was | Is |
+|---|---|
+| `crt/pass.rs` and `sight/pass.rs`, 178 and 206 lines the same but for names | `fullscreen.rs`, generic over a `Fullscreen` uniform: a label, its shader, and `wanted()`. Each module still embeds and loads its own `.wgsl`, because an embedded asset's path is its module's |
+| `crt/plugin.rs`, registration and 230 lines of the tube's states | Registration only; the states, `F3`'s cycle and `extract` in `crt/tube.rs` |
+| `Editing`, `Loom`, `Standing`, `Installing`: four `Option` resources with the same five methods, and three run conditions | `Modal<T>` and `is_open::<T>`. The menu keeps one method of its own, `open_menu`, for its health warning |
+| Six copies of the Ctrl/Super check and its stale-chord escape | `input::Chord` |
+| Four two-word setting resources, 22 lines each | `pair!` |
+| Five transcript-key systems | `read_keys` and a key table; PgUp and PgDn stay apart, since they page at the prompt too |
+| `setting::remember`, `SIGHT`/`FOCUS`/`LINEAR` re-named, `page_step`, `sight::seeded`, `sim::raise` | Their callers name `orbs_shell` directly |
+
+| *Not done* | Why |
+|---|---|
+| `reset_for_swap` beside `menuing::swap` | `shell_resources!` builds both it and the plugin's registration |
+| `moving()` once per frame | It is already one pure function. A cached copy is a resource every reader must be ordered after, and `F3` changes the tube mid-frame |
+| One enum-indexed array for `Picture` and `Kinds` | A strength per effect and a `bool` per cue: a generic would serve two short tables |
+| The manual's `Reading` and the maze's `Walk` as `Modal` | `Reading` carries `took_the_keys` across a frame, and `Walk` is a `bool` |
+
+#### One test per property (`0.20.8`)
+
+`cargo test --workspace` went from 2,547 to 2,539, and the played suite from 216
+to 210. Every test removed is listed beside the one that still holds what it
+held.
+
+| Removed | Still held by |
+|---|---|
+| `tests/naming.rs` `every_verb_is_reachable_from_plain_english` | The same test, word for word, in `parser/vocabulary.rs` |
+| `tower/spell/tests.rs` `no_line_a_spell_can_say_has_a_hole_in_it` | `tests/spells.rs`'s, which drives three failure lines where this drove one |
+| `persistence.rs`: future and earlier formats refused, on a fresh tower and again on a busy one | `a_save_from_another_format_is_refused_rather_than_misread`, one table on a busy tower that also checks the refusal says which |
+| `besieging.rs`: a useless item, an item not held, a die pledged twice | `what_the_wall_cannot_take_is_refused_and_says_why` |
+| `besieging.rs` `a_siege_replays_through_running_out_of_quintessence` | `a_siege_replays_from_its_submissions`, now a table of both scripts, each asserting an outcome of the path it is for. The potion script spawns six, what a warding asks before it draws, and is debug-only for `debug_spawn` |
+| `save/naming.rs`: errand, mark, register and role round trips, written a second and third time | `no_variant_can_arrive_without_a_word`, whose exhaustive matches also catch a new variant; `Way` keeps `a_way_reads_back` |
+| TUI `a_whole_clarity_brews_by_hand_and_earns_sixteen` | `session.rs` `a_morning_in_the_laboratory`, which types the same fifteen lines and goes on |
+| TUI: six one-line laboratory claims and two lens refusals, a game each | One game for the brewing file's three, one for the carrying file's three, one for the lens's two: none of them changes the world |
+
+| Shared instead of copied | Where |
+|---|---|
+| The forge's and the siege's "every declared reading is published" assertion | `common::assert_all_published`. The circle's asks `holds_reading` per word and stays |
+| Three sabotaged-spell tests' fight-and-audit preamble | `besieging.rs` `sabotaged()`, which now asserts the sabotage in all three |
+| `boundaries.rs`'s read-every-source-and-assert loop | A `forbid` in each crate's file. `sources()` stays a copy per crate, for the reason the shell's header gives |
+| `percent`, three times, and the scrivener's load-or-say-so, twice | `orbs_augury::cli` |
+| Five filmstrips in `screens.rs` | `filmstrip`. The output is the same but for trailing spaces, now trimmed on every strip |
+
+Two augury tests printed and asserted nothing. `it_can_refuse` now asserts the
+reader refuses *what should i do next*, and the scrivener's control-flow test
+asserts the two lines the shipped weights read; *wait ten ticks* is not one, so
+it is not claimed. `questions.rs` claimed to stop the parser going quadratic and
+times nothing; it says so now.
+
+#### The comment pass's instrument, and `tower/spell` and `tower/siege` (`0.20.9`)
+
+`scripts/only-comments.py` lexes every changed `.rs`, `.toml` and `.wgsl` file
+in both versions with comments dropped and compares the token streams. Tokens,
+because rustfmt rewraps a line whose trailing comment went. It keeps as code
+what a comment-shaped thing can hide: strings and raw strings, a `#` inside a
+TOML string, and every line inside a doc comment's fence, since a doctest
+compiles.
+
+Nothing on `dev` is committed between boxes, so `HEAD` is no base. `snapshot`
+writes the working tree as a tree object through a private index and prints
+its hash; `check <hash>` compares against it. The real index is never touched.
+
+Its negative control is `self-test`: fifteen cases, each a comment edit that
+must pass or a one-token code edit that must fail, over raw strings, nested
+block comments, lifetimes against char literals, a doctest and TOML strings.
+Before it gated anything it was also run against every one of the tree's 569
+source files: a comment inserted before each item passed, and one identifier
+changed in each failed, with nothing misjudged.
+
+| Box 10 | Comment lines | Lines |
+|---|---|---|
+| Before | 3,044 | 9,753 |
+| After | 1,760 | 8,469 |
+
+What went is the class the audit sampled: history narration, restated code, and
+the long form of a reason §19 already holds. What stayed is every naming
+collision note in `siege/readings.rs`, shortened to the score and the word it
+lost to — those are the ones a rename needs.
+
+#### `tower/`, first half (`0.20.10`)
+
+`assault` through `ley`, with `charm/` and `circle/`: 2,809 comment lines to
+1,850, of 9,393 lines to 8,434.
+
+`build.rs` said *a new domain goes on the end* four times, once per domain added
+after the arsenal; it says it once now, on `BRANCHES`. Three comments were wrong
+rather than long, and are corrected: `brief.rs` counted seven rail slots where
+`DOMAINS` has six, and said four rooms stay unbuilt *until Phase 11a*;
+`lattice.rs` named a `debug_lattice` that does not exist.
+
+#### `tower/`, second half (`0.20.11`)
+
+`mastery` through `work/`, with `supply/`: 3,439 comment lines to 2,624, of
+10,888 lines to 10,073. `scene.rs` and `panel.rs` carried most of it — each
+exemption from §7's naming rule was argued in full at its site, and is now said
+once on the item it is about (`Fixture`, `Keep`, `Topics`) with the site pointing
+there. `ward.rs` lost a block describing three functions that no longer exist.
+`pylon.rs`'s and `supply/`'s `# Errors` headings stay: clippy's
+`missing_errors_doc` requires them on a public `Result`.
+
+#### `parser/` (`0.20.12`)
+
+3,342 comment lines to 1,898, of 9,163 lines to 7,719. `verb.rs` and
+`vocabulary.rs` were most of it: every synonym's refused candidates were argued
+in prose, and are now the word and what it collided with, since a rename has to
+re-run those sweeps and a note saying which words already lost is what saves
+the next one.
+
+Three doc comments had been spliced onto the wrong item when a function was
+added between an item and its doc. `scene.rs`'s `abbreviates` carried
+`score_against`'s doc above its own, `normalise.rs`'s `FILLER` carried an
+orphan second paragraph, and `expect.rs`'s `far_side_begins` carried
+`question`'s opening. Each doc now sits on its own item.
+
+#### `execute/` (`0.20.13`)
+
+3,345 comment lines to 2,253, of 11,721 lines to 10,629. Most of what went was
+the *Takes the node, never `Cwd`* argument written out in full at each of six
+publishers, now said once as *the lens's rule*; and `recall.rs`'s defect
+histories, each of which a test name already carries.
+
+`execute/mod.rs`'s module table listed six modules of twenty-seven, two of them
+under verbs that no longer exist, and `debug_spell.rs` still called a split
+module `debug.rs`. Both say what is true now. A comment on `land_sweep`'s
+re-export explained `scroll::spending`, two lines below; it moved there.
+
+Removing a comment between `use` items let rustfmt merge two import groups and
+re-sort them, which `only-comments.py` refused. A blank line holds the groups
+apart now, and it is no token change.
+
+`research.rs`'s exit pull had a measurement in its doc and no home in §19. It
+is here. Over the 16×11 grid, with a cell's weight `(reach - away + 1)^PULL`:
+
+| `PULL` | within 4 of the far corner | within 8 | median |
+|---|---|---|---|
+| 2 | 22% | 52% | 8 |
+| **3** | **29%** | **63%** | **7** |
+| 4 | 37% | 72% | 6 |
+| 6 | 51% | 85% | 4 |
+
+At two the exit lands mid-maze as often as far from it, so the errand is always
+the same length in other clothes. At six it is the old fixed corner with extra
+steps. Three keeps the walk long and the destination unpredictable, and every
+cell can still win.
+`the_way_out_leans_toward_the_opposing_corner_without_being_pinned_to_it` holds
+both halves.
+
+#### `save/`, `content/` and the top of `orbs-sim` (`0.20.14`)
+
+4,202 comment lines to 3,251, of 13,121 lines to 12,170. Less came out than
+elsewhere, and on purpose. A save field's doc is usually the only place that
+says why its absence reads the way it does, and those were shortened rather
+than cut. `save::FORMAT`'s bump list and `migrate`'s table stay whole; they are
+the reference a format bump is written against.
+
+Stale claims went with the prose around them: `Sim::set_register` was still
+*driven by threat in Phase 8*, `Sim::location` still said `decoct` works in the
+laboratory, and `Recipe::secret` and `Recipes::outputs` each said *see the
+other* for the same reason. That reason now lives on `outputs`.
+
+**Test hygiene, folded in.** A check for hanging tests found no live processes.
+It did find 48 dead tmux sockets in `/tmp/tmux-1000`, plus two causes of them:
+
+- `probes.rs` named each probe's socket after its pid, so every `play.sh` run
+  left two more. They have fixed names now, `orbs-hangup` and `orbs-lifetime`,
+  as `orbs-play` already had.
+- `play.sh` set an `EXIT` trap and then `exec`ed cargo. `exec` replaces the
+  shell, so the trap never fired, and the `orbs-play` server lived until the next
+  run killed it. Cargo runs as a child now, and `set -e` passes its status
+  through.
+
+`scripts/play.sh probes::` passes both probes, and afterwards no tmux server and
+no `orbs-tui` process is left.
+
+#### `orbs-shell`, first half (`0.20.15`)
+
+The files from `bench` to `menu/`, split by name: 3,998 comment lines to 3,416,
+of 14,531 lines to 13,949. `dump.rs` carried most of it. Each switch's doc
+explained at length why a dump cannot see what it shows, and now says it in a
+line. The `text` example blocks are untouched, since `only-comments.py` treats
+every fenced line as code.
+
+Two docs were wrong rather than long. `glance.rs` said *beside the other N* in
+five fields, a count that grew each time a domain landed; it now says that only
+one room's puzzle is ever present. `focus.rs` still described the menagerie's
+retired `Chant` surface at length; it is a one-line pointer to §19.
+
+#### `orbs-shell`, second half (`0.20.16`)
+
+`panel` to `transition`, with `passing/`, `reveal/` and `settings/`: 3,814
+comment lines to 3,183, of 12,365 lines to 11,734. Most of the cut was
+`prompt.rs`, `save.rs` and `panel.rs` narrating each defect beside its fix. The
+fix stays, and the narration goes where §19 or a test name already holds it.
+
+Two comments described code that no longer exists. `prompt.rs` spent ten lines
+on the retired telemetry pane, which is now a one-line pointer. `prompt.rs`
+also still said `decoct` resolves in the laboratory, and that clause went.
+
+#### `orbs-render` (`0.20.17`)
+
+5,130 comment lines to 4,052, of 15,044 lines to 13,966. The pictures (`fire`,
+`grind`, `bath`, `liquid`, `mix`, `pulse`, `passage`) carried their
+photosensitivity and greyscale arguments in full in every module header. Each
+header now states its property in a line and points at §19, where the
+argument lives. `text` diagrams and the two doctests are untouched.
+
+One doc was wrong. `RecordKind::Section` still described a heading as
+`[reagent]`, a TOML-style bracket that the view replaced with a rule. It now
+says the view rules the heading off.
+
+#### `orbs` (`0.20.18`)
+
+4,286 comment lines to 3,254, of 14,551 lines to 13,519. Most of it was in two
+places:
+
+- the ordering notes in `shell/plugin.rs`, each of which retold the defect
+  that put its edge there;
+- the colour-solving narratives in `palette.rs`, `ember.rs` and `tint.rs`.
+
+What every block keeps is what the code depends on: which system orders after
+which writer, and why; the contrast margin a value is solved against; the
+`run_if` every reader carries. The defect histories stay in the entries above
+that recorded them.
+
+#### `orbs-tui`, `orbs-augury`, `orbs-balance` (`0.20.19`)
+
+3,885 comment lines to 3,012:
+
+| Crate | Before | After |
+|---|---|---|
+| `orbs-tui` | 1,447 | 1,191 |
+| `orbs-augury` | 1,628 | 1,281 |
+| `orbs-balance` | 810 | 540 |
+
+`examples/measure.rs` cited *"§9999's reason"* for the scrivener being stricter.
+No such section exists, and the pointer now names this log.
+
+Several margins carried a measurement as their why, and those measurements had
+no other home. They are recorded here, so the comments can point:
+
+- **The menagerie's band.** Seeds 0–7, 11 and 42 read 0.0319 to 0.0550,
+  because a two-hour run holds about forty beasts and one beast can take 1 call
+  or 174. At a fifteen-percent band, two seeds of ten flagged on luck alone, so
+  `taming` has its own band of thirty-five percent.
+- **The bailey's pin.** The first spread, 0.043 to 0.085, was `fight_one`
+  keying its round on a rendered line's byte length. Keyed on `turns` it was
+  0.1225 to 0.1313. Pledging dice took it to 0.114, and pledging that costs
+  quintessence took it to 0.123. Over `agrees::SEEDS` the four worlds read
+  0.1225, 0.1342, 0.1225 and 0.1138, for a mean of 0.1232.
+- **`bound`.** Its absolute rate moves with a world's luck at sabotage, as
+  `grind`'s does: 0.0814 on seed 3 against 0.0910 on seed 0. The quotient of
+  the two is 0.910 on every seed, so the quotient is what is pinned.
+- **The spell register's tags.** When tags were numbered by position, `let`
+  read 25% of its holdout and `pull` read 71%. Thinning the refusals to a
+  shape's share left their holdout at 40%, where the prompt register reads 80%
+  with all 2,756.
+- **The vocabulary's opening row.** Folding `<cls>` to `cls` let the reader
+  score 98.6% in training and refuse every line a player typed.
+
+#### The tests' comments (`0.20.20`)
+
+5,981 comment lines to 5,053, of 31,121 lines to 30,193:
+
+| Where | Before | After |
+|---|---|---|
+| `orbs-sim/tests` | 3,942 | 3,267 |
+| `orbs-tui/tests` | 1,085 | 988 |
+| `orbs-render` tests and examples | 687 | 576 |
+| `orbs-balance/tests`, `orbs-sim/examples`, `orbs-shell/tests` | 267 | 222 |
+
+The cut is smaller than in shipped code, and on purpose. A test's comment is
+usually the only place that says what property the test holds, and why a
+weaker assertion would pass vacuously. Those stay. What went was the story of
+how each vacuous version was found.
+
+Three things were wrong rather than long:
+
+- In `examples/screens.rs`, the pylon screen's doc sat on `rampart`, stacked
+  above the siege's own doc, so `pylon` had none. It is back on `pylon`.
+- In `tests/solver.rs`, `/// The archive's lectern.` sat on `fragment_kind`
+  instead of `lectern_of`. It is back on `lectern_of`.
+- `tests/ward.rs` carried one nine-line doc three times. It still called the
+  ward a 360-code puzzle, which it has not been since the rework to 1,296
+  codes. Each copy is now two lines, with the stale count gone.
+  `tests/secrets.rs` had the same kind of copy twice.
+
+#### Manifests, content TOML and shaders (`0.20.21`)
+
+3,153 comment lines to 1,663, of 11,168 lines to 9,673. `only-comments.py`
+lexes TOML and WGSL as well as Rust, so the same gate holds. A `#` inside a
+spell's string is content, not a comment.
+
+| Where | Before | After |
+|---|---|---|
+| The eight manifests | 244 | 79 |
+| `prose.toml` | 1,021 | 689 |
+| `dev_spells.toml` | 593 | 187 |
+| The rest of `content/` | 1,094 | 603 |
+| `crt.wgsl`, `sight.wgsl` | 201 | 105 |
+
+A content file's comments are a writer's notes, and they had the same failure
+as code comments: each recorded the defect that shaped a line, at length,
+beside the line. The rules stay. The defects are in this log already.
+
+Eleven comments said something that has stopped being true:
+
+- **`Cargo.toml`** still described the version as `0.<phase>.<step>`, two
+  renumbers after §19 made it `0.<feature>.<iteration>`.
+- **`progression.toml`'s mastery header** said "seven lines, one per room". The
+  grimoire has none, so there are six. `prose.toml`'s mastery sentences and a
+  test comment in `content/length.rs` repeated the claim.
+- **`fuel.toml`** reasoned about a charcoal burning "at 300". It burns 600.
+- **`recipes.toml`** said the lectern draws from "one entry today"; there are
+  three outputs. It also said the athanor's fuel "arrives with step 4", which
+  arrived phases ago in `fuel.toml`.
+- **`siege.toml`** said every key is "a potion or a scroll". Demons are keys
+  too.
+- **`dev_spells.toml`'s `threading`** said a true minimum "cannot yet" be
+  written. `roaming`, thirty lines below it, writes one with `for each` and
+  `let`.
+- **`prose.toml`'s essences header** said every potion's use "is not built",
+  because sieges were Phase 8. Every `using_` line beneath it describes a
+  working supply.
+- **`prose.toml`'s editor words** counted two, then three; the row has four.
+- **`crt.wgsl`** spoke of fidelity tiers twice, which went when the grid was
+  fixed. It also called the scanline period "an integer fraction" of a cell,
+  which its own header said it no longer is.
+
+Three comments sat on the wrong item:
+
+- the `assembling` spell's above `breaking`;
+- `prose.toml`'s note on what a station opened, above `room_sealed` rather
+  than the `opened_*` keys;
+- an orphaned note about `unfurl`'s manual page, whose key is gone.
+
+#### What the pass came to (`0.20.22`)
+
+The whole tree, `0.19.13` against `0.20.22`, counted over every `.rs`, `.toml`
+and `.wgsl` file:
+
+| | Comment lines | All lines |
+|---|---|---|
+| Shipped Rust, inline test modules included | 41,592 → 30,675 | 133,622 → 121,918 |
+| Integration tests and examples | 6,319 → 5,290 | 33,812 → 31,351 |
+| Manifests, content, shaders | 3,189 → 1,699 | 11,217 → 9,721 |
+| **Total** | **51,100 → 37,664** | **178,651 → 162,990** |
+
+Lines that are neither comment nor blank went 114,136 → 111,972, about 2,200
+fewer: the shared test helpers of `0.20.1`, and the boxes `0.20.2` to `0.20.7`
+merging second copies of one rule. The suite went from 2,547 tests to 2,539
+(`0.20.8`), and each removed test is paired above with the test that still holds
+its property. The two behaviour corrections of `0.20.0` are the only things a
+player can see.
+
+The comment pass found more than length. Across its thirteen boxes, more than
+two dozen comments sat on the wrong item or described code that had since changed,
+and each is listed under its box above. That is the argument for the pass, more
+than the line count: a comment narrating its own history goes stale faster
+than one stating a rule.
+
+**The docs** (`0.20.22`). ROADMAP went 7,548 → 3,893 lines and CLAUDE.md 473 →
+417. Every box line, See-it line and heading in ROADMAP survives, checked per
+section by script, and every `#anchor` resolves; what went is narrative this log
+already holds. Stale claims corrected:
+
+- §8 still sold a script speed advantage, struck with invariant 3, and described
+  files storing canonical commands with ID anchors, withdrawn with the rewriter.
+- §11.5 and §15 said seven mastery lines; it is six since `0.11.3`.
+- §13 listed `rand` 0.9 and fidelity tiers, had no `orbs-augury`, and named
+  `bevy-steamworks` as a dependency it is not yet. §4 and §16 still said 0.19.
+- CLAUDE.md said DESIGN.md is ~2,000 lines; it is ~19,000.
+- The game-plan skill's gate lacked `--features orbs-augury/train`, and it and
+  SETUP.md still called the version `0.<phase>.<step>`.
+- ROADMAP's augury preamble still said *"no LLM-generated training data"*, which
+  `0.13.5` had narrowed to the artefact.
+
+SEEING-IT gained *Proving nothing changed*: the refactor gate, and what
+`scripts/only-comments.py` cannot see.
+
+**Things that look duplicated and are not.** The audits flagged each of these,
+reading every site found a reason to keep both, and the next pass should not
+redo the work:
+
+- **`render::palette`'s solved themes against `orbs-tui`'s ANSI indices.** One
+  is a solved colour table and the other the user's terminal theme (§13). They
+  share names, not values.
+- **`CrtUniform` beside `CrtSettings`.** The uniform is the GPU mirror, its
+  field order fixed by `crt.wgsl`.
+- **`HeldOver` in both frontends.** winit reports a key's release and a
+  terminal does not, so one drops keys until they are released and the other
+  works by timing.
+- **`Tower`'s narrow forwards and the `Sim` facade's peek and take methods.**
+  The facade is the boundary on purpose, and each forward is one line.
+- **`Sim::submit` and `Sim::submit_divined`.** The second records the reader's
+  echo as the replayed command (`Submission::Divined`), the determinism
+  boundary; the first records what was typed.
+- **`siege::Strengths` beside the pledged dice.** What the dice rolled to is a
+  different fact from what was pledged.
+- **`shell::guide` and `parser::expect`.** The guide lists what may be written
+  in a room; `expect` says what a half-typed line wants next.
+- **`Settable` and the two `Readings`.** `Settable` is the system parameter
+  that reads the settings rows; `record::Readings` is a column plan; the
+  settings `Readings` gathers its sources. They share a word only.
+- **The menu's two health-warning timings.** One is said once a machine,
+  stored in the settings file; the other is the play page's complaint row,
+  which clears every line.
+- **`Boot::is_live` and `Stage::world_runs`.** They agree today and answer
+  different questions: whether the game has arrived, and whether the clock may
+  run. `Menuing` and `Quitting` stay apart for the same reason.
+- **Ward's and Binding's missing `abandon`.** `stop`'s per-`Open` `abandon` is
+  optional, and these two are a gap rather than a decision. That is a feature
+  to build, not a copy to merge.
+
+**A review before the commit** found fifteen things this pass got wrong, none
+of them serious, and the rows above now say what is true. Each gate passed
+while it was wrong, which is the lesson worth keeping:
+
+- **Two "no change" claims were changes.** The window's first tower read
+  `ORBS_CONTENT` by its own rule and a swapped-in tower by `load`'s, so
+  `ORBS_CONTENT=` (set, empty) loaded `./prose.toml` into one and not the
+  other. The shared dump lexer made `<down>` a key on surfaces that had typed
+  it. `dumps.sh` uses neither, so the byte-identical gate could not see them.
+- **Three tests could not fail.** The potion replay quaffed two wardings where
+  six open the draw, and its guard matched the typed line. The dev-spells test
+  called the parser, not `spells()`. The say-then-pay table missed two of eight
+  paying sites.
+- **Two merges stopped at the type.** Only `Raising` reached `orbs-shell`;
+  each frontend kept its raise and its content reload, and the terminal's
+  content warning went to a `tracing` with no subscriber. `archive.log` was
+  fixed one emitter at a time and left `wander`, `stop` and the gleaning line
+  out.
+- **The rest.** Release test builds warned. Two comments named tests by the
+  wrong name, two named tests that never existed, and one doc sat on the wrong
+  test. `Menu::settings` was dead. `queue::say`, `settings::seeded` and
+  `augury`/`scrivener`'s public re-exports were copies the merges left behind,
+  and `tests/common/mod.rs` held logic against CLAUDE.md's rule.
 
 ### The terminal kept true (`0.19`)
 

@@ -1,11 +1,8 @@
 //! What currently exists, and can therefore be named.
 //!
-//! DESIGN.md §6, step 2: fuzzy match against known vocabulary and entities
-//! that currently exist. That second half separates this from a command parser
-//! — `decoct clarity` resolves only while clarity is a researched essence.
-//!
-//! Passed in rather than read from the ECS world, so the parser stays testable
-//! against a handful of nouns rather than a fully built tower.
+//! §6, step 2: fuzzy match against vocabulary *and* entities that currently
+//! exist. Passed in rather than read from the world, so the parser tests
+//! against a handful of nouns.
 
 use bevy_ecs::prelude::*;
 
@@ -30,21 +27,16 @@ pub struct NounMatch {
     pub kind: NounKind,
     /// Similarity, on [`fuzzy::EXACT`]'s scale.
     pub score: u32,
-    /// How many of the offered words the match actually used.
-    ///
-    /// A phrase is tried whole and word by word, so two matches can score the
-    /// same while one explains everything and the other one word.
-    /// [`score`](Self::score) cannot tell a command from a sentence with a
-    /// command at the front; the augury's router must. See
-    /// `Analysis::reads_outright`.
+    /// How many of the offered words the match actually used — what tells a
+    /// command from a sentence with one at the front, which
+    /// `Analysis::reads_outright` must.
     pub words: usize,
 }
 
 /// The nameable surface of the world at the moment of a parse.
 ///
-/// A `Resource` because it is world state: what the player can refer to is what
-/// the tower contains, not a fixed command table. Never a `Component` — a type
-/// cannot derive both as of Bevy 0.19.
+/// A `Resource`, because what the player can refer to is what the tower
+/// contains.
 #[derive(Resource, Debug, Default, Clone)]
 pub struct Scene {
     nouns: Vec<Noun>,
@@ -69,11 +61,8 @@ impl Scene {
         self
     }
 
-    /// Offer a per-instrument verb, because its instrument is here.
-    ///
-    /// §7's rule applied to verbs: `mix` means the flask and rod, and there is
-    /// no flask and rod in the archive. Keeps the vocabulary bounded as §10's
-    /// domains land — the parser never considers a warding verb while you brew.
+    /// Offer a per-instrument verb, because its instrument is here — §7's rule
+    /// for verbs, which keeps the vocabulary bounded per room.
     #[must_use]
     pub fn offering(mut self, verb: Verb) -> Self {
         self.operations.push(verb);
@@ -83,15 +72,9 @@ impl Scene {
     /// Teach the scene every substance the laboratory has a word for, whether
     /// or not any is here.
     ///
-    /// Fuzzy matching exists for typos, and a typo is not a word. `ground-sage`
-    /// scores 819 against `ground-salt` and a 600 threshold, so with no sage on
-    /// the shelf `digest ground-sage` silently moved the salt — which §6 ranks
-    /// below a refusal.
-    ///
-    /// So a known substance only ever matches exactly. Typos still fuzz and
-    /// abbreviations still prefix; what stops is one real name read as another.
-    ///
-    /// The live-parser half of a rule `spell::compile` already applied (§19).
+    /// A known word only ever matches exactly, or `digest ground-sage` moves
+    /// the salt. Typos still fuzz and abbreviations still prefix; what stops is
+    /// one real name read as another (§19).
     #[must_use]
     pub fn knowing(mut self, names: impl IntoIterator<Item = String>) -> Self {
         self.known.extend(names);
@@ -107,13 +90,8 @@ impl Scene {
 
     /// Whether a verb's fixture stands here.
     ///
-    /// Always true for a verb with no fixture: `attend`, `survey` and `peruse`
-    /// are how you reach a domain, so gating them would lock the key inside the
-    /// door.
-    ///
-    /// Asks [`Verb::anchor`] rather than `Verb::is_operation`, which answered
-    /// the production-slot question and let `help` in the laboratory list
-    /// `research`, `follow` and `wander` (§19).
+    /// By [`Verb::anchor`]. Always true for a verb with no fixture, or the key
+    /// to a domain would be locked inside it.
     #[must_use]
     pub fn offers(&self, verb: Verb) -> bool {
         verb.anchor()
@@ -140,20 +118,11 @@ impl Scene {
         self.candidates(kind, words).into_iter().next()
     }
 
-    /// Everything `words` could be naming, best first.
+    /// Everything `words` could be naming, best first, one entry per noun.
     ///
-    /// The runner-up is worth keeping because
-    /// [`best_match`](Self::best_match) answers the prompt's question — *what
-    /// did they most likely mean* — with the player standing there to see the
-    /// echo. A spell resolves its names with nobody watching, so it needs *was
-    /// there anything else nearly as close?* With both products on the shelf,
-    /// `ground` is an equally good prefix of `ground-sage` and `ground-salt`,
-    /// and taking the first-registered would be a coin flip deciding what a
-    /// laboratory does. See `spell::compile`.
-    ///
-    /// One entry per noun, at its best-scoring reading — the joined phrase and
-    /// each individual word are all tried, so `castle gates` reaches `gates`
-    /// when nothing is called "castle gates".
+    /// A spell resolves with nobody watching, so `spell::compile` asks whether
+    /// a runner-up was as close — `ground` prefixes both `ground-sage` and
+    /// `ground-salt`.
     #[must_use]
     pub fn candidates(&self, kind: NounKind, words: &[&str]) -> Vec<NounMatch> {
         if words.is_empty() {
@@ -166,10 +135,8 @@ impl Scene {
             phrases.extend_from_slice(words);
         }
 
-        // Asked once per phrase, not once per phrase per noun: `is_known` scans
-        // the known set and cannot depend on which noun is being scored, so
-        // inside the loop it made one resolution O(nouns x known) — a few
-        // hundred by a few hundred, every command.
+        // Once per phrase, outside the noun loop: inside, it was
+        // O(nouns × known) every command.
         let known: Vec<bool> = phrases.iter().map(|phrase| self.is_known(phrase)).collect();
 
         let mut found: Vec<NounMatch> = Vec::new();
@@ -177,22 +144,13 @@ impl Scene {
             if !kind.accepts(noun.kind) {
                 continue;
             }
-            // First-wins on a tie, which keeps `words` honest: the joined phrase
-            // is `phrases[0]`, so a match explaining everything it was given
-            // outranks one explaining a word of it at the same score. `max()`
-            // would have taken the last.
+            // First wins a tie, so the joined phrase outranks one word of it.
             let mut best: Option<(u32, usize)> = None;
             for (index, (phrase, known)) in phrases.iter().zip(&known).enumerate() {
                 let score = score_against(noun, phrase);
-                // A word only ever matches itself. See `knowing`: fuzzing a
-                // real substance into a *different* real substance is how
-                // `digest ground-sage` came to digest ground-salt.
-                //
-                // Unless it is abbreviating, which is not fuzzing. The rule was
-                // written over substances, where no known word is a strict
-                // prefix of another, so this never came up — until the known set
-                // held every verb word: `check` is `verify`'s, and a spell
-                // called `check.spell` became unreachable by `invoke check`.
+                // A known word only ever matches itself (see `knowing`) —
+                // unless it is abbreviating, or `invoke check` misses
+                // `check.spell`.
                 let score = if score < fuzzy::EXACT && *known && !abbreviates(noun, phrase) {
                     0
                 } else {
@@ -221,33 +179,15 @@ impl Scene {
     }
 }
 
-/// How well one phrase names one noun.
-///
-/// A [`NounKind::Place`] also answers to its last path segment, so `attend
-/// laboratory` reaches `/tower/laboratory` — paths are places (§7), and players say
-/// the place, not the path.
-/// Whether `phrase` is the start of what this noun is called.
-///
-/// The line between abbreviating and mistyping, and the only reason `knowing`
-/// needs one: `check` starts `check.spell` and `walk` does not start `wall`.
-/// `fuzzy` draws it too, but its bands overlap at short lengths, so this asks
-/// the structural question rather than reading a number.
-///
-/// A [`NounKind::Place`] answers to its leaf as well, for the reason
-/// [`score_against`] gives.
+/// Whether `phrase` is the start of what this noun is called — the line
+/// between abbreviating and mistyping: `check` starts `check.spell` and `walk`
+/// does not start `wall`. A [`NounKind::Place`] answers to its leaf as well.
 fn abbreviates(noun: &Noun, phrase: &str) -> bool {
     let phrase = phrase.to_lowercase();
     let name = noun.name.to_lowercase();
 
-    // Except the lie told about this very word. §8.1's substitution renames a
-    // pile to its own name plus a struck sigil, so `sage-` strictly extends
-    // `sage` — and the rule below would read that as abbreviating, hand the pile
-    // back to the spell that named it, and leave the sabotage resolving at full
-    // confidence into nothing. It is the deliberate counter-example to this
-    // exemption's premise that no known word is a strict prefix of another.
-    //
-    // Asked of `tower::sabotage` rather than spelled here, because a second copy
-    // of the lie's shape is a rule that comes apart the next time it changes.
+    // Except §8.1's lie about this very word, which extends the truth by a
+    // struck sigil; asked of `tower::sabotage`, so the shape has one copy.
     if name == crate::tower::claimed(&phrase) {
         return false;
     }
@@ -262,6 +202,8 @@ fn abbreviates(noun: &Noun, phrase: &str) -> bool {
             .is_some_and(|leaf| leaf.starts_with(&phrase))
 }
 
+/// How well one phrase names one noun. A [`NounKind::Place`] also answers to
+/// its last path segment, since players say the place, not the path (§7).
 fn score_against(noun: &Noun, phrase: &str) -> u32 {
     let direct = fuzzy::similarity(phrase, &noun.name);
     if noun.kind != NounKind::Place {
@@ -297,13 +239,8 @@ mod tests {
 
     #[test]
     fn a_real_name_is_never_read_as_a_different_real_name() {
-        // The defect this whole rule exists for. `ground-sage` and
-        // `ground-salt` are two characters apart in eleven, which scores 819
-        // against a threshold of 600 — so with no ground-sage on the shelf,
-        // `digest ground-sage` resolved to `digest ground-salt`, echoed it, and
-        // moved the salt into the bath. One candidate scored, so it won outright
-        // and ran at full confidence: a silent wrong action, which §6 ranks
-        // below a refusal.
+        // Two characters apart in eleven scores 819, past the 600 threshold: a
+        // silent wrong action, which §6 ranks below a refusal.
         assert!(
             fuzzy::is_near("ground-sage", "ground-salt"),
             "the premise is gone: these are no longer close enough to collide",
@@ -341,15 +278,9 @@ mod tests {
 
     #[test]
     fn a_known_name_does_not_abbreviate_the_lie_told_about_it() {
-        // §8.1's substitution, defeated by the abbreviation exemption: the swap
-        // renames a pile to `claimed(name)` — its own name plus a struck sigil —
-        // so the lie strictly extends the truth and reads as an abbreviation of
-        // it. `grind sage` then resolved to the very pile the swap had renamed,
-        // at full confidence, and the sabotage amounted to nothing.
-        //
-        // Found by `tests/tampering.rs` waiting on the real ambient swap, which
-        // is seed-scheduled; this asks the rule directly so the next change to
-        // it fails here in milliseconds rather than there on one seed in four.
+        // §8.1's lie extends the truth by a struck sigil, so it reads as an
+        // abbreviation and the sabotage amounts to nothing. `tests/tampering.rs`
+        // finds it on one seed in four; this finds it every time.
         let lied = Scene::new()
             .with(NounKind::Reagent, &crate::tower::claimed("sage"))
             .knowing(["sage".to_owned()]);
@@ -367,8 +298,7 @@ mod tests {
 
     #[test]
     fn a_known_name_still_matches_itself_when_it_is_here() {
-        // The rule tightens fuzzy matching, not exact matching. Stated because
-        // "only ever matches exactly" would be a plausible way to break this.
+        // The rule tightens fuzzy matching, not exact matching.
         let found = shelf()
             .with(NounKind::Reagent, "ground-sage")
             .best_match(NounKind::Any, &["ground-sage"]);

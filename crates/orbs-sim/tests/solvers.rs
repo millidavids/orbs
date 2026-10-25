@@ -1,22 +1,14 @@
 //! Every shipped dev spell, run against the game it claims to solve.
 //!
-//! `dev_spells.toml` ships ten solvers and until this file nothing ran any of
-//! them, so one could stop compiling, spin for ever or silently do nothing with
-//! the gate green. §19 records it happening twice.
-//!
-//! Four things a solver must do here, and the middle two are what a broken
-//! spell fails: compile clean (a renamed reading or a withdrawn word breaks
-//! that); terminate (a `repeat until` that cannot be satisfied spins one
-//! instruction a tick for ever, quietly); do its work (running and achieving
-//! nothing passes the first two); and latch no `Mark::Fault`.
-//!
-//! `SCRIPT_BUDGET` is 1 until the weave grants more, and a solver may be *meant*
-//! to fall short at one step a tick — `tending_blindly` is — so each spell
-//! declares what it needs rather than the file assuming one number.
+//! Nothing ran them before this, and §19 records two breaking unseen. Each
+//! must compile clean, terminate, do its work and latch no `Mark::Fault`, at
+//! the step budget it declares.
 
 #![cfg(debug_assertions)]
 
-use orbs_render::{FieldName, Value};
+mod common;
+
+use common::{run, said};
 use orbs_sim::{Sim, tower};
 
 /// A solver, and what it takes to judge it.
@@ -249,22 +241,6 @@ const SOLVERS: &[Solver] = &[
         did: Some("ground-sage"),
     },
 ];
-
-fn run(sim: &mut Sim, line: &str) {
-    sim.submit(line);
-    sim.step();
-}
-
-fn said(sim: &Sim) -> Vec<String> {
-    sim.scrollback()
-        .records()
-        .iter()
-        .filter_map(|record| match record.field(FieldName::Message) {
-            Some(Value::Text(text)) => Some(text.to_owned()),
-            _ => None,
-        })
-        .collect()
-}
 
 /// Cast `solver` and let it work. Returns the sim for further questions.
 fn drive(solver: &Solver, seed: u64) -> Sim {

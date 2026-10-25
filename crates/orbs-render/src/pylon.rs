@@ -1,20 +1,9 @@
 //! A course of wards across three stations — what the pylon looks like.
 //!
-//! Drawn beside the transcript whenever a course is drawn up, the rule the
-//! archive's map and the lens's sheet both follow: the picture is not gated on
-//! a word, because watching a bound spell solve one and solving it yourself are
-//! different activities.
-//!
-//! It carries nothing the readings lack (rule 2). Every ward here could be
-//! counted off `survey wellspring` and the two `potency` readings, and the
-//! tally is what `survey pylon` says. What the picture adds is all three
-//! stations legible at once, which is what makes a Hanoi position readable.
-//!
-//! A ward's magnitude is its width, never its colour. §14 forbids meaning that
-//! lives only in hue, and the puzzle's one rule is *a greater ward will not
-//! rest upon a lesser* — as a colour it would be invisible in greyscale and in
-//! a dump. A ward `n` wide is `n` cells of [`WARD`], so an illegal position is
-//! a staircase with a step the wrong way up. The tint is pure enrichment.
+//! Drawn beside the transcript, never gated on a word. Nothing the readings
+//! lack (rule 2); it shows all three stations at once. A ward's magnitude is
+//! its width, never its colour (§14), so an illegal stack is a step the wrong
+//! way up.
 
 use crate::style::{Style, Tint};
 
@@ -29,11 +18,8 @@ pub const TINT: Tint = Tint::Violet;
 
 /// The tallest course the pylon will draw up.
 ///
-/// A painter's constant, not a copy of the sim's. `tower::pylon::MOST` is the
-/// world's rule; this is how many rows the picture reserves, and they match
-/// because a board that could not draw the tallest course would stop working on
-/// a neglected tower. `a_board_has_room_for_the_tallest_course` holds the two
-/// together from the sim's side, the only side that sees both.
+/// The rows reserved, matching `tower::pylon::MOST` by
+/// `a_board_has_room_for_the_tallest_course`, the side that sees both.
 pub const TALLEST: usize = 7;
 
 /// The stations, and what is stacked at each.
@@ -108,13 +94,8 @@ impl Pylon {
         (Self::COLS, Self::rows())
     }
 
-    // No `viewport` here, and there was one: it answered *does the bare board
-    // fit*, and its only caller was its own test. `orbs_shell::pylon::split`
-    // asks a different question — a bordered board plus gutter and transcript
-    // floor — and takes the one shared piece, [`size`](Self::size), from here.
-    // A second fits-or-not that nothing consults is a rule waiting to disagree
-    // with the one that ships. (`Board::viewport` in the lens is dead the same
-    // way.)
+    // No fits-or-not here: `orbs_shell::pylon::split` owns it, using
+    // [`size`](Self::size).
 
     /// One row of the board, as glyphs and their styles.
     ///

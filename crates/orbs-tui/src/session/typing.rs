@@ -5,7 +5,8 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use super::Session;
 use super::state::scribing;
 use crate::keymap::{as_key, escape_prefixed};
-use crate::surfaces::{Owner, Swap};
+use crate::surfaces::Owner;
+use orbs_shell::Raising;
 
 impl Session {
     /// Take one keystroke. Returns `false` when the player asked to leave.
@@ -14,20 +15,9 @@ impl Session {
         // `finish_reveal` does: waiting must never be something a player is made
         // to do.
         self.reveal.finish();
-        // Escape with a letter behind it is two keystrokes and this build threw
-        // the first away: crossterm reads the pty buffer in one syscall, and
-        // `\x1b` plus any byte in the same read parses as `Alt+<that byte>` —
-        // so leaving the spell editor and typing `quit` fast enough put `quit`
-        // in the buffer as a line of the spell.
-        //
-        // Splitting it apart is lossless only here: with no keyboard-enhancement
-        // flags (this build pushes none, see the `Repeat` note in `play`)
-        // crossterm builds `Alt+Char` from an `\x1b <byte>` pair and nothing
-        // else. A *real* Alt chord on a special key arrives CSI-encoded and is
-        // left alone, which matters — `Alt+Left` is word-left in plenty of
-        // terminals. The game binds none anyway, and the guard below excludes
-        // Alt so AltGr can type `@`, `#` and `\`; on Linux AltGr composes in the
-        // terminal and never reaches this branch.
+        // `\x1b` and a byte in one read parse as `Alt+<byte>`, so split them.
+        // Lossless with no enhancement flags, where only that pair makes
+        // `Alt+Char`; a real Alt chord on a special key is CSI and left alone.
         if let Some(rest) = escape_prefixed(&event) {
             if !self.typed(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)) {
                 return false;
@@ -35,14 +25,8 @@ impl Session {
             // One level deep and no further: `rest` has Alt cleared.
             return self.typed(rest);
         }
-        // `Ctrl-H` is Backspace on a great many terminals and the chord guard
-        // below was eating it: `stty erase ^H` (PuTTY's default) sends `0x08`,
-        // crossterm turns every `0x01..=0x1A` byte into `Char(letter) +
-        // CONTROL`, and §6 makes this a game played entirely by typing — so a
-        // typo became uncorrectable short of clearing the line. Translated here
-        // rather than special-cased in the guard, because every surface reads
-        // `KeyCode::Backspace` and none should have to know this; the cost is a
-        // deliberate `Ctrl-H`, which the game does not bind.
+        // `Ctrl-H` is Backspace on many terminals (`stty erase ^H`), so it is
+        // translated here, before the chord guard, for every surface.
         let event = if event.code == KeyCode::Char('h')
             && event.modifiers.contains(KeyModifiers::CONTROL)
         {
@@ -83,33 +67,14 @@ impl Session {
             .modifiers
             .intersects(KeyModifiers::CONTROL | KeyModifiers::SUPER);
         if chord {
-            // Raw mode means the terminal does not turn this into SIGINT, so it
-            // is ours to answer — and a full-screen application that cannot be
-            // left by the one chord everybody tries is a trap.
-            //
-            // One accepted divergence: the Bevy build lets `Cmd+←/→` mean
-            // Home/End, *"which a Mac keyboard has no other key for"*. Every
-            // macOS emulator sends real Home and End on `Fn+←/→`, and a second
-            // chord path would be a second place to forget a surface.
+            // Raw mode makes no SIGINT, so it is ours to answer. No `Cmd+←/→`
+            // here: macOS terminals send Home and End on `Fn+←/→`.
             return !matches!(event.code, KeyCode::Char('c' | 'd'));
         }
 
-        // Exactly one surface takes a keystroke: two consuming a key is
-        // invisible until a player types `:wq` and finds it in their history.
-        //
-        // The transcript scrolls without `unfurl` and from behind a surface —
-        // the word exists because the *key* could not be discovered, not
-        // because the key needs permission. Answered before the surface
-        // dispatch, which is where this was wrong: below it the editor, the
-        // weave screen and the maze swallowed both keys through their `_ => {}`,
-        // while the Bevy build gates `scroll_back`/`scroll_forward` on `booted`
-        // alone.
-        //
-        // Except the manual, the one surface that answers these keys itself;
-        // without the guard PgDn pages the chapter *and* the transcript under
-        // it. The Bevy build's is `manualling::not_reading_the_manual`. Nor at
-        // the threshold, where the transcript is a scratch world's behind a menu
-        // — the Bevy build gates these on `playing`.
+        // The transcript pages from behind any surface, so before the
+        // dispatch — but not under the manual, which answers these keys, nor
+        // at the threshold, as the Bevy build's guards.
         let total = self.sim.scrollback().records().drawn_len();
         match event.code {
             KeyCode::PageUp | KeyCode::PageDown
@@ -141,21 +106,11 @@ impl Session {
                 event.code,
                 &mut self.sim,
                 &mut self.scroll,
-                scribing(self.held.driver, self.scribe.as_deref()),
+                scribing(&self.readers, self.held.driver),
             );
-            // The one keystroke that reaches the world without a tick.
-            // `Sim::walk` is the third entry point (§19): an arrow moves the
-            // reading *now* and spends no world time, so it lands between the
-            // ticks `Panel` is rebuilt on — and `panel.stacks` is what the
-            // inline map and `wander`'s pane draw from, so without this the map
-            // runs up to a second stale, invisibly to every test that drives
-            // `Sim` directly. The Bevy build needs no such line: `walk` takes
-            // `Tower` by `&mut` and `refresh_panel` hangs on
-            // `resource_changed::<Tower>`. This is that, by hand.
-            //
-            // The whole panel, not just `stacks`: a walk can pick up a fragment
-            // and can solve the maze outright, which moves the cabinet's stock
-            // and the archive's rail box with it.
+            // `Sim::walk` spends no tick (§19), so the panel is refreshed by
+            // hand, as the Bevy build's `resource_changed::<Tower>` does — all
+            // of it, since a walk can pick up a fragment or solve the maze.
             if owner == Owner::Maze {
                 self.panel.refresh(&self.sim);
             }
@@ -176,22 +131,16 @@ impl Session {
             // which keeps the echo instant while effects stay tick-aligned
             // (§19). `plain` leaves the reader loaded and does not ask it — see
             // `Session::held`.
-            let reader = match self.held.driver {
-                orbs_shell::Driver::Plain => None,
-                orbs_shell::Driver::Augury => self.augury.as_deref(),
-            };
+            let reader = self.readers.reader(self.held.driver);
             // During an installation the line goes through it, and one that
             // wakes the tower asks `run` for the real one and reaches no world.
             if let Some(install) = self.install.as_mut() {
                 if let Some(raise) = install.submit(&mut self.sim, &finished, reader) {
-                    self.surfaces.swapping = Some(Swap::Installed(raise));
+                    self.surfaces.swapping = Some(Raising::Installed(raise));
                     return true;
                 }
             } else {
-                match reader {
-                    Some(augur) => self.sim.submit_reading(&finished, augur),
-                    None => self.sim.submit(&finished),
-                }
+                self.sim.submit_with(&finished, reader);
             }
             self.scroll.rewind();
             // `unfurl` and `wander` answer on the tick they are typed, so the
@@ -206,12 +155,8 @@ impl Session {
 
     /// The function keys that are neither the prompt nor a surface.
     ///
-    /// Returns whether this key was one of them. `F4` is why it exists at all:
-    /// `prompt.rs` draws `F4 deep` into the session border every frame and the
-    /// terminal build shipped without answering it — §19's *"the first
-    /// affordance the game showed was one that did not work"* a second time. The
-    /// rules behind them are `orbs-shell`'s, so the two builds cannot disagree
-    /// about the register cycle or what the trace file is called.
+    /// Returns whether this key was one of them; the border advertises `F4`
+    /// (§19). The rules are `orbs-shell`'s.
     fn shortcut(&mut self, code: KeyCode) -> bool {
         match code {
             // Flip the focus mode. Visibly this only moves the border's own hint
@@ -244,14 +189,8 @@ impl Session {
                     tracing::warn!("parse trace -> {} failed: {error}", orbs_shell::TRACE_PATH);
                 }
             }
-            // §3's three tonal registers. Visibly inert here and bound anyway:
-            // `Presentation` picks a *face* in the Bevy build's glyph atlas, and
-            // a terminal's face is whatever the user set — one of this
-            // frontend's accepted degradations (`theme.rs`). It still does the
-            // same thing to the same world, and `F6`'s trace shows the register
-            // move. A key that changed the world in one build and not the other
-            // is the divergence worth avoiding; one that changes it invisibly is
-            // the frontend limitation rule 2 permits.
+            // §3's registers: invisible here (`theme`), but the same change to
+            // the same world, which rule 2 permits.
             KeyCode::F(7) => {
                 orbs_shell::cycle_register(&mut self.sim);
             }

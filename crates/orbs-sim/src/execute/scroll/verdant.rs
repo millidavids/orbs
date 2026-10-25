@@ -39,9 +39,7 @@ pub(super) fn grow(world: &mut World, name: &str, worth: u32, flowers_at: u32) {
 /// Put the next base reagent the laboratory has never had on its shelf.
 /// Returns whether one flowered.
 ///
-/// Alphabetical, because `Recipes::vocabulary` is sorted: which herb arrives
-/// first is fixed for every seed, and a roll here would stack a second draw on
-/// the lectern's.
+/// Alphabetical, from `Recipes::vocabulary`, so no second roll is needed.
 fn flower(world: &mut World, name: &str) -> bool {
     let Some(shelf) = tower::home(world, SAGE) else {
         return false;
@@ -71,16 +69,9 @@ fn flower(world: &mut World, name: &str) -> bool {
 
 /// Base reagents the laboratory has not been given yet, alphabetically.
 ///
-/// *Base* is "the vocabulary knows it and nothing in the tower makes it": a
-/// recipe's output, a recipe's leaving, a fuel, and what a fuel leaves behind
-/// when it burns. The first version asked only `Recipes::outputs`, and four
-/// scrolls put `dregs`, `ash` and a `fragment` on the shelf as endless stock.
-///
-/// And *the laboratory's*, by [`tower::home`], which keeps the archive's
-/// `fragment` out without naming it.
-///
-/// Held is asked of the shelf's *true* names: a reagent swap renames sage to
-/// `sage-` for a while, and asking by name grew sage back as a new herb.
+/// *Base*: known to the vocabulary and made by nothing — not an output, a
+/// leaving, a fuel or ash. *The laboratory's*, by [`tower::home`]. Held is
+/// asked of the shelf's true names, or a swap regrows sage.
 fn locked(world: &World, shelf: Entity) -> Vec<String> {
     let recipes = world.resource::<Recipes>();
     let fuels = world.resource::<crate::content::Fuels>();

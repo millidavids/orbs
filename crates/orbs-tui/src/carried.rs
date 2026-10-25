@@ -27,90 +27,41 @@ pub(crate) fn default_settings() -> Vec<orbs_shell::settings::Row> {
 
 /// What this build can set, and what each is set to now.
 ///
-/// A shorter list than the window's, which is how *unsupported* is said: no
-/// tube, no phosphor and no sound, so no rows for them and no pages offering
-/// them, because a control that does nothing is the dead affordance §15 weighs
-/// heaviest (`orbs-shell`'s `settings::values` carries the argument). What is
-/// left is real: `F4`, `F5`, how the orb reads a line, §4's sticky skip, the
-/// installation, and how fast text types itself.
+/// Shorter than the window's: no tube, phosphor or sound, so no rows for them
+/// (§15, `settings::values`).
 pub(crate) fn settings(held: &Carried) -> Vec<orbs_shell::settings::Row> {
-    use orbs_shell::settings::{
-        Category, ECHO, ECHOES, FOCUS, INSTALL, MOTION, Row, SKIP, SWITCH, switched,
-    };
+    use orbs_shell::settings::{Category, ECHO, ECHOES, Row, rows};
 
     vec![
         // First on the page, as in the window. Here it takes the hue out of the
         // terminal's own colours.
-        Row::new(
-            Category::Access,
-            orbs_shell::settings::SIGHT,
-            held.sight.name(),
-            &orbs_shell::Sight::ALL.map(orbs_shell::Sight::name),
-        ),
-        Row::new(
-            Category::Access,
-            orbs_shell::LINEAR_SETTING,
-            switched(held.linear),
-            &SWITCH,
-        ),
+        rows::sight(held.sight),
+        rows::linear(held.linear),
         // The row alone, since there is no tube here to be the other switch.
-        Row::new(Category::Access, MOTION, switched(held.motion), &SWITCH),
+        rows::motion(held.motion),
         Row::new(
             Category::Access,
             ECHO,
             ECHOES[usize::from(held.echo)],
             &ECHOES,
         ),
-        // `reading` to a player, `driver` in the file — see `Row::key`.
-        Row::new(
-            Category::Habits,
-            "reading",
-            held.driver.word(),
-            &orbs_shell::Driver::ALL.map(orbs_shell::Driver::word),
-        )
-        .keyed(orbs_shell::settings::DRIVER),
-        Row::new(
-            Category::Habits,
-            FOCUS,
-            held.mode.word(),
-            &DisplayMode::ALL.map(DisplayMode::word),
-        ),
+        rows::reading(held.driver),
+        rows::focus(held.mode),
         // From what the session holds, never the file: with nowhere to write,
         // the refresh in `Session::answered` rebuilt this from the file and
         // snapped `skip on` straight back to `off`.
-        Row::new(Category::Habits, SKIP, switched(held.skip), &SWITCH),
-        Row::new(Category::Habits, INSTALL, switched(held.installs), &SWITCH),
-        Row::new(
-            Category::Habits,
-            orbs_shell::settings::PACE,
-            held.pace.word(),
-            &orbs_shell::Pace::ALL.map(orbs_shell::Pace::word),
-        ),
-        // No list: it takes what it is given, and shows what a new tower would
-        // take.
-        Row::new(
-            Category::Habits,
-            orbs_shell::settings::NAME,
-            &orbs_shell::new_wizard(held.name.as_deref()),
-            &[],
-        ),
+        rows::skip(held.skip),
+        rows::install(held.installs),
+        rows::pace(held.pace),
+        rows::name(held.name.as_deref()),
     ]
 }
 
 /// What a swap carries across, because it is the player's and not the tower's.
 ///
-/// The terminal's answer to `reset_for_swap`'s three exceptions. `run` builds a
-/// whole new `Session` per swap, so every field starts at its default and these
-/// three defaults read `orbs-settings.toml` — making the file their only memory
-/// across a swap, the failure the Bevy build lifted `Linear` out of
-/// `shell_resources!` to prevent. With `ORBS_SAVE=off`, a read-only install or a
-/// failed write, `F5` on and then choosing a tower turned §14's linear stream
-/// off with nothing said; `reading plain` reverted the same way.
-///
-/// Nothing about a new tower is a reason to stop reading the screen aloud.
-///
-/// Also what the settings rows are built from and what a setting is applied
-/// to, so the page and what is in effect have one source.
+/// `reset_for_swap`'s exceptions, for a build that makes a new `Session` per
+/// swap, so the file is not their only memory (§14). Also the rows' source,
+/// so the page shows what is in effect.
 ///
 /// `Default` is for tests; a launch starts from [`Carried::remembered`].
 #[derive(Debug, Default, Clone, PartialEq, Eq)]

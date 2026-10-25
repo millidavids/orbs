@@ -61,7 +61,13 @@ impl Spells {
     /// by `the_builtin_file_parses`.
     #[must_use]
     pub fn builtin() -> Self {
-        super::load::builtin(FILE, BUILTIN)
+        Self::builtin_from(FILE, BUILTIN)
+    }
+
+    /// [`builtin`](Self::builtin), from another spellbook the crate ships, named
+    /// as itself in an error.
+    pub(crate) fn builtin_from(file: &'static str, text: &str) -> Self {
+        super::load::builtin(file, text)
     }
 
     /// Parse a spellbook file.

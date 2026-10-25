@@ -1,22 +1,10 @@
 //! What the orb says when it wakes.
 //!
-//! §4 specifies a status report reflecting real world state, not a splash
-//! screen: the boot text is the tower answering for itself, every line something
-//! the player could have asked for. Hence built by walking the world rather than
-//! written down — a report that could go stale is a lie the player reads first.
-//!
-//! §8.1 gives it a second job: *"forgotten bound scripts"* are answered by the
-//! boot report, sabotage logs and `verify --all`. Listing what runs unattended
-//! is an ambient defence against automation you no longer remember building.
-//!
-//! It doubles as the scaffold tutorial. §15 wants a throwaway onboarding so the
-//! gate *"measures the parser rather than the absence of onboarding"*, so the
-//! report ends by naming the verbs.
-//!
-//! Names, not sentences. Rule 6 and §12 keep authored prose in content files,
-//! and §19 set the line: the parser's tables emit facts and `Verb::canonical` is
-//! a const table nobody calls a violation. The sentence wrapped around it —
-//! §4's *"the orb warms to your touch"* — is composed by a content file.
+//! §4's status report on real world state, not a splash screen: built by
+//! walking the world, since a report that could go stale is a lie the player
+//! reads first. It names what is bound, §8.1's defence against forgotten
+//! automation, and ends with the verbs, §15's scaffold tutorial. Names, not
+//! sentences; the prose around them is a content file's.
 
 use bevy_ecs::prelude::*;
 use orbs_render::{FieldName, RecordKind, Role};
@@ -36,12 +24,8 @@ pub fn report(world: &mut World) {
     let seed = world.resource::<Rngs>().master_seed();
     let tick = world.resource::<Tick>().get();
 
-    // One row per domain, carrying what it holds and whether it is sound. §8.1's
-    // `verify` answers the same question one surface at a time; this is the
-    // glance that tells you which surface to ask about.
-    // Only the rooms the tower has opened, so a fresh game's first screen names
-    // the laboratory and nothing it has not earned. The rail's dark boxes do the
-    // foreshadowing; this report would spend it.
+    // One row per open domain — the glance that says which surface to `verify`.
+    // A sealed room is left to the rail's dark box.
     let domains: Vec<(String, usize, bool)> = children_of(world, root)
         .into_iter()
         .filter(|branch| super::sealed_room_of(world, *branch).is_none())
@@ -80,10 +64,7 @@ pub fn report(world: &mut World) {
             .finish();
     }
 
-    // §8.1: bound scripts are named here so automation cannot be forgotten.
-    // Counted now, where it was hardcoded to nought: a report saying `bound 0`
-    // while the orb held a spell is the forgotten-automation surface lying in
-    // the one place it exists to tell the truth.
+    // §8.1: bound scripts are counted here so automation cannot be forgotten.
     let bound = crate::tower::spell::held(world).len();
     let mut scrollback = world.resource_mut::<Scrollback>();
     let records = scrollback.records_mut();
@@ -93,25 +74,16 @@ pub fn report(world: &mut World) {
         .count(FieldName::Quantity, bound as u64)
         .finish();
 
-    // The scaffold tutorial (§15). Facts, not a lesson: these are the words that
-    // work, which is the smallest thing that stops the gate measuring a tester's
-    // guesswork instead of the vocabulary.
-    //
-    // `execute::offered`, shared with `recall`'s overview, which is where the
-    // three exclusions are argued. It was this same filter written out here, and
-    // two copies of *live, ungated, in scope* is two chances for the launch
-    // tutorial to disagree with the manual a minute later. Its scoping half
-    // generalises what this hardcoded: at the tower root an empty scene offers
-    // no operations, so `Scene::offers` and `!is_operation()` name one list.
+    // The scaffold tutorial (§15): the words that work, through
+    // `execute::offered`, which `recall`'s overview shares and argues.
     let offered = crate::execute::offered(world);
     let mut scrollback = world.resource_mut::<Scrollback>();
     let records = scrollback.records_mut();
     for verb in offered {
         let mut entry = records.push(RecordKind::Entry);
         entry = entry.text(FieldName::Name, verb.canonical());
-        // `status` and `undo` take nothing, and an empty field is not the same
-        // as an absent one: it draws as trailing blanks and speaks as a labelled
-        // silence — "kind:" followed by nothing at all.
+        // An empty field is not an absent one: it would speak as "kind:" and
+        // then nothing.
         if !verb.signature_label().is_empty() {
             entry = entry.text(FieldName::Kind, verb.signature_label());
         }
@@ -138,9 +110,7 @@ mod tests {
 
     #[test]
     fn the_orb_reports_the_world_it_actually_has() {
-        // §4: a status report reflecting real world state. Built by walking the
-        // tower, so it cannot go stale — a boot report that could would be a lie
-        // the player reads first.
+        // §4: a status report reflecting real world state.
         let sim = Sim::new(1);
         let named = rows(&sim, RecordKind::Status);
         assert!(named.iter().any(|name| name == "laboratory"));
@@ -150,26 +120,13 @@ mod tests {
 
     #[test]
     fn it_names_every_working_verb_and_no_others() {
-        // §15's scaffold tutorial. A tester who knows no verb at all is testing
-        // their guesswork rather than the vocabulary — but a tester sent after a
-        // verb nobody has built yet is testing Phase 1, and `bind` would have
-        // them read a `sift` of the session log as a success.
-        // A domain's own verbs are also left out, for the same reason one step
-        // further in: the report is written at the tower root, and `grind` is
-        // not a word there (§7).
+        // Live, ungated, and unanchored, since the report is written at the
+        // tower root, where `grind` is not a word (§7).
         let sim = Sim::new(1);
         let listed = rows(&sim, RecordKind::Entry);
-        // The rule restated, not the function called: asserting against
-        // `execute::offered` would only prove the report calls what it calls.
-        // This says what the list means.
-        //
-        // `anchor().is_none()`, and it was `!is_operation()`. The two agreed
-        // until scoping stopped being the production-slot question: `research`
-        // is declared by the stacks and takes no slot, so the old form listed it
-        // at the tower root, where it is not a word.
-        // ...and the shared filter agrees with that rule, at the root where the
-        // report is written. `recall`'s overview calls the same function in rooms
-        // that *do* offer operations, which is the half this cannot see.
+        // The rule restated as well as the shared function compared: asserting
+        // only against `execute::offered` would prove the report calls what it
+        // calls.
         let shared: Vec<&str> = offered(sim.world())
             .into_iter()
             .map(Verb::canonical)

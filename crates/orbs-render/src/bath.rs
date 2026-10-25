@@ -1,9 +1,7 @@
 //! What a water bath looks like, working.
 //!
-//! The balneum mariae digests gently over the athanor (DESIGN.md §10.1), drawing
-//! something out of a reagent and into a liquid — so the bar is *the liquid in
-//! the vessel*: a shallow layer that rises as the extraction proceeds and stands
-//! full until the tincture is taken.
+//! The bar is the liquid in the vessel, rising as the extraction proceeds
+//! (§10.1).
 //!
 //! ```text
 //!   charged        working          ...later          ready
@@ -15,25 +13,10 @@
 //!    ██              ██               ██               ██
 //! ```
 //!
-//! The level is never zero, which is the whole reason it is drawn this way: a
-//! bar reading *how far along* draws a charged bath as an empty vessel, which is
-//! the invisible-state defect §10.1's panel exists to remove. The mortar solved
-//! it the same way.
-//!
-//! All the motion is in the colour, and the glyph is always `█` from the floor
-//! to the surface — what moves is how hard each cell is rolling. That buys the
-//! value surviving with the colour thrown away (§14), no ambiguity on the one
-//! cell the reading is taken from, and legibility at one cell, which the panel's
-//! horizontal layout needs.
-//!
-//! How it moves lives in [`liquid`], shared with the flask, because two vessels
-//! must not say different things with the same picture. What is this
-//! instrument's own is that a bath *bubbles* only while the athanor is lit and
-//! shifts in place when it is not — so the fire going out is visible without a
-//! word being read. This module decides only *where the liquid is*.
-//!
-//! Deterministic: an integer hash of position and tick, never an RNG, so
-//! `ORBS_DUMP` reproduces and this stays out of `orbs-sim`'s seeded streams.
+//! The level is never zero, so a charged bath is not an empty vessel. All
+//! motion is colour over solid `█`, so the value survives greyscale (§14). How
+//! it moves is [`liquid`]'s; this decides where the liquid is. An integer
+//! hash, never an RNG.
 
 use crate::liquid;
 pub(crate) use crate::liquid::Motion;
@@ -41,11 +24,8 @@ use crate::style::Depiction;
 
 /// How little of a vessel a charged one shows.
 ///
-/// The reagent is in and nothing has been drawn out of it yet. One cell, because
-/// this is the *floor* rather than a reading — the meter says zero and the
-/// picture still has to be a picture. `caught` in [`fire`](crate::fire) and the
-/// pour in [`grind`](crate::grind) each record the same lesson: a picture that
-/// can vanish is not a picture.
+/// One cell, a floor, since a picture that can vanish is not one — as
+/// [`fire`](crate::fire)'s `caught`.
 const FLOOR: u16 = 1;
 
 /// How deep the settled grit of a spent run lies.
@@ -70,19 +50,12 @@ pub struct Steep {
     pub motion: Motion,
     /// How far through the current world tick, `0.0..1.0`.
     ///
-    /// Why the level can rise faster than the world turns — see
-    /// [`Grind::advance`](crate::Grind), which documents the argument in full.
-    /// The sim's whole-tick count is a *sample* of a continuous duration, so
-    /// interpolating between samples is closer to the truth than holding the
-    /// last one.
+    /// As [`Grind::advance`](crate::Grind).
     pub advance: f32,
     /// Whether the vessel holds nothing but what the last run left.
     ///
-    /// `State::Fouled` — sediment. Drawn as a still band of grit lying too low
-    /// to be a level, because **the two must not look alike**: at the panel's
-    /// narrow layout there is no state word on screen, so a fouled bath drawn as
-    /// a charged one is the panel saying an instrument is ready when it is
-    /// jammed.
+    /// `State::Fouled`: still grit, too low to be a level, since the narrow
+    /// panel has no state word to tell it from charged.
     pub spent: bool,
     /// Whether a run has settled something in the bottom of the vessel.
     ///
@@ -92,42 +65,20 @@ pub struct Steep {
     pub leavings: bool,
     /// Whether bubbles *break* at the surface rather than merely reaching it.
     ///
-    /// The alembic's signature, and the only thing separating its picture from
-    /// the balneum's. Distilling is a harder boil than a gentle digestion, so
-    /// the topmost cell of liquid reaches the brightest step on the bubble beat
-    /// — a break at the face.
-    ///
-    /// At the surface, and above it where above is up — see
-    /// [`upward`](Self::upward).
+    /// The alembic's harder boil: the top cell reaches the brightest step, and
+    /// above it where above is [`upward`](Self::upward).
     pub breaking: bool,
     /// Whether the bar runs upward, so that past the fill is *above* it.
     ///
-    /// The one thing in this picture that depends on the layout. Bubbles
-    /// escaping into the air above the face were twice refused, because in the
-    /// horizontal layout *above* becomes rightward — putting the marks on the
-    /// row over the athanor's, whose sparks occupy that same region past its own
-    /// fill, so two adjacent rows carry sparse marks meaning different things.
-    ///
-    /// Upward, each instrument is a column: the athanor's sparks are *beside*
-    /// the alembic and the air above its face is its own. The picture differs by
-    /// orientation because what is *adjacent* to it does, which is the whole of
-    /// the objection. Otherwise the two share every cell, which is the property
-    /// `cell` exists to keep.
+    /// The one layout dependence: sideways, escaping bubbles would sit beside
+    /// the athanor's sparks and mean something else.
     pub upward: bool,
 }
 
 /// One cell of a bath's bar.
 ///
-/// `step` counts from the end the bar fills from — leftward for a horizontal
-/// meter, upward for a vertical one — so both orientations share this and cannot
-/// drift apart. `filled` is what `filled_of` computed, so the bath and the plain
-/// meter always agree about where the value is.
-///
-/// Returns a [`Depiction`] rather than a [`Style`](crate::Style), following
-/// [`fire`](crate::fire): a depiction is dropped on any accented cell by
-/// [`Style::depicted`](crate::Style::depicted), so a picture built out of a
-/// `Style` has to remember never to set a role. One that cannot express a role
-/// cannot forget.
+/// `step` counts from the filling end, so both orientations share this;
+/// `filled` is `filled_of`'s. A [`Depiction`], which cannot express a role.
 pub(crate) fn cell(lane: u16, step: u16, filled: u16, work: Steep) -> (char, Depiction) {
     // Leavings first: a spent vessel is not a shallow one, and every branch
     // below would draw it as liquid.
@@ -195,14 +146,8 @@ mod tests {
 
     #[test]
     fn the_vessel_is_solid_to_its_surface_and_empty_above() {
-        // A **bath**: `working` sets neither `breaking` nor `upward`, so nothing
-        // leaves the liquid here. The alembic's air is not empty and its version
-        // of this property is `a_bubble_never_touches_the_reading`.
-        // §14, and the easiest version of it any instrument has: the level is
-        // read off solid-against-blank, which is the strongest join the alphabet
-        // has and the one the fire's flame front is also pinned to. Nothing in
-        // the liquid varies but its colour, so throwing the colour away costs
-        // the picture nothing at all.
+        // A bath's join is solid against blank (§14); the alembic's is
+        // `a_bubble_never_touches_the_reading`.
         for phase in sweep() {
             for filled in 1..16u16 {
                 let cells = bar(16, filled, working(phase));
@@ -245,14 +190,7 @@ mod tests {
 
     #[test]
     fn a_charged_bath_is_perfectly_still() {
-        // `Standing` only, which is the state the rule was written about: an
-        // instrument that has not begun must not move, or a player waits for
-        // something that has not started. A *finished* bath is a deliberate
-        // exception — see `a_finished_bath_settles_rather_than_freezing`.
-        //
-        // Swept over every fill, because the sibling lesson in `grind` was
-        // learned by asserting this at one end of a range and finding the middle
-        // moved.
+        // An instrument not begun must not move. Every fill.
         for filled in [0u16, 1, 5, 11, 15, 16] {
             let at = |phase: f32| {
                 bar(

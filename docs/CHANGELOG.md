@@ -15,6 +15,20 @@
   at 1.0 (DESIGN.md §19).
 -->
 
+## [v0.20.22] - 2026-10-25
+
+### Description
+In development — a dev log, not patch notes. A cleanup pass over the whole
+tower: each rule written once, tests sharing their helpers, comments cut to a
+line or two. Two fixes fell out of it, in the forge and the archive's log.
+
+### Fixed
+- **The forge says what it did before the level it earned.** When a charm took
+  the forge up a level, the level line printed above the charm.
+- **The archive's log holds the archive.** `peruse archive.log` now shows the
+  stacks opening, a solved walk, wandering and gleaning, where it held none of
+  them. `stop` in the sanctum now reaches `sanctum.log` too.
+
 ## [v0.19.13] - 2026-10-22
 
 ### Description

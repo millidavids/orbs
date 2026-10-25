@@ -1,9 +1,7 @@
 //! What the parser decided, and how sure it was.
 //!
-//! DESIGN.md §6 closes with *"the parser must explain itself."* That is why a
-//! [`Candidate`] carries its component scores rather than one opaque number: the
-//! Phase 0 gate needs to act on the *clustering* of failures, which means knowing
-//! whether a miss was the verb or the argument.
+//! §6: *"the parser must explain itself"*, so a [`Candidate`] carries its
+//! component scores — a miss can be told apart as the verb or the argument.
 
 use super::verb::{NounKind, Verb};
 use super::vocabulary::Register;
@@ -19,28 +17,14 @@ pub struct Argument {
     pub slot: usize,
 }
 
-// There is no `anchor` field, and there was one. §8 binds referents *"by
-// stable entity ID"* so a destroyed-and-rebuilt thing fails the check instead of
-// being silently acted on — §8.1's substitution surface, and a real requirement
-// about things that *can* be rebuilt. §8's own example is `north_gate`, which a
-// siege tears down and the player puts back.
-//
-// Nothing in the tower is like that yet: `purge` on a place scours it rather
-// than despawning it, so an instrument's identity is fixed for the life of the
-// world. The field was `None` at every construction site and read at none, and
-// the `#5` it produced was written into every spell to guard a substitution that
-// cannot occur. It comes back with wards and gates, when there is something for
-// it to catch and something to test it against.
+// No `anchor` field: §8's bind-by-entity-ID guards a thing that can be
+// destroyed and rebuilt, and nothing in the tower is yet. It returns with one.
 
 impl Argument {
     /// The value as the echo shows it.
     ///
-    /// Only a place is shortened. Applying [`leaf`] to every argument truncated
-    /// free text at a slash: `sift march/north laboratory.log` echoed `sift
-    /// north laboratory.log`, teaching a command that searches for a different
-    /// string than the one that ran. `arguments.rs` states the invariant this
-    /// broke — *"free text: whatever was typed, in the case and punctuation they
-    /// typed it in"* — and §6 makes the echo how players learn the vocabulary.
+    /// Only a place is shortened: free text is echoed as typed, slashes and
+    /// all, since the echo is how players learn (§6).
     #[must_use]
     pub fn display(&self) -> &str {
         if self.kind == NounKind::Place {
@@ -69,17 +53,8 @@ pub struct Intent {
 impl Intent {
     /// The argument that filled signature slot `index`, if any.
     ///
-    /// `arguments` drops the `None`s that `Filled::slots` deliberately keeps —
-    /// *"positional rather than compacted, so a later slot resolving while an
-    /// earlier one does not cannot silently renumber the arguments"* — and
-    /// `execute::carry` then rebuilt the mapping by matching on slice length:
-    /// two arguments meant the source was skipped, three meant it was named.
-    ///
-    /// That reintroduced the renumbering hazard one layer up, holding only by
-    /// accident — `move` is the sole signature with an optional slot and it sits
-    /// between two required ones. The next verb with an optional argument would
-    /// inherit an arity match that is not a positional read, and the mis-mapping
-    /// is silent.
+    /// A positional read, never one by slice length: `arguments` is compacted,
+    /// so an arity match silently renumbers once an optional slot is skipped.
     #[must_use]
     pub fn slot(&self, index: usize) -> Option<&Argument> {
         self.arguments
@@ -103,21 +78,9 @@ impl Intent {
 
 /// A place argument as its last segment.
 ///
-/// Places resolve to full paths, so a three-argument `move` echoed
-/// `move charcoal /tower/laboratory/dispensary /tower/laboratory/athanor` — 74
-/// characters against the ~60 a pane gives at the 80×22 floor, and the
-/// destination was clipped off the one line whose job is saying where a thing
-/// went.
-///
-/// The leaf is also what the player typed and what §7 says they say: *"a place
-/// answers to its full path; §6's matcher also accepts the last segment, which
-/// is what makes `attend laboratory` reach `/tower/laboratory` — players say the
-/// place, not the path."*
-///
-/// Only the last segment, never a middle one: `score_against` (`super::scene`)
-/// matches a phrase against the full name or the leaf and nothing between, so
-/// echoing `laboratory/alembic` would teach a form the parser rejects.
-/// `every_place_leaf_is_unique` enforces the uniqueness this rests on.
+/// What players say (§7), and short enough that a three-place `move` fits the
+/// 80×22 pane. Never a middle segment, which the matcher rejects;
+/// `every_place_leaf_is_unique` holds the uniqueness this rests on.
 #[must_use]
 pub fn leaf(value: &str) -> &str {
     value.rsplit('/').next().unwrap_or(value)
@@ -133,23 +96,15 @@ pub enum Confidence {
     Forced,
     /// The orb worked the line out rather than reading it — the augury (§6).
     ///
-    /// Renders as [`Forced`](Self::Forced) does, deliberately: `Outcome` is a
-    /// closed set of six with a test asserting every marker differs, and a
-    /// seventh glyph would be a second thing to learn about the same fact — *the
-    /// orb acted on its best reading and invites correction*. One `≈` for both.
-    ///
-    /// What it carries that `Forced` does not is *why*, and two things read it:
-    /// the trace, so a session can be sifted for what the model decided, and the
-    /// destructive guard, so `purge` confirms when it was inferred.
+    /// Renders as [`Forced`](Self::Forced) does — one `≈` for *the orb acted
+    /// on its best reading*. What it adds is *why*, for the trace and for the
+    /// destructive guard, so an inferred `purge` confirms.
     Divined,
 }
 
 impl Confidence {
-    /// Whether the orb worked this out rather than reading it outright.
-    ///
-    /// The one question the rest of the game asks of this enum. A predicate
-    /// rather than a bare `==` because the destructive guard and the trace must
-    /// not drift apart on it.
+    /// Whether the orb worked this out rather than reading it outright — one
+    /// predicate, so the destructive guard and the trace agree.
     #[must_use]
     pub const fn is_divined(self) -> bool {
         matches!(self, Self::Divined)
@@ -177,9 +132,8 @@ pub struct Candidate {
 
 /// Whether a blocking disambiguation prompt is permitted.
 ///
-/// §6: *"Disambiguation never blocks during a siege."* The numbered prompt is
-/// modal and siege ticks advance on wall-clock, so a modal wait would make
-/// ambiguous phrasing cost siege time — exactly the typing pressure §14 forbids.
+/// §6: *"Disambiguation never blocks during a siege"*, or ambiguous phrasing
+/// costs siege time — the typing pressure §14 forbids.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
     /// The tower. A prompt may block.
@@ -207,10 +161,8 @@ pub enum Resolution {
     /// The verb is known but a required argument is not, and the parser cannot
     /// offer a list because the slot takes free text or a number.
     ///
-    /// §6 forbids a bare error, and the alternative here is worse than one: a
-    /// verb that matched at full score falling through to
-    /// [`Resolution::Unresolved`] makes the orb answer "I do not know that word"
-    /// and then suggest the word just typed.
+    /// Not [`Resolution::Unresolved`], which would answer "I do not know that
+    /// word" and suggest the word just typed.
     Incomplete {
         /// The verb that matched.
         verb: Verb,
@@ -223,12 +175,9 @@ pub enum Resolution {
     },
     /// A verb that takes no argument, handed words it cannot use.
     ///
-    /// [`Incomplete`](Self::Incomplete)'s other half. That one answers a verb
-    /// whose argument explained nothing by naming the slot it is waiting for —
-    /// *"verify what?"* — and a verb that takes nothing has no slot to name, so
-    /// `status gibberish` ran `status` with the word thrown away and `undo
-    /// gibberish` acknowledged. §6 forbids the silent discard as firmly as the
-    /// bare error, so the orb names the verb and the words it could not use.
+    /// [`Incomplete`](Self::Incomplete)'s other half, for a verb with no slot
+    /// to name: §6 forbids the silent discard, so the orb names the verb and
+    /// the words it could not use.
     TakesNothing {
         /// The verb that matched.
         verb: Verb,
@@ -239,27 +188,17 @@ pub enum Resolution {
     },
     /// A real verb, but not one this place answers to.
     ///
-    /// §7 scopes an instrument's verb to where the instrument is, so `mix` in
-    /// the archive resolves to nothing — and *"I do not know that word"* would be
-    /// a lie about a word the game taught the player in the room next door.
-    /// §6 forbids a bare error and this is the same rule one step further in:
-    /// the useful answer names the verb and says where it is not.
+    /// §7 scopes an instrument's verb to its room, and *"I do not know that
+    /// word"* would lie about a word taught next door.
     Elsewhere {
         /// The verb they meant.
         verb: Verb,
     },
     /// A word that means something in a spell, typed at the prompt.
     ///
-    /// [`Elsewhere`](Self::Elsewhere) one step further. That one covers a verb
-    /// this *place* does not answer to; this covers a word the *prompt* does not
-    /// answer to, and the same reasoning applies — *"I do not know that word"*
-    /// would be a lie about a word the game taught the player in the editor.
-    ///
-    /// This exists because the alternative was destructive. `wait for the
-    /// mortar` at the prompt used to open the editor on a new empty
-    /// `mortar.spell`: `for`/`the` are filler and `wait` is a `meditate` synonym
-    /// whose `Count` slot cannot take `mortar`, so the reading lost to `scribe
-    /// <Name>`, which takes free text. `repeat 3` resolved to `undo`.
+    /// [`Elsewhere`](Self::Elsewhere) for the prompt rather than the place.
+    /// Guessing was destructive: `wait for the mortar` once opened an empty
+    /// `mortar.spell`.
     InSpell {
         /// The word they used.
         word: super::SpellWord,

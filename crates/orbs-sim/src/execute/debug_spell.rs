@@ -1,32 +1,13 @@
 //! A working spell for a tester, in the builds a tester runs.
 //!
-//! Beside `debug_spawn` rather than inside it. [`debug`](super::debug) skips the
-//! forty ticks of grinding a state costs; this skips the eighty lines an
-//! automated state costs, since the ladder that solves a maze is twenty-four
-//! rungs. Separate modules because they are separate concerns — `debug.rs` is
-//! already long, and a spawn order and a spell share only the `cfg`.
+//! [`debug`](super::debug) skips the ticks a state costs; this skips the lines
+//! an automated one costs. A release build has neither code nor content:
+//! module and [`DEV_SPELLS`] are both `cfg(debug_assertions)`.
 //!
-//! A release build has neither code nor content: the module is
-//! `cfg(debug_assertions)` and [`DEV_SPELLS`] is `include_str!`'d under the same
-//! `cfg`, so the word, the parse, the queue variant, the effect and the ladder
-//! are all absent. `debug_spawn`'s prose ships because `prose.toml` is one file;
-//! this file is its own.
-//!
-//! Two places it deliberately does not copy `debug_spawn`.
-//!
-//! It refuses outside the spell's own domain. `debug_spawn`'s headline property
-//! is *"any fixture, from anywhere"*, on the argument that making a tester walk
-//! puts back what the tool exists to skip. That does not survive here:
-//! [`Sim::write_spell`](crate::Sim::write_spell) homes a new spell to wherever
-//! the player stands, so `debug_spell threading` typed in the laboratory writes
-//! an archive spell whose `follow` and `research` lines cannot resolve.
-//!
-//! It records the write, not the typed line. `debug_spawn` pushes its line into
-//! [`Submissions`](crate::session::Submissions) and re-runs it on replay, which
-//! here would record twice — the typed line and the `Wrote` that `write_spell`
-//! pushes — and a replay would re-match the word and push both again. Recording
-//! the write is also stronger: a replay reproduces the lines that actually ran,
-//! even if this file is edited afterwards.
+//! Two departures from `debug_spawn`. It refuses outside the spell's own
+//! domain, since [`Sim::write_spell`](crate::Sim::write_spell) homes a new
+//! spell to where the player stands. And it records the write, not the typed
+//! line, which would record twice and replay the file as later edited.
 
 use bevy_ecs::prelude::*;
 use orbs_render::{FieldName, RecordKind, Role};
@@ -37,9 +18,7 @@ use crate::tower;
 
 /// The word, matched exactly and never advertised.
 ///
-/// Underscored like `debug_spawn`, and for the same reason: no verb in §6's
-/// vocabulary has an underscore, so this cannot be reached by a typo of a real
-/// word and it reads as a tool rather than as part of the game.
+/// Underscored like `debug_spawn`, so no typo of a real word reaches it.
 pub const SPELL: &str = "debug_spell";
 
 /// The ladders, compiled in only where the word exists.
@@ -60,12 +39,7 @@ pub enum Order {
 /// it can make.
 #[must_use]
 pub fn order(line: &str) -> Option<Order> {
-    let rest = line.trim().strip_prefix(SPELL)?;
-    // `debug_spelling` is not this word. Anything after it must be whitespace.
-    if !rest.is_empty() && !rest.starts_with(char::is_whitespace) {
-        return None;
-    }
-    let mut words = rest.split_whitespace();
+    let mut words = super::debug::argument(line, SPELL)?.split_whitespace();
     let Some(name) = words.next() else {
         return Some(Order::List);
     };
@@ -86,8 +60,16 @@ pub fn order(line: &str) -> Option<Order> {
 /// `the_dev_file_parses`.
 #[must_use]
 pub fn spells() -> Spells {
-    Spells::parse(DEV_SPELLS).expect("dev_spells.toml is malformed")
+    parsed(DEV_SPELLS)
 }
+
+/// `text` as the dev file, so a test can break it and see the name.
+fn parsed(text: &str) -> Spells {
+    Spells::builtin_from(DEV_FILE, text)
+}
+
+/// The file's name, for an error a writer can act on.
+const DEV_FILE: &str = "dev_spells.toml";
 
 /// Carry out `order`, on the tick boundary like every other effect.
 ///
@@ -113,10 +95,7 @@ fn write(world: &mut World, book: &Spells, name: &str) -> Option<(String, Vec<St
         return None;
     };
 
-    // The room has to match — the departure from `debug_spawn`. A spell is
-    // written for a domain and `scribe::write` homes a new one to where the
-    // player stands, so writing an archive spell from the laboratory produces a
-    // file whose every line fails to resolve.
+    // The room has to match — see the module doc.
     let cwd = world.resource::<tower::Cwd>().0;
     let here = tower::domain_of(world, cwd)
         .or(Some(cwd))
@@ -175,6 +154,12 @@ mod tests {
     fn the_dev_file_parses() {
         let book = spells();
         assert!(!book.is_empty(), "the dev spellbook is empty");
+    }
+
+    #[test]
+    #[should_panic(expected = "dev_spells.toml is not valid content")]
+    fn a_broken_dev_file_is_named_as_itself() {
+        let _ = parsed("lines = [");
     }
 
     #[test]

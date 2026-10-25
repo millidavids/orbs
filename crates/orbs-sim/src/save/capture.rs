@@ -1,15 +1,8 @@
 //! Reading a world out into a document.
 //!
-//! Everything here takes `&World` and nothing takes `&mut`, which is the
-//! guarantee that saving cannot perturb the world: a `&mut` could build a
-//! `QueryState`, which registers components and changes archetypes, and a save
-//! that quietly changed what it described would make the lockstep test in
-//! `tests/persistence.rs` measure itself.
-//!
-//! So the walk uses `world.get::<T>(entity)` and [`crate::tower::children_of`], which is also
-//! `tower::node`'s ordering rule: `Children` order, never a global query.
-//! Archetype order is not insertion order, and a document whose rows moved when
-//! a component was added would fail its own byte-for-byte test.
+//! `&World` only, so saving cannot move the archetypes it describes. The walk
+//! is [`crate::tower::children_of`] — `Children` order, never a query — so a
+//! document's rows never move.
 
 use bevy_ecs::prelude::*;
 use orbs_render::{Presentation, Role, Value};
@@ -27,14 +20,9 @@ use crate::tower::{Cwd, Marks};
 
 /// How many records a save carries.
 ///
-/// A tail, not the stream. The stream grows without bound — §5's catch-up alone
-/// is ~29k steps — and a save carrying all of it would be mostly transcript.
-/// Five hundred is a few screens of `peruse`, so a returning player finds their
-/// logs where they left them.
-///
-/// What is *not* bounded is `Records::sequence`, which rides in `[world]`. A
-/// running spell's cursor is a position in that sequence, so the count has to
-/// survive the truncation even though the records do not.
+/// A tail of a few screens, since the stream grows without bound.
+/// `Records::sequence` rides in `[world]` untruncated, since a spell's cursor
+/// is a position in it.
 pub(super) const RECORD_TAIL: usize = 500;
 
 /// Read the whole world out.
@@ -333,11 +321,8 @@ fn node(world: &World, entity: Entity) -> NodeSave {
 
 /// A spell part-way through.
 ///
-/// The flat cursor fields come from `strands[0]`, never from `Running`'s own:
-/// those hold whichever cursor `step_one` put back last, which for two strands
-/// is arbitrary, so a forked spell's save would depend on where the tick
-/// stopped. `strands` is the authority; the flat fields are its first element,
-/// spelled out so an unforked save keeps the shape it has always had.
+/// The flat cursor fields come from `strands[0]`, never `Running`'s own, which
+/// hold whichever cursor ran last.
 fn running(world: &World, run: &tower::spell::Running) -> RunningSave {
     let first = run.strands.first().cloned().unwrap_or_default();
     RunningSave {

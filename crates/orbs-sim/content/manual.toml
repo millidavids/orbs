@@ -1,23 +1,13 @@
 # The manual: chapters a player reads, rather than sentences the orb says.
 #
-# **Not `prose.toml`, for two reasons** — see `content/manual.rs`. The short of
-# it: every line there is held to 70 cells because it is drawn as written, and a
-# manual is paragraphs the reader wraps; and every `recall_` key there becomes a
-# parser noun, which §19 records a content file doing by accident.
+# Not `prose.toml`, which holds lines to 70 cells and turns `recall_` keys into
+# nouns (`content/manual.rs`). A chapter is a typed word, a title and lines that
+# wrap; an empty line is blank.
 #
-# Each chapter is a word a player types, a title for the contents page, and its
-# lines. An empty line is a blank one. Everything else wraps to the pane.
-#
-# **Every chapter name is one lowercase word and no two share a first letter**,
-# because the contents page is prefix-matched like every other list in the game.
-# `content/manual.rs` holds both, along with the CP437 repertoire — and
-# `manual/assemble.rs` holds it across the two chapters the reader *builds*,
-# `commands` and `language`, which take `c` and `l`.
-#
-# ⚠ **Indentation does not survive.** `Wrap` trims leading spaces, so a line
-# cannot be nested by putting spaces in front of it. Internal padding is
-# untouched, which is what makes a two-column row work. Hierarchy here is made of
-# columns, blank lines and words. `manual/assemble.rs` carries the reason.
+# Every name is one lowercase word with its own first letter, since the contents
+# page is prefix-matched; `commands` and `language` are built, taking `c` and
+# `l`. Leading spaces are trimmed, so hierarchy is columns, blank lines and
+# words.
 
 [[chapters]]
 name = "orbs"

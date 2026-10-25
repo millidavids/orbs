@@ -5,18 +5,17 @@
 //! the audit's cost is that the tower stops working while it runs, and "the
 //! tower stops working" is a claim about the screen.
 
-use crate::play::{Game, QUIET, available};
+use crate::play::{Game, QUIET};
 
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn a_bare_verify_audits_the_tower_and_stops_the_work() {
-    if !available() {
-        return;
-    }
     // The price, on screen. §8.1 makes the audit Production-class so that *which
     // surface do I inspect first* is a decision, and the way a player learns it
     // is one is by being refused a grind while it runs.
-    let game = Game::seeded(QUIET);
+    let Some(game) = Game::seeded(QUIET) else {
+        return;
+    };
     game.does("attend laboratory", "/tower/laboratory")
         .does("verify", "the whole tower")
         .does("grind sage", "busy verifying");
@@ -29,14 +28,13 @@ fn a_bare_verify_audits_the_tower_and_stops_the_work() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn checking_a_log_leaves_the_shelves_open() {
-    if !available() {
-        return;
-    }
     // The whole point of rationing. §8.1: *"four free instant checks are
     // `verify --all` by another name."* One look costs you that kind of surface
     // and nothing else, so the player still has somewhere to look — and choosing
     // where is the mechanic.
-    let game = Game::seeded(QUIET);
+    let Some(game) = Game::seeded(QUIET) else {
+        return;
+    };
     game.does("attend laboratory", "/tower/laboratory")
         .does("verify laboratory.log", "sound")
         .does("verify laboratory.log", "still reading the log")
@@ -50,13 +48,12 @@ fn checking_a_log_leaves_the_shelves_open() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn the_audit_names_what_is_lying() {
-    if !available() {
-        return;
-    }
     // §8.1's design rule — *"the skill is knowing which surface to inspect, not
     // deciphering an obscure clue"*. Once the duration has been paid, the answer
     // is the thing itself, by name.
-    let game = Game::seeded(QUIET);
+    let Some(game) = Game::seeded(QUIET) else {
+        return;
+    };
     game.does("attend laboratory", "/tower/laboratory")
         .does("debug_swap", "")
         .does("verify", "the whole tower");

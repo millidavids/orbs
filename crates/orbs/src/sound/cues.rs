@@ -1,27 +1,12 @@
 //! What the orb sounds like, and what makes it make a sound.
 //!
-//! Rule 2 lets a frontend add enrichment the other cannot reproduce *"provided
-//! it carries no information absent from the Frame"*. So a cue is chosen from
-//! exactly what the marker glyph is chosen from: a record's `kind`, `role` and
-//! `outcome`. [`Record::marker`] draws a character in front of the line, in the
-//! same instant, out of the same three.
-//!
-//! `FieldName::Outcome` is an annotation and never printed as a labelled field,
-//! but it is not invisible — `Record::marker` makes it a glyph and
-//! `Record::style` an intensity. So a cue reading it says out loud what the
-//! prompt already draws, and a player with the sound off has lost a channel and
-//! not a fact. `every_cue_is_chosen_from_what_the_marker_is` keeps that true.
+//! A cue is chosen from what [`Record::marker`] is — `kind`, `role` and
+//! `outcome` — so sound off loses a channel, not a fact (rule 2,
+//! `every_cue_is_chosen_from_what_the_marker_is`). Only `Records::drawn`, so a
+//! spell's work is silent. The watermark is a sequence, which survives a clear
+//! and a restore.
 //!
 //! [`Record::marker`]: orbs_render::Record::marker
-//!
-//! Only records the transcript draws. `Records::drawn` skips a spell's output
-//! and anything quiet, both being *"in the log, not in the pane"* — and a cue
-//! for a line nobody can see is information the Frame does not have. It is also
-//! the difference between six bound spells being atmospheric and unusable.
-//!
-//! The watermark is a sequence number because `Records::sequence` survives both
-//! a clear and a save's truncated tail — the two things that would make a
-//! length-based watermark fire the whole transcript at once.
 
 use bevy::prelude::*;
 use orbs_render::{Outcome, RecordKind, Role};
@@ -222,15 +207,8 @@ pub(super) fn ring_for_records(
         .filter_map(|record| voice_of(record.kind(), record.role(), record.outcome()))
         .collect();
 
-    // A cap, and not only insurance: `Heard` resets on a swap, which is what
-    // fixed the restored tail ringing at once, but any other discontinuity would
-    // do the same and offline catch-up (~29k steps) is planned. Beyond that, a
-    // fistful of cues in one frame is a noise rather than a chord.
-    //
-    // It keeps `BURST`, not one. An earlier version popped the last and threw
-    // the rest away, so a five-cue tick was quieter than a four-cue one, and the
-    // test asserted `<= burst()`, which one satisfies. The newest survive,
-    // because the newest record is the one at the bottom of the transcript.
+    // A cap for any discontinuity, and a fistful of cues is noise. Keeps the
+    // newest `BURST`, the ones at the bottom of the transcript.
     if asked.len() > BURST {
         asked.drain(..asked.len() - BURST);
     }

@@ -1,24 +1,12 @@
 //! One training example, as numbers.
 //!
-//! The reader is asked for two things in one pass: which verb, read off the
-//! leading `<cls>` row as a classification over [`Verb::ALL`] plus a reject
-//! class for *"this is not a command"*, and which words fill which slot, tagged
-//! per word.
+//! Which verb, off `<cls>` over [`Verb::ALL`] plus a reject class, and which
+//! words fill which slot. Binding stays with `parser::resolve`: a reader says
+//! what was meant, the matcher what it refers to.
 //!
-//! Everything else — binding `sage` to the sage on the shelf, deciding whether
-//! `grind` means anything in this room — stays with `parser::resolve`, which is
-//! deterministic and can explain itself. A reader says what the sentence
-//! *meant*; the matcher says what it *refers to*.
-//!
-//! Tagged by slot position, not by noun kind: `move {reagent} {place}` has to
-//! know which span is the destination and `mix {reagent} {reagent}` has two
-//! spans of one kind, neither of which kind can separate. Position is also what
-//! `Intent` is made of, so a prediction reconstructs a command by
-//! concatenation.
-//!
-//! `<cls>` rather than pooling, because a mean over the sentence lets a long
-//! argument outvote the verb. The leading row attends to everything and belongs
-//! to nothing, so it is free to carry *"what kind of sentence is this"*.
+//! Tagged by slot position, since one kind can fill two slots, and position
+//! rebuilds an `Intent` by concatenation. `<cls>`, not pooling, so a long
+//! argument cannot outvote the verb.
 
 use orbs_sim::content::Example;
 use orbs_sim::parser::{NounKind, Verb};
@@ -203,20 +191,10 @@ impl Sample {
 
     /// Encode a generated example as a **spell** line, in the class `class`.
     ///
-    /// [`encode`](Self::encode)'s sibling; only the class differs. There it is
-    /// read off the canonical's head, because a command names its own verb;
-    /// here it is the *template* the example was expanded from, because `if
-    /// {place} is idle` and `if {place} is empty` are one word apart and
-    /// nothing in the string separates them. See [`crate::spelling`].
-    ///
-    /// `class` is [`spelling::command`](crate::spelling::command) for a line that
-    /// is an ordinary command and belongs to the prompt's reader.
-    ///
-    /// Tokens and spans derive identically, which is why the two registers
-    /// share an encoder and a trainer. Tags are numbered by kind rather than by
-    /// position — a place is slot 0 in every spell line; see
-    /// [`spelling::slot_for`](crate::spelling::slot_for) for what numbering by
-    /// position cost `let`.
+    /// [`encode`](Self::encode)'s sibling, the class being the template
+    /// ([`crate::spelling`]), or [`spelling::command`](crate::spelling::command).
+    /// Tags are numbered by kind
+    /// ([`spelling::slot_for`](crate::spelling::slot_for)).
     #[must_use]
     pub fn spelling(example: &Example, class: usize, vocabulary: &Vocabulary) -> Option<Self> {
         let mut sample = Self::encode_words(example, vocabulary, |_, kind| {

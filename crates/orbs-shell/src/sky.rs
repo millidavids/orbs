@@ -80,10 +80,7 @@ const fn from_civil(year: i64, month: i64, day: i64) -> i64 {
 /// Today, if anything may ask.
 #[must_use]
 pub fn tonight() -> Option<Day> {
-    if let Some(named) = std::env::var(DATE)
-        .ok()
-        .filter(|text| !text.trim().is_empty())
-    {
+    if let Some(named) = crate::environment::switched(DATE) {
         return Day::parse(&named);
     }
     if COVERED.load(Ordering::Relaxed) {

@@ -1,27 +1,16 @@
 //! What may come next here — one answer, three surfaces.
 //!
 //! The prompt's Tab listing, the prompt's ghost and the spell editor's Tab all
-//! ask the same question: *given this line and this caret, what could go there?*
+//! ask *given this line and this caret, what could go there?* One function, so
+//! none holds a second opinion (§19).
 //!
-//! One function, not three: §19 records that shape going wrong three times, each
-//! a second opinion about something the sim already knew. It is load-bearing
-//! inside this file too — `verb_of` goes through the real
-//! [`match_phrase`](super::resolve::match_phrase) because a private single-word
-//! scan disagreed with `resolve` twice.
+//! The scribing guide asks *what should I teach you* and lists canonical names
+//! through [`spell_vocabulary`](crate::spell_vocabulary); this offers all three
+//! registers. They share everything that could drift: [`spell_may`],
+//! `Scene::offers` and [`SpellWord::shape`].
 //!
-//! The scribing guide is a fourth surface and is not this. It asks *what should
-//! I teach you*, so it lists canonical names through
-//! [`spell_vocabulary`](crate::spell_vocabulary), where this offers all three of
-//! §6's registers and Tab completing `l` to `ls` and `look` is the point. They
-//! share everything that could drift: `may_issue`/`is_live` (see [`spell_may`]),
-//! `Scene::offers`, and [`SpellWord::shape`].
-//!
-//! It does not answer whether a word is any good, only what the grammar permits,
-//! in a stable order — the language's own words as taught, verbs alphabetical,
-//! nouns in scene order. Permitted is a real filter and the half that took the
-//! work: `until` never opens a line, `end` needs something open and `else` needs
-//! an `if` directly above, so [`control`] takes the block stack rather than the
-//! partial word. Offering a word the orb then refuses is §15's dead end.
+//! It answers what the grammar permits, never whether a word is any good:
+//! offering a word the orb then refuses is §15's dead end.
 
 use core::ops::Range;
 
@@ -34,54 +23,33 @@ use super::verb::{NounKind, Verb};
 use super::vocabulary::SYNONYMS;
 
 /// Where the caret is standing.
-///
-/// `spell` is the editor rather than the prompt, and not cosmetic: the language
-/// has nine words of its own the prompt cannot run, and the prompt has §6's
-/// numbered answer a spell never sees.
 #[derive(Debug, Clone, Copy)]
 pub struct Situation<'a> {
     /// The live vocabulary — for a spell, the domain the file belongs to, which
     /// is not always the room the player is standing in.
     pub scene: &'a Scene,
-    /// Whether this line is a line of a spell rather than a command.
+    /// Whether this line is a line of a spell rather than a command — which
+    /// has words of its own and never sees §6's numbered prompt.
     pub spell: bool,
-    /// Whether §6's numbered prompt is waiting for a digit.
-    ///
-    /// Turns the answer off entirely: the orb wants a number, and offering a
-    /// verb there — or ghosting one — is §15's dead end. It lives in the
-    /// situation rather than in callers, or three of the four surfaces would
-    /// each have to remember to.
+    /// Whether §6's numbered prompt is waiting for a digit, which turns the
+    /// answer off: here, so no surface has to remember to.
     pub prompt_open: bool,
-    /// The blocks open above this line, innermost last.
-    ///
-    /// From [`open_blocks`]. Empty at the prompt, which has no lines above it
-    /// and cannot run a block anyway.
+    /// The blocks open above this line, innermost last, from [`open_blocks`].
+    /// Empty at the prompt.
     pub open: &'a [SpellWord],
     /// The sets `for each` may walk here — `way` in the archive, `socket` and
     /// `sigil` in the lens.
     ///
-    /// A field because it is not derivable from the [`Scene`]: a set is declared
-    /// by the fixture and read by `tower::groups_at`, and `scene_at` never
-    /// registers one as a `Noun`. Answering `for each ` from the scene offers
-    /// the room's *contents* — `stacks`, `cabinet`, `north` — a list where every
-    /// entry is wrong and every right answer missing, contradicting `recall
-    /// scripting`, the only place a player learns sets exist.
-    ///
-    /// Empty at the prompt, which cannot run `for`.
+    /// Not derivable from the [`Scene`]: a set is declared by the fixture
+    /// (`tower::groups_at`) and is never a `Noun`. Empty at the prompt.
     pub sets: &'a [String],
 }
 
 /// Why something is being offered.
 ///
-/// Not [`Lexeme`] under another name, though for one version it was. `is`,
-/// `has`, `be` and `each` are fixed in position by the grammar — as much
-/// scaffolding as `if` — yet none is a [`Lexeme::Control`], because `lex`
-/// reserves that for [`SpellWord`] and a completer must not disagree with the
-/// painter about how a word is drawn.
-///
-/// Two facts, then, with [`kind`](Self::kind) deriving one from the other here
-/// rather than at each caller — `complete`'s header records what two fields per
-/// construction site cost last time.
+/// Not [`Lexeme`]: `is`, `has`, `be` and `each` are grammar, yet `lex` draws
+/// them as names, and a completer must not disagree with the painter. So
+/// [`kind`](Self::kind) derives the drawing from the reason.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Reason {
     /// One of the language's own words — `repeat`, `if`, `end`.
@@ -121,10 +89,7 @@ pub struct Expected {
     /// without asking the grammar a second time.
     pub why: Reason,
     /// What follows it, for a surface with room to say — `<count>`, `place`.
-    ///
-    /// Empty where nothing follows, which is most nouns and two of the nine
-    /// control words. The *signature*, not [`text`](Self::text) twice — it came
-    /// from a table `orbs-shell` was keeping in parallel with the grammar.
+    /// Empty where nothing follows.
     pub shape: &'static str,
 }
 
@@ -150,9 +115,8 @@ impl Expected {
 pub struct Expectation {
     /// The byte range of the line this replaces — the partial word.
     ///
-    /// A range rather than an append, because §6's parser is deliberately fuzzy:
-    /// a completer that can only *extend* what was typed is useless on a
-    /// near-miss, and a near-miss is what this game expects.
+    /// A range rather than an append, because §6's parser is fuzzy and a
+    /// near-miss is what this game expects.
     pub replaces: Range<usize>,
     /// The candidates, in a stable order — verbs alphabetical, nouns in scene
     /// order, control words in the language's own order.
@@ -174,12 +138,8 @@ impl Expectation {
 
     /// The text every candidate agrees on.
     ///
-    /// GNU readline's `compute_lcd_of_matches`: Tab advances to the longest
-    /// common prefix and lists only when that adds nothing.
-    ///
-    /// Two surfaces read this and must agree — Tab spends the prefix and the
-    /// prompt's ghost draws exactly what Tab would take, so a second
-    /// implementation would have the ghost promising what Tab did not do.
+    /// readline's `compute_lcd_of_matches`. Tab spends it and the ghost draws
+    /// it, so one copy keeps the ghost promising only what Tab does.
     #[must_use]
     pub fn common(&self) -> String {
         let mut rest = self.expected.iter();
@@ -223,9 +183,8 @@ pub fn expect(line: &str, caret: usize, at: &Situation<'_>) -> Expectation {
         out.extend(verbs(partial, at.scene, at.spell));
         out
     } else if let Some(word) = at.spell.then(|| opening(leading)).flatten() {
-        // A line opening with one of the language's own words is the language's
-        // to finish, not a verb's. Falling through to `verb_of` left `if the
-        // mortar_and_pestle is ` offering nothing at all.
+        // A line opening with one of the language's own words is the
+        // language's to finish, not a verb's.
         after(word, leading, partial, at)
     } else {
         match verb_of(leading, at.scene) {
@@ -247,19 +206,9 @@ fn opening(leading: &str) -> Option<SpellWord> {
 
 /// What the blocks open at this line allow to be written next.
 ///
-/// A stack, not a count: `else` is legal only directly inside an `if`, and a
-/// count cannot tell an `if` inside a `repeat` from a `repeat` inside an `if`.
-/// `end` closes whatever is innermost, so it wants only a non-empty stack.
-///
-/// A bare `else` neither opens nor closes and still changes the answer, being
-/// the *last* branch of its ladder — a second is `spell_stray_else`. Tracking
-/// only opens and closes left the `if` on the stack after its else-branch had
-/// started, so the guide went on offering `else`.
-///
-/// `else if` chains, which is why the two are told apart here rather than by the
-/// word alone: `if A / else if B / else / end` is valid, and treating its middle
-/// rung as final would forbid the spelling that saved `threading` forty-six
-/// lines.
+/// A stack, not a count: `else` is legal only directly inside an `if`. A bare
+/// `else` ends its ladder, so it replaces the `if`; `else if` chains and leaves
+/// it.
 #[must_use]
 pub fn open_blocks(before: &[String]) -> Vec<SpellWord> {
     let mut open = Vec::new();
@@ -297,18 +246,9 @@ fn chains(line: &str) -> bool {
 
 /// The language's own words that may open a line **here**.
 ///
-/// Not sorted: `wait`, `repeat`, `if`, `else`, `end` is the order they are
-/// taught in and appear in; alphabetising puts `else` before `if`, which reads
-/// as nonsense to somebody learning the shape.
-///
-/// Three of the nine are illegal at a line start, and listing all nine offered
-/// three ways to make the orb refuse the line it had just suggested:
-///
-/// - `until` never opens a line — it is `repeat`'s guard, written on `repeat`'s
-///   own line, and alone it is `spell_stray_until`.
-/// - `end` with nothing to close is `spell_stray_end`.
-/// - `else` needs an `if` *directly* above, which is why [`open_blocks`] keeps a
-///   stack rather than a depth.
+/// In the order they are taught, not alphabetical, which puts `else` before
+/// `if`. `until` never opens a line, `end` needs something to close, and `else`
+/// needs an `if` directly above.
 fn control(partial: &str, open: &[SpellWord]) -> Vec<Expected> {
     SpellWord::ALL
         .iter()
@@ -334,15 +274,9 @@ fn legal_here(word: SpellWord, open: &[SpellWord]) -> bool {
 
 /// What may follow the language's own word, once the line has opened with it.
 ///
-/// `wait` takes a thing, not a state, though the feature was specified the other
-/// way. `program.rs` stores `Kind::Wait(<name>)` and `run.rs` resolves it by
-/// scanning the record stream for an event naming that thing; no state is read,
-/// and `be` is not filler — so `wait for the mortar_and_pestle to be idle` waits
-/// on a thing called `mortar_and_pestle be idle`, matches nothing, burns
-/// `PATIENCE` and latches a fault on the rail.
-///
-/// The state set belongs to `is`. Offering it after `wait` would break this
-/// function's own rule: never teach a line the runner refuses.
+/// `wait` takes a thing, never a state: the runner scans the record stream for
+/// the name, so `wait for the mortar_and_pestle to be idle` waits on a thing
+/// called `mortar_and_pestle be idle` and faults. The states belong to `is`.
 fn after(word: SpellWord, leading: &str, partial: &str, at: &Situation<'_>) -> Vec<Expected> {
     let scene = at.scene;
     let all: Vec<String> = leading
@@ -383,26 +317,15 @@ fn after(word: SpellWord, leading: &str, partial: &str, at: &Situation<'_>) -> V
             1 => vec![Expected::plain("be", Reason::Grammar)],
             _ => places(scene),
         },
-        // `pull <name> from <place>` — `let`'s shape, name coined the same way,
-        // so nothing to offer there either.
-        //
-        // `from` is filler: `rest` has already dropped it, so one word in hand
-        // puts the caret at the place, and offering `from` would offer a word
-        // the parser throws away. `let`'s `be` survives normalisation and
-        // carries the grammar, so it is offered.
+        // `pull <name> from <place>` — `let`'s shape. `from` is filler and
+        // already dropped, so it is never offered; `let`'s `be` is grammar.
         SpellWord::Pull => match rest.len() {
             0 => Vec::new(),
             _ => places(scene),
         },
-        // Nothing, like `part`. What follows is a call naming a part *this file*
-        // defines, which the scene knows nothing about; the editor's guide shows
-        // the shape (`<name>(...)`), and the room's nouns would be a list with
-        // no right answer in it — `for each`'s mistake, below.
+        // A call naming a part this file defines, which the scene cannot know.
         SpellWord::Alongside => Vec::new(),
-        // The sets the fixture declares — `way`, `socket`, `sigil` — never the
-        // room's contents. Offering `stacks`, `cabinet`, `north` was a list with
-        // no right answer in it, contradicting `recall scripting`, the one page
-        // that teaches sets exist.
+        // The sets the fixture declares, never the room's contents.
         SpellWord::For => match rest.split_first() {
             None => vec![Expected::plain("each", Reason::Grammar)],
             Some((&"each", _)) => at
@@ -419,22 +342,11 @@ fn after(word: SpellWord, leading: &str, partial: &str, at: &Situation<'_>) -> V
     starting(offered, partial)
 }
 
-/// What may come next inside a question, given the words of it so far.
-///
-/// The grammar is `<place> is <state>` or `<place> has [no] [<count>] <thing>`,
-/// and [`STOPPERS`](super::question) fixes `is` and `has` as the two hinges.
 /// Where a comparative's far side begins, if the line has reached one.
 ///
-/// The opener is found first and its closer after it. Searching for the closers
-/// alone matched the *opening* `as` of `as many … as`, so `has as many ` was
-/// answered with the far side's own words until the comparative closed — wrong
-/// on all three surfaces at once, and the test that shipped with it only
-/// exercised `than`.
-///
-/// The gap in the middle is the other discriminator, the same one
-/// `question::eat_comparative` uses: nothing sits between the comparative and
-/// its closer in the *number* form `more than 1 fragment`, where `more marks
-/// than east` compares against a place.
+/// The opener is found first and its closer after it, or the opening `as` of
+/// `as many … as` reads as a closer. Nothing between the two is the number
+/// form `more than 1 fragment`, as `question::eat_comparative` decides.
 fn far_side_begins(asked: &[&str]) -> Option<usize> {
     let mut at = 0;
     while at < asked.len() {
@@ -460,11 +372,11 @@ fn far_side_begins(asked: &[&str]) -> Option<usize> {
     None
 }
 
+/// What may come next inside a question, given the words of it so far.
+///
+/// `<place> is <state>` or `<place> has [no] [<count>] <thing>`.
 fn question(asked: &[&str], scene: &Scene) -> Vec<Expected> {
-    // A comparative's far side is its own little question: after `than` the
-    // words belong to it, not the near side. Without this the hinge below found
-    // the *first* `has` and kept offering the near side's things through `than
-    // the d20 has …`, where the answer is certainly a reading over there.
+    // A comparative's far side is its own little question, with its own hinge.
     if let Some(begins) = far_side_begins(asked) {
         let far = &asked[begins..];
         // Straight after the closer: a place, or the one word that scales one.
@@ -505,18 +417,12 @@ fn question(asked: &[&str], scene: &Scene) -> Vec<Expected> {
     };
 
     match asked[at] {
-        // A closed vocabulary of eight — the answer the feature was asked for,
-        // at `is`, where it belongs.
         "is" => SpellState::WORDS
             .iter()
             .map(|word| Expected::plain(*word, Reason::State))
             .collect(),
-        // `has` takes an optional `no`, an optional count, and a thing or a
-        // reading. A count is a number and completes to nothing.
-        //
-        // Things first, readings after: `Errand::ALL` and the maze's senses
-        // chain onto every scene, so a laboratory spell asking `has ` was
-        // offered `passage`, `wall` and `spoil` above its own reagents.
+        // An optional `no`, a count (which completes to nothing), and a thing
+        // or reading — things first, since every scene carries the readings.
         _ => {
             let mut out = Vec::new();
             if asked.len() == at + 1 {
@@ -541,15 +447,8 @@ fn readings(scene: &Scene) -> Vec<Expected> {
 
 /// Everything the tower *has* that a spell can name.
 ///
-/// `Command` is excluded. `scene_at` registers every one-word verb synonym as a
-/// `NounKind::Command` — about a hundred: `spy`, `peek`, `try`, `light`, `walk`
-/// — so the fuzzy matcher cannot turn a word the game knows into a noun. None is
-/// a thing, yet `if the cabinet has ` listed the lot, and `wait ` offered one,
-/// which scans the record stream for something that never arrives, burns
-/// `PATIENCE` and latches a fault on the rail.
-///
-/// `Sense` is excluded too: a reading is offered by [`readings`], after these,
-/// because the scene's things are the room's and its readings are not.
+/// Not a `Command` — every verb synonym is one, and none is a thing — nor a
+/// `Sense`, which [`readings`] offers after these.
 fn things(scene: &Scene) -> Vec<Expected> {
     scene
         .nouns()
@@ -569,11 +468,8 @@ fn of_kind(scene: &Scene, kind: NounKind, why: Reason) -> Vec<Expected> {
         .collect()
 }
 
-/// Keep only what the player has already started typing.
-///
-/// Applied once at the end rather than inside each arm above, so a new arm
-/// cannot forget it — which is how a completer starts offering `idle` to
-/// somebody who has typed `bu`.
+/// Keep only what the player has already started typing — once, at the end,
+/// so a new arm cannot forget it.
 fn starting(offered: Vec<Expected>, partial: &str) -> Vec<Expected> {
     if partial.is_empty() {
         return offered;
@@ -584,24 +480,13 @@ fn starting(offered: Vec<Expected>, partial: &str) -> Vec<Expected> {
         .collect()
 }
 
-/// Every phrase that could be the verb being typed.
+/// Every phrase that could be the verb being typed, multi-word ones included.
 ///
-/// Canonical names *and* synonyms, including the multi-word ones: §6 claims all
-/// three registers reach the same command, and a `words.len() == 1` filter here
-/// made `go to`, `look for`, `get rid of`, `what's here`, `how do i` and `take
-/// it back` invisible to Tab.
-///
-/// Two filters in a spell, not one. `Scene::offers` asks whether the verb's
-/// fixture stands in this domain; [`may_issue`](crate::tower::spell::may_issue)
-/// asks whether a spell may issue it *at all*. `attend`, `meditate`, `scribe`,
-/// `unfurl`, `weave` and `wander` pass the first and fail the second, so without
-/// it the editor offers six words the runner refuses — §15's dead end, taught
-/// deliberately.
+/// In a spell, two filters: `Scene::offers` asks whether the verb's fixture
+/// stands here, and [`spell_may`] whether a spell may issue it at all.
 fn verbs(partial: &str, scene: &Scene, spell: bool) -> Vec<Expected> {
     let mut out: Vec<(String, Verb)> = SYNONYMS
         .iter()
-        // Tab must not offer a word the parser would refuse. A per-instrument
-        // verb out of its domain is exactly that — see `Scene::offers`.
         .filter(|entry| scene.offers(entry.verb))
         .filter(|entry| !spell || spell_may(entry.verb))
         .map(|entry| (entry.words.join(" "), entry.verb))
@@ -618,37 +503,19 @@ fn verbs(partial: &str, scene: &Scene, spell: bool) -> Vec<Expected> {
         .collect()
 }
 
-/// Whether a spell may issue this verb at all.
-///
-/// The same pair [`spell_vocabulary`](crate::spell_vocabulary) applies, and the
-/// two must not drift: that builds the guide's teaching list, this the editor's
-/// completion, so a word Tab offers and the guide never explains is the shape
-/// §19 records going wrong three times.
-///
-/// They differ in one thing, deliberately: this iterates the synonym table so
-/// all three of §6's registers complete, where the guide lists canonical names
-/// only — `ls`, `look`, `go to` and `what's here` side by side is the overwhelm
-/// it exists to prevent.
+/// Whether a spell may issue this verb at all — the pair
+/// [`spell_vocabulary`](crate::spell_vocabulary) applies too, so Tab never
+/// offers a word the guide does not explain.
 const fn spell_may(verb: Verb) -> bool {
-    // `is_live` is *"nobody built this"* and `may_issue` is *"a spell may not"*.
-    // Both are dead ends and a completer must offer neither.
+    // *Nobody built this* and *a spell may not*: both dead ends.
     crate::execute::is_live(verb) && crate::tower::spell::may_issue(verb)
 }
 
 /// The verb a line has already named, and how many argument slots follow it.
 ///
-/// Matched through [`match_phrase`](super::resolve::match_phrase) — the same
-/// function `resolve` ranks with — rather than through
-/// [`resolve`](mod@super::resolve) itself: a bare `wield ` has no argument yet, so a
-/// full resolution comes back `Incomplete` and yields no intent, exactly when
-/// completion is most wanted.
-///
-/// The real matcher is what keeps Tab and Enter agreeing. A private single-word
-/// scan disagreed twice: multi-word phrases were invisible, so `look for `
-/// offered places for `Survey` while the line resolves to `sift`, whose slot is
-/// free text and must offer nothing; and its `max_by_key` took the *last*
-/// maximum where `resolve` applies `named_exactly` → score → `verb_order`, so a
-/// tie offered one verb's arguments and ran another's.
+/// Through [`match_phrase`](super::resolve::match_phrase), the matcher
+/// `resolve` ranks with, so Tab and Enter agree; not through `resolve` itself,
+/// which calls a bare `wield ` `Incomplete` just when completion is wanted.
 fn verb_of(leading: &str, scene: &Scene) -> Option<(Verb, usize)> {
     let split = super::normalise::Tokens::split(leading);
     let all = split.words();
@@ -662,11 +529,8 @@ fn verb_of(leading: &str, scene: &Scene) -> Option<(Verb, usize)> {
                 .map(|(score, span)| (score, entry.verb, span))
         })
         .max_by(|a, b| {
-            // Score, then the longer phrase, then table order. `match_phrase`
-            // clamps its `PHRASE_BONUS` at `fuzzy::EXACT`, so a perfectly typed
-            // `look for` scores what a perfectly typed `look` does, and without
-            // the span tie-break the two-word reading loses to whichever came
-            // first.
+            // Score, then the longer phrase — an exact `look for` and `look`
+            // score alike — then table order.
             a.0.cmp(&b.0)
                 .then_with(|| a.2.cmp(&b.2))
                 .then_with(|| verb_order(b.1).cmp(&verb_order(a.1)))
@@ -702,10 +566,8 @@ fn nouns(verb: Verb, filled: usize, partial: &str, scene: &Scene) -> Vec<Expecte
         return Vec::new();
     }
 
-    // `Name` is the exception among the free-text kinds. It cannot *resolve*
-    // against the scene — a spell being coined does not exist — but the
-    // commonest `scribe` reopens one that does, so completion offers the spells
-    // that exist while resolution still accepts anything typed.
+    // `Name` is free text, but the commonest `scribe` reopens a spell, so the
+    // spells that exist are offered.
     let offered = if slot.kind == NounKind::Name {
         NounKind::Script
     } else {
@@ -783,10 +645,8 @@ mod tests {
         )
     }
 
-    /// A spell line may open with one of the language's own words.
-    ///
-    /// The prompt cannot run them, so `complete` never offered them and the
-    /// editor's Tab would have taught that `repeat` is not a word.
+    /// A spell line may open with one of the language's own words; the prompt
+    /// cannot run them.
     #[test]
     fn a_spell_offers_the_languages_own_words_and_the_prompt_does_not() {
         let found = spelling("re").texts();
@@ -800,20 +660,13 @@ mod tests {
     }
 
     /// ...and the verbs are still there beside them.
-    ///
-    /// A spell line is `repeat 3` *or* `grind sage`; offering only the
-    /// scaffolding would be worse than offering only the verbs.
     #[test]
     fn a_spell_offers_verbs_as_well_as_words() {
         let found = spelling("su").texts();
         assert!(found.contains(&"survey".to_owned()), "{found:?}");
     }
 
-    /// Control words come first, in the order they are taught — not
-    /// alphabetical, which puts `else` before `if`.
-    ///
-    /// Six of the nine, at the top of a spell: `until` never opens a line, and
-    /// `else` and `end` need something open above them.
+    /// Control words come first, in the order they are taught.
     #[test]
     fn the_languages_words_lead_and_keep_their_own_order() {
         let found = spelling("").expected;
@@ -824,9 +677,7 @@ mod tests {
             .collect();
         assert_eq!(
             words,
-            // `SpellWord::ALL`'s order. A word added anywhere but the end
-            // reorders what the editor's guide and the prompt's completion both
-            // offer, and the two have agreed since the language had four words.
+            // `SpellWord::ALL`'s order, which the guide shares.
             [
                 "wait",
                 "repeat",
@@ -846,13 +697,9 @@ mod tests {
         );
     }
 
-    /// Three of the nine are illegal at a line start, and it depends where.
-    /// Listing all nine gave three ways to make the orb refuse the line it had
-    /// just suggested.
     #[test]
     fn a_word_that_cannot_open_a_line_here_is_not_offered() {
-        // `until` is `repeat`'s guard, written on `repeat`'s own line. Alone it
-        // is `spell_stray_until`, so it never opens a line anywhere.
+        // `until` is `repeat`'s guard, and alone is `spell_stray_until`.
         for open in [&[][..], &[SpellWord::Repeat][..], &[SpellWord::If][..]] {
             assert!(
                 !inside("", open).texts().contains(&"until".to_owned()),
@@ -868,8 +715,7 @@ mod tests {
                 .contains(&"end".to_owned()),
         );
 
-        // `else` needs an `if` directly inside one, which is why the stack is a
-        // stack and not a depth.
+        // `else` needs an `if` directly above.
         assert!(
             inside("", &[SpellWord::If])
                 .texts()
@@ -895,13 +741,7 @@ mod tests {
         assert!(open_blocks(&[]).is_empty());
     }
 
-    /// `is` offers the states and `wait` does not.
-    ///
-    /// The feature was specified as offering them after `wait … to be`, which
-    /// does not work: `wait` stores a *thing* and resolves it by scanning the
-    /// record stream, so `wait for the mortar_and_pestle to be idle` waits on a
-    /// thing called `mortar_and_pestle be idle`, matches nothing, and burns
-    /// `PATIENCE` into a fault on the rail.
+    /// `is` offers the states and `wait` does not — see `after`.
     #[test]
     fn the_states_belong_to_is_and_not_to_wait() {
         let states = spelling("if the mortar_and_pestle is ").texts();
@@ -921,11 +761,6 @@ mod tests {
     }
 
     /// The far side is its own little question, and the hinge is the last one.
-    ///
-    /// `question` found the *first* `is`/`has`, so everything after `than … has`
-    /// was answered against the near side — the room's things in the one
-    /// position where the answer is certainly a reading over there, and wrong on
-    /// all three surfaces at once.
     #[test]
     fn the_far_side_of_a_comparison_completes_as_its_own_question() {
         // Straight after the closer: somewhere to compare against, or the word
@@ -937,8 +772,7 @@ mod tests {
             "the far side offered no place: {far:?}",
         );
 
-        // A place is named. The trailing space is the convention that turns
-        // *explain this word* into *what may come next*, as it does everywhere.
+        // A place is named; the trailing space asks what comes next.
         let after =
             spelling("if the mortar_and_pestle has fewer sage than the laboratory ").texts();
         assert_eq!(
@@ -961,15 +795,12 @@ mod tests {
                 .texts();
         assert_eq!(operator, vec!["plus".to_owned()]);
 
-        // `double` changes none of that, which makes it a prefix rather than a
-        // fourth state to thread through.
+        // `double` is a prefix and changes none of that.
         let doubled =
             spelling("if the mortar_and_pestle has fewer sage than double the laboratory ").texts();
         assert_eq!(doubled, vec!["has".to_owned(), "plus".to_owned()]);
 
-        // `as many … as` opens with the word that closes it, and searching
-        // backwards for the closer made the near side's own things unreachable
-        // from here until the closing `as`.
+        // `as many … as` opens with the word that closes it.
         let opening = spelling("if the mortar_and_pestle has as many ").texts();
         assert!(
             opening.contains(&"sage".to_owned()),
@@ -983,9 +814,7 @@ mod tests {
         let closed = spelling("if the mortar_and_pestle has as many sage as ").texts();
         assert!(closed.contains(&"double".to_owned()), "{closed:?}");
 
-        // The number form is not a far side: nothing sits between the
-        // comparative and its closer in `more than 2 …`, the spelling `BOUNDS`
-        // has read since counting arrived.
+        // The number form `more than 2 …` is not a far side.
         let counted = spelling("if the mortar_and_pestle has more than 2 ").texts();
         assert!(
             counted.contains(&"sage".to_owned()),
@@ -1036,12 +865,6 @@ mod tests {
     }
 
     /// `for each ` walks a set, and the room's contents are not sets.
-    ///
-    /// A set is declared by the fixture and read by `groups_at`; `scene_at`
-    /// never registers one as a noun. Answering from the scene offered
-    /// `mortar_and_pestle` and `sage` — every entry wrong, every right answer
-    /// missing — and contradicted `recall scripting`, the only page saying sets
-    /// exist.
     #[test]
     fn for_each_offers_a_set_and_not_the_rooms_contents() {
         assert_eq!(spelling("for each ").texts(), ["way"]);
@@ -1054,11 +877,6 @@ mod tests {
     }
 
     /// A verb word is not a thing, so nothing offers one as one.
-    ///
-    /// `scene_at` registers every one-word synonym as a `NounKind::Command` so
-    /// the fuzzy matcher cannot turn a word the game knows into a noun. `wait `
-    /// offering one is a spell that scans the record stream for something that
-    /// never arrives, burns `PATIENCE` and latches a fault.
     #[test]
     fn a_verb_word_is_never_offered_as_a_thing() {
         let scene = Scene::new()
@@ -1089,10 +907,6 @@ mod tests {
     }
 
     /// A second bare `else` is not offered, and `else if` still chains.
-    ///
-    /// `open_blocks` tracked only opens and closes, so the `if` stayed on the
-    /// stack after its else-branch had started and the guide went on offering
-    /// `else`.
     #[test]
     fn a_ladder_that_has_had_its_else_is_not_offered_another() {
         let ladder = |lines: &[&str]| {
@@ -1109,8 +923,7 @@ mod tests {
             !ladder(&["if the mortar_and_pestle is idle", "else"]),
             "a finished ladder was offered a second `else`",
         );
-        // `else if` chains; forbidding it would outlaw the spelling that took
-        // `threading` from 98 lines to 52.
+        // `else if` chains.
         assert!(
             ladder(&[
                 "if the mortar_and_pestle is idle",
@@ -1132,11 +945,8 @@ mod tests {
         );
     }
 
-    /// A spell is offered only verbs it is allowed to issue.
-    ///
-    /// `attend` passes `Scene::offers` — its fixture is the tower itself — and
-    /// fails `may_issue`, because a spell is written *for* a domain and does not
-    /// walk. Teaching a line the runner refuses is worse than offering nothing.
+    /// A spell is offered only verbs it may issue: `attend` passes
+    /// `Scene::offers` and fails `may_issue`.
     #[test]
     fn a_spell_is_not_offered_a_verb_it_may_not_issue() {
         let prompt = typing("att").texts();
@@ -1150,18 +960,14 @@ mod tests {
     }
 
     /// Each candidate carries how it is used, from the grammar's own table.
-    ///
-    /// This lived in `orbs-shell` as a second copy — a painter keeping its own
-    /// answer to *what does `for` take*, which its own comment called out.
     #[test]
     fn a_candidate_carries_the_shape_that_follows_it() {
         let words = spelling("").expected;
         let repeat = words.iter().find(|one| one.text == "repeat");
         assert_eq!(repeat.map(|one| one.shape), Some("<count>"));
 
-        // `end` takes nothing, and the empty string is the honest answer rather
-        // than an absence every caller has to special-case. Reached from inside
-        // a block, because with nothing open it is not offered at all.
+        // `end` takes nothing, and says so with an empty string. Inside a
+        // block, since with nothing open it is not offered.
         let closing = inside("", &[SpellWord::Repeat]).expected;
         let end = closing.iter().find(|one| one.text == "end");
         assert_eq!(end.map(|one| one.shape), Some(""));
@@ -1171,12 +977,6 @@ mod tests {
         assert_eq!(verb.map(|one| one.shape), Some("place"));
     }
 
-    /// The shared prefix is as far as everyone agrees.
-    ///
-    /// readline's `compute_lcd_of_matches`. Two surfaces read it — Tab spends
-    /// it, the prompt's ghost draws what Tab would take — so a second
-    /// implementation, very nearly written in `orbs-shell`, would have the ghost
-    /// promising something Tab did not do.
     #[test]
     fn the_common_prefix_is_as_far_as_everyone_agrees() {
         // Two places share `m`... but only one starts with `mo`, so the whole
@@ -1193,9 +993,6 @@ mod tests {
     }
 
     /// An argument slot is the same answer in both, because it is the same verb.
-    ///
-    /// The one thing a spell must *not* get differently: `grind sage` means
-    /// `grind sage` wherever it is written.
     #[test]
     fn an_argument_slot_answers_the_same_in_a_spell_as_at_the_prompt() {
         assert_eq!(spelling("wield mo"), typing("wield mo"));
@@ -1211,8 +1008,7 @@ mod tests {
         let verbs = typing("surv").expected;
         assert_eq!(verbs.first().map(Expected::kind), Some(Lexeme::Verb));
 
-        // A grammar word is scaffolding to the *guide* and an ordinary word to
-        // the *painter* — why `why` and `kind` are two facts rather than one.
+        // Grammar to the guide, an ordinary word to the painter.
         let hinge = spelling("if the mortar_and_pestle ").expected;
         let is = hinge.first().expect("a hinge");
         assert_eq!(is.why, Reason::Grammar);
@@ -1220,9 +1016,6 @@ mod tests {
     }
 
     /// The numbered prompt closes it, in a spell too.
-    ///
-    /// A spell never sees §6's prompt, but the flag is answered before anything
-    /// else is looked at, and a surface that passes both is asking for nothing.
     #[test]
     fn nothing_is_expected_while_a_numbered_prompt_is_open() {
         let scene = tower();

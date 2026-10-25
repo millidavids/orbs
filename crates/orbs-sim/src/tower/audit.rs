@@ -1,15 +1,8 @@
 //! The expensive audit, and what limits the cheap one (DESIGN.md §8.1).
 //!
-//! §8.1 prices `verify`'s two forms against each other: `verify --all` scales
-//! with the tower — bound scripts plus log volume — because a flat audit would
-//! be trivially correct to open every siege with, and `verify <target>` carries
-//! a short per-surface cooldown, because four free instant checks *are*
-//! `verify --all` by another name.
-//!
-//! Neither shipped until now, so four instant checks audited the whole tower
-//! for nothing. In the calm layer only the shelf lies — `substitution` swaps
-//! a reagent about once an hour — so *is it the log, or the shelf?* is a
-//! question the siege asks (§19).
+//! `verify --all` scales with the tower, or it would be trivially correct to
+//! open every siege with; `verify <target>` cools per surface, or four instant
+//! checks are `--all` by another name.
 
 use bevy_ecs::prelude::*;
 
@@ -17,11 +10,7 @@ use crate::tick::Tick;
 
 /// One of §8.1's tamperable surfaces.
 ///
-/// The log and the shelf shipped first; script text and trigger clocks waited
-/// for the siege that produces them, because a variant nothing can ever be is a
-/// cooldown nobody can ever be on. A poisoned log and a swapped pile are told
-/// apart by *which* surface you look at, and the cooldown is what makes looking
-/// at the wrong one cost something.
+/// The cooldown is what makes looking at the wrong one cost something.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Surface {
     /// A `.log` file, whose lines can be forged (`sabotage::Log`).
@@ -29,24 +18,15 @@ pub enum Surface {
     /// A pile of stock, which can be swapped for something wearing its name.
     World,
     /// A `.spell` file, whose lines an enemy can rewrite (`tower::Held`).
-    ///
-    /// Siege-only by §5.1 — *"the enemy never touches scripts, schedules, or
-    /// logs in the calm layer"*, which pillar 4 requires — so it has no ambient
-    /// producer at all and only ever lies mid-siege.
+    /// Siege-only (§5.1, pillar 4).
     Script,
     /// A bound spell's schedule, which an enemy can retime (`spell::Bound`).
-    ///
-    /// Siege-only, for [`Script`](Self::Script)'s reason. It is the subtlest of
-    /// the four: nothing about the spell's *text* is wrong, so `peruse` shows a
-    /// correct spell and only the clock is lying.
+    /// Siege-only; the text is perfect and only the clock lies.
     Clock,
 }
 
 impl Surface {
     /// Every surface that ships — all four, which closes §8.1's model.
-    ///
-    /// `Cooling` is keyed by *word*, so adding the siege's two renumbered
-    /// nothing in a save.
     pub const ALL: [Self; 4] = [Self::Log, Self::World, Self::Script, Self::Clock];
 
     /// How many there are.
@@ -54,9 +34,8 @@ impl Surface {
 
     /// Where this one sits in [`Cooling`]'s array.
     ///
-    /// Private to that storage, unlike `RngStream::index`, which is a
-    /// save-format commitment. Renumbering here is free because the save is
-    /// keyed by [`word`](Self::word) instead.
+    /// Free to renumber, unlike `RngStream::index`: the save is keyed by
+    /// [`word`](Self::word).
     #[must_use]
     pub const fn index(self) -> usize {
         match self {
@@ -67,11 +46,8 @@ impl Surface {
         }
     }
 
-    /// The word a record carries for it.
-    ///
-    /// A table, not prose — `Verb::canonical`'s exemption. A field value `sift`
-    /// matches and §14 speaks; the sentence around it is composed in
-    /// `content/prose.toml` like every other.
+    /// The word a record carries for it — a table, not prose; the sentence is
+    /// in `content/prose.toml`.
     #[must_use]
     pub const fn word(self) -> &'static str {
         match self {
@@ -84,26 +60,22 @@ impl Surface {
 
     /// Which surface a node belongs to.
     ///
-    /// `None` for a place or an instrument: still `verify`-able and still
-    /// answering `sound`, just not *rationed*, because a check that can never
-    /// find anything is a cooldown with no information behind it.
+    /// `None` for a place or an instrument: still `verify`-able, just not
+    /// rationed, since such a check can never find anything.
     #[must_use]
     pub fn of(world: &World, node: Entity) -> Option<Self> {
         if world.get::<super::sabotage::Log>(node).is_some() {
             return Some(Self::Log);
         }
-        // A spell is two surfaces, and a retimed one's text is perfect — so
-        // categorising every spell as `Script` left `Clock` unreachable and
-        // `to_save` could never emit a `["clock", n]` row. Retimed goes first.
+        // A retimed spell first: its text is perfect, so filing it as `Script`
+        // would leave `Clock` unreachable.
         if world.get::<super::Retimed>(node).is_some() {
             return Some(Self::Clock);
         }
         if world.get::<super::Held>(node).is_some() {
             return Some(Self::Script);
         }
-        // The place, not the pile: `verify dispensary` reports the shelf by
-        // looking one level down, so asking the shelf itself for `Stock` would
-        // answer `None` and leave the commonest world check unrationed.
+        // The place, not the pile: `verify dispensary` looks one level down.
         let holds_stock = super::children_of(world, node)
             .into_iter()
             .any(|held| world.get::<super::Stock>(held).is_some());
@@ -113,69 +85,42 @@ impl Surface {
 
 /// How long one surface stays unavailable after a targeted check.
 ///
-/// §8.1 says *short*. Against a 56-tick clarity brew and a 4-tick purge, twenty
-/// is a real loss without ever becoming the reason a player stops looking.
-///
-/// It rations the *surface*, never the target: §8.1's decision is *which
-/// surface do I inspect first*, and a per-target cooldown would leave a player
-/// free to walk the six domain logs in six ticks.
+/// Short (§8.1): a real loss against a 56-tick brew, never the reason a player
+/// stops looking. Per surface, not target, or the six logs walk in six ticks.
 pub const COOLING: u64 = 20;
 
-/// The floor on a full audit, before the tower is weighed.
-///
-/// §8.1 rules out *"a flat 30-second audit"*, so this is the base of a sum
-/// rather than the answer: a bare tower audits in about this, and every spell
-/// bound and every line logged pushes it up from here.
+/// The floor on a full audit, before the tower is weighed — the base of a sum,
+/// since §8.1 rules out a flat audit.
 pub const AUDIT_BASE: u64 = 20;
 
-/// What each held spell adds to a full audit.
-///
-/// §8.1's *"proportional to bound scripts"*. A bound spell is a surface the
-/// enemy can rewrite, so auditing one is real work — and the player who
-/// automates hardest pays most to check their automation, which is pillar 3
-/// stated as a duration.
+/// What each held spell adds to a full audit: the player who automates hardest
+/// pays most to check it, pillar 3 as a duration.
 pub const AUDIT_PER_SPELL: u64 = 8;
 
-/// How many logged lines add one tick to a full audit.
-///
-/// The *"plus log volume"* half. Divided rather than multiplied: the stream is
-/// thousands of records deep by mid-game and a tick each would make the audit
-/// longer than the session.
+/// How many logged lines add one tick to a full audit — divided, because the
+/// stream is thousands deep by mid-game.
 pub const AUDIT_PER_LINES: u64 = 20;
 
 /// The longest a full audit will ever take, however large the tower grows.
 ///
-/// A clamp rather than a refusal, on `LONGEST_BIDE`'s argument: the number is
-/// the player's own sprawl and there is no honest place to refuse it, but an
-/// audit longer than `MAX_MEDITATE` is indistinguishable from one that never
-/// lands. Ten minutes is past any tower the harness has swept, and bounded.
+/// A clamp, `LONGEST_BIDE`'s argument: past `MAX_MEDITATE` an audit is
+/// indistinguishable from one that never lands.
 pub const AUDIT_LONGEST: u64 = 600;
 
 /// When each surface may be checked again.
 ///
-/// A resource keyed by surface, not a component on the target: [`COOLING`]
-/// rations the *surface*, so hanging it on a node means writing it to every log
-/// in the tower and keeping six copies in step.
-///
-/// It travels in the save — a cooldown that reset on load is one a player
-/// clears by quitting.
+/// A resource keyed by surface, not a component on every target. Saved, or
+/// quitting would clear it.
 #[derive(Resource, Debug, Clone, Default, PartialEq, Eq)]
 pub struct Cooling {
-    /// When each surface is next available, indexed by [`Surface::index`].
-    ///
-    /// An array rather than a field per surface: at four, the fields were the
-    /// same `match` written out in `spend`, `from_save` and `at` — three places
-    /// to forget a fifth surface in. The save stays keyed by name, because a
-    /// renumbered save would silently remap a player's cooldowns.
+    /// When each surface is next available, indexed by [`Surface::index`]. The
+    /// save is keyed by name, so renumbering here remaps nothing.
     until: [Option<Tick>; Surface::COUNT],
 }
 
 impl Cooling {
-    /// How long `surface` has left, or `None` when it is ready.
-    ///
-    /// Zero reads as ready, so the tick a cooldown expires on is a tick the
-    /// player may check — `bide`'s and `Working`'s `>=` boundary, which stops a
-    /// twenty-tick wait being a twenty-one-tick one.
+    /// How long `surface` has left, or `None` when it is ready — ready on the
+    /// tick it expires, the `>=` boundary every duration uses.
     #[must_use]
     pub fn left(&self, surface: Surface, now: Tick) -> Option<u64> {
         let until = self.at(surface)?;
@@ -188,17 +133,11 @@ impl Cooling {
         self.until[surface.index()] = Some(Tick::new(now.get().saturating_add(COOLING)));
     }
 
-    /// What a save writes: the surfaces that *are* cooling, and until when.
+    /// What a save writes: the surfaces still cooling, and until when.
     ///
-    /// Pairs rather than a `Vec<Option<u64>>` positional on [`Surface::ALL`]:
-    /// `toml` refuses that outright — *"unsupported None value"* — and §15
-    /// wants a save a person can read, where `[["log", 120]]` says what a bare
-    /// `[null, 120]` cannot. Order carries no meaning, so the siege's two
-    /// surfaces renumbered nothing and an older save still reads right.
-    ///
-    /// Only what is *still* cooling: `spend` stores a tick and nothing clears
-    /// it, so filtering on *ever checked* put four rows thousands of ticks
-    /// stale in every autosave once a player had `verify`'d each surface.
+    /// Named pairs, because `toml` refuses a positional `None` and §15 wants a
+    /// save a person can read. Only what is still cooling, since `spend` never
+    /// clears a tick and stale rows are sentences that are not true.
     #[must_use]
     pub fn to_save(&self, now: Tick) -> Vec<(String, u64)> {
         Surface::ALL
@@ -211,12 +150,8 @@ impl Cooling {
             .collect()
     }
 
-    /// Read one back.
-    ///
-    /// A missing row is not an error, the tolerance every `from_save` here has:
-    /// a document written before this existed has no table, and the honest
-    /// reading of that is *nothing is cooling*. A surface the build no longer
-    /// knows is dropped for the same reason.
+    /// Read one back. A missing row is *nothing cooling*, and a surface this
+    /// build does not know is dropped.
     #[must_use]
     pub fn from_save(saved: &[(String, u64)]) -> Self {
         let mut cooling = Self::default();
@@ -237,12 +172,10 @@ impl Cooling {
     }
 }
 
-/// How long a full audit of this tower takes.
+/// How long a full audit of this tower takes: §8.1's *bound scripts plus log
+/// volume*, floored and capped.
 ///
-/// §8.1's *"proportional to bound scripts plus log volume"*, floored and
-/// capped. A pure function of two counts, so the number quoted before the audit
-/// starts is the number waited, and a test can assert the curve without running
-/// one.
+/// Pure, so the number quoted before the audit is the number waited.
 #[must_use]
 pub fn ticks_for(spells: usize, logged: usize) -> u64 {
     let spells = u64::try_from(spells).unwrap_or(u64::MAX);
@@ -263,7 +196,6 @@ mod tests {
         let bare = ticks_for(0, 0);
         assert_eq!(bare, AUDIT_BASE);
 
-        // Each bound spell is a surface to walk.
         assert_eq!(ticks_for(1, 0), AUDIT_BASE + AUDIT_PER_SPELL);
         assert!(ticks_for(4, 0) > ticks_for(1, 0));
 
@@ -272,8 +204,7 @@ mod tests {
         assert!(ticks_for(4, 3000) > ticks_for(4, 0));
     }
 
-    /// §8.1 rules out a flat audit by name, so a grown tower must cost
-    /// materially more than a bare one rather than merely more.
+    /// A grown tower must cost materially more than a bare one, not merely more.
     #[test]
     fn a_grown_tower_is_not_a_flat_thirty_seconds() {
         let bare = ticks_for(0, 0);
@@ -286,14 +217,11 @@ mod tests {
         );
     }
 
-    /// Bounded however far the tower sprawls — `LONGEST_BIDE`'s argument.
     #[test]
     fn an_audit_is_bounded() {
         assert_eq!(ticks_for(usize::MAX, usize::MAX), AUDIT_LONGEST);
     }
 
-    /// The tick it expires on is a tick you may check — the `>=` boundary every
-    /// other duration in the game uses.
     #[test]
     fn a_cooldown_ends_on_the_tick_it_names() {
         let mut cooling = Cooling::default();
@@ -306,8 +234,8 @@ mod tests {
         assert_eq!(cooling.left(Surface::Log, Tick::new(9999)), None);
     }
 
-    /// One surface cooling leaves the other ready, which is what makes *"which
-    /// surface do I inspect first"* a decision rather than a wait.
+    /// One surface cooling leaves the other ready, which makes *which first* a
+    /// decision rather than a wait.
     #[test]
     fn surfaces_cool_apart() {
         let mut cooling = Cooling::default();
@@ -322,17 +250,9 @@ mod tests {
         cooling.spend(Surface::World, Tick::new(42));
         assert_eq!(Cooling::from_save(&cooling.to_save(Tick::new(42))), cooling,);
 
-        // A document written before this existed has no row, and nothing is
-        // cooling — which is the honest reading of an absence.
         assert_eq!(Cooling::from_save(&[]), Cooling::default());
     }
 
-    /// An expired cooldown is not written at all.
-    ///
-    /// `spend` never clears its tick, so `to_save` filtered on *ever checked*
-    /// and a player who had `verify`'d each surface carried four stale rows in
-    /// every autosave. §15 wants a save a person can read, and four dead rows
-    /// are four sentences that are not true.
     #[test]
     fn a_cooldown_that_has_run_out_is_not_saved() {
         let mut cooling = Cooling::default();
@@ -348,7 +268,6 @@ mod tests {
             "an expired cooldown was written: {:?}",
             cooling.to_save(long_after),
         );
-        // ...and it reads back as nothing cooling, which it already was.
         assert_eq!(cooling.left(Surface::Log, long_after), None);
     }
 }

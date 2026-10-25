@@ -5,21 +5,13 @@
 //! cargo run --release -p orbs-augury --example trials -- --scribe target/seeds/try/scribe-7 --scores
 //! ```
 //!
-//! `content/spell_trials.toml` holds the lines — literal, written to be unlike
-//! the corpus, and held by a test to be nothing the reader was taught. This is
-//! the report over them: by shape and by style, the betrayals apart, every miss
-//! with *why*, and the whole scripts written through a real tower.
-//!
-//! Inference only, so it needs no GPU and no `train` feature.
-//!
-//! `--scribe` and `--reader` put weights other than the shipped ones on trial,
-//! each a path without its `.bin`, and `--scores` prints only the numbers — one
-//! `name<TAB>value` a line — for `scripts/seeds.sh` to average across seeds.
+//! A report over `content/spell_trials.toml`, lines a test holds untaught: by
+//! shape and style, every miss with why, and whole scripts through a real
+//! tower. Inference only. Flags as in `measure`.
 
 use burn::backend::NdArray;
 use orbs_augury::Scribe;
-use orbs_augury::cli::{missing, weights};
-use orbs_augury::trained::{SCRIBE_WEIGHTS, WEIGHTS};
+use orbs_augury::cli::{percent, scribe};
 use orbs_sim::content::{TRIAL_SHAPES, TRIAL_STYLES, Trial, Trials, fold, with_extension};
 use orbs_sim::{Sim, tower};
 
@@ -29,16 +21,7 @@ fn main() {
     if !scores {
         println!("\nO.R.B.S. — the scrivener on trial\n");
     }
-    let Ok(scribe) = Scribe::<NdArray<f32>>::load_from(
-        &weights("--scribe", SCRIBE_WEIGHTS),
-        &weights("--reader", WEIGHTS),
-        Default::default(),
-    ) else {
-        missing(
-            scores,
-            "spell weights",
-            "cargo run --release -p orbs-augury --example train --features train -- --spells",
-        );
+    let Some(scribe) = scribe(scores) else {
         return;
     };
 
@@ -207,15 +190,4 @@ fn tally(read: &[(&Trial, Option<String>)], which: impl Fn(&Trial) -> bool) -> (
         .filter(|(trial, got)| trial.passes(got.as_deref()))
         .count();
     (passed, chosen.len())
-}
-
-#[expect(
-    clippy::cast_precision_loss,
-    reason = "a suite is hundreds of lines, not 2^24"
-)]
-fn percent(part: usize, whole: usize) -> f32 {
-    if whole == 0 {
-        return 0.0;
-    }
-    part as f32 / whole as f32 * 100.0
 }

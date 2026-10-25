@@ -23,12 +23,9 @@ pub const MIN_SIMILARITY: u32 = 600;
 
 /// Longest word this module will compare character by character.
 ///
-/// [`distance`] is O(left x right) and runs once per synonym and once per scene
-/// noun, so an unbounded word makes one keystroke-completed line arbitrarily
-/// expensive — 100k characters measured at 605 ms in release, a visible freeze
-/// on the frame thread that §6 forbids outright. Nothing in the vocabulary or
-/// the tower is close to this long; anything longer cannot be a near-miss for
-/// something this short, so refusing to score it loses no resolution.
+/// [`distance`] is O(left × right) per synonym and noun: 100k characters froze
+/// the frame thread for 605 ms. Nothing nameable is close to this long, so
+/// refusing to score longer loses no resolution.
 pub const MAX_WORD: usize = 64;
 
 /// Shortest prefix that counts as an abbreviation rather than a coincidence.

@@ -1,29 +1,9 @@
 //! How a vessel of liquid moves.
 //!
-//! Two instruments hold liquid — the balneum mariae and the flask — and they
-//! must agree about what motion *means*, or the panel says two different things
-//! with the same picture. So the vocabulary lives here and both draw from it.
-//!
-//! Bubbles mean heat and nothing else does. [`Motion::Bubbling`] is the only
-//! state whose pattern travels, and it belongs to a bath over a lit athanor: the
-//! flask is never heated so never bubbles, and a bath whose fire has gone out
-//! stops at once, which is the panel saying the athanor died without a word.
-//! §10.1 makes *"light it once, get both heated stages done inside that window"*
-//! the central timing decision — this is that window, visible.
-//!
-//! Everything else shifts in place. [`Motion::Stirring`] and
-//! [`Motion::Drifting`] are one stationary shimmer at two rates: liquid moving
-//! but not driven from below. A finished vessel still shifts, because liquid
-//! does.
-//!
-//! A stationary shimmer takes the staggered clock and a travelling one must not.
-//! `pulse::tick_of` folds each cell's offset into the tick, which stops a strip
-//! turning over as one field; a rising pattern cannot use it, because cell `s+1`
-//! would sit half a tick behind cell `s` and the rise would wash out into churn.
-//! It does not need to either, since a translation moves brightness along the
-//! strip.
-//!
-//! Tempo is the signature:
+//! One vocabulary for the bath and the flask, so a picture means one thing.
+//! Bubbles mean heat and nothing else: only [`Motion::Bubbling`] travels, over
+//! a lit athanor, so a dying fire shows (§10.1). Everything else shimmers in
+//! place on the staggered clock, which a rising pattern cannot take.
 //!
 //! | Motion | Ticks per step | Flashes | Reads as |
 //! |---|---|---|---|
@@ -32,8 +12,7 @@
 //! | [`Motion::Stirring`] | [`STIR_EVERY`] | 0.6 Hz | being worked |
 //! | [`Motion::Bubbling`] | [`RISE_EVERY`] | 1 Hz | being worked **over a fire** |
 //!
-//! Every one is under §14's 3 Hz floor, so unlike the athanor's fire no part of
-//! this needs a photosensitivity exemption.
+//! All under §14's 3 Hz floor.
 
 use crate::pulse::{TICKS_PER_CYCLE, drift_noise, noise, rising, shared_tick, tick_of};
 use crate::style::Roil;
@@ -157,37 +136,15 @@ pub const CARRY: u16 = STAGES * STAGE;
 
 /// One air cell in this many carries a bubble, before lifetime thins them.
 ///
-/// Tuned by looking, at `screens`. Sparse enough that every mark is a thing
-/// rather than a texture, and dense enough to read as a boil: at five, a
-/// two-lane column showed a bubble about a third of the time and looked like a
-/// stray artefact rather than an instrument working. With a life of one to
-/// [`CARRY`] cells, this puts a little over one mark in the air at a time,
-/// thinning with height.
+/// Tuned by looking, at `screens`: about one mark in the air at a time.
 const ESCAPE_ODDS: u32 = 3;
 
 /// A bubble that has broken the surface, `ahead` cells above it.
 ///
-/// [`roil`] already has bubbles going out at the surface, which is the balneum's
-/// whole motion. The alembic adds that some get through — distilling is a harder
-/// boil than a digestion. Gated on `breaking` and [`Motion::Bubbling`], so it
-/// means what the rest of the vocabulary means: over a lit athanor.
-///
-/// It rides the liquid's clock, because an escaped bubble is the bubble that was
-/// rising a moment ago: `rising` gives a coordinate constant for one bubble
-/// while the tick and its height climb together, as `fire::spark` does. Its
-/// lifetime is read off that travelling coordinate rather than a stationary one,
-/// which would be a fixed ceiling every bubble died at.
-///
-/// `ahead`, not the absolute cell, so the surface can never overtake it. The
-/// vessel fills while this runs, at a rate depending on the recipe and on a bar
-/// that grows with the window, so a bubble anchored in absolute space is
-/// swallowed by the liquid it just left whenever `bar / ticks` beats one cell
-/// per [`RISE_EVERY`] — which at the shipped durations it did. No tick count
-/// fixes that at every window size, so a bubble is defined as sitting so many
-/// cells above the face.
-///
-/// Returns the [`Roil`] rather than a style: what colour a piece of liquid is
-/// belongs with the liquid, and a bubble is liquid that has left.
+/// The alembic's harder boil, gated on `breaking` and [`Motion::Bubbling`]. On
+/// the liquid's travelling clock, as `fire::spark`, so its lifetime is not a
+/// fixed ceiling. `ahead` of the face, or a filling vessel swallows it.
+/// Returns the [`Roil`], since a bubble is liquid that has left.
 pub(crate) fn escaping(lane: u16, ahead: u16, phase: f32) -> Option<(char, Roil)> {
     // The face itself is never a bubble: it is the cell the level is read off,
     // and a mark on it is the one place picture and value disagree.
@@ -226,12 +183,8 @@ pub(crate) fn escaping(lane: u16, ahead: u16, phase: f32) -> Option<(char, Roil)
 
 /// A shimmer that stays where it is, at `every` ticks a step.
 ///
-/// Density is ordered as well as tempo, and has to be: a sweep of the cycle
-/// counts how many cells move at once, so a `Drifting` vessel denser than a
-/// `Bubbling` one reads as busier however slowly it changes. The first version
-/// mapped two of four shades to `Stirred` for the calm case and measured 16,500
-/// moving cells against bubbling's 10,400 — calmer by the clock, busier to the
-/// eye.
+/// Density is ordered with tempo, or a calm vessel moving more cells reads
+/// busier however slowly it changes.
 fn shift(lane: u16, step: u16, phase: f32, every: u16, calm: bool) -> Roil {
     let beat = tick_of(phase, lane, step) / every;
     let vigour = noise(lane, step, beat) >> 5;

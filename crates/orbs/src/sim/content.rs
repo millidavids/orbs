@@ -1,22 +1,9 @@
 //! Watching authored content, and handing it to the sim on a tick boundary.
 //!
-//! CLAUDE.md rule 6 puts prose in data files so a writer can work without a
-//! compiler. This is the half that makes "hot-reloadable" true rather than
-//! aspirational: edit `prose.toml` with the game running and the next tick
-//! speaks the new line.
-//!
-//! Finding and parsing the file is [`orbs_shell::load`]'s, because every frontend
-//! needs that and only a hosted one can keep a background thread.
-//!
-//! The watcher is here rather than in `orbs-sim` because rule 8 forbids async
-//! there and rule 3 makes a frontend a caller, not a host — and a watcher inside
-//! the sim would make every headless test touch the filesystem. `notify` runs
-//! its own thread and posts over a channel; a system drains it and calls
-//! [`Sim::set_prose`](orbs_sim::Sim::set_prose) between ticks.
-//!
-//! Opt-in, so a shipped build cannot depend on a path that is not there: content
-//! is compiled in with `include_str!`, and this module does nothing unless
-//! `ORBS_CONTENT` names a directory:
+//! Rule 6's hot reload: edit `prose.toml` running and the next tick speaks it.
+//! Parsing is [`orbs_shell::load`]'s. The watcher is here, not in the sim
+//! (rules 3, 8): `notify`'s thread posts over a channel, drained into
+//! [`Sim::set_prose`](orbs_sim::Sim::set_prose) between ticks. Opt-in:
 //!
 //! ```bash
 //! ORBS_CONTENT=crates/orbs-sim/content cargo run -p orbs
@@ -32,7 +19,7 @@ use std::time::SystemTime;
 use bevy::prelude::*;
 use notify::{RecursiveMode, Watcher as _};
 
-use orbs_shell::{CONTENT_DIR, MANUAL, PROSE, read, read_manual};
+use orbs_shell::{CONTENT_DIR, CONTENT_DIRECTORY, MANUAL, PROSE, read, read_manual};
 
 use super::driver::Tower;
 
@@ -59,17 +46,9 @@ struct Live {
     path: PathBuf,
     /// The modification time already applied.
     ///
-    /// Not an optimisation — it stops the watch feeding itself. Re-reading the
-    /// file lands in the directory watch that asked for the re-read, so at
-    /// `0.16.8` one `touch` reloaded `prose.toml` on every tick for the life of
-    /// the run, saying so once a second while the game looked fine.
-    ///
-    /// Draining the channel after the read would also break the loop, but would
-    /// swallow an edit saved during it. Comparing the stamp costs one `stat` on
-    /// a spurious event and nothing else.
-    ///
-    /// It accepts two writes inside one filesystem timestamp tick — nanoseconds
-    /// here, and the next save corrects it.
+    /// Stops the watch feeding itself on its own re-read, without swallowing
+    /// an edit saved during one. Two writes in one timestamp tick are
+    /// accepted.
     stamp: Option<SystemTime>,
 }
 
@@ -102,36 +81,18 @@ fn modified(path: &Path) -> Option<SystemTime> {
         .ok()
 }
 
-/// Put `ORBS_CONTENT`'s prose into a tower that has just been built.
-///
-/// Called again whenever a tower is, which is why it is a function. `install`
-/// loads once at App-build time and the watcher keeps *that* tower current, but
-/// a `Sim` swapped in from the menu is a new world holding the built-in text —
-/// so a writer would load a save and silently get the shipped prose back.
-pub(crate) fn apply(tower: &mut Tower) {
-    let Some(dir) = std::env::var_os(CONTENT_DIR).map(PathBuf::from) else {
-        return;
-    };
-    // Absent is not a complaint, which `orbs_shell::load` decided and this path
-    // did not follow: a writer working on the prose keeps a directory with
-    // `prose.toml` and nothing else, and without these guards `content: cannot
-    // read .../manual.toml` was logged on every launch and every swap. A file
-    // that is there and will not parse is still said, loudly, by `read`.
-    let prose = dir.join(PROSE);
-    if prose.exists()
-        && let Some(loaded) = read(&prose)
-    {
-        tower.set_prose(loaded);
-    }
-    let manual = dir.join(MANUAL);
-    if manual.exists()
-        && let Some(loaded) = read_manual(&manual)
-    {
-        tower.set_manual(loaded);
+/// Say what [`orbs_shell::load`] could not read, at launch or on a swap.
+pub(crate) fn say_missed(missed: &[&str]) {
+    // A file that will not parse is said by `read`, with why; a missing
+    // directory is not.
+    if missed.contains(&CONTENT_DIRECTORY) {
+        warn!(
+            "content: {CONTENT_DIR} is set but {CONTENT_DIRECTORY} did not load; running on the built-in text"
+        );
     }
 }
 
-/// Install the watcher, if `ORBS_CONTENT` names a readable directory.
+/// Load `ORBS_CONTENT` and install the watcher, if it names a directory.
 ///
 /// Failure is always a warning and never fatal — a missing or unreadable
 /// content directory means the built-in text, which is a complete game.
@@ -139,25 +100,14 @@ pub(crate) fn install(app: &mut App) {
     let Some(dir) = std::env::var_os(CONTENT_DIR).map(PathBuf::from) else {
         return;
     };
+    // Loaded up front by the rule a swapped-in tower gets, so the first tower
+    // and the next cannot read `ORBS_CONTENT` differently.
+    say_missed(&app.world_mut().resource_mut::<Tower>().load_content());
+    if !dir.is_dir() {
+        return;
+    }
     let prose = dir.join(PROSE);
     let manual = dir.join(MANUAL);
-
-    // Load once up front, so a run starts on what is on disk rather than
-    // waiting for the first edit. Guarded on existence for `apply`'s reason: a
-    // live file that is simply not there is an ordinary content directory, not
-    // something to warn about once a launch.
-    if prose.exists()
-        && let Some(loaded) = read(&prose)
-    {
-        app.world_mut().resource_mut::<Tower>().set_prose(loaded);
-        info!("content: loaded {}", prose.display());
-    }
-    if manual.exists()
-        && let Some(loaded) = read_manual(&manual)
-    {
-        app.world_mut().resource_mut::<Tower>().set_manual(loaded);
-        info!("content: loaded {}", manual.display());
-    }
 
     let (tx, changes) = channel();
     let mut watcher = match notify::recommended_watcher(move |event| {
@@ -175,18 +125,9 @@ pub(crate) fn install(app: &mut App) {
         }
     };
 
-    // The *directory*, not the file. Editors save by writing a temporary file
-    // and renaming it over the target, which severs a watch on the inode and
-    // makes exactly one edit work before the watch goes quiet.
-    //
-    // Only `prose.toml` and `manual.toml` are live, though the whole directory
-    // is watched. `recipes.toml` reaches decisions, so swapping it mid-session
-    // would break replay from `(seed, submissions)` (see `Sim::new`); `fuel.toml`
-    // is the same. Editing either said "reloaded prose.toml" and changed no
-    // behaviour, so name the live files once where a writer will see it.
-    //
-    // Announced after the watch takes: "watching" followed by "cannot watch"
-    // leaves a writer with two contradictory claims.
+    // The directory, since editors rename over the file. Only `prose.toml` and
+    // `manual.toml` are live — the rest reach decisions and replay (`Sim::new`)
+    // — so name them. Announced once the watch takes.
     if let Err(error) = watcher.watch(&dir, RecursiveMode::NonRecursive) {
         warn!("content: cannot watch {} ({error})", dir.display());
         return;

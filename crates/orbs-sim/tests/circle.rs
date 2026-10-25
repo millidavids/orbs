@@ -8,34 +8,14 @@
 
 use std::collections::BTreeSet;
 
-use orbs_render::{Circle, FieldName, Value};
+mod common;
+
+use common::{at_the_circle, run, said};
+use orbs_render::Circle;
 use orbs_sim::Sim;
 use orbs_sim::tower::circle::{Glyph, Humour};
 use rand::{RngExt, SeedableRng};
 use rand_chacha::ChaCha8Rng;
-
-fn run(sim: &mut Sim, line: &str) {
-    sim.submit(line);
-    sim.step();
-}
-
-/// Every sentence the tower has said so far.
-fn said(sim: &Sim) -> Vec<String> {
-    sim.scrollback()
-        .records()
-        .iter()
-        .filter_map(|record| match record.field(FieldName::Message) {
-            Some(Value::Text(text)) => Some(text.to_owned()),
-            _ => None,
-        })
-        .collect()
-}
-
-fn at_the_circle(seed: u64) -> Sim {
-    let mut sim = Sim::new(seed);
-    run(&mut sim, "attend menagerie");
-    sim
-}
 
 /// Whether the player is standing in the menagerie.
 fn here_is_menagerie(sim: &Sim) -> bool {

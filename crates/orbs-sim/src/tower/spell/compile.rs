@@ -1,16 +1,12 @@
 //! Reading a spell's text into something the orb can run.
 //!
-//! §8 asked for loose phrasing to be resolved *"at authoring time"*. That is met
-//! here, but the moment is **cast** and the result lives in the program, not in
+//! §8's loose phrasing is resolved at **cast**, into the program and never into
 //! the file: a rewriter that understands part of a line writes the rest out of
-//! existence (§19), and a rewritten file is not the player's any more.
+//! existence (§19). Cast, not save, so names are fixed in the world the spell is
+//! about to run in.
 //!
-//! Cast beats save too — the names are fixed in the world the spell is about to
-//! run in, and one that stops matching later is reported every casting (§8.1).
-//!
-//! The orb accepts an abbreviation, never a typo and never a coin flip. §6's
-//! matcher is forgiving because the player is *there* to see the echo, where a
-//! spell resolves with nobody watching, so it is held to [`SPELL_SIMILARITY`].
+//! An abbreviation is accepted, never a typo or a coin flip: nobody is watching a
+//! spell resolve, so it is held to [`SPELL_SIMILARITY`], not §6's prompt floor.
 
 use bevy_ecs::prelude::*;
 
@@ -22,48 +18,28 @@ use super::program::{Block, Complaint, Draft, Kind, Program, Step};
 
 /// How alike a name must be to what it names, inside a spell.
 ///
-/// 850 is where the scale already divides. `fuzzy` scores a *prefix* of three
-/// characters or more at `PREFIX_FLOOR` (850) plus coverage, so an abbreviation
-/// is always at or above the line — `mortar` → `mortar_and_pestle` is 902 — and
-/// a *typo*, scored by edit distance, only reaches it as a single wrong
-/// character in a long word. *"Prefixes are intentional… typos are
-/// accidental."*
-///
-/// The case that forced it: `similarity("ground-salt", "ground-sage")` is 819,
-/// over the prompt's floor of 600, so a question written while the salt was
-/// absent compiled into a question about the sage.
+/// 850 is `PREFIX_FLOOR`, where the scale already divides: any prefix of three
+/// or more clears it, and a typo only as one wrong character in a long word.
+/// At the prompt's 600, a question about absent salt compiled as one about sage.
 pub const SPELL_SIMILARITY: u32 = 850;
 
 /// How far ahead of the runner-up a name must be to be the one meant.
 ///
-/// A floor alone cannot help when two things are *equally* close: with both
-/// products on the shelf, `ground` is a 931 prefix of `ground-sage` and of
-/// `ground-salt` alike, and `Scene::best_match` would hand back whichever was
-/// registered first. Command lines in a spell already refuse on ambiguity, so
-/// this brings questions into line rather than inventing a policy for them.
-///
-/// It was `1` — a margin in name and a tie in behaviour. Against the shipped
-/// vocabulary nothing lands between 1 and 54, so the two rules cannot be told
-/// apart today; the ceiling is `sag` → `sage` at 67, a legitimate abbreviation
-/// that has to keep working, so 50 is the room there is.
-/// `the_margin_is_below_the_closest_call` measures that lead and fails when a
-/// new name squeezes it.
+/// `ground` is an equal prefix of `ground-sage` and `ground-salt`, and
+/// `best_match` would pick whichever registered first. The ceiling is `sag` →
+/// `sage` at 67; `the_margin_is_below_the_closest_call_the_vocabulary_makes`
+/// fails when a new name squeezes it.
 pub const SPELL_MARGIN: u32 = 50;
 
 /// Whether one line stands on its own as a spell **statement**.
 ///
-/// The check a reader's output has to pass before it may replace a line. A
-/// function rather than a `program::read` at each site, because three complaints
-/// are earned *purely for being on one line* — `spell_unclosed` (a lone `if`,
-/// `repeat`, `for` or `part`), `spell_stray_end` and `spell_stray_else` — and a
-/// caller comparing `complaints.is_empty()` would refuse most of the control
-/// flow the scrivener exists for.
+/// What a reader's output must pass before it may replace a line. Three
+/// complaints are earned only for being alone — a lone `if`, `end` or `else` —
+/// so `complaints.is_empty()` would refuse most control flow. A command line
+/// answers `false`: the prompt's reader owns it.
 ///
-/// A command line answers `false`: it is a statement the *prompt's* reader owns.
-///
-/// ⚠ Parsing is not understanding. `if the alembic has finished` passes this —
-/// as *"holds a thing called finished"* — and means something else entirely, so
-/// a reader's output must also account for every word the player wrote.
+/// Parsing is not understanding: `if the alembic has finished` passes, as
+/// *holds a thing called finished*. A reader must also account for every word.
 #[must_use]
 pub fn reads_cleanly(line: &str) -> bool {
     /// What a line earns for having no block around it.
@@ -77,9 +53,7 @@ pub fn reads_cleanly(line: &str) -> bool {
     {
         return false;
     }
-    // Two ways, because `end` and `else` produce no step: a body check alone
-    // would call the two commonest words in the language unreadable. A call
-    // takes the other route — `morning()` opens on no spell word.
+    // `end` and `else` produce no step, and a call opens on no spell word.
     crate::parser::spell_word(line).is_some()
         || draft
             .body
@@ -89,15 +63,9 @@ pub fn reads_cleanly(line: &str) -> bool {
 
 /// The lines a spell compiles from: its reading, or its text if it has none.
 ///
-/// One place, because two would disagree: casting, the mid-flight reload and
-/// restoring a save all ask this.
-///
-/// [`Read`](crate::tower::Read) is derived and byte-equal to
-/// [`Held`](crate::tower::Held) unless something read the file. It falls back
-/// when the component is absent, and line by line where a reading was not read
-/// from the text now at its place (see `Read::compiled`) — comparing only line
-/// counts meant a save with one hand-edited line compiled the reading of the
-/// line that used to be there.
+/// One place for casting, the mid-flight reload and a restored save. Line by
+/// line, because a reading is used only where it was read from the text now at
+/// its place — see `Read::compiled`.
 #[must_use]
 pub fn source(world: &World, node: Entity) -> Vec<String> {
     let held = world
@@ -117,10 +85,8 @@ pub fn source(world: &World, node: Entity) -> Vec<String> {
 /// Read `lines` as a program, with every name resolved against the domain at
 /// `from`.
 ///
-/// The only way a [`Program`] is made. `program::read` returns a [`Draft`],
-/// which nothing can run and nothing can store on [`Running`](super::Running),
-/// so a future call site cannot skip the resolution. Visibility would not do it:
-/// both callers are already in this crate.
+/// The only way a [`Program`] is made: `program::read` returns a [`Draft`],
+/// which nothing can run, so no future call site can skip the resolution.
 #[must_use]
 pub fn compile(world: &World, from: Entity, lines: &[String]) -> Program {
     let at = crate::tower::domain_of(world, from).unwrap_or(from);
@@ -128,11 +94,10 @@ pub fn compile(world: &World, from: Entity, lines: &[String]) -> Program {
     let known = world.resource::<crate::content::Recipes>().vocabulary();
     let draft = super::program::read(lines);
     let mut complaints = draft.complaints;
-    // The names the spell binds, gathered first. They are lexical, and a bound
-    // name reaches `fix` looking exactly like a place the room does not have.
+    // First: a bound name otherwise reaches `fix` looking like a missing place.
     let bound = super::program::bindings(&draft.body);
-    // Against the text rather than the room, since a part is a name the *spell*
-    // defines. Asking it here keeps `interpret` and the cast agreeing (§19).
+    // Against the text, since the spell defines its parts; `interpret` asks the
+    // same (§19).
     let defined: Vec<(String, usize)> = super::program::parts(&draft.body)
         .into_iter()
         .map(|(name, takes)| (name.to_owned(), takes))
@@ -141,22 +106,16 @@ pub fn compile(world: &World, from: Entity, lines: &[String]) -> Program {
     check_commands(&draft.body, &scene, &bound, &mut complaints);
     check_learned(world, &draft.body, &mut complaints);
     let body = resolved(draft.body, &scene, &known, &bound, &mut complaints);
-    // In line order, so what the orb says about a spell reads down the file
-    // however the faults were found.
+    // Down the file, however the faults were found.
     complaints.sort_by_key(|complaint| complaint.line);
     Program::new(body, complaints)
 }
 
 /// Say so about every word the loom has not granted yet.
 ///
-/// `queue` is a verb and refuses in voice where it is typed; `pull` and
-/// `alongside` are control words with nobody to answer, so the report comes from
-/// here — where every other unreadable line is reported, before casting rather
-/// than on whichever tick it is reached.
-///
-/// A complaint, so the rest of the spell still runs: §8 forbids refusing at save
-/// and halting at cast, so a loop above a `pull` goes round doing the half it
-/// can.
+/// `pull` and `alongside` are control words with nobody to answer at run time,
+/// so the report is made here, before casting. A complaint, not a refusal: the
+/// rest of the spell runs (§8).
 fn check_learned(world: &World, body: &Block, complaints: &mut Vec<Complaint>) {
     use crate::tower::{Grant, holds};
     let satchel = holds(world, Grant::Satchel);
@@ -195,27 +154,19 @@ fn walk_learned(body: &Block, satchel: bool, cursors: bool, complaints: &mut Vec
 /// Say so about every call naming a part the spell does not define.
 ///
 /// At cast rather than at the call, which inside a branch may be never.
-/// `run::called` still answers for it, since a definition can be deleted while
-/// the spell runs (§8), but by then it is a report about an edit, not a typo.
-///
-/// Recursive, because a call can be anywhere a command can.
+/// `run::called` answers again for a definition deleted while the spell runs.
 fn check_calls(body: &Block, defined: &[(String, usize)], complaints: &mut Vec<Complaint>) {
     for Step { line, kind } in body {
         match kind {
-            // A fork is checked exactly as a call is: `alongside missing()` and
-            // `missing()` are the same mistake, and a fork whose part does not
-            // exist would start a cursor on nothing.
+            // A fork is the same mistake as a call.
             Kind::Call { name, args } | Kind::Alongside { name, args } => {
                 match defined.iter().find(|(part, _)| part == name) {
                     None => complaints.push(Complaint {
                         line: *line,
                         key: "spell_no_such_part",
                     }),
-                    // Wrong count is its own complaint, not a missing part. A
-                    // part takes names positionally, so `between(wellspring)`
-                    // has nothing to put in `there` — and binding it to nothing
-                    // leaves the body asking about a name that resolves against
-                    // the room and does the wrong thing quietly.
+                    // Positional, so a short call leaves a parameter that would
+                    // resolve against the room and quietly do the wrong thing.
                     Some((_, wanted)) if *wanted != args.len() => {
                         complaints.push(Complaint {
                             line: *line,
@@ -246,25 +197,15 @@ fn check_calls(body: &Block, defined: &[(String, usize)], complaints: &mut Vec<C
 /// Read each command's **verb** at cast, and say so when it is one a spell may
 /// not issue.
 ///
-/// The verb is knowable here and the arguments are not. A spell makes its own
-/// inputs: `digest ground-sage` is written above the line that produces any, so
-/// at cast the room has none and `analyse` drops the argument. Freezing a whole
-/// `Intent` here would break every pipeline spell in the game (§19); the verb
-/// survives because the fixture standing in the room offers it.
-///
-/// `may_issue` is a security boundary and was answered too late — `run_line`
-/// asks it when the line is *reached*, so a `meditate 3600` in an untaken branch
-/// said nothing, and `Sim::step` drains `Skip` in a while-loop.
-///
-/// Asked here as well, not instead: a boundary with one guard is one a future
-/// caster can walk around.
+/// Only the verb: a spell makes its own inputs, so at cast its arguments may not
+/// exist yet, and freezing a whole `Intent` would break every pipeline (§19).
+/// `may_issue` is a security boundary, asked here as well as when the line runs,
+/// so a forbidden line in an untaken branch is still said.
 fn check_commands(body: &Block, scene: &Scene, bound: &[String], complaints: &mut Vec<Complaint>) {
     for Step { line, kind } in body {
         match kind {
             Kind::Command(text) => {
-                // A line naming something the spell binds is left alone: a
-                // variable holds nothing until the line runs, so resolving one
-                // here reads `follow way` as a `follow` with no bearing.
+                // A variable holds nothing until the line runs.
                 if names_a_binding(text, bound) {
                     continue;
                 }
@@ -274,9 +215,8 @@ fn check_commands(body: &Block, scene: &Scene, bound: &[String], complaints: &mu
                     continue;
                 };
                 if !super::run::may_issue(intent.verb) {
-                    // Its own key, not `run_line`'s: a complaint carries only
-                    // `name` and `count`, so the runtime key's `{detail}` would
-                    // reach the player unsubstituted.
+                    // Its own key: the runtime one's `{detail}` has nothing to
+                    // fill it here.
                     complaints.push(Complaint {
                         line: *line,
                         key: "spell_forbidden_line",
@@ -292,14 +232,9 @@ fn check_commands(body: &Block, scene: &Scene, bound: &[String], complaints: &mu
                 check_commands(body, scene, bound, complaints);
                 check_commands(otherwise, scene, bound, complaints);
             }
-            // `bide` is checked at parse: this asks whether a *verb* is one the
-            // room offers, and a bide has no verb.
-            //
-            // `pull` is out for a sharper reason: it names a *place*, resolved
-            // by `run::pull` in the room the spell stands in. `scene` is built
-            // from where the **player** is, so checking it here would fault a
-            // good line whenever a bound solver worked while the player was
-            // elsewhere — §19's Cwd-versus-spell-room defect.
+            // No verb in a bide. A `pull` names a place in the spell's room,
+            // while `scene` is the player's, so checking it here would fault a
+            // good line whenever a bound spell worked elsewhere (§19).
             Kind::Wait(_)
             | Kind::Bide(_)
             | Kind::Let { .. }
@@ -328,9 +263,7 @@ fn resolved(
         .map(|Step { line, kind }| Step {
             line,
             kind: match kind {
-                // A guard's names are fixed exactly as an `if`'s are, or `repeat
-                // until the mortr is idle` resolves quietly at cast and then
-                // never ends.
+                // Fixed as an `if`'s are, or a misspelt guard never ends.
                 Kind::Repeat {
                     times,
                     mut until,
@@ -340,9 +273,8 @@ fn resolved(
                         .as_mut()
                         .map(|condition| fix(condition, scene, known, bound))
                         .unwrap_or_default();
-                    // Nought turns, not unbounded. Leaving `times` at `None` —
-                    // what a *guarded* repeat carries — turns a loop the orb
-                    // could not read into one that never stops.
+                    // Nought turns: a guarded repeat's `None` would make an
+                    // unreadable loop one that never stops.
                     let mut turns = times;
                     if unplaced
                         .iter()
@@ -366,9 +298,8 @@ fn resolved(
                     body,
                     otherwise,
                 } => {
-                    // A word that names nothing makes the question unreadable,
-                    // rather than a question about a thing that happens not to
-                    // be here. See [`fix`] for the difference.
+                    // A word naming nothing makes the question unreadable — see
+                    // [`fix`].
                     let unplaced = condition
                         .as_mut()
                         .map(|condition| fix(condition, scene, known, bound))
@@ -389,18 +320,14 @@ fn resolved(
                         otherwise: resolved(otherwise, scene, known, bound, complaints),
                     }
                 }
-                // The body is resolved, and forgetting that is silent: a `for
-                // each` whose block skipped this would run with every name as
-                // typed, and a misspelt line inside a loop is the one place a
-                // typo answers no for ever.
+                // Skipping the body would leave a typo inside a loop answering
+                // no for ever.
                 Kind::Each { group, body } => Kind::Each {
                     group,
                     body: resolved(body, scene, known, bound, complaints),
                 },
-                // The value is a name and is resolved like one, so `set m to
-                // mortar` binds `mortar_and_pestle`. A name the spell itself
-                // binds is left alone — `set best to way` is an accumulator
-                // inside a `for each`.
+                // `set m to mortar` binds `mortar_and_pestle`; a name the spell
+                // binds itself is an accumulator and is left alone.
                 Kind::Let { name, value } => {
                     let held = bound.iter().any(|held| held.eq_ignore_ascii_case(&value));
                     let found = if held {
@@ -425,29 +352,14 @@ fn resolved(
         .collect()
 }
 
-/// Resolve one question's names in place, answering whether it can be asked at
-/// all.
+/// Resolve one question's names in place, reporting every name it could not
+/// place.
 ///
-/// A *place* that cannot be found makes the question unanswerable (§8's
-/// *Referent missing*). It is left as the player typed it, so `holds` finds
-/// nothing and the runner names the word — every cast, because the tower may
-/// have changed since.
-///
-/// A *thing* that cannot be found is usually just an answer of no: `if the
-/// dispensary has ground-sage` is asked *before* there is any. So a thing is
-/// looked for in the room first and then in
-/// [`Recipes::vocabulary`](crate::content::Recipes::vocabulary) — every name any
-/// recipe can produce or consume, present or not. A word in neither is a typo:
-/// unreadable, said once at cast, and neither branch runs, because `has
-/// ground-slat` left to answer no is indistinguishable from an empty shelf.
-///
-/// It reports what it could not place rather than being asked twice: as a bare
-/// `bool` with the editor re-deriving the rest, a byproduct counted as placed
-/// here and unplaced there, and a place re-checked against `NounKind::Any` read
-/// clean and then failed at run time.
-///
-/// Every name, not the first: stopping at one, `if the mortr is idle and the
-/// dispensary has sagg` said nothing about `sagg` (§8.1).
+/// A missing *place* leaves the question unanswerable (§8's *Referent missing*),
+/// named by the runner every cast. A missing *thing* is usually an answer of no
+/// — `has ground-sage` is asked before there is any — so it is looked for in the
+/// room, then in every name any recipe knows; in neither, it is a typo, and the
+/// question cannot be asked. Every name, not the first (§8.1).
 fn fix(
     condition: &mut Condition,
     scene: &Scene,
@@ -456,10 +368,8 @@ fn fix(
 ) -> Vec<Unplaced> {
     let mut unplaced = Vec::new();
     condition.rename(&mut |kind, name| {
-        // A name the spell binds is left as written and is not a fault: it
-        // stands for a place known only when the line runs. Left alone rather
-        // than substituted, because the *value* is what gets resolved, at the
-        // `set` that binds it.
+        // A bound name stands for a place known only when the line runs; its
+        // value was resolved at the `set`.
         if bound.iter().any(|held| held.eq_ignore_ascii_case(name)) {
             return None;
         }
@@ -485,9 +395,8 @@ fn fix(
 
 /// The one fault a list of unplaced names adds up to.
 ///
-/// A typo outranks a missing place: a place the tower does not have leaves a
-/// question that stands and cannot be answered, where a word that names nothing
-/// leaves one that cannot be asked. Every offender of the winning kind is named.
+/// A typo outranks a missing place: one leaves a question that cannot be asked,
+/// the other one that cannot be answered. Every offender of that kind is named.
 fn fault_of(unplaced: &[Unplaced]) -> Option<Fault> {
     let typos: Vec<&str> = unplaced
         .iter()
@@ -516,23 +425,17 @@ fn fault_of(unplaced: &[Unplaced]) -> Option<Fault> {
 }
 
 /// A name in a question that the room could not place, and which kind it was.
-///
-/// The two fail differently (see [`fix`]), and the difference decides whether
-/// the question can be asked at all — so a type rather than a flag.
 enum Unplaced {
-    /// A place the tower does not have. The question stands and is unanswerable;
-    /// the runner names it every casting, because the tower may change.
+    /// A place the tower does not have: the question stands, unanswerable.
     Place(String),
-    /// A word that names nothing at all — not in the room, not in the recipes.
-    /// A typo, and the question cannot be asked.
+    /// A word that names nothing, in the room or the recipes: a typo.
     Thing(String),
 }
 
 /// What `name` clearly names in `scene`, or `None` if it is not clear.
 ///
-/// Three ways to be unclear, and all three answer the same: nothing is near
-/// enough; the best is a typo rather than an abbreviation; or two things are
-/// equally close and picking one would be a guess.
+/// Unclear is nothing near enough, a typo rather than an abbreviation, or two
+/// things equally close.
 fn clearly(scene: &Scene, kind: NounKind, name: &str) -> Option<String> {
     let words: Vec<&str> = name.split_whitespace().collect();
     let found = scene.candidates(kind, &words);
@@ -542,14 +445,11 @@ fn clearly(scene: &Scene, kind: NounKind, name: &str) -> Option<String> {
     }
     let winner = leaf(&best.name);
 
-    // Two entries for one word are one candidate, not a tie. §6.1 registers a
-    // `Topic` beside every reagent, which put `ground-sage` in the scene twice
-    // at identical scores — so `ground-sag` was refused as ambiguous with its
-    // own manual entry.
+    // Two entries for one word are not a tie: §6.1 registers a `Topic` beside
+    // every reagent at the same score.
     let runner_up = found.iter().find(|next| leaf(&next.name) != winner);
 
-    // An exact match is never a coin flip, whatever else is near it: `ground-sage`
-    // means `ground-sage` even with `ground-salt` on the shelf beside it.
+    // An exact match is never a coin flip.
     if best.score < EXACT
         && runner_up.is_some_and(|next| best.score.saturating_sub(next.score) < SPELL_MARGIN)
     {
@@ -558,31 +458,23 @@ fn clearly(scene: &Scene, kind: NounKind, name: &str) -> Option<String> {
     Some(winner.to_owned())
 }
 
-/// Every distinct name a scene could answer `name` with, best first.
-///
-/// Exposed for the tie rule above — `best_match` keeps only the winner, which is
-/// exactly the information a coin flip has to be detected from.
+/// Every distinct name a scene could answer `name` with, best first — what a
+/// tie is detected from, which `best_match` throws away.
 #[must_use]
 pub fn candidates(scene: &Scene, kind: NounKind, name: &str) -> Vec<NounMatch> {
     let words: Vec<&str> = name.split_whitespace().collect();
     scene.candidates(kind, &words)
 }
 
-/// Read `lines` without resolving anything — for the parser's own tests, and for
-/// the editor, which reports on a buffer rather than running it.
-///
-/// Returns a [`Draft`] rather than a [`Program`] for the reason [`compile`]
-/// gives: the type is what keeps an unresolved program from being run.
+/// Read `lines` without resolving anything — for the parser's tests, and for the
+/// editor, which reports on a buffer rather than running it.
 #[must_use]
 pub fn read(lines: &[String]) -> Draft {
     super::program::read(lines)
 }
 
-/// One line of a spell, as the orb reads it.
-///
-/// The rewriter turned the right way round: `scribe::canonicalise`'s work,
-/// except that it *returns* the reading instead of writing it into the player's
-/// file.
+/// One line of a spell, as the orb reads it: the rewriter turned round, so it
+/// returns the reading instead of writing it into the player's file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Reading {
     /// Which line, counting from one, as the player sees it.
@@ -590,11 +482,8 @@ pub struct Reading {
     /// What the orb hears: the canonical command, the resolved question, or the
     /// line itself where it is the player's own (a comment, a blank).
     pub heard: String,
-    /// What the player wrote, when a reader turned it into something else.
-    ///
-    /// Without it a line read *correctly* and one read *wrongly* look identical
-    /// in the editor. `None` where [`heard`](Self::heard) came from the line as
-    /// typed, which is every line in a build with no reader.
+    /// What the player wrote, when a reader turned it into something else —
+    /// without it a line read rightly and one read wrongly look alike.
     pub was: Option<String>,
     /// Why the orb cannot read it, if it cannot.
     pub fault: Option<Fault>,
@@ -602,8 +491,7 @@ pub struct Reading {
 
 /// What is wrong with a line, in a form prose can be built from.
 ///
-/// Not [`Complaint`], which carries a prose key and nothing else: half of what
-/// this reports is a *name*, and a `&'static str` has nowhere to put it.
+/// Not a [`Complaint`], which has nowhere to put the name at fault.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Fault {
     /// The prose key for what is wrong.
@@ -614,19 +502,10 @@ pub struct Fault {
 
 /// Read `lines` as a spell for `domain`, line by line, without running anything.
 ///
-/// What the editor draws `interpret` and its marks from. Pure, and over the
-/// **buffer** rather than the saved file, so the answer tracks what is on screen.
-/// A line the orb understands reads back as what it heard; one it does not is
-/// returned as typed, with the fault beside it. Nothing here changes the buffer,
-/// which is the difference between this and the rewriter it descends from.
-///
-/// `read` is each line as it would compile, looked up where the save does
-/// (`Sim::read_spell_with`), so a line the save already read is not read again.
-/// A line the reader changed carries the player's own text in [`Reading::was`].
-///
-/// Everything file-shaped is asked of the reading, not the text: judging each
-/// line on its reading while finding blocks and bindings in the buffer made the
-/// two disagree exactly where a reader had helped (§19).
+/// What the editor draws `interpret` and its marks from, over the buffer rather
+/// than the saved file. `read` is each line as it would compile, from the save.
+/// Everything file-shaped is asked of the reading, not the text, or the two
+/// disagree exactly where a reader helped (§19).
 #[must_use]
 pub fn interpret(world: &World, domain: &str, lines: &[String], read: &[String]) -> Vec<Reading> {
     let Some(at) = crate::execute::find_domain(world, domain) else {
@@ -654,20 +533,17 @@ pub fn interpret(world: &World, domain: &str, lines: &[String], read: &[String])
         .map(|(at, line)| read.get(at).unwrap_or(line).clone())
         .collect();
 
-    // Faults about the *shape* of the file — a block nothing closed, a stray
-    // `end` — belong to a line but are found by reading the whole thing.
+    // A fault of shape belongs to a line but is found by reading the whole file.
     let draft = super::program::read(&compiled);
     let mut structural = draft.complaints;
-    // The same check the cast makes, on the same tree: `interpret` and the
-    // runner disagreeing about a line is §19's recurring defect in this file.
+    // The cast's check, on the same tree.
     let defined: Vec<(String, usize)> = super::program::parts(&draft.body)
         .into_iter()
         .map(|(name, takes)| (name.to_owned(), takes))
         .collect();
     check_calls(&draft.body, &defined, &mut structural);
-    // The whole file's bindings, for every line of it: a `set` on line 9 is a
-    // name line 2 may already say, and disagreeing with the runner here paints a
-    // working line red.
+    // The whole file's bindings for every line: a `set` on line 9 may be said on
+    // line 2.
     let bound = super::program::bindings(&draft.body);
 
     lines
@@ -676,7 +552,6 @@ pub fn interpret(world: &World, domain: &str, lines: &[String], read: &[String])
         .enumerate()
         .map(|(index, (line, heard))| {
             let at = index + 1;
-            // What the orb would compile, then what it makes of that.
             let mut reading = one(heard, &scene, &known, &bound);
             reading.was = (heard != line).then(|| line.clone());
             reading.line = at;
@@ -703,9 +578,8 @@ fn one(line: &str, scene: &Scene, known: &[&str], bound: &[String]) -> Reading {
         was: None,
         fault,
     };
-    // The orb's reading where it differs from the text — a call written
-    // `gathering ()` is heard as `gathering()`, which is the form the player has
-    // to type and the one this surface is for showing them.
+    // The orb's reading where it differs from the text: `gathering ()` is heard
+    // as `gathering()`, the form the player has to type.
     let verbatim_as = |heard: &str, fault: Option<Fault>| Reading {
         line: 0,
         heard: heard.to_owned(),
@@ -713,29 +587,19 @@ fn one(line: &str, scene: &Scene, known: &[&str], bound: &[String]) -> Reading {
         fault,
     };
 
-    // A blank line and a comment are the player's own, and the orb has nothing
-    // to say about either.
     if trimmed.is_empty() || trimmed.starts_with('#') {
         return verbatim(None);
     }
 
-    // A call, before the command resolver sees it and after the language's own
-    // words, which is the order `read` uses. `gathering()` is not a word the
-    // tower has, so falling through to the resolver would report *"no such
-    // thing"* about a good line; whether the part is *defined* arrives from
-    // `check_calls`.
-    //
-    // The `spell_word` guard stops a *definition* being read as a malformed
-    // call: `call_name("part gathering()")` finds a two-word head and answers
-    // `Some(None)`, so without it the canonical `part <name>()` was reported
-    // unreadable here while `read` compiled and ran it.
+    // A call before the command resolver, as `read` orders it — whether the part
+    // exists comes from `check_calls`. Guarded on `spell_word`, or `part
+    // gathering()` reads as a malformed call.
     if crate::parser::spell_word(trimmed).is_none()
         && let Some(called) = super::program::call_of(trimmed)
     {
         return match called {
-            // The arguments are written back as names, never resolved: what the
-            // orb hears is *"do `between` with whatever `near` is"*, and it
-            // cannot know that until the line runs.
+            // Arguments stay names: what they stand for is known when the line
+            // runs.
             Some((name, args)) => verbatim_as(&format!("{name}({})", args.join(", ")), None),
             None => verbatim(Some(Fault {
                 key: "spell_unreadable_call",
@@ -745,9 +609,7 @@ fn one(line: &str, scene: &Scene, known: &[&str], bound: &[String]) -> Reading {
     }
 
     if let Some(word) = crate::parser::spell_word(trimmed) {
-        // `repeat until` carries the same grammar an `if` does, resolved by the
-        // same `fix`. Excluded, a guard with a misspelt place came back as
-        // typed, with no fault and no change to the "cannot read" count.
+        // `repeat until` carries an `if`'s grammar and is fixed by the same `fix`.
         let guarded = word == crate::parser::SpellWord::Repeat
             && crate::parser::spell_argument(trimmed)
                 .split_whitespace()
@@ -777,8 +639,6 @@ fn one(line: &str, scene: &Scene, known: &[&str], bound: &[String]) -> Reading {
                 detail: None,
             }));
         };
-        // A name the room cannot place: what the file used to reveal by being
-        // rewritten, and the reason this surface exists. Asked of `fix`.
         let fault = fault_of(&fix(&mut question, scene, known, bound));
         return Reading {
             line: 0,
@@ -788,11 +648,8 @@ fn one(line: &str, scene: &Scene, known: &[&str], bound: &[String]) -> Reading {
         };
     }
 
-    // A line naming something the spell binds is quoted, never resolved.
-    // `follow best` read back as `follow west` — the fuzzy matcher finding the
-    // nearest place in the room, which is the one thing `best` is certainly not.
-    // Verbatim is the honest answer: what the orb hears is *"follow whatever
-    // `best` is"*, and it cannot know until the line runs.
+    // A line naming a binding is quoted, never resolved: `follow best` once read
+    // back as `follow west`, the one place `best` is certainly not.
     if trimmed
         .split_whitespace()
         .any(|word| bound.iter().any(|held| held.eq_ignore_ascii_case(word)))
@@ -800,25 +657,18 @@ fn one(line: &str, scene: &Scene, known: &[&str], bound: &[String]) -> Reading {
         return verbatim(None);
     }
 
-    // A command, read the way the runner will read it — through the same
-    // `analyse` a typed line goes through, against the spell's own room.
+    // As the runner reads it: the same `analyse`, in the spell's own room.
     let resolution = analyse(line, scene, Mode::Calm).resolution;
 
-    // A line naming another spell is quoted, never resolved: a player writes
-    // `night_watch` and the `brew_clarity` it invokes in whichever order they
-    // think of them (§8), so the spell being named routinely does not exist yet.
-    // The parser weights the verb double, so `invoke not_written_yet` read back
-    // as `invoke first_light.spell` — the orb naming a spell the player did not
-    // (§19).
+    // A spell naming another is quoted: the one named often does not exist yet,
+    // and the matcher would name a spell the player did not (§19).
     if names_a_spell(&resolution) {
         return verbatim(None);
     }
 
     let intent = match resolution {
         Resolution::Resolved { intent, .. } => intent,
-        // A verb that takes nothing says so here too. A spell answered *"nothing
-        // here answers to …"*, which is not what is wrong with the line —
-        // `muster the troops` names no missing referent.
+        // `muster the troops` names no missing referent: the verb takes nothing.
         Resolution::TakesNothing { extra, .. } => {
             return verbatim(Some(Fault {
                 key: "spell_takes_nothing",
@@ -853,18 +703,13 @@ fn one(line: &str, scene: &Scene, known: &[&str], bound: &[String]) -> Reading {
 
 /// Whether this reading is a spell naming another spell.
 ///
-/// `Incomplete` counts: `invoke brew_clarity` where `brew_clarity` does not
-/// exist yet leaves the `Script` slot unfillable, which is the case this exists
-/// for, so reporting only the readings that *did* resolve would miss it.
+/// `Incomplete` counts — a forward reference leaves the `Script` slot unfilled —
+/// and so does a tie between spells, which a forward reference with four on the
+/// shelf produces.
 fn names_a_spell(resolution: &Resolution) -> bool {
     let verb = match resolution {
         Resolution::Resolved { intent, .. } => intent.verb,
         Resolution::Incomplete { verb, .. } => *verb,
-        // Ambiguous counts too, and this was the hole: a forward reference
-        // matches *no* spell well, so with four on the shelf `invoke
-        // not_written_yet` tied between them and fell through to
-        // `spell_missing`. The rule is *this line names a spell*, and a tie
-        // between spells is still that.
         Resolution::Ambiguous { candidates } => {
             return !candidates.is_empty()
                 && candidates

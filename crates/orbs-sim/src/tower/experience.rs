@@ -1,22 +1,10 @@
 //! What the work is worth, and what it buys (DESIGN.md §11.5, §19).
 //!
-//! It only ever rises: experience accumulates and is never spent, so an upgrade
-//! opens when the total passes its number and stays open. That is what makes it
-//! a `u64` and a save a single value — no balance to keep, and nothing a player
-//! can spend and then wish they had not.
-//!
-//! What it is *worth* and what it *buys* are both authored
-//! ([`Progression`]); this module knows only when
-//! to add and how to say so.
-//!
-//! Under `tower/` because it is world state that ticks — the test that put
-//! `spell/` here rather than in `execute/`, which holds no per-tick state. This
-//! is written by a run *completing*, in a system, on a tick boundary.
-//!
-//! Concentration is derived from it, never stored: [`concentration`] is a
-//! function of the total against the authored table, so there is no second
-//! number to fall out of step. A save that carried both could disagree with
-//! itself; this one cannot.
+//! It only ever rises, so an upgrade opens when the total passes its number and
+//! stays open, and nothing is spent and regretted. What it is worth and what it
+//! buys are authored ([`Progression`]); this knows when to add and how to say
+//! so. Concentration is derived from the total, never stored, so a save cannot
+//! disagree with itself.
 
 use bevy_ecs::prelude::*;
 use orbs_render::{FieldName, RecordKind, Role};
@@ -24,19 +12,13 @@ use orbs_render::{FieldName, RecordKind, Role};
 use crate::content::{Progression, Prose};
 use crate::session::Scrollback;
 
-/// Everything the player has earned by working.
-///
-/// Never decreases: nothing in the game removes experience, and the only mutator
-/// here adds.
+/// Everything the player has earned by working. Never decreases.
 #[derive(Resource, Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct Experience(u64);
 
 impl Experience {
-    /// Put a total back, for a save.
-    ///
-    /// Not `credit`, which emits records and can announce an unlock: a restore
-    /// is the world being what it already was, and a load that congratulated you
-    /// on yesterday's work would be reporting a lie in voice.
+    /// Put a total back, for a save — not `credit`, or a load would congratulate
+    /// you on yesterday's work.
     pub(crate) const fn restore(&mut self, total: u64) {
         self.0 = total;
     }
@@ -55,12 +37,8 @@ pub fn concentration(world: &World) -> usize {
     world.resource::<Progression>().concentration(earned)
 }
 
-/// How deep a siege's quintessence pool is, before the tower's repair scales it.
-///
-/// [`concentration`]'s twin, and a function here rather than two resource
-/// lookups at the call site for its reason: which table answers a progression
-/// question is this module's business, and a caller reaching for `Experience`
-/// and `Progression` itself would be a second place that has to agree.
+/// How deep a siege's quintessence pool is, before the tower's repair scales it
+/// — [`concentration`]'s twin, so which table answers stays this module's.
 #[must_use]
 pub fn quintessence_steps(world: &World) -> usize {
     let earned = world.resource::<Experience>().get();
@@ -69,10 +47,8 @@ pub fn quintessence_steps(world: &World) -> usize {
 
 /// What one completed run at `named` is worth.
 ///
-/// Read before the run reports itself, credited after (see [`credit`]): the
-/// split is what puts the sentences in the order they happened — the alembic
-/// yields a clarity, *and then* the orb can hold a spell. In one call it
-/// announced the reward before the work.
+/// Read before the run reports itself and credited after (see [`credit`]), so
+/// the work is said before the reward.
 #[must_use]
 pub fn worth(world: &World, named: &str) -> u64 {
     world.resource::<Progression>().earns(named)
@@ -80,15 +56,9 @@ pub fn worth(world: &World, named: &str) -> u64 {
 
 /// What a solve at `named` pays, given how many tries it took against `par`.
 ///
-/// Full at or under par, three quarters beyond it, and never nothing. The
-/// halving curve a first draft proposed is withdrawn: a blind ladder needs ~23
-/// presses against a player's ~4 and halving would land it on the floor of 1,
-/// while the ladder already pays 5.5× the ticks — so a yield penalty
-/// double-counts. The tick cost does the real work; this rewards playing well.
-///
-/// One rule for two rooms: the lens prices a press this way and the menagerie a
-/// call, and two copies of a three-line rule are how one gets tuned and the
-/// other does not.
+/// Full at or under par, three quarters beyond it, never nothing: a blind
+/// ladder already pays in ticks, so a steeper yield penalty would double-count.
+/// One rule for the lens and the menagerie.
 #[must_use]
 pub fn worth_within_par(world: &World, named: &str, spent: u32, par: u32) -> u64 {
     let full = worth(world, named);
@@ -101,9 +71,8 @@ pub fn worth_within_par(world: &World, named: &str, spent: u32, par: u32) -> u64
 
 /// Add what a completed run earned, and say so if it bought something.
 ///
-/// Called where a run *succeeded*, never where one ended: `finish` also runs for
-/// a scour and for a run that matched no recipe, and neither is work the tower
-/// has anything to show for. See `work::produce::transmute`.
+/// Where a run succeeded, never where one ended: a scour and an unmatched run
+/// also finish. See `work::produce::transmute`.
 pub fn credit(world: &mut World, earned: u64) {
     if earned == 0 {
         return;
@@ -115,23 +84,18 @@ pub fn credit(world: &mut World, earned: u64) {
     let now = world.resource::<Experience>().get();
     let after = concentration(world);
 
-    // Said once, at the tick that bought it: a level is derived, so it would
-    // otherwise be true silently for ever and the player would find out by
-    // trying `bind`. The fact is continuous, the sentence is an edge.
+    // Said on the edge, or a derived level would be true silently for ever.
     if after > before {
         say_gained(world, after);
     }
 
-    // And then what the stations passed opened: a level is derived from the
-    // total, a room is not, so crossing a step has to write it (`ley::cross`).
-    // After the level, because that is what this run bought.
+    // A room opened is not derived, so crossing a step writes it
+    // (`ley::cross`), after the level.
     super::ley::cross(world, was, now);
 }
 
-/// What a run at `named` earned, credited — for callers with nothing to say.
-///
-/// The tests below, and nothing in the game: every real site reports what it
-/// made, so it wants [`worth`] and [`credit`] either side of that sentence.
+/// What a run at `named` earned, credited — for the tests; every real site
+/// says what it made between [`worth`] and [`credit`].
 #[cfg(test)]
 fn earn(world: &mut World, named: &str) -> u64 {
     let earned = worth(world, named);
@@ -139,12 +103,8 @@ fn earn(world: &mut World, named: &str) -> u64 {
     earned
 }
 
-/// The orb can hold one more than it could.
-///
-/// §6 forbids a bare fact where a sentence would teach, and this is the first
-/// thing in the game that *opens* rather than refuses — the moment §11.5 calls
-/// the game's turn. It names the verb, because a capability nobody can find is a
-/// capability nobody has.
+/// The orb can hold one more than it could — §11.5's turn. It names the verb,
+/// because a capability nobody can find is one nobody has.
 fn say_gained(world: &mut World, level: usize) {
     let message = world
         .resource::<Prose>()

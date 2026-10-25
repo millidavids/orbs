@@ -13,16 +13,9 @@
 //!         └──────────┘
 //! ```
 //!
-//! One texture rather than three keeps the renderer to a single bind group, and
-//! stacking by face makes a cell's atlas coordinate pure arithmetic on
-//! `(cp437_index, Presentation)`.
-//!
-//! White with coverage in alpha, not a coverage map: `ColorMaterial` multiplies
-//! texel by vertex colour, so `(1, 1, 1, coverage) * (r, g, b, 1)` needs no
-//! custom shader, where an `R8Unorm` atlas would tint the screen red.
-//!
-//! Colour is resolved per cell from the phosphor theme, because `orbs-render`
-//! never emits one (architectural rule 2). See [`super::palette`].
+//! One texture, one bind group, and a coordinate that is arithmetic. White with
+//! coverage in alpha, so `ColorMaterial`'s multiply needs no shader where
+//! `R8Unorm` would tint red. Colour is [`super::palette`]'s (rule 2).
 
 use bevy::asset::RenderAssetUsages;
 use bevy::image::{ImageFilterMode, ImageSampler, ImageSamplerDescriptor};
@@ -63,12 +56,8 @@ pub(crate) struct GlyphAtlas {
 
 /// The UV rectangle for a glyph, as `(u0, v0, u1, v1)`.
 ///
-/// No half-texel insets: magnification is Nearest, so an upscaled glyph is
-/// exact whatever the scale. Minification is the case with nothing protecting
-/// it — bilinear there reaches a neighbouring glyph's column, since the atlas
-/// packs 8×16 cells edge to edge — and it is survivable only because it is
-/// unreachable above `MIN_SCALE`. Padding is the price of ever wanting a
-/// sub-native picture.
+/// No half-texel insets: magnification is Nearest, and minification, which
+/// would bleed, is unreachable above `MIN_SCALE`.
 pub(crate) fn uv(index: u8, presentation: Presentation) -> (f32, f32, f32, f32) {
     let column = f32::from(u16::from(index) % 16);
     let row = f32::from(u16::from(index) / 16);
@@ -162,12 +151,8 @@ pub(crate) fn build(images: &mut Assets<Image>, weight: super::weight::Weight) -
         RenderAssetUsages::RENDER_WORLD,
     );
 
-    // Nearest going up, Linear coming down. A bitmap font filtered bilinearly
-    // is a blurred bitmap font and §4 makes legibility the product, so every
-    // window at or above `MIN_SCALE` stays Nearest. Going down, Nearest *drops*
-    // whole source columns — 8 pixels squeezed into 6 loses two strokes, and
-    // which two depends on where the letter sits — and that is only reachable
-    // below the floor, where all the game draws is the "too small" card.
+    // Nearest up, so glyphs stay sharp (§4); Linear down, where Nearest drops
+    // strokes, reachable only on the "too small" card.
     image.sampler = ImageSampler::Descriptor(ImageSamplerDescriptor {
         mag_filter: ImageFilterMode::Nearest,
         min_filter: ImageFilterMode::Linear,

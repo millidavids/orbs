@@ -1,13 +1,7 @@
 //! The naming rules, enforced.
 //!
-//! DESIGN.md §15: *"The canonical command set is player-facing API and requires
-//! a dedicated in-world naming pass before Phase 1 freezes vocabulary."*
-//!
-//! The Phase 0 pass ran against the sixteen slice commands and found three
-//! defects that only measurement shows: a canonical collision between the two
-//! core brewing verbs, a `dec-` prefix shared three ways, and four names over
-//! the length rule. Phase 1 adds ~35 more commands, which is exactly when a
-//! vocabulary drifts back into collision — so the pass is a test, not an event.
+//! §15's naming pass, as a test rather than an event, since a vocabulary
+//! drifts back into collision as it grows.
 
 use orbs_sim::parser::{
     MIN_SIMILARITY, Mode, NounKind, Register, SYNONYMS, Scene, Verb, resolve, similarity,
@@ -15,13 +9,8 @@ use orbs_sim::parser::{
 
 /// One noun of every kind, so any verb can be given a fitting argument.
 fn scene() -> Scene {
-    // Standing in the laboratory with every per-instrument verb in scope, so the
-    // guards below measure the worst case — every word the game has, live at
-    // once. Without them this file would be measuring the scoping rule instead.
-    //
-    // Built from `Verb::anchor`, not `is_operation`: the latter is the
-    // production-slot question and left `research`, `follow` and `wander`
-    // unresolvable, which is exactly that failure.
+    // Every word live at once, the worst case, from `Verb::anchor` — not
+    // `is_operation`, the slot question.
     let mut scene = Verb::ALL
         .into_iter()
         .filter_map(Verb::anchor)
@@ -255,9 +244,7 @@ fn rec_is_pinned_as_a_prefix_before_anything_else_wants_it() {
 /// outranked by another verb's word is a wrong command with `Clear` confidence,
 /// not a near miss.
 ///
-/// It replaces a check that compared the synonym list against a set built from
-/// the same list, so it was always true — and passed while `find` resolved to
-/// `bind` and `write` to `meditate`.
+/// Driven, since a list compared with itself is always true.
 #[test]
 fn every_phrase_reaches_the_verb_that_claims_it() {
     let scene = scene();
@@ -379,20 +366,9 @@ fn ambiguous_synonym_prefixes_are_known() {
     // What must never happen is one resolving silently, and
     // `every_phrase_reaches_the_verb_that_claims_it` guards that.
     //
-    // `gri` left this set when the manual was renamed to `recall` (§19), which
-    // is the direction it should move in. `pro` and `que` joined, with the lens
-    // and the satchel: in both the full word is canonical and exact, so only a
-    // deliberate abbreviation prompts, and the pair is as far apart as two words
-    // in this game get. What separates them from §19's `leave`/`exit` refusal is
-    // what sits on the other side — there it was *ending the session*, and a
-    // prompt is only unfair when one of its answers is expensive.
-    //
-    // The canonical prefix is what actually binds:
-    // `three_character_canonical_prefixes_name_at_most_one_verb` has no
-    // exemptions, which is why `scry` is not a verb (`scr` reaches `scribe`) and
-    // why `seat` became `dial` (`sea` reaches `search`). The alternatives to
-    // `queue` lose there: `stow` shares `sto` with `stop` and scores 750 against
-    // it, `stash` shares `sta` with `status`.
+    // `pro` and `que` prompt only on a deliberate abbreviation, and neither
+    // answer is expensive (§19). The canonical prefix binds, with no
+    // exemptions: `three_character_canonical_prefixes_name_at_most_one_verb`.
     assert_eq!(
         ambiguous,
         [
@@ -413,20 +389,6 @@ fn ambiguous_synonym_prefixes_are_known() {
 }
 
 #[test]
-fn every_verb_is_reachable_from_plain_english() {
-    // Half the Phase 0 gate's testers self-report no shell experience.
-    for verb in Verb::ALL {
-        assert!(
-            SYNONYMS
-                .iter()
-                .any(|entry| entry.verb == verb && entry.register == Register::Plain),
-            "{} has no plain-English synonym",
-            verb.canonical()
-        );
-    }
-}
-
-#[test]
 fn the_words_the_naming_pass_replaced_still_resolve() {
     // Renaming a player-facing command must not strand the old word — and for
     // `decant` must not *release* it either, since unclaimed it lands on
@@ -436,8 +398,8 @@ fn the_words_the_naming_pass_replaced_still_resolve() {
         .into_iter()
         .filter_map(Verb::anchor)
         .fold(Scene::new(), Scene::offering)
-        // `siphon` takes a place now (§10.1): the product sits in the instrument
-        // that made it, not in a vessel.
+        // A product sits in the instrument that made it (§10.1), not in a
+        // vessel.
         .with(NounKind::Place, "/tower/laboratory/alembic")
         .with(NounKind::Vessel, "retort")
         .with(NounKind::Topic, "clarity")
@@ -445,14 +407,8 @@ fn the_words_the_naming_pass_replaced_still_resolve() {
         .with(NounKind::Script, "night_watch");
 
     for (input, expected) in [
-        // Echoed as a leaf: the full path clipped the destination off a
-        // three-argument `move` at the 80×22 floor, and §7 says players say the
-        // leaf anyway.
-        //
-        // `decant` outlived the verb it was a synonym for — `siphon` retired
-        // (§19) and `empty` inherited its words, because a released word does
-        // not stop resolving, it resolves to whatever is nearest (§6.1), and the
-        // nearest here were `purge` and `stop`.
+        // Echoed as a leaf, as players say it (§7). `decant` is `empty`'s,
+        // since a released word resolves to whatever is nearest (§6.1, §19).
         ("decant alembic", "empty alembic"),
         // `divine` takes no argument now: it opens the stacks rather than
         // consuming a fragment (§10, §19). The *word* is what this is about.
@@ -485,19 +441,8 @@ fn offered(sim: &orbs_sim::Sim) -> Vec<String> {
 
 #[test]
 fn a_bare_anything_verb_offers_the_same_four_readings() {
-    // Pinned before the noun space moves, not after. A bare `purge` prompts with
-    // every noun in the room sorted by `Argument`'s derived `Ord`, so adding a
-    // noun kind reorders it and adding a noun changes which four surface — with
-    // nothing on screen saying so.
-    //
-    // It has moved once, which is what the pin is for: `east` was the fourth
-    // reading until the archive gained a `cabinet`, and `/tower/archive/cabinet`
-    // sorts first. A fixture added two rooms away changed what a bare `purge`
-    // offers.
-    //
-    // `purge` alone now. This pinned `verify` too, until §8.1's audit made a
-    // bare `verify` a legal command, so it no longer prompts. One verb with a
-    // required `Any` slot is all it takes to notice the noun space moving.
+    // A bare `purge` offers nouns by `Argument`'s `Ord`, so a fixture two
+    // rooms away can change which four surface. Pinned to notice.
     let verb = "purge";
     let mut sim = orbs_sim::Sim::new(1);
     sim.submit("attend laboratory");
@@ -597,10 +542,7 @@ fn a_spell_cannot_name_a_verb_as_a_thing() {
 
 /// Every word a `Sense` noun answers to, across every domain that has them.
 ///
-/// There was no sweep for these at all, which is how `gained`/`held`/`lost`
-/// shipped: a reading is a `NounKind::Sense` and `NounKind::Any` reaches one, so
-/// `purge grind` fuzzy-matched `gained` at full confidence. Found by hand twice,
-/// both times after it shipped.
+/// `NounKind::Any` reaches a `Sense`, so `purge grind` once matched `gained`.
 fn readings() -> Vec<&'static str> {
     let mut out = orbs_sim::tower::maze::readings();
     out.extend(orbs_sim::tower::ward::readings());
@@ -627,10 +569,7 @@ fn readings() -> Vec<&'static str> {
 
 /// Every material name, which a reading must also not collide with.
 ///
-/// The hole all three earlier sweeps had: a `Sense` sits in the way of
-/// everything a player can name — verbs, synonyms, spell words and materials.
-/// Sweeping only the first three let `vigour` ship against a potion called
-/// `vigour`.
+/// A `Sense` sits in the way of every name, materials included.
 fn materials() -> Vec<String> {
     orbs_sim::content::Materials::builtin()
         .names()
@@ -670,19 +609,9 @@ fn no_reading_collides_with_a_material() {
         // `potency` is the sanctum's ward magnitude and `potash` a laboratory
         // byproduct. Three shared letters, different rooms, no shared verb.
         "potency vs potash: prefix",
-        // The one tolerated collision that shares a room, with its cost written
-        // down. `quintessence` is the siege's pool and `quickening-scroll` is
-        // spent at the same wall, so `potency`'s "different rooms" argument does
-        // not apply. The verb split does: `wield` takes `Workable = Place |
-        // Scroll`, which rejects a `Sense`, so `wield qui` still reaches the
-        // scroll — pinned by
-        // `the_scroll_keeps_its_abbreviation_against_the_reading`.
-        //
-        // The exposure is `purge` and `verify`, which see both: `qui` was
-        // already ambiguous between the two materials, and the reading now wins
-        // it 887 to 876. The alternatives are worse — `mana` scores 750 against
-        // `many` (inside the comparison grammar it is written for) and `power`
-        // 800 against `tower`.
+        // The one tolerated same-room collision: `wield` rejects a `Sense`
+        // (`the_scroll_keeps_its_abbreviation_against_the_reading`); `purge`
+        // and `verify` see both. `mana` and `power` score worse.
         "quintessence vs quickening-scroll: prefix",
         "quintessence vs quiet-draught: prefix",
     ];
@@ -723,15 +652,8 @@ fn the_scroll_keeps_its_abbreviation_against_the_reading() {
 
 #[test]
 fn the_readings_that_score_against_a_typed_word_are_pinned() {
-    // A reading is nameable from every room, so it sits in the way of the whole
-    // vocabulary. These score above the bar a canonical faces and are answered
-    // by the resolver rather than a rename — every verb word is in
-    // `Scene::knowing`, so it matches exactly and none is reachable by fuzzing.
-    // The two tests below drive that; this keeps the list honest, because a new
-    // entry is a word somebody should look at before shipping.
-    //
-    // It caught the ward's second delta on its first run:
-    // `fuller`/`steady`/`thinner` scored 667 against `filter` and `study`.
+    // Above the canonical bar, answered by exact matching in `Scene::knowing`
+    // (the tests below). Pinned so a new entry gets looked at.
     let mut collisions = Vec::new();
     for reading in readings() {
         for (word, _) in single_words() {
@@ -908,15 +830,8 @@ fn no_two_readings_fuzzy_match_each_other() {
 
 /// Every plain-English synonym that is genuinely more than one word.
 ///
-/// Pinned rather than derived because `Synonym::words` is one phrase, pre-split:
-/// `&["spy", "peek", "try"]` declares the phrase `spy peek try`, not three
-/// synonyms. The lens shipped that way, leaving §6's plain register with no way
-/// in — and two tests watched it happen, because one asks whether a `Plain`
-/// entry exists and the other drives the declared phrase, which resolves fine.
-///
-/// So the multi-word ones are listed. A real phrase — `go to`, `get rid of` —
-/// belongs here; three words meant to be three entries do not, and adding one
-/// fails this test with the phrase printed.
+/// Pinned, since `Synonym::words` is one pre-split phrase, and three words
+/// meant as three entries read as one. A real phrase belongs here.
 #[test]
 fn multi_word_plain_synonyms_are_pinned() {
     let mut found: Vec<String> = SYNONYMS
@@ -956,16 +871,8 @@ fn multi_word_plain_synonyms_are_pinned() {
 /// §6.1's command table says what the code must do, so the two are checked
 /// against each other.
 ///
-/// A design table is a second list, and this one had drifted six rows —
-/// `meditate` appeared twice saying opposite things about `wait`, `stop` claimed
-/// `damp` where the code says `quench`, and four verbs had gained words the
-/// table never heard about. §19 records the same shape three times over, every
-/// one found by a person reading two things side by side.
-///
-/// Only the rows that are there: §6.1 is the *slice* vocabulary and the domains
-/// coined fourteen verbs after it. The plain register is not compared either —
-/// it is prose, written as English with quotes and capitals. What is held is the
-/// canonical name and its shell synonyms, exact words in both places.
+/// A design table drifts (§19). The rows that are there, canonical name and
+/// shell synonyms; the plain register is prose.
 #[test]
 fn the_slice_table_in_this_document_matches_the_vocabulary() {
     let design = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))

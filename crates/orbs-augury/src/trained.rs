@@ -1,12 +1,7 @@
 //! The trained reader, answering as an [`Augur`].
 //!
-//! `orbs-sim` owns *which* lines a reader may see and what happens to its
-//! answer; this owns only the answering. The sim never depends on this crate
-//! (rule 1), so a tower with no reader compiled in is the game as it was.
-//!
-//! It still never sees the world: the reader answers `grind sage` with the
-//! player's own word in the slot and `parser::resolve` binds it to whatever is
-//! on the shelf, so a reader needs no `Scene` and never goes stale.
+//! Only the answering; `orbs-sim` owns the rest (rule 1). It never sees the
+//! world — `parser::resolve` binds its words — so it never goes stale.
 
 use burn::prelude::*;
 use burn::record::{BinFileRecorder, FullPrecisionSettings, Recorder as _};
@@ -24,12 +19,8 @@ pub const SCRIBE_WEIGHTS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/weights/s
 
 /// The reader as a frontend should hold it.
 ///
-/// The CPU backend, measured rather than preferred: one 32-token sentence takes
-/// 348µs on `ndarray` against 2.71ms on `wgpu`, because a batch of one is
-/// almost all kernel-launch overhead. The GPU's place is the training run.
-///
-/// 348µs also retires the worker thread, the deadline and the *"the orb
-/// ponders"* indicator the plan budgeted for — §6 asks for sub-millisecond.
+/// The CPU, measured: 348µs a sentence against the GPU's 2.71ms, within §6's
+/// sub-millisecond, so no worker thread.
 pub type Reading = Trained<burn::backend::NdArray<f32>>;
 
 impl Reading {
@@ -86,19 +77,9 @@ impl<B: Backend> Trained<B> {
 
     /// What the reader makes of one line, best first.
     ///
-    /// Empty when the reader answered *"nothing is being asked for here"* —
-    /// which is its own head's decision rather than a threshold applied to the
-    /// verb scores afterwards.
-    ///
-    /// Several, because the room knows things the reader does not: the tagger
-    /// reads 97% and the verb head far less, so the usual failure is a
-    /// correctly-found argument under the wrong verb — which a scene settles,
-    /// since only one of `move lectern` and `attend lectern` is a thing you can
-    /// do to a lectern. `Sim::submit_reading` takes the first that resolves.
-    ///
-    /// Each candidate is trimmed to its own verb's arity, or a three-slot
-    /// tagging offered to a one-slot verb would be refused for having too many
-    /// arguments rather than judged on the argument that matters.
+    /// Empty when its own head says nothing is asked. Several, since the room
+    /// settles a right argument under a wrong verb (`Sim::submit_reading`).
+    /// Each trimmed to its verb's arity.
     #[must_use]
     pub fn readings(&self, line: &str) -> Vec<String> {
         let Some(read) = decode(&self.reader, &self.vocabulary, &self.device, line, VERBS) else {
@@ -151,11 +132,8 @@ impl<B: Backend> Augur for Trained<B> {
 
 /// Load one register's weights, checked against what this build holds.
 ///
-/// Both shapes are checked before the record is applied, because `load_record`
-/// answers a table that changed shape underneath it with a panic from inside
-/// `burn` — which reaches a player as a crash on a line they typed. Growing the
-/// corpus or adding a template does it, so this is ordinary authoring rather
-/// than a corrupt file.
+/// Shapes checked first, since `load_record` panics on a changed table, which
+/// ordinary authoring causes.
 ///
 /// # Errors
 ///
@@ -299,9 +277,10 @@ mod tests {
         // raw resolution rate, so a reader that answers everything is worse than
         // one that answers less.
         let Some(reader) = trained() else { return };
-        println!(
-            "what should i do next -> {:?}",
-            reader.command("what should i do next")
+        let read = reader.command("what should i do next");
+        assert!(
+            read.is_none(),
+            "a question with no command in it read as {read:?}"
         );
     }
 }

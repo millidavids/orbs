@@ -1,22 +1,12 @@
 //! The trained reader behind §6's deterministic pipeline (DESIGN.md §19).
 //!
-//! `orbs-sim` decides which lines a reader may see — `parser::is_literal` and
-//! `Analysis::reads_outright` between them — and `augur::Augur` is the seam it
-//! hands them through. This crate is one implementation of that seam: a small
-//! model, trained here, on this game's own content. Nothing depends on it, and
-//! `orbs-sim` must never gain a dependency here or rule 1's headless boundary
-//! goes with it.
+//! One implementation of `augur::Augur`; `orbs-sim` decides which lines it sees
+//! and must never depend on this crate (rule 1).
 //!
-//! Trained from scratch on data this project made: no pretrained weights, no
-//! pretrained embeddings, no downloaded tokenizer, no distillation. The rule is
-//! about the artefact rather than who typed a phrasing — drafting corpus lines
-//! in a session is fine, and §19 records correcting an earlier *"no
-//! LLM-generated training data"* that said more than was meant.
-//!
-//! It is load-bearing twice: shipped weights are a distributed artefact and the
-//! repository is GPL-3.0-or-later, and a model with no general English under it
-//! has the corpus as its only source of capability — which is why it stays small
-//! and why `content/phrasings.toml` is the larger half of the work.
+//! Trained from scratch on this project's own data: no pretrained weights,
+//! embeddings or tokenizer, and no distillation (§19). The corpus is its only
+//! capability, so it stays small and `content/phrasings.toml` is most of the
+//! work.
 //!
 //! [`Vocabulary`] is where that rule becomes code: every row comes from a table
 //! this repository already contains.

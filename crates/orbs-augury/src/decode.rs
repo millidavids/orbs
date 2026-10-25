@@ -127,15 +127,9 @@ pub fn decode<B: Backend>(
 /// A tagged word as an argument holds it: without the sentence's punctuation
 /// on its ends, or a trailing `'s`.
 ///
-/// The tagger marks whole words, so *"grind the sage, please"* read as `grind
-/// sage,`. Sheds what the parser sheds before matching — `.,!;:?`, and the
-/// quotes and brackets around a word — but keeps a trailing `-` or `_`:
-/// `rock-salt` and `mortar_and_pestle` are names with them in, and `sage-` is
-/// sabotage, the sigil `tower::claimed` appends so that nothing folds the lie
-/// back.
-///
-/// Case is left alone. A slot can be a spell's name, and a file is found by the
-/// name the player gave it.
+/// Sheds what the parser sheds, but keeps a trailing `-` or `_`, which names
+/// and `tower::claimed`'s sabotage sigil carry. Case is kept, since a slot can
+/// name a file.
 fn slot_word(word: &str) -> String {
     let word = word.replace('\u{2019}', "'");
     let trimmed = word

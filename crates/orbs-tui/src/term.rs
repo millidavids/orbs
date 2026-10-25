@@ -21,13 +21,8 @@ use orbs_render::GridSize;
 ///
 /// # Errors
 ///
-/// If the terminal refuses raw mode or the alternate screen — a pipe, a `cron`
-/// job, a CI runner with no tty. The caller should say so and exit rather than
-/// draw into nothing.
-///
-/// It unwinds itself: the second step can fail on its own, and returning `?`
-/// from the middle would leave raw mode on with the caller's `leave()` past the
-/// early return — no echo, no line editing, a shell that looks dead.
+/// If the terminal refuses raw mode or the alternate screen, as with no tty.
+/// It unwinds itself, or a failed second step leaves raw mode on.
 pub(crate) fn enter() -> std::io::Result<()> {
     install_panic_hook();
     enable_raw_mode()?;
@@ -81,13 +76,8 @@ pub(crate) fn grid() -> std::io::Result<GridSize> {
 
 /// Ask to be told when the process is being killed, rather than simply dying.
 ///
-/// The exit `install_panic_hook`'s reasoning covers and its code does not: a
-/// signal leaves the terminal raw by a route no panic hook sees — `kill`, a
-/// dropped ssh connection, Ctrl-\. Raw mode disables ISIG only for Ctrl-C.
-///
-/// A flag rather than a handler that draws, because a signal handler may do
-/// almost nothing safely and the loop is awake thirty times a second: it sees
-/// the flag, returns normally, and [`leave`] runs on the ordinary path.
+/// A signal leaves the terminal raw by a route no panic hook sees. A flag the
+/// loop sees, so [`leave`] runs on the ordinary path.
 ///
 /// # Errors
 ///
@@ -112,14 +102,9 @@ pub(crate) const PROBE: char = '○';
 
 /// Whether the terminal draws our symbols one column wide.
 ///
-/// Correctness, not polish: one double-width cell shifts the rest of the row and
-/// invalidates the per-cell diff `blit` relies on, because the shadow buffer and
-/// the screen stop agreeing about which column is which. The Bevy build is
-/// immune — an 8×16 bitmap atlas is one cell because the renderer says so.
-///
-/// So it is measured, not assumed: print the glyph at a known column and ask
-/// where the cursor ended up. A failure to ask is treated as narrow, the common
-/// case.
+/// Correctness: one wide cell breaks `blit`'s per-cell diff. Measured — print
+/// at a known column and ask where the cursor went; a failure to ask is
+/// narrow.
 ///
 /// # Errors
 ///

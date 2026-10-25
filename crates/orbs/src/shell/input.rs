@@ -1,24 +1,12 @@
 //! Keystrokes reaching the line, and the state a paint reads back.
 //!
-//! The line *itself* is [`Line`] — buffer, caret, history, Tab and the ghost,
-//! none of which needs a window. This file is the Bevy half: the one system that
-//! turns a `KeyboardInput` into an edit, and the three resources holding what a
-//! frame would otherwise recompute 60 times a second.
+//! The Bevy half of [`Line`]: the system turning a `KeyboardInput` into an
+//! edit.
 //!
-//! Read `text`, not `logical_key`: the spacebar's logical key is [`Key::Space`],
-//! not `Key::Character(" ")`, on every platform winit supports, so a buffer
-//! built by matching `Key::Character` silently loses the space bar and every
-//! multi-word command in DESIGN.md §6.1 becomes untypeable.
-//! [`KeyboardInput::text`] carries the locale-mapped character for every layout
-//! and handles the Windows dead-key case. `logical_key` is consulted for Enter
-//! and Backspace.
-//!
-//! `text` is not safe to append: it holds control characters — winit documents
-//! Enter as `Some("\r")` — and one in the buffer would reach
-//! [`Painter::put_str`](orbs_render::Painter), occupy a cell and draw nothing,
-//! drifting the caret from the text. So every character is filtered through
-//! [`orbs_render::is_renderable`], the repertoire itself: `is_ascii_graphic`
-//! would also throw away the accented range the font can draw.
+//! Read [`KeyboardInput::text`], not `logical_key`, whose space is
+//! [`Key::Space`]; `text` is locale-mapped and handles dead keys. It carries
+//! control characters too, so each passes [`orbs_render::is_renderable`],
+//! which keeps the accented range.
 
 use bevy::input::ButtonState;
 use bevy::input::keyboard::{Key, KeyCode, KeyboardInput};
@@ -31,15 +19,9 @@ use crate::sim::Tower;
 
 /// Keys a surface was still holding when it handed the keyboard back.
 ///
-/// Escape out of the archive's maze with a finger still on an arrow and key
-/// repeat keeps delivering: by the next frame the prompt owns the keyboard, an
-/// arrow there means *recall history*, and leaving put the `wander` that opened
-/// the maze back in the prompt. All four surfaces do this.
-///
-/// A set of keys rather than a quiet frame, because swallowing everything for a
-/// frame or two races the player's key-repeat rate. What is wrong is exact: the
-/// prompt is handed the *middle* of a keystroke whose press it never saw, so it
-/// drops events for those keys until they are released.
+/// Key repeat keeps delivering after a surface closes. The prompt drops these
+/// keys until released, since it never saw their press — exact, where a quiet
+/// frame would race the repeat rate.
 #[derive(Resource, Debug, Default)]
 pub(crate) struct HeldOver {
     /// Physical keys whose press went to another surface.
@@ -57,13 +39,8 @@ impl HeldOver {
 
 /// Notice when the keyboard changes hands, and what was held when it did.
 ///
-/// Ungated, and it has to be: [`type_into_line`] is gated on
-/// `on_message::<KeyboardInput>`, so it never runs on the frames where a surface
-/// owned the keyboard and nobody typed — and the edge that matters is the frame
-/// Escape arrives.
-///
-/// Who owns a keystroke is [`Surfaces::focus`]'s answer; what this keeps is the
-/// *edge* rather than the state.
+/// Ungated, unlike [`type_into_line`], since the edge is the frame Escape
+/// arrives. [`Surfaces::focus`] owns the state; this keeps the edge.
 pub(crate) fn watch_focus(
     surfaces: Surfaces,
     held: Res<ButtonInput<KeyCode>>,
@@ -126,7 +103,7 @@ impl Surfaces<'_> {
 /// The questions are asked here and answered there. A second expression of one
 /// rule is how two frontends come to disagree about who owns a keystroke —
 /// `orbs_shell::shortcuts`'s argument, one module along.
-const fn opened(
+pub(super) const fn opened(
     editing: &super::editing::Editing,
     loom: &super::Loom,
     walk: &super::Walk,
@@ -167,13 +144,8 @@ pub(crate) struct SubmittedMessage {
 
 /// Forget every held key when the window loses focus.
 ///
-/// A key's release goes to whoever has focus, so `Cmd+Shift+Ctrl+4` on macOS
-/// hands the screenshot overlay the release for `Cmd` and `Ctrl` and
-/// `ButtonInput` here believes they are still down, for ever — every later
-/// keystroke hits [`type_into_line`]'s chord guard with nothing saying why.
-///
-/// Any OS modal does this, so the fix is to distrust held state across a focus
-/// boundary rather than to enumerate them.
+/// A release goes to whoever has focus, so an OS modal leaves keys held for
+/// ever; distrust held state across a focus boundary.
 pub(crate) fn forget_held_keys(
     mut focus: MessageReader<WindowFocused>,
     mut keys: ResMut<ButtonInput<KeyCode>>,
@@ -183,23 +155,54 @@ pub(crate) fn forget_held_keys(
     }
 }
 
-/// Whether a keystroke that produced `text` proves the held chord is a ghost.
-///
-/// A focus hook was never going to be enough: [`forget_held_keys`] assumes a
-/// stolen window is observable, and Bevy 0.19 dropped winit's
-/// `ModifiersChanged` — so a key-up swallowed without a focus event left the
-/// modifier down for the rest of the session. `Cmd+Shift+Ctrl+4` did exactly
-/// that. Bevy 0.20 reconciles held modifiers from that event, which mends it
-/// wherever winit reports one; this stays for wherever nothing is reported.
-///
-/// So the OS decides what is text: under a real chord macOS hands back none at
-/// all, and Windows and X11 a control character [`Line::insert`] already
-/// filters. Text arriving is the proof that nothing is held.
-///
-/// Platform-independent, needs no event that may never come, and its worst case
-/// is one keystroke behaving as though the chord had been released.
-pub(crate) fn chord_is_stale(quiet: f32) -> bool {
+/// Whether the keyboard has been quiet long enough that a held chord cannot be
+/// real: a key-up swallowed with no focus event, which [`forget_held_keys`]
+/// cannot see. The worst case is one keystroke.
+fn chord_is_stale(quiet: f32) -> bool {
     quiet >= STALE_AFTER
+}
+
+/// The modifiers held as this frame's keys arrive, as every surface reads them.
+///
+/// Ctrl and Super make a chord: a command, not text. Alt deliberately does not,
+/// because `AltGr` is how European layouts type `@`, `#` and `\`; so readline's
+/// `Alt+B`/`Alt+F` insert characters rather than move by word.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Chord {
+    held: bool,
+    stale: bool,
+    command_only: bool,
+}
+
+impl Chord {
+    pub(crate) fn read(held: &ButtonInput<KeyCode>, quiet: &Quiet) -> Self {
+        let control = held.any_pressed([KeyCode::ControlLeft, KeyCode::ControlRight]);
+        let command = held.any_pressed([KeyCode::SuperLeft, KeyCode::SuperRight]);
+        Self {
+            held: control || command,
+            stale: chord_is_stale(quiet.gap()),
+            command_only: command && !control,
+        }
+    }
+
+    /// A chord the player aimed at their operating system, which must not
+    /// reach a surface on the way past — unless the keyboard has been silent
+    /// long enough that it cannot be real. See [`chord_is_stale`].
+    pub(crate) const fn swallows(self) -> bool {
+        self.held && !self.stale
+    }
+
+    /// A keystroke under this chord proves it a ghost.
+    pub(crate) const fn is_ghost(self) -> bool {
+        self.held && self.stale
+    }
+
+    /// `Cmd` without `Ctrl`: `Cmd+←/→` is Home/End on a Mac keyboard, which
+    /// has neither. An allow-list rather than a hole — the guard exists because
+    /// `Cmd+Enter` was submitting lines.
+    pub(crate) const fn moves_to_an_end(self) -> bool {
+        self.command_only
+    }
 }
 
 /// How long the keyboard must be silent before a held chord is disbelieved.
@@ -239,12 +242,8 @@ impl Quiet {
 
 /// Advance the silence, and hand it to the text fields when a key arrives.
 ///
-/// Two fields, because resetting on arrival would erase what the readers need:
-/// a frame with keys publishes the silence that preceded them and starts
-/// counting again; a frame without keys just counts.
-///
-/// Ordered before the text fields, so the gap they read is the one in front of
-/// this frame's keystroke.
+/// Two fields: a frame with keys publishes the silence before them, then
+/// counts again. Before the text fields, so they read this frame's gap.
 pub(crate) fn watch_quiet(
     time: Res<Time>,
     mut keys: MessageReader<KeyboardInput>,
@@ -275,13 +274,8 @@ pub(crate) fn type_into_line(
     quiet: Res<Quiet>,
     over: Res<HeldOver>,
 ) {
-    // Discarded here, not gated out by a run condition: every reader carries its
-    // own cursor, so a system that does not run while another surface has the
-    // keyboard leaves the keystrokes queued and they all arrive at once.
-    // Clearing the cursor is what actually throws a keystroke away.
-    //
-    // The ordering itself lives once, in `orbs_shell::focus`; what stays here is
-    // the discarding, which genuinely differs.
+    // Discarded, not gated: a reader that does not run keeps its cursor, and
+    // its keys arrive later at once. The ordering is `orbs_shell::focus`'s.
     if surfaces.focus().is_elsewhere() {
         keys.clear();
         return;
@@ -289,25 +283,7 @@ pub(crate) fn type_into_line(
     // Set when a keystroke proves the held chord is a ghost, and acted on after
     // the loop — `held` is borrowed for the duration of it.
     let mut stale = false;
-    let stale_chord = chord_is_stale(quiet.gap());
-    // Chords are commands, not text. Alt is deliberately not in this list: AltGr
-    // is how European layouts type `@`, `#` and `\`. The consequence is that
-    // `Alt+B`/`Alt+F` — readline's word motion — insert characters rather than
-    // moving; word motion is deferred with `Ctrl+R`, `Delete`, `Ctrl+U` and
-    // `Ctrl+W`.
-    let chord = held.any_pressed([
-        KeyCode::ControlLeft,
-        KeyCode::ControlRight,
-        KeyCode::SuperLeft,
-        KeyCode::SuperRight,
-    ]);
-
-    // ...except the editing chords, which a Mac keyboard has no other key for:
-    // there is no Home or End, and `Cmd+←/→` is what every text field on the
-    // platform does. An allow-list rather than a hole — the guard exists because
-    // `Cmd+Enter` was submitting lines.
-    let editing = held.any_pressed([KeyCode::SuperLeft, KeyCode::SuperRight])
-        && !held.any_pressed([KeyCode::ControlLeft, KeyCode::ControlRight]);
+    let chord = Chord::read(&held, &quiet);
 
     for event in keys.read() {
         // `repeat` is deliberately not filtered: held Backspace should delete
@@ -324,26 +300,18 @@ pub(crate) fn type_into_line(
         // Any keystroke retires the last Tab listing — it answered a question
         // the player has already moved past. A Tab cycle ends with it too.
         //
-        // Inside the press filter, because winit sends a `KeyboardInput` for the
-        // release as well: at the top of the function, lifting the Tab key
-        // cleared the list, so a listing lived for the ~50ms a finger was down.
-        //
-        // `orbs_shell::apply` does this too, and neither copy is redundant: the
-        // shared one covers every key that reaches the prompt, this one the keys
-        // that *do not* — a chorded keystroke `continue`s below and never gets
-        // there. Both are idempotent, so the overlap costs nothing.
+        // Inside the press filter, or Tab's own release clears it.
+        // `orbs_shell::apply` does this too, for the keys that reach it; this
+        // covers a chord, which never does.
         if !matches!(event.logical_key, Key::Tab) {
             offered.clear();
             line.end_cycle();
         }
         // The chord guard covers every key, `Enter` and `Backspace` included:
         // they used to bypass it, so `Cmd+Enter` submitted the line and
-        // `Ctrl+Backspace` ate a character. ...unless the keyboard has been
-        // silent long enough that the held chord cannot be real — see
-        // `chord_is_stale`.
-        if chord && !stale_chord {
-            // `Cmd+←/→` is Home/End on a keyboard that has neither.
-            if editing {
+        // `Ctrl+Backspace` ate a character.
+        if chord.swallows() {
+            if chord.moves_to_an_end() {
                 match &event.logical_key {
                     Key::ArrowLeft => line.home(),
                     Key::ArrowRight => line.end(),
@@ -352,7 +320,7 @@ pub(crate) fn type_into_line(
             }
             continue;
         }
-        stale |= chord && stale_chord;
+        stale |= chord.is_ghost();
         // What a keystroke *means* is `orbs-shell`'s; only finding it is ours.
         // Everything above is winit — press versus release, key repeat, held
         // modifiers, a ghost chord — which a terminal has none of.

@@ -12,7 +12,7 @@ use orbs_sim::content::Length;
 use super::pages::abandoning;
 use super::state::{Complaint, Menu, Outcome, Page};
 use super::words::{ABANDON, NEW};
-use crate::opening::Refused;
+use crate::opening::{Raising, Refused};
 use crate::save::Keep;
 
 impl Menu {
@@ -77,7 +77,7 @@ impl Menu {
                 self.complaint = Some(Complaint::Unreadable(slot));
                 None
             }
-            Some(save) => Some(Outcome::Load(save.path.clone())),
+            Some(save) => Some(Outcome::Raise(Raising::Load(save.path.clone()))),
             None => {
                 self.complaint = Some(Complaint::Empty(slot));
                 None
@@ -121,11 +121,8 @@ impl Menu {
 
     /// Offer the lengths, if there is anywhere to put a new tower.
     ///
-    /// A session that keeps nothing can still begin one: this refused with
-    /// [`Complaint::Unkept`] when there was no save path, but the tower is
-    /// playable, it simply will not be remembered. `ORBS_SAVE=off` is what
-    /// `scripts/dumps.sh` and the played-game suite run under, so refusing
-    /// `new` made the build unreachable from its own instruments.
+    /// A session that keeps nothing can still begin one, unremembered — every
+    /// instrument runs with `ORBS_SAVE=off`.
     fn open_lengths(&mut self) {
         // Nowhere to keep it and no room for it are different answers, and only
         // the second is a refusal — `free_slot` says `None` to both.
@@ -154,19 +151,19 @@ impl Menu {
     pub(super) fn measured(&mut self, typed: &str) -> Option<Outcome> {
         // Prefix-matched like every other word here, so `s`, `m` and `l` work.
         // `Baseline` is not among the ones offered — see `Length::OFFERED`.
-        let Some(length) = Length::OFFERED
-            .into_iter()
-            .find(|length| length.word().starts_with(typed))
-        else {
+        let Some(length) = crate::prefix::unique_prefix(
+            Length::OFFERED.map(|length| (length.word(), length)),
+            typed,
+        ) else {
             self.complaint = Some(Complaint::Unknown(typed.to_owned()));
             return None;
         };
         // Resolved when the page opened, not now: a destination worked out
         // twice is one a changed `ORBS_SAVE` can make disagree with itself.
-        Some(Outcome::Begin {
+        Some(Outcome::Raise(Raising::Begin {
             keep: self.keep.clone(),
             length,
-        })
+        }))
     }
 }
 
@@ -232,7 +229,9 @@ mod tests {
         menu.type_text("2");
         assert_eq!(
             menu.enter(),
-            Some(Outcome::Load(PathBuf::from("/somewhere/orbs-save-2.toml"))),
+            Some(Outcome::Raise(Raising::Load(PathBuf::from(
+                "/somewhere/orbs-save-2.toml"
+            )))),
         );
     }
 
@@ -361,7 +360,7 @@ mod tests {
             };
             menu.type_text(typed);
             let outcome = menu.enter();
-            let Some(Outcome::Begin { keep, length }) = outcome else {
+            let Some(Outcome::Raise(Raising::Begin { keep, length })) = outcome else {
                 panic!("`{typed}` did not begin a game: {outcome:?}");
             };
             assert_eq!(length, want);
@@ -389,11 +388,7 @@ mod tests {
 
     #[test]
     fn a_session_that_keeps_nothing_still_begins_a_tower() {
-        // `ORBS_SAVE=off` is not exotic: `scripts/dumps.sh` and the played-game
-        // suite both run under it, so a `new` that refused would make the
-        // threshold unreachable from the project's own instruments. `keep:
-        // None` is what `open_lengths` leaves behind — a playable tower that is
-        // not remembered.
+        // `keep: None`, from `open_lengths`, is a playable tower unremembered.
         let mut menu = Menu {
             page: Page::Lengths,
             keep: None,
@@ -402,10 +397,10 @@ mod tests {
         menu.type_text("short");
         assert_eq!(
             menu.enter(),
-            Some(Outcome::Begin {
+            Some(Outcome::Raise(Raising::Begin {
                 keep: None,
                 length: Length::Short,
-            }),
+            })),
             "a session with nowhere to save refused to begin a game",
         );
     }

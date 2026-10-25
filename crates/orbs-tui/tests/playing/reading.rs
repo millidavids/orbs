@@ -118,12 +118,7 @@ impl Game {
 
     /// Wait for text to leave the **whole screen**.
     ///
-    /// [`Self::expect_absent`] scopes to the newest block, which is the wrong
-    /// question for a pane: the guide, the rail and the instrument panel are
-    /// drawn outside every block, so asking it there passes without looking.
-    ///
-    /// This waits honestly, closing a pane being an event — a redraw. Named for
-    /// the screen because `expect_gone` is taken.
+    /// For panes, drawn outside every block [`Self::expect_absent`] scopes to.
     pub fn expect_off_screen(&self, needle: &str) -> &Self {
         self.until(
             |screen| !flatten(screen).contains(&flatten(needle)),

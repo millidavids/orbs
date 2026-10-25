@@ -1,18 +1,8 @@
 //! The satchel: a queue of names, in the tower rather than in a spell.
 //!
-//! §8's spells already ran two at a time but shared no channel, so the
-//! concurrency was two solitary loops rather than a pipeline. This is the
-//! channel.
-//!
-//! A node, not a field on `Running`: state lives in the tower here. A queue
-//! inside a spell is reachable by one spell, invisible to `survey`, and outside
-//! every instrument. A node is reachable by two spells and by two cursors of
-//! one, saves by the usual path, and `survey satchel` shows what is waiting.
-//!
-//! A component, not children plus [`Stock`]: a queue is an ordered multiset —
-//! `heed` may be queued twice and the order is the point — while `Stock`
-//! collapses duplicates into a count and despawns at nought. So the names ride
-//! a `VecDeque` on the node, and `spell::watch` answers `is empty` from here.
+//! §8's channel between two spells. A node, so two spells or two cursors reach
+//! it and `survey` shows it. A component, not children with [`Stock`], because
+//! a queue is an ordered multiset and `Stock` collapses duplicates.
 //!
 //! [`Stock`]: super::Stock
 
@@ -35,12 +25,8 @@ pub const QUEUED: &str = "queued";
 
 /// The most names one satchel will hold.
 ///
-/// A runaway guard, not a balance number: a producer outrunning its consumer
-/// grows the *save* by a line a tick until nothing can read it. `MAX_PARTS`
-/// makes the same argument for a descent.
-///
-/// Sixteen is well past any pipeline the game has — the sanctum's `coursing`
-/// queues two stations a haul.
+/// A runaway guard, `MAX_PARTS`'s argument: a producer outrunning its consumer
+/// grows the save a line a tick. Well past any pipeline the game has.
 pub const DEPTH: usize = 16;
 
 /// An ordered queue of names, on the node that is the satchel.
@@ -54,9 +40,8 @@ pub struct Satchel(VecDeque<String>);
 impl Satchel {
     /// Put a name on the back.
     ///
-    /// Refuses at [`DEPTH`] rather than dropping the oldest: forgetting the
-    /// front hands the consumer a name out of order, which looks like a solver
-    /// with a timing bug. Refusing stalls the pipeline where it went wrong.
+    /// Refuses at [`DEPTH`] rather than dropping the oldest, which would look
+    /// like a solver with a timing bug.
     pub fn put(&mut self, name: &str) -> bool {
         if self.0.len() >= DEPTH {
             return false;
@@ -78,9 +63,7 @@ impl Satchel {
 
     /// Whether nothing is waiting.
     ///
-    /// What `if the satchel is empty` reads, and why the queue is a component:
-    /// `spell::watch` answers emptiness with `children_of(...).is_empty()`, and
-    /// a satchel has no children either way.
+    /// What `if the satchel is empty` reads, since a satchel has no children.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()

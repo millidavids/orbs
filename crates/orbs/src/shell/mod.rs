@@ -6,6 +6,7 @@ mod input;
 mod installing;
 mod manualling;
 mod menuing;
+mod modal;
 mod motion;
 mod plugin;
 mod reading;
@@ -36,11 +37,9 @@ pub(crate) use motion::{Stillness, moving, moving_at_launch};
 pub use plugin::ShellPlugin;
 pub(crate) use plugin::ShellSystems;
 // A function key and the settings page are **one setting seen twice**: the key
-// cycles, and this is what stops the page disagreeing with it on the next
-// launch. See `setting::remember`.
-pub(crate) use setting::{
-    CRT, FOCUS, SIGHT, THEME, defaults as default_settings, remember as remember_setting,
-};
+// cycles and writes its word down, so the page cannot disagree on the next
+// launch. These are the words the window's own keys write.
+pub(crate) use setting::{CRT, THEME, defaults as default_settings, pair};
 pub(crate) use thresholding::playing;
 pub(crate) use wandering::Walk;
 pub(crate) use weaving::Loom;

@@ -1,23 +1,12 @@
 //! The tower rail — every domain at a glance, down the right (DESIGN.md §9).
 //!
-//! Awareness only, never commandable. It replaces the telemetry pane, which was
-//! nine developer readings in fifty-eight columns; what survives of that pane is
-//! the five rows at the rail's foot, which are the ones §15 made playability
-//! gates and the ones §9 requires be readable.
+//! Awareness, never commandable; the old telemetry pane survives as five rows
+//! at its foot. Every fact is [`Sim::briefs`]', so both frontends draw the
+//! same rail (rule 2).
 //!
-//! Rule 2 lets a frontend decide only *how* a cell is drawn, so every fact comes
-//! from [`Sim::briefs`] and `orbs-tui` draws the same rail from the same
-//! `Vec<Brief>`. Layout and glyph are decided here and nothing else.
-//!
-//! Six boxes — the rooms you *work in*, since the grimoire left `DOMAINS` (§19)
-//! — and five are dark in a fresh game. A shut room is a dim dotted row with no
-//! name, which says *there is more* without saying what; naming them would spend
-//! §11's discovery loop. An open room's state row ends in the percentage to its
-//! next mastery station.
-//!
-//! A horizontal rule closes every box but the last, whose boundary is the foot's
-//! own rule: a box is one to four rows, so without it consecutive domains ran
-//! together in a column of whitespace. Both are silent.
+//! A box per room you work in (§19). A shut room is a dim nameless row, which
+//! says *there is more* without spending §11's discovery. A silent rule closes
+//! each box, so boxes do not run together.
 
 use orbs_render::{Frame, Pos, Rect, Span, Style};
 use orbs_sim::Sim;
@@ -43,10 +32,8 @@ const RUNNING: char = '►';
 
 /// Draw the rail, if the layout found room for it.
 ///
-/// `boxes` and `foot` come from [`ScreenLayout`](orbs_render::ScreenLayout) —
-/// this module does no arithmetic about where the rail is, because §19 records
-/// that transcribed geometry rots silently and the layout is the one place that
-/// knows.
+/// `boxes` and `foot` come from [`ScreenLayout`](orbs_render::ScreenLayout),
+/// the one place that knows the geometry (§19).
 pub fn paint(
     frame: &mut Frame,
     sim: &Sim,
@@ -122,10 +109,8 @@ fn domain(painter: &mut orbs_render::Painter<'_>, brief: &Brief, at: Rect, ruled
     // The name, with its mark pushed to the right edge so a glance down the rail
     // finds every mark in one column.
     //
-    // `chars().count()`, never `len()`: `‼` is one column and three bytes, so a
-    // byte count padded a fault two columns short of the edge while one-byte `!`
-    // landed on it — putting faults and news in different columns, which is the
-    // one property this arithmetic exists for.
+    // `chars().count()`, never `len()`, or the three-byte `‼` lands off the
+    // column.
     let width = usize::from(at.cols);
     let wide = mark.chars().count();
     let name = truncate(brief.name, width.saturating_sub(wide));
@@ -144,12 +129,9 @@ fn domain(painter: &mut orbs_render::Painter<'_>, brief: &Brief, at: Rect, ruled
         Pos::new(at.col, row),
         &Span::new(&state).with_style(Style::DIM),
     );
-    // The percentage to the room's next mastery station, on the state row's
-    // right edge (§11.5). There is no spare row: `MIN_RAIL_BOX` is name, state,
-    // detail, spell and the rule, and a sixth would be dropped exactly when a
-    // room is busy and automated — the state the rail exists to show.
-    // Drawn with `glyphs`, so it is silent: §14's rule for progress is
-    // *completion only*, and the station reaching is what gets said.
+    // The percentage to the next mastery station, on the state row, since a
+    // box has no spare row (§11.5). Silent: progress speaks on completion
+    // only (§14).
     if let Some(progress) = brief.mastery {
         let label = format!("{}%", progress.percent());
         let taken = state.chars().count() + 1;
@@ -195,14 +177,8 @@ fn domain(painter: &mut orbs_render::Painter<'_>, brief: &Brief, at: Rect, ruled
 
 /// The spell row: what is running here, and how much more of it there is.
 ///
-/// `+n` says there is more running here than this line can name.
-/// [`Brief::running`] counts *cursors*, because from here a second `invoke` and
-/// an `alongside` fork are the same fact. `status` lists them by name — the
-/// standing split between the glance and the answer.
-///
-/// The name is truncated and the suffix never is: cutting the whole string to
-/// width would drop `+2` off exactly the rooms busy enough to have earned it, a
-/// marker that vanishes when it matters (§19).
+/// `+n` counts more cursors ([`Brief::running`]); `status` names them. The
+/// name truncates, never the suffix (§19).
 fn casting(spell: &str, running: usize, width: usize) -> String {
     let more = running.saturating_sub(1);
     let extra = if more > 0 {
@@ -266,11 +242,8 @@ const fn focus(screen: &Screen) -> &'static str {
 
 /// What a domain is doing, in the panel's own vocabulary.
 ///
-/// [`State::label`] for nine of the ten, and one deliberate difference — which
-/// was a hand-written copy of all ten arms claiming there was none. The panel
-/// labels an *instrument*, and one with nothing in it is empty; the rail labels
-/// a *room*, and a room is idle. Writing the other nine out beside it is what
-/// let that difference become accidental rather than stated.
+/// [`State::label`], but for one stated difference: an empty instrument is
+/// an idle room.
 const fn word(state: State) -> &'static str {
     match state {
         State::Empty => "idle",
@@ -296,15 +269,8 @@ mod tests {
     use super::*;
     use orbs_render::RAIL_COLS;
 
-    /// Nothing but this test holds `MAX_PANES` and `DOMAINS` together, and they
-    /// must live in different crates: rule 1 forbids `orbs-render` from reaching
-    /// into the sim, so the layout cannot read the list it lays out. This crate
-    /// is the only one that sees both.
-    ///
-    /// They did drift. The grimoire left `DOMAINS` while `MAX_PANES` stayed at
-    /// seven, so the leftover slot drew as a five-row hole and `fits_rail`
-    /// demanded room for a box that does not exist — dropping the rail entirely
-    /// between 39 and 43 rows. Neither compiled wrong nor failed a test.
+    /// Only this crate sees both `MAX_PANES` and `DOMAINS`, which once drifted
+    /// and dropped the rail between 39 and 43 rows.
     #[test]
     fn the_rail_has_exactly_one_box_per_domain() {
         assert_eq!(

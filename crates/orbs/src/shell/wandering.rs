@@ -1,22 +1,11 @@
 //! `wander` — the arrow keys walking the archive's stacks (§10, §19).
 //!
-//! The smallest surface that can own the keyboard: the prompt, the editor, the
-//! unfurled transcript and the weave screen each own a pane, and this owns only
-//! the keys. The map draws whenever a maze is open, so walking one by hand and
-//! watching a spell walk it are the same picture.
+//! Owns only the keys; the map draws whenever a maze is open. Gated, as
+//! `weaving`, since it consumes keys.
 //!
-//! So `weaving`'s asymmetry applies unchanged — gated by a run condition because
-//! it consumes keys, where `type_into_line` has to *run* to throw away what it
-//! declines.
-//!
-//! An arrow moves the reading the instant it is pressed. Two versions went
-//! through the prompt's queue and both were wrong: per keystroke walked at the
-//! speed of the keyboard (`Pending` drains whole at tick start, so a held arrow
-//! was thirty cells), and one aim plus a bounded burst walked at the speed of the
-//! world, which at 1 Hz is a wait rather than a minigame. The tick was the
-//! problem, not the queue — so an arrow calls
-//! [`Sim::walk`](orbs_sim::Sim::walk) directly, moving the reading and costing
-//! no tick. Nothing is left to bound; a wall still refuses for free.
+//! An arrow calls [`Sim::walk`](orbs_sim::Sim::walk) directly, moving the
+//! reading now and costing no tick — the queue walked at the keyboard's speed
+//! or the world's.
 
 use bevy::input::ButtonState;
 use bevy::input::keyboard::{Key, KeyboardInput};
@@ -28,12 +17,8 @@ use crate::sim::Tower;
 
 /// Whether the arrows have the stacks.
 ///
-/// A resource rather than a component, for the reason `Editing` and `Loom` both
-/// give: there is one maze, the mode is modal, and an entity would invite a
-/// second.
-///
-/// It holds no steps. Two earlier versions kept an aim and then a queue, which
-/// is what a move waiting on a clock needs. A move no longer waits.
+/// A resource, as `Editing` and `Loom`: one maze, modal. No steps, since a
+/// move no longer waits.
 #[derive(Resource, Debug, Default)]
 pub(crate) struct Walk(bool);
 
@@ -82,26 +67,15 @@ pub(crate) fn type_into_maze(
     mut walk: ResMut<Walk>,
     mut tower: ResMut<Tower>,
 ) {
-    // A held chord is skipped; a stale one is not. `chord_is_stale` says the
-    // modifier is a ghost — latched from an alt-tab the window never saw
-    // released — so it means *accept this keystroke*. Read the other way it
-    // swallows one key every time the mode is entered after a pause, which is
-    // exactly when it is entered. The weave screen shipped with it inverted.
-    let stale_chord = super::input::chord_is_stale(quiet.gap());
-    let chord = held.any_pressed([
-        KeyCode::ControlLeft,
-        KeyCode::ControlRight,
-        KeyCode::SuperLeft,
-        KeyCode::SuperRight,
-    ]);
+    // A held chord is skipped; a stale one is not — `type_into_loom` records the
+    // keystroke swallowed by reading it the other way round.
+    let chord = super::input::Chord::read(&held, &quiet);
 
     for event in keys.read() {
         if event.state != ButtonState::Pressed {
             continue;
         }
-        // A chord the player aimed at their operating system must not reach the
-        // maze on the way past.
-        if chord && !stale_chord {
+        if chord.swallows() {
             continue;
         }
         // `break`, not `continue`: a frame can carry several keystrokes, and
@@ -111,8 +85,7 @@ pub(crate) fn type_into_maze(
             walk.close();
             break;
         }
-        // The arrow-to-`Way` table is `orbs-shell`'s; it was written here, in
-        // `orbs-tui`, and a third time in `dump.rs`.
+        // The arrow-to-`Way` table is `orbs-shell`'s, and the dump's too.
         //
         // Everything else is swallowed, not passed on: a surface that owns the
         // keyboard owns all of it, and letting text through would type into a
@@ -137,10 +110,7 @@ pub(crate) fn type_into_maze(
 
 /// Let go when the stacks are no longer open to walk.
 ///
-/// Three ways a maze ends, one condition: solved, abandoned by `stop lectern`
-/// (which a bound spell may issue), or the player left the archive. Naming this
-/// after the solved case leaves the other two owning the keyboard over a pane
-/// with no map on it.
+/// Solved, stopped by a spell, or left: one condition.
 pub(crate) fn close_when_gone(tower: Res<Tower>, mut walk: ResMut<Walk>) {
     if tower.sim().stacks().is_none() {
         walk.close();
@@ -265,13 +235,7 @@ mod tests {
 
     #[test]
     fn walking_out_of_the_archive_gives_the_keys_back() {
-        // Unreachable by typing — the prompt is dead while this is open — but a
-        // bound spell can `stop stacks`, and `Sim::stacks` is `None` outside
-        // the archive too. One condition, three ways in.
-        //
-        // `stop stacks`, and it was `stop lectern`: the maze moved to its own
-        // instrument, so stopping the lectern abandons an assembly and leaves
-        // the stacks alone.
+        // A bound spell's `stop stacks`, which typing cannot reach.
         let mut app = app();
         run(&mut app, "attend archive");
         run(&mut app, "research");

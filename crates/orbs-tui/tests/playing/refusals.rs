@@ -1,15 +1,12 @@
 //! A word a command cannot use is named, and a word the orb cannot place is
 //! asked about — never dropped, and never run around.
 
-use crate::play::{Game, available};
+use crate::play::Game;
 
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn a_word_a_verb_cannot_use_is_named() {
-    if !available() {
-        return;
-    }
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.does(
         "status gibberish",
         "status takes nothing - 'gibberish' is not something it can use",
@@ -20,10 +17,7 @@ fn a_word_a_verb_cannot_use_is_named() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn a_word_the_orb_cannot_place_is_asked_about() {
-    if !available() {
-        return;
-    }
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.does("attend menagerie", "/tower/menagerie")
         .does("summon", "gathers at the circle")
         // The verb and the gate it could place, and nothing run.
@@ -35,14 +29,11 @@ fn a_word_the_orb_cannot_place_is_asked_about() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn a_spell_walks_every_store() {
-    if !available() {
-        return;
-    }
     // `for each store` with `has spent`: a nameable word no `has` can reach
     // would compile, run and do nothing for ever. A quaff of each spent store is
     // refused by name in the log, which is the proof the loop reached them all —
     // a survey from a spell lands in no log at all.
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.does("attend bailey", "/tower/bailey")
         .does("debug_spawn warding 1", "all along")
         .does("debug_spawn clarity 1", "all along");

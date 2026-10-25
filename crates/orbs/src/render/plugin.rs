@@ -34,16 +34,8 @@ pub(crate) struct Theme(pub(crate) Phosphor);
 
 impl Default for Theme {
     fn default() -> Self {
-        // What the player last chose, if they chose. `F2` cycles and writes
-        // back, so this is the other half of one setting seen twice.
-        //
-        // A name this build does not have falls through rather than failing: a
-        // settings file written by a later build can name a phosphor this one
-        // has never heard of, and a game that refused to start over a colour
-        // would be the worst possible answer to it.
-        //
-        // `named`, over every theme: a hidden one chosen last session must come
-        // back, or `theme p7` would quietly be amber after a relaunch.
+        // What the player last chose; `F2` writes it. An unknown name falls
+        // through to the default. `named` covers hidden themes too.
         if let Some(chosen) = orbs_shell::settings::get(crate::shell::THEME)
             && let Some(phosphor) = palette::named(&chosen)
         {
@@ -178,8 +170,8 @@ fn cycle_theme(mut theme: ResMut<Theme>) {
         .map_or(0, |index| (index + 1) % palette::ALL.len());
     theme.0 = palette::ALL[next];
     info!("phosphor: {}", theme.0.name);
-    // One setting seen twice — see `crt::plugin::cycle`.
-    crate::shell::remember_setting(crate::shell::THEME, theme.0.name);
+    // One setting seen twice — see `crt::tube::cycle`.
+    orbs_shell::settings::set(crate::shell::THEME, theme.0.name);
 }
 
 /// Frames to wait before the automatic capture, so the first drawn frame is not
@@ -223,12 +215,8 @@ fn tint_background(theme: Res<Theme>, mut clear: ResMut<ClearColor>) {
 
 /// Everything the shell keeps between frames, as one dependency.
 ///
-/// A `SystemParam` rather than eight more parameters on [`repaint`]. The same
-/// `clippy.toml` threshold that split `repaint` from `rasterise` fired again
-/// when the editor arrived, and it was asking the same question a second time:
-/// these eight are not eight dependencies, they are **one** — the state
-/// `shell::View` is assembled from. Splitting the *system* again would have
-/// meant two systems painting one frame.
+/// One `SystemParam`, since these are one dependency: what `shell::View` is
+/// built from.
 #[derive(bevy::ecs::system::SystemParam)]
 struct ShellState<'w> {
     line: Res<'w, crate::shell::Line>,
@@ -267,13 +255,8 @@ struct ShellState<'w> {
 
 /// Paint the screen into the `Frame`.
 ///
-/// Split from [`rasterise`] rather than being one `redraw`, because they are two
-/// jobs meeting at the Frame boundary and sharing only the [`Canvas`]: this one
-/// decides *what the screen says* and reads the world to do it; that one turns
-/// cells into triangles and reads nothing but the frame, the theme and the
-/// caret. `clippy.toml`'s argument threshold is what forced the question, and
-/// the answer it wanted — a system whose parameters had stopped being one
-/// dependency list.
+/// Split from [`rasterise`] at the Frame boundary: this decides what the screen
+/// says, that turns cells into triangles.
 fn repaint(
     screen: Res<Screen>,
     tower: Res<Tower>,
@@ -363,19 +346,10 @@ fn rasterise(
         return;
     };
 
-    // An empty screen must not rebuild the mesh. `Assets::get_mut` marks the
-    // asset changed whether or not anything is written, so a blank frame
-    // re-uploaded a zero-vertex mesh every frame — and Bevy 0.19's slab
-    // allocator answers that with `use-after-free: attempted to copy element
-    // data for an unallocated key`, ~250 of them in 1.3 seconds of boot.
-    //
-    // The `Local` keeps this correct rather than merely quiet: the transition
-    // into blank still writes once, so a screen that empties really does clear.
-    //
-    // "Nothing to draw" must mean no geometry, which includes the caret — and
-    // the caret is geometry only on the showing half of its blink. Checking
-    // `cursor().is_some()` alone let a glyphless screen rebuild an empty mesh
-    // every off-phase, which is the same fault from the other direction.
+    // An empty screen must not rebuild the mesh: `get_mut` marks it changed,
+    // and Bevy's allocator answers a zero-vertex upload with `use-after-free`.
+    // The `Local` still writes the transition into blank. A caret counts only
+    // on the showing half of its blink.
     let caret = blink.showing() && canvas.frame.cursor().is_some();
     let nothing = canvas.frame.is_blank() && !caret;
     if nothing && !*drew_something {
@@ -387,16 +361,9 @@ fn rasterise(
         return;
     };
 
-    // §9: the CRT's scanline and grille frequencies re-derive against the active
-    // cell size. Publishing it here is what keeps them landing on real pixels as
-    // the window is dragged — the mesh is drawn in *virtual* pixels and the
-    // projection scales it, so this is the only place the physical size of a
-    // cell is known.
-    //
-    // The fill is the same arithmetic one level up: how much of the window the
-    // 4:3 picture covers. The shader needs it to know where the **tube** is, so
-    // the curve and the bezel belong to the monitor rather than to the window
-    // (§19). A window already 4:3 fills both axes and the bars are zero wide.
+    // The only place a cell's physical size is known, so the CRT's scanlines
+    // land on real pixels (§9). The fill tells the shader where the tube is,
+    // so the bezel is the monitor's, not the window's (§19).
     let scale = screen.scale();
     let window = (
         orbs_render::pixels(screen.window.0),

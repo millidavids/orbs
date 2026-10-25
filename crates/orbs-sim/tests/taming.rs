@@ -5,37 +5,10 @@
 //! `progression.toml` says, and the shipped search runs through `invoke` rather
 //! than a Rust copy of its loop.
 
-use orbs_render::{FieldName, Value};
+mod common;
+
+use common::{at_the_circle, ever_said, run, said};
 use orbs_sim::Sim;
-
-fn run(sim: &mut Sim, line: &str) {
-    sim.submit(line);
-    sim.step();
-}
-
-/// Every sentence the tower has said so far.
-fn said(sim: &Sim) -> Vec<String> {
-    sim.scrollback()
-        .records()
-        .iter()
-        .filter_map(|record| match record.field(FieldName::Message) {
-            Some(Value::Text(text)) => Some(text.to_owned()),
-            _ => None,
-        })
-        .collect()
-}
-
-/// Whether anything said so far contains `needle`.
-fn ever_said(sim: &Sim, needle: &str) -> bool {
-    said(sim).iter().any(|line| line.contains(needle))
-}
-
-/// Standing in the menagerie, with nothing done yet.
-fn at_the_circle(seed: u64) -> Sim {
-    let mut sim = Sim::new(seed);
-    run(&mut sim, "attend menagerie");
-    sim
-}
 
 /// Where a glyph stands on the board, by the word it is limned with.
 fn standing(sim: &Sim, glyph: &str) -> Option<String> {

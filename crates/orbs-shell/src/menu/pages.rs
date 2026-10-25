@@ -18,16 +18,8 @@
 //! because the table had a catch-all arm.
 
 use super::state::{Complaint, Menu, Outcome, Page};
-use super::words::{ABANDON, BACK, Word, word};
-
-/// Whether `typed` is `back`, by prefix.
-///
-/// Either direction: `bac` is a prefix of `back`, and a player who typed the
-/// whole word plus something is still asking for it. The vocabulary's rule,
-/// applied to the one word that is not in it.
-fn is_back(typed: &str) -> bool {
-    typed.starts_with(BACK) || BACK.starts_with(typed)
-}
+use super::words::{ABANDON, Word, word};
+use crate::prefix::is_back;
 
 /// The slot `abandon` names, if that is what was typed.
 ///

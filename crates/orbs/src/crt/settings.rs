@@ -16,16 +16,8 @@ use bevy::render::render_resource::ShaderType;
 pub(crate) struct CrtSettings {
     /// Whether the tube is on at all.
     ///
-    /// Explicit, and deliberately not inferred from "are all the effects zero".
-    /// §14 makes this the accessibility switch, and a switch something else can
-    /// flip back on is not a switch.
-    ///
-    /// `enabled` used to be derived as `settings != OFF`. Both [`flash`] and
-    /// [`desaturation`] are documented right here as *reserved for world state*,
-    /// so the moment anything drove one — a breach flash, threat desaturation,
-    /// the Phase 0.5 boot strike — the settings stopped equalling `OFF`, and
-    /// barrel, scanlines, grille and vignette all came back for a player who had
-    /// turned them off for motion sickness.
+    /// Explicit, never inferred from the effects, which world state such as
+    /// [`flash`] and [`desaturation`] may drive: §14's switch must stay off.
     ///
     /// [`flash`]: Self::flash
     /// [`desaturation`]: Self::desaturation
@@ -108,16 +100,8 @@ impl CrtSettings {
         aberration: 0.0005,
         glow: 0.5,
         flicker: 0.10,
-        // The largest radius that loses no cell — a computed bound rather than a
-        // taste (§19). The mask is evaluated on the texture coordinate, so the
-        // binding cell is the session pane's top-left border corner at `(0, 0)`
-        // and the bound is `0.0278`. At `0.09` the arc reached the `d` of the
-        // prompt, which a screenshot showed and the number never would.
-        //
-        // Barely a change: it was `0.028`, a hair over the bound and getting
-        // away with it because the radius was applied to the unwarped tube,
-        // whose corners lie outside the picture. Now that it bites, the bound
-        // has to hold.
+        // The largest radius losing no cell, computed (§19): the corner cell
+        // at `(0, 0)` binds it at `0.0278`.
         corner_radius: 0.027,
         desaturation: 0.0,
         flash: LinearRgba::NONE,
@@ -222,18 +206,9 @@ mod tests {
 
     #[test]
     fn the_rounded_bezel_loses_no_cell() {
-        // Architectural rule 2: a frontend may enrich what the other cannot
-        // reproduce **provided it carries no information absent from the
-        // Frame**, and a corner the tube has eaten carries less. The bezel is
-        // the one CRT term that can delete a cell outright rather than dim it,
-        // so its radius is a bound to hold rather than a number to like.
-        //
-        // This is `crt.wgsl`'s rounded-box SDF in Rust, evaluated at the four
-        // corner cells of the grid. It is a second implementation of the same
-        // arithmetic, which is the cost of the shader being untestable — but the
-        // formula is six lines and the alternative is finding out by screenshot,
-        // which is exactly how the `0.09` that ate the prompt's first letter got
-        // as far as a window.
+        // The bezel alone can delete a cell, which rule 2 forbids. `crt.wgsl`'s
+        // rounded-box SDF restated in Rust at the four corners — the cost of an
+        // untestable shader.
         let aspect = 4.0 / 3.0_f32;
         let grid = orbs_render::GRID;
         let radius = CrtSettings::DEFAULT.corner_radius;
@@ -302,15 +277,8 @@ mod tests {
 
     #[test]
     fn nothing_world_driven_can_switch_a_disabled_tube_back_on() {
-        // The defect this replaced: `enabled` was `settings != OFF`, and both
-        // `flash` and `desaturation` are documented as world-driven. Driving
-        // either made the settings unequal to `OFF`, so `enabled` flipped to 1.0
-        // and the whole tube — barrel, scanlines, grille, vignette — came back
-        // for a player who had turned it off for motion sickness (§14).
-        //
-        // Checked field by field rather than through the toggle, because the
-        // failure was never that someone pressed the wrong key. It was that
-        // something else wrote a field.
+        // A world-driven field must not turn the tube back on (§14). Field by
+        // field, since the failure is another writer, not a key.
         for lit in [
             CrtSettings {
                 flash: LinearRgba::rgb(1.0, 1.0, 1.0),

@@ -15,40 +15,21 @@ use crate::surfaces::Surfaces;
 /// Everything the loop keeps between frames.
 pub(crate) struct Session {
     pub(super) sim: Sim,
-    /// The reader that answers lines the orb cannot read itself (§6), if any.
+    /// The readers that answer what the orb cannot read itself (§6), if any.
     ///
     /// Built once with the session, not per keystroke: reading the environment
     /// is not free and the answer cannot change mid-run.
-    ///
-    /// The trained reader, same as the Bevy build. This was empty while the
-    /// reader dragged `wgpu` behind it; it does not — inference is `ndarray` at
-    /// 436µs — so the terminal frontend is the whole game. `scripts/play.sh` can
-    /// still set `stub` when a scenario wants a fixed answer.
-    pub(super) augury: Option<Box<dyn orbs_sim::Augur>>,
-    /// The spell reader, on exactly the same terms.
-    ///
-    /// Both registers under one setting, because a player who has said *"read
-    /// what I mean"* has said it about their whole session — `crate::sim::Readers`
-    /// in the Bevy build is the same decision.
-    pub(super) scribe: Option<Box<dyn orbs_sim::Scrivener>>,
+    pub(super) readers: orbs_shell::Readers,
     /// The player's settings, carried across a swap.
     ///
-    /// The driver sits here beside the readers rather than replacing them, for
-    /// the Bevy build's reason: switching back must not cost a file read on a
-    /// keystroke. The focus mode is held rather than rebuilt per frame, because
-    /// `Screen` is assembled fresh in `draw` and `F4` would otherwise flip back.
-    ///
-    /// Its `linear` is not read: [`Session::carrying`] takes it from `linear`,
-    /// which `F5` toggles directly.
+    /// The driver beside the readers, so switching back reads no file; the mode
+    /// held, since `draw` rebuilds `Screen`. Its `linear` is unread:
+    /// [`Session::carrying`] takes `linear`.
     pub(super) held: Carried,
     /// The file this tower is kept in, and where it is written back.
     ///
-    /// The path travels with the `Sim`, which is what stops loading a second
-    /// game destroying the first: a path resolved at the moment of writing is
-    /// one resolved *after* a swap. Here they are two fields of one struct
-    /// `run` replaces together, by building a new `Session`.
-    ///
-    /// `None` when this session keeps nothing — `ORBS_SAVE=off`.
+    /// Travels with the `Sim`, replaced together, as the Bevy build's `Kept`.
+    /// `None` for `ORBS_SAVE=off`.
     pub(super) kept: Option<std::path::PathBuf>,
     /// Whether a failed write has already been complained about.
     pub(super) save_failed: bool,
@@ -112,33 +93,21 @@ pub(crate) struct Session {
 /// here rather than branched around, so there is one write path instead of two.
 static VERBATIM: orbs_sim::Verbatim = orbs_sim::Verbatim;
 
-/// The spell reader in effect: what this build offers, if the player wants it.
-///
-/// Two switches answering different questions, the pair `Readers::reader`
-/// documents in the Bevy build: `ORBS_SCRIVENER` is a developer's override
-/// saying what is on offer, the driver says whether it is consulted.
+/// The spell reader in effect: what this build offers, if the player wants it,
+/// and otherwise one that reads nothing. Fields rather than `&Session`, so a
+/// caller can lend the sim mutably beside it.
 pub(super) fn scribing(
+    readers: &orbs_shell::Readers,
     driver: orbs_shell::Driver,
-    scribe: Option<&dyn orbs_sim::Scrivener>,
 ) -> &dyn orbs_sim::Scrivener {
-    match driver {
-        orbs_shell::Driver::Plain => &VERBATIM,
-        orbs_shell::Driver::Augury => scribe.unwrap_or(&VERBATIM),
-    }
+    readers.scrivener(driver).unwrap_or(&VERBATIM)
 }
 
 impl Session {
     /// A session on this tower.
     ///
-    /// `boot` is a parameter and not `Boot::default()`, which made every
-    /// ordinary launch play the boot sequence twice: `run` builds a whole new
-    /// `Session` per swap, `Boot::default()` returns the live thirteen-second
-    /// sequence unless `ORBS_BOOT=0` or the sticky skip is set, and with the
-    /// threshold the swap is the only path to a tower — so a player walked boot,
-    /// menu, choose, boot again. Invisible to every instrument: the play suite
-    /// and `scripts/tui.sh` both push `ORBS_BOOT=0` and the dump never reaches
-    /// `play`. The Bevy build was unaffected — `Boot` is `BootPlugin`'s, not in
-    /// `shell_resources!`.
+    /// `boot` a parameter, since a swap builds a new `Session` and
+    /// `Boot::default()` would play the sequence a second time.
     pub(crate) fn new(
         sim: Sim,
         kept: Option<std::path::PathBuf>,
@@ -161,8 +130,7 @@ impl Session {
             held_over: HeldOver::default(),
             engine,
             sim,
-            augury: orbs_shell::augury(),
-            scribe: orbs_shell::scrivener(),
+            readers: orbs_shell::Readers::from_environment(),
             kept,
             save_failed: false,
             line: Line::default(),
@@ -187,17 +155,16 @@ impl Session {
                 // The threshold's menu goes up with the session: no word opens
                 // it, there is no prompt to type one at, and it cannot be closed
                 // (`Stance::Threshold`) — so this is the only place it goes up.
+                // From the session, not hard-coded: passing `false` and `Wide`
+                // let the Access page report `linear [off]` while the pane drew
+                // the linear stream, §14's only visible control reporting the
+                // opposite of what was in effect.
                 menuing: threshold.is_waiting().then(|| {
-                    let mut menu = orbs_shell::Menu::at(orbs_shell::Stance::Threshold);
-                    menu.show_driver(carried.driver);
-                    // The same rows the `menu` verb's opener hands over, so the
-                    // page does not differ by which door you came in — and from
-                    // the session, not hard-coded: passing `false` and `Wide`
-                    // let the Access page report `linear [off]` while the pane
-                    // drew the linear stream, §14's only visible control
-                    // reporting the opposite of what was in effect.
-                    menu.show_settings(settings(&carried));
-                    menu
+                    orbs_shell::Menu::open_at(
+                        orbs_shell::Stance::Threshold,
+                        carried.driver,
+                        settings(&carried),
+                    )
                 }),
                 ..Surfaces::default()
             },

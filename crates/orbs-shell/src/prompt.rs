@@ -24,12 +24,9 @@ use super::transition::PaneTransition;
 
 /// Everything a frame is drawn from, borrowed for the one call.
 ///
-/// A struct rather than ten positional parameters: `paint` ended up with three
-/// adjacent `&str`-ish arguments, where transposing two compiles cleanly.
-/// `Frame` and `Linear` stay separate because they are what `paint` writes.
-///
-/// Not `Copy`: the editor's viewport follows its caret and only the painter
-/// knows how many lines fit, so there are `&mut` fields and the struct moves.
+/// A struct, so no two `&str`-ish arguments can be transposed; `Frame` and
+/// `Linear` stay apart as what `paint` writes. Not `Copy`: a viewport only the
+/// painter can size makes some fields `&mut`.
 pub struct View<'a> {
     /// The world, for everything the frame says.
     pub sim: &'a Sim,
@@ -65,10 +62,8 @@ pub struct View<'a> {
     pub weaving: Option<&'a Tapestry>,
     /// Whether the arrow keys are walking the archive's stacks.
     ///
-    /// A flag rather than a borrow, because this surface holds no state of its
-    /// own — the maze arrives through `panel` and the arrows are `Walk`'s. All
-    /// it says is who owns the keyboard, which decides whether the maze is drawn
-    /// over the pane or beside the transcript.
+    /// A flag, since this surface holds no state: it decides whether the maze
+    /// is drawn over the pane or beside the transcript.
     pub walking: bool,
     /// The orb's menu, if `quit` has opened it.
     ///
@@ -88,30 +83,17 @@ pub struct View<'a> {
 
 /// Paint the session into `frame`.
 ///
-/// Two panes, from a real `ScreenLayout`. The game drew one hand-built rectangle
-/// until now, so §9's layout system — pane tiling, the sidebar, Deep versus Wide
-/// focus — existed only in an example; asking for two panes is what makes the
-/// binary exercise it (§15's retroactive gate), and it is the right screen
-/// anyway: a session and a dashboard.
-///
-/// The layout arrives already interpolated (see [`PaneTransition`]), so every
-/// rectangle here is wherever that motion has reached this frame.
+/// From a real `ScreenLayout`, already interpolated (see [`PaneTransition`]),
+/// so every rectangle is wherever the motion has reached this frame.
 pub fn paint(
     frame: &mut Frame,
     linear: &mut Linear,
     passing: &mut super::passing::Passing,
     view: View<'_>,
 ) {
-    // A wrapper, because `paint_view` has three early returns and a
-    // fall-through: a crossing at each would be four copies of one rule, and the
-    // surface added without its copy would simply not animate. This is the
-    // single place a screen is handed over. `passing` is a parameter rather than
-    // a [`View`] field, and `&mut`, because it is the only thing here that
-    // outlives the frame.
-    //
-    // Only crossed if the kept screen still describes this grid — a resize
-    // mid-crossing would blit last frame's cells at this frame's coordinates,
-    // the defect `orbs-tui`'s shadow buffer records for itself.
+    // The one place a screen is handed over, around `paint_view`'s four exits.
+    // `passing` is a parameter, the one thing here that outlives the frame.
+    // Only crossed if the kept screen still describes this grid.
     let crossing = passing.crossing().filter(|_| passing.describes(frame));
     let crossed = paint_view(frame, linear, view);
 
@@ -157,27 +139,15 @@ const MOST: usize = 3;
 pub(crate) struct Crossed {
     /// The regions that move, each with the edge it leaves by.
     ///
-    /// An array rather than named fields. It was `strip` and `block`, which
-    /// assumed the block was one rectangle — and it is two whenever the layout
-    /// puts the panel across the top *and* a board down the side, which
-    /// `Along::of` does on any pane taller than wide. See [`slabs`].
-    ///
-    /// Slot 0 is the gauges and the road, slots 1 and 2 the block's two slabs.
-    /// Fixed, so [`union`](Self::union) can pair them across two screens without
-    /// matching rectangles to each other.
+    /// Slot 0 is the gauges and the road, 1 and 2 the block's two slabs (see
+    /// [`slabs`]). Fixed, so [`union`](Self::union) pairs them across screens.
     parts: [(Rect, Toward); MOST],
     /// The whole interior, when a surface replaced it. Overrides the two above.
     whole: Rect,
     /// The tower rail, which moves for one crossing only.
     ///
-    /// Every ordinary crossing leaves it standing: it is awareness rather than a
-    /// view, drawn on every branch including the modal ones, so a player deep in
-    /// the spell editor still gets told the forge caught fire. Taking it away
-    /// for a room change would take away the one thing on screen that is not
-    /// about the room.
-    ///
-    /// Out of the boot card it is not on screen yet, so it pushes in from the
-    /// right. Carried here always, used only when `Passing::is_waking`.
+    /// Awareness, not a view, so ordinary crossings leave it standing. Out of
+    /// the boot card it pushes in from the right (`Passing::is_waking`).
     rail: Rect,
 }
 
@@ -214,14 +184,8 @@ impl Crossed {
 
     /// What to cross, and which way each part goes.
     ///
-    /// `whole` is not a third part, it is the other two's replacement, and it
-    /// contains both by construction. Running it alongside them drew *three*
-    /// gathers each converging on a different centre, so a maze opening over a
-    /// laboratory came apart into three piles instead of one.
-    ///
-    /// Empty rectangles are dropped rather than crossed: a short pane refuses
-    /// the road, an empty room draws no panel, and a zero-area region is a
-    /// divide waiting to happen in the shapes.
+    /// `whole` replaces the parts rather than joining them, or one crossing
+    /// gathers to three centres. Empty rectangles are dropped.
     fn moving(self) -> impl Iterator<Item = (Rect, Toward)> {
         // `Toward` means nothing to a whole-pane change — a `Gather` converges
         // from every side — so the value paired here is a default, not a claim.
@@ -270,28 +234,13 @@ fn paint_view(frame: &mut Frame, linear: &mut Linear, view: View<'_>) -> Crossed
     let main = layout.main();
     let first = main.first().copied().unwrap_or(Rect::EMPTY);
 
-    // The rail carries the readings; the border title carries them only when
-    // there is no rail. This asked `panes.panes() == 1`, which was right while a
-    // second pane held the telemetry — but with `PANES` at 1 that is permanently
-    // true, and the title would have gone to its long form at every size,
-    // duplicating the rail's five rows where the player is always looking. The
-    // question is now the one it stood in for: is there anywhere else for the
-    // readings to be?
+    // The border title carries the readings only when there is no rail.
     let carry_readings = layout.rail().is_empty();
 
-    // The same rectangle, not a second pane: §14's stream says the same thing as
-    // the cells, and a comparison made by pressing one key is one you make.
-    //
-    // The editor takes the session pane while it is open, not a pane of its own:
-    // §9's pane count is a progression axis, and an editor adding one would hand
-    // the player the thing the multiplex track sells. The weave screen takes it
-    // on the same terms, checked first only because the two cannot both be open
-    // — an order is still needed, and the newer surface losing silently would be
-    // the harder bug to see.
-    //
-    // The rail is drawn whatever the pane is doing, which makes it awareness
-    // rather than a view. Each modal branch returns early, so it is hoisted
-    // above all four rather than copied into each.
+    // The same rectangle, not a second pane, so one key compares them (§14).
+    // A surface takes the session pane rather than adding one, since §9's pane
+    // count is a progression axis. The rail is hoisted above every modal
+    // branch, being awareness rather than a view.
     let rail = || (layout.rail(), layout.rail_boxes(), layout.rail_foot());
 
     // The interior, not the pane. A crossing never touches the border: the title
@@ -303,16 +252,9 @@ fn paint_view(frame: &mut Frame, linear: &mut Linear, view: View<'_>) -> Crossed
     // `Focus::takes_the_pane` names the same set, and `Passing` asks it there.
     let whole = Crossed::all(interior, layout.rail());
 
-    // The menu is checked before the other three: they are surfaces of a tower
-    // and this is the way out of one, so if two could be up together the way out
-    // is what the player meant — `Focus::of`'s order, for the same reason. No
-    // rail beside it: the rail is the tower's telemetry and this screen is
-    // stepping out of the tower, where a forge catching fire is not news a
-    // player can act on.
-    //
-    // The manual comes before the menu, because it opens over it. Every other
-    // branch is exclusive; this pair is not, and the order is `Focus::of`'s,
-    // which is why that chain and this one are kept in step.
+    // `Focus::of`'s order, kept in step with it: the manual over the menu over
+    // the tower's surfaces. No rail beside the menu, which steps out of the
+    // tower.
     if let Some(reader) = reading_manual {
         super::manual::paint(frame, reader, first, sim.prose());
         return whole;
@@ -342,13 +284,8 @@ fn paint_view(frame: &mut Frame, linear: &mut Linear, view: View<'_>) -> Crossed
         return whole;
     }
 
-    // The maze, when the arrows have it. It cannot coexist with either branch
-    // above: `wander` needs the prompt typed, and the prompt is dead while the
-    // editor or the loom has the keys.
-    //
-    // The map itself is not gated on this — `session` draws it beside the
-    // transcript whenever a maze is open, which makes a spell's solving
-    // watchable. This branch adds the pane, for the player walking it.
+    // The maze pane, when the arrows have it. The map itself draws beside the
+    // transcript whenever a maze is open, so a spell's solving is watchable.
     if walking && let Some(maze) = panel.stacks.as_ref() {
         let mut painter = frame.painter(first);
         super::stacks::paint_alone(&mut painter, first, maze, sim.prose());
@@ -429,11 +366,8 @@ const fn split_input(input: Rect, listing: u16) -> (Rect, Rect) {
 
 /// What Tab offered, on the row above the prompt.
 ///
-/// Not a record. There is deliberately no `scrollback_mut` (§13): the scrollback
-/// *is* the log, and a frontend writing into it makes a session `(seed,
-/// submissions)` cannot replay — a Tab press is not a submission. So this is
-/// transient Frame content, and §3's "unlogged output is forbidden" is about the
-/// orb's output rather than the shell's own affordances.
+/// Transient Frame content, never a record (§13); §3's logging rule is about
+/// the orb's output, not the shell's affordances.
 fn candidates(frame: &mut Frame, area: Rect, offered: &super::offering::Offered) {
     if offered.is_empty() || area.is_empty() {
         return;
@@ -481,10 +415,8 @@ fn candidates(frame: &mut Frame, area: Rect, offered: &super::offering::Offered)
 /// really does open black. The prompt types itself, the pane border then draws
 /// itself a cell at a time, and the POST card follows.
 ///
-/// Takes no Bevy resources, because `shell::dump` builds no `App` (§19); no
-/// `Sim`, because the boot screen draws nothing from the world; and no `Screen`,
-/// which wanted a fidelity tier to size the input line and there is no longer
-/// such a thing.
+/// No Bevy resources, since a dump builds no `App` (§19), and no `Sim`, since
+/// the boot draws nothing from the world.
 pub fn paint_booting(frame: &mut Frame, stage: crate::stage::Stage, progress: f32, engine: &str) {
     let grid = frame.size();
     let layout = ScreenLayout::compute(&ScreenRequest::single(grid));
@@ -500,15 +432,8 @@ pub fn paint_booting(frame: &mut Frame, stage: crate::stage::Stage, progress: f3
 
     crate::post::paint(frame, stage, progress, engine);
 
-    // And then the whole card leaves. `Stage::Close` draws the finished screen
-    // and takes it away by the leaving half of a `Gather` — the motion `wander`
-    // and the editor use, because it is the same event: a surface that had the
-    // whole pane giving it back.
-    //
-    // Over the pane's interior, and the box stays. Folding the whole screen
-    // reads better in isolation and worse in sequence — the border would go and
-    // come straight back, because the game draws one too. Left standing it *is*
-    // the game's pane, narrowed from the right as the rail opens.
+    // The card leaves by a `Gather`'s leaving half, as any full-pane surface
+    // does. The box stays: it *is* the game's pane, narrowed as the rail opens.
     if let Some(closing) = stage.closing(progress) {
         frame.fold(
             pane.inset(1),
@@ -527,13 +452,8 @@ pub fn paint_booting(frame: &mut Frame, stage: crate::stage::Stage, progress: f3
 
 /// The transcript: what was typed and what came back.
 ///
-/// Returns the regions a crossing moves — the strip along the top and the block
-/// down the side — and not the transcript between them, which did not change and
-/// is what a room change deliberately leaves standing.
-///
-/// Returned rather than re-derived because the splits below are the only thing
-/// that knows: neither region is a function of the pane alone, and the boards
-/// take their slices in a fixed order from whatever is left.
+/// Returns the regions a crossing moves, never the transcript a room change
+/// leaves standing — returned, since only these splits know them.
 pub(super) fn session(
     frame: &mut Frame,
     sim: &Sim,
@@ -551,34 +471,16 @@ pub(super) fn session(
         return [(Rect::EMPTY, Toward::Up); MOST];
     }
     let mut painter = frame.painter(pane);
-    // The pane says where you are, because the pane is what shows a place (§7:
-    // paths are places). The prompt cannot: §9 puts one input line beneath
-    // however many panes are open, so it stands in none of them. It is also the
-    // only thing on screen saying *which commands will work* — the essences live
-    // in `/tower/laboratory`, so that is where `decoct` resolves. See
-    // `orbs_sim::tower::rebuild`.
-    //
-    // The `F4` hint rides along because below `DEEP_FOCUS_FLOOR` there is one
-    // pane and nothing else would say a second exists.
+    // The pane says where you are (§7), and so which commands will work; the
+    // prompt stands under every pane. The `F4` hint rides along.
     let switch = match screen.mode {
         DisplayMode::Deep => "wide",
         DisplayMode::Wide => "deep",
     };
-    // Scrolled-back is a state the pane declares, and it replaces the `F4` hint
-    // rather than crowding in beside it: the title is already near the width a
-    // border gives at the 80x22 floor, and the way back is more urgent. New
-    // output keeps arriving while the player reads — it must, or a completion
-    // they did not cause would be lost — so without this the newest line on
-    // screen is not the newest and nothing says so. In the title, because
-    // `Painter::border` announces one as a heading and a reader hears it (§14).
-    //
-    // Plain ASCII, deliberately: an arrow glyph is CP437 0x18 and an em-dash is
-    // not in the repertoire at all — one shipped once and drew as `?`.
-    //
-    // Reading outranks scrolled-back, which outranks the focus key: once the
-    // transcript has the keyboard the way out is what the player needs, and no
-    // other screen has taught it. `unfurl_keys` is authored (rule 6) because it
-    // is a sentence a player reads.
+    // Scrolled-back replaces the `F4` hint in the title, since output keeps
+    // arriving and the way back is more urgent; a title is heard as a heading
+    // (§14). Plain ASCII, as an em-dash once drew as `?`. Reading outranks
+    // scrolled-back, which outranks the focus key.
     let hint = if scroll.is_reading() {
         sim.prose().line("unfurl_keys", &[])
     } else if scroll.is_back() {
@@ -604,25 +506,10 @@ pub(super) fn session(
     let interior = pane.inset(1);
     let mut body = interior;
 
-    // §5.0's economy, made visible: an action occupies its slot for a duration,
-    // and a meter is the only thing on screen saying how much is left. §14 names
-    // progress bars, and `Painter::progress` lived in an example until something
-    // had a duration to show.
-    //
-    // §10.1's instrument panel is a permanent fixture — twice a piece of
-    // laboratory state was reported as a bug because the only way to see it was
-    // to touch it. It follows the shape of the pane: down the side when wider
-    // than tall, across the top when taller than wide.
-    //
-    // §11.5's road is the room's mastery line, one row under the title and taken
-    // before the panel and boards divide what is left, so a short pane loses the
-    // road rather than the transcript. Its two standings go above it — the only
-    // numbers about the tower's whole life rather than the room in front of you
-    // — with the room's own count beside them where there is room, and they
-    // yield before the road does. See `gauges::split`.
-    //
-    // The installation's strip takes their place: the orb is not up yet, and a
-    // practice tower's standings are thrown away with it.
+    // A meter shows what an action's slot has left (§5.0). §10.1's panel
+    // follows the pane's shape. §11.5's road is taken first, so a short pane
+    // loses it before the transcript, with the tower's two standings above it
+    // (`gauges::split`). The installation's strip takes their place.
     if let Some(install) = installing {
         let strip = crate::install::split(body);
         crate::install::paint(&mut painter, strip.area, install);
@@ -709,25 +596,13 @@ pub(super) fn session(
         super::lattice::paint(&mut painter, binding.area, open, sim.prose());
     }
     body = binding.rest;
-    // The block down the side: the panel and whichever domain board is open —
-    // everything the room put on screen. It leaves rightward, by the edge
-    // `panel::split` puts it against, so it goes out past the tower rail rather
-    // than across the transcript.
-    //
-    // Taken after the whole chain rather than unioned split by split: only one
-    // board is present at a time and each takes from what the last left, so the
-    // difference is the block. Two slabs, not one — the panel can run across the
-    // top while a board claims columns down the side, and what the transcript
-    // gives up is then an L. See `slabs`.
+    // The block — everything the room put on screen — leaves by the edge
+    // `panel::split` put it against. Taken after the whole chain, as two slabs
+    // (`slabs`).
     let block = slabs(after_strip, body);
 
-    // The tower-wide production meter stays: it is the *pool* rather than an
-    // instrument, and says the slot is spent wherever it was spent. Skipped in
-    // the laboratory, where the panel already draws that bar.
-    //
-    // `instruments.is_empty()` first: `Sim::working` walks every entity with a
-    // dynamic component lookup and rarely short-circuits, so as the left operand
-    // it ran every frame in the one place its result is thrown away.
+    // The tower-wide production meter, skipped where the panel draws it.
+    // `instruments.is_empty()` first, since `Sim::working` walks every entity.
     if instruments.is_empty()
         && let Some(working) = sim.working()
     {
@@ -746,17 +621,9 @@ pub(super) fn session(
     let prompt = sim.prompt();
     let mut view = RecordView::prompt(&prompt);
 
-    // What the player did, not what their spells did. A spell emits what the
-    // same commands typed by hand emit, which is right and which buried the
-    // pane: a `repeat` loop pushes records every few ticks, so the player's own
-    // last line scrolled off in seconds. Nothing is lost or stored twice — a log
-    // is already a view over this one stream (§3, rule 4), so `peruse
-    // laboratory.log` reads the records this declines to draw. See
-    // `FieldName::Spell`.
-    //
-    // A closure rather than a collected `Vec`: `RecordView` measures the tail
-    // several times a frame and needs a `Clone` iterator, and the scrollback
-    // grows without bound.
+    // What the player did, not their spells, or a `repeat` buries the pane;
+    // the log still has them (§3, `FieldName::Spell`). A closure, since
+    // `RecordView` needs a `Clone` iterator over an unbounded stream.
     let drawn = || records.drawn();
     let total = records.drawn_len();
 
@@ -768,17 +635,9 @@ pub(super) fn session(
     // Only the tail fits. `iter().skip(n)` is O(1) here and stays `Clone`, which
     // is what `RecordView::draw` needs to measure and then draw.
     //
-    // Binary search rather than a walk: `height` is non-increasing in the skip —
-    // restoring an older record can only widen a run's columns — making "the
-    // smallest skip that still fits" monotone. Walking re-measured the whole
-    // tail per step, quadratic in a per-frame path; this is about five
-    // measurements at the 80×22 floor.
-    //
-    // The upper bound is `len`, not `len - rows`. A record is not one row —
-    // `RecordView` opens every `Input` after the first with a blank line — so
-    // `len - rows` is not known to fit, and a search whose predicate is false at
-    // its own upper bound converges on a value that overflows the pane, dropping
-    // the *newest* records off the bottom. Skipping everything is height 0.
+    // A binary search, since `height` is non-increasing in the skip. The upper
+    // bound is `len`, where height is 0, since a record is not one row and
+    // `len - rows` may not fit.
     //
     // `take(visible)` before the skip, so scrolling back is the same search over
     // a shorter stream rather than a second way of choosing what to draw.
@@ -809,20 +668,9 @@ pub(super) fn session(
 
 /// What `after` gave up out of `before`, as up to two disjoint slabs.
 ///
-/// Two, because what a body gives up is an L and not a rectangle. This returned
-/// one rect — the bounding box of the edges that moved — and that wiped the
-/// transcript: `panel::split` puts the panel across the top of a pane taller
-/// than wide, `stacks::split` claims columns from the right whatever the shape,
-/// and the bounding box of those two slabs is *the entire body*. At
-/// `ORBS_GRID=80x45` a room change erased it.
-///
-/// So the slabs are kept apart, and disjoint by construction: one takes rows
-/// spanning the full width, the other columns spanning only the rows the
-/// transcript kept. Overlapping would double-cross the corner, where the
-/// arriving half's second pass would read the first pass's output.
-///
-/// Each leaves by the edge it sits against, which is a fact about *which slab it
-/// is* rather than a guess from its shape.
+/// Two, since what a body gives up can be an L, whose bounding box is the whole
+/// body. Disjoint by construction, rows then columns, so no corner is crossed
+/// twice; each leaves by the edge it sits against.
 const fn slabs(before: Rect, after: Rect) -> [(Rect, Toward); 2] {
     if after.is_empty() {
         // The transcript got nothing, so the whole body is the block.
@@ -862,16 +710,7 @@ fn to_u32(ticks: u64) -> u32 {
     u32::try_from(ticks).unwrap_or(u32::MAX)
 }
 
-// The telemetry pane was here, and the tower rail replaced it (§19, Phase 2).
-//
-// It drew nine developer readings into fifty-eight columns of the second main
-// pane, built as a playability gate rather than as something a player wants.
-// Five moved to the rail's foot (`shell::rail::readings`); the other four were
-// already in `status`, the full answer where the rail is the glance.
-//
-// What it bought is not lost — `tick` still proves the sim runs, and `scale`
-// against a fixed `grid` is what a window drag walks through. What it cost was
-// §9's second pane, spent on the orb rather than on a domain.
+// The telemetry pane's readings moved to the rail's foot and `status` (§19).
 
 /// §9's focus mode, as a word.
 ///
@@ -884,21 +723,9 @@ const fn focus(screen: &Screen) -> &'static str {
 
 /// Re-draw the visible line one lexical run at a time, silently.
 ///
-/// The whole line is lexed and only a window drawn. `parser::lex` classifies
-/// partly by position — a line opening with `#` is one comment run, one opening
-/// with a control word is a control line, otherwise the first word is the verb —
-/// so lexing the visible slice of a scrolled line would apply all three to a
-/// mid-line fragment. [`Line::window_starts`] exists so it does not.
-///
-/// A scrolled comment is the only case that reaches a cell: dim throughout when
-/// lexed whole, coming apart into ordinary words when lexed from the window. A
-/// window starting on a verb draws identically either way, because `Verb` and
-/// `Name` both weigh `Normal`.
-///
-/// Silent, because the row has already been spoken: the `Input` span above draws
-/// *and* announces the visible text, and these runs re-draw the same glyphs with
-/// `glyphs`, which says nothing. §14's stream is rebuilt every frame, so one
-/// utterance per word would be the `0.3.23` defect.
+/// The whole line is lexed and a window drawn ([`Line::window_starts`]), since
+/// `parser::lex` classifies by position. Silent, since the `Input` span above
+/// already spoke the row (§14).
 fn highlight(painter: &mut Painter<'_>, at: Pos, line: &Line, room: u16) {
     let text = line.text();
     let (visible, _) = line.viewport(room);
@@ -944,14 +771,9 @@ fn input_line(frame: &mut Frame, area: Rect, line: &Line, prompt: &str, ghost: &
     if area.is_empty() {
         return;
     }
-    // Two rows would mean double-size glyphs, not a spare row: at 2× a glyph
-    // fills two cells across as well as down, so the text is written into *half*
-    // the columns and the frontend draws it into all of them. That halving is
-    // why the region lives on the `Frame` rather than in the renderer.
-    //
-    // `INPUT_ROWS` is 1, so this is false today. Inferred from the rect rather
-    // than the constant, because the Tab listing splits these rows and the
-    // prompt should follow what it is actually given.
+    // Two rows mean double-size glyphs in half the columns, which is why the
+    // region lives on the `Frame`. False today; read from the rect, which the
+    // Tab listing splits.
     let big = area.rows >= 2;
     let row = area.row;
     let width = if big { area.cols / 2 } else { area.cols };
@@ -962,29 +784,16 @@ fn input_line(frame: &mut Frame, area: Rect, line: &Line, prompt: &str, ghost: &
     let room = width.saturating_sub(prompt);
     let (visible, caret) = line.viewport(room);
     let at = area.col.saturating_add(prompt);
-    // One span for the whole line rather than a glyph run: the linear stream
-    // carries what is being typed, tagged `Input` so a reader can filter the
-    // partial line out. It is re-spoken every frame, which is correct raw
-    // material and wrong to recite verbatim — hence the tag.
-    //
-    // Exactly one, and the highlighting below must not add a second: a
-    // run-per-word would recite a half-typed command a word at a time, the
-    // `0.3.23` defect. Hence the silent `glyphs` over what this already drew.
+    // One span for the line, tagged `Input` so a reader can filter it; the
+    // highlighting below is silent, so the line is spoken once.
     painter.span(
         Pos::new(at, row),
         &Span::new(visible).with_kind(UtteranceKind::Input),
     );
     highlight(&mut painter, Pos::new(at, row), line, room);
 
-    // The suggestion, after the caret and dim. Spoken, with its own kind so a
-    // reader can filter it: §19's Frame-boundary rule is that *"a narrow pane is
-    // a visual constraint and must not become an informational one"*, and a
-    // ghost drawn but never announced is that asymmetry.
-    //
-    // After the runs, so nothing over-draws it. A ghost is only offered with the
-    // caret at the end of the line, so it sits past the last run — but that is
-    // `Line::ghost`'s invariant, and leaning on someone else's invariant for a
-    // drawing order that costs nothing is how the next change breaks it.
+    // The suggestion, dim, spoken with its own kind (§19's Frame boundary).
+    // After the runs, so nothing over-draws it, whatever `Line::ghost` promises.
     if !ghost.is_empty() {
         let at = area.col.saturating_add(prompt).saturating_add(caret);
         let room = width.saturating_sub(at.saturating_sub(area.col));
@@ -1007,13 +816,8 @@ fn input_line(frame: &mut Frame, area: Rect, line: &Line, prompt: &str, ghost: &
 
 /// The window cannot host the game.
 ///
-/// `Screen::is_hostable` documents this as a real state to render rather than a
-/// reason to stop drawing: blanking the mesh left the player looking at an empty
-/// rectangle with no idea why.
-///
-/// Its one sentence comes from `content/prose.toml` (rule 6): a string in Rust
-/// is invisible to the `ORBS_CONTENT` watcher, to the width and CP437 lints in
-/// `prose.rs`, and to a writer grepping `content/`.
+/// A real state to render (`Screen::is_hostable`), not a blank. Its sentence
+/// is `content/prose.toml`'s (rule 6).
 pub fn paint_too_small(frame: &mut Frame, sim: &Sim) {
     let area = frame.area();
     if area.is_empty() {

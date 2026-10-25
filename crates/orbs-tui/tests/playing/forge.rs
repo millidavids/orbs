@@ -1,23 +1,16 @@
 //! A charm bound at a real keyboard (§10's Enchanting).
 //!
-//! `orbs-sim`'s `tests/enchanting.rs` proves every charm reaches its number and
-//! `tower::lattice` proves the puzzle over all 512 boards. Neither can prove
-//! the domain is playable: that the lattice is on screen beside the transcript,
-//! that a player can read the residue and answer it, all by typing.
-//!
-//! The board is what is at risk. A Lights Out puzzle whose glyphs do not line
-//! up under their columns is unplayable rather than merely ugly — a player
-//! reads down a column to see what a snap did.
+//! That the domain is playable by typing; the board is the risk, read down its
+//! columns.
 
-use crate::play::{Game, QUIET, available};
+use crate::play::{Game, QUIET};
 
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn a_charm_is_bound_by_typing_and_the_lattice_is_beside_you() {
-    if !available() {
+    let Some(game) = Game::seeded(QUIET) else {
         return;
-    }
-    let game = Game::seeded(QUIET);
+    };
     game.does("attend forge", "/tower/forge")
         .does("imbue mortar_and_pestle hurried", "the glyphs rise");
 
@@ -37,10 +30,9 @@ fn a_charm_is_bound_by_typing_and_the_lattice_is_beside_you() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn the_forge_refuses_in_voice_rather_than_falling_silent() {
-    if !available() {
+    let Some(game) = Game::seeded(QUIET) else {
         return;
-    }
-    let game = Game::seeded(QUIET);
+    };
     game.does("attend forge", "/tower/forge")
         // Before anything is open, and §6 forbids a bare error for either.
         .does("snap apex", "imbue something first")
@@ -60,10 +52,9 @@ fn the_forge_refuses_in_voice_rather_than_falling_silent() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn the_manual_teaches_the_room_it_is_read_in() {
-    if !available() {
+    let Some(game) = Game::seeded(QUIET) else {
         return;
-    }
-    let game = Game::seeded(QUIET);
+    };
     game.does("attend forge", "/tower/forge");
     // `help` is the way in, and what it offers has to be what the room does.
     // `a_primer_only_names_words_that_room_actually_offers` covers the listing;
@@ -75,15 +66,14 @@ fn the_manual_teaches_the_room_it_is_read_in() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn a_lattice_is_solved_by_hand_and_the_charm_reaches_the_tool() {
-    if !available() {
-        return;
-    }
     // The whole domain, typed, end to end: a person can sit down, read the
     // board, and get a charm out of it.
     //
     // The seed is fixed so the residue is. `QUIET` is what `play::` uses
     // everywhere — a fixture that works out its own answer tests the fixture.
-    let game = Game::seeded(QUIET);
+    let Some(game) = Game::seeded(QUIET) else {
+        return;
+    };
     game.does("attend forge", "/tower/forge")
         .does("imbue mortar_and_pestle hurried", "the glyphs rise");
 
@@ -102,12 +92,11 @@ fn a_lattice_is_solved_by_hand_and_the_charm_reaches_the_tool() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn the_board_columns_line_up_under_their_names() {
-    if !available() {
-        return;
-    }
     // A stride that drifts by one cell makes the puzzle unreadable, and nothing
     // in `orbs-sim` can see it: the glyphs are right and the picture is wrong.
-    let game = Game::seeded(QUIET);
+    let Some(game) = Game::seeded(QUIET) else {
+        return;
+    };
     game.does("attend forge", "/tower/forge")
         .does("imbue mortar_and_pestle hurried", "the glyphs rise");
     game.expect_drawn("apex")

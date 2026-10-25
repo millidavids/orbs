@@ -7,25 +7,15 @@
 //! charm's price. `debug_take` holds the node without the experience, which is
 //! the tool's one job; everything downstream is the real reader.
 
+mod common;
+
+// `debug_take` is what this file is built on, so most of it is gated; two tests
+// need neither the word nor the helpers.
 #[cfg(debug_assertions)]
-use orbs_render::{FieldName, Value};
+use common::{run_all, said};
 use orbs_sim::Sim;
 #[cfg(debug_assertions)]
 use orbs_sim::tower::grant;
-
-/// Type each line and give the world a tick.
-///
-/// Gated with the tests that use it. `debug_take` is what this file is built on
-/// and it is `debug_assertions`-only, so in a release build every helper here
-/// has no callers and reads as dead code. Two tests below need neither the word
-/// nor these helpers and are ungated.
-#[cfg(debug_assertions)]
-fn run(sim: &mut Sim, lines: &[&str]) {
-    for line in lines {
-        sim.submit(line);
-        sim.step();
-    }
-}
 
 /// The siege being fought, if one is.
 #[cfg(debug_assertions)]
@@ -35,20 +25,6 @@ fn siege(sim: &mut Sim) -> Option<orbs_sim::tower::Siege> {
         .iter(sim.world())
         .next()
         .cloned()
-}
-
-/// Every message the orb has said, in order.
-#[cfg(debug_assertions)]
-fn said(sim: &Sim) -> Vec<String> {
-    sim.scrollback()
-        .records()
-        .iter()
-        .filter_map(|record| record.field(FieldName::Message))
-        .filter_map(|value| match value {
-            Value::Text(text) => Some(text.to_owned()),
-            _ => None,
-        })
-        .collect()
 }
 
 #[cfg(debug_assertions)]
@@ -80,7 +56,7 @@ fn every_authored_fork_node_can_be_held_by_a_tester() {
         "floor_2",
         "haste_2",
     ] {
-        run(&mut sim, &[&format!("debug_take {id}")]);
+        run_all(&mut sim, &[&format!("debug_take {id}")]);
         assert!(
             sim.taken().iter().any(|held| held == id),
             "{id} was refused"
@@ -92,7 +68,7 @@ fn every_authored_fork_node_can_be_held_by_a_tester() {
 #[test]
 fn fuel_lengthens_what_is_lit_and_not_what_was_banked() {
     let mut plain = Sim::new(1);
-    run(&mut plain, &["attend laboratory", "kindle charcoal"]);
+    run_all(&mut plain, &["attend laboratory", "kindle charcoal"]);
     let plain_said = said(&plain);
     let base = plain_said
         .iter()
@@ -100,7 +76,7 @@ fn fuel_lengthens_what_is_lit_and_not_what_was_banked() {
         .expect("the athanor said how long");
 
     let mut longer = Sim::new(1);
-    run(
+    run_all(
         &mut longer,
         &["debug_take fuel_1", "attend laboratory", "kindle charcoal"],
     );
@@ -122,7 +98,7 @@ fn pool_and_floor_raise_the_ceiling() {
     let base = orbs_sim::tower::ceiling(plain.world());
 
     let mut deeper = Sim::new(1);
-    run(&mut deeper, &["debug_take pool_1"]);
+    run_all(&mut deeper, &["debug_take pool_1"]);
     assert_eq!(
         orbs_sim::tower::ceiling(deeper.world()),
         base + grant::POOL_BONUS,
@@ -149,14 +125,10 @@ fn pool_and_floor_raise_the_ceiling() {
 #[cfg(debug_assertions)]
 #[test]
 fn a_document_with_no_pool_row_fills_to_the_ceiling_the_grants_bought() {
-    // An ordering trap, because the reader is forgiving: `ceiling` reads
-    // `pool_<n>` and `floor_<n>` off `Taken`, and `grant::tiers` answers nought
-    // for a resource that is not there yet rather than panicking. So a restore
-    // reading the ceiling before putting `Taken` back filled the pool as if the
-    // orb had taken nothing, and the tower came back four short per tier. A
-    // document with no `quintessence` row is what a hand-edited save looks like.
+    // An ordering trap: `ceiling` reads `Taken`, which answers nought before
+    // it is restored. A document with no `quintessence` row is a hand edit.
     let mut sim = Sim::new(1);
-    run(&mut sim, &["debug_take pool_1", "debug_take pool_2"]);
+    run_all(&mut sim, &["debug_take pool_1", "debug_take pool_2"]);
     let bought = orbs_sim::tower::ceiling(sim.world());
 
     let mut save = sim.snapshot();
@@ -182,7 +154,7 @@ fn a_document_with_no_pool_row_fills_to_the_ceiling_the_grants_bought() {
 #[test]
 fn edge_rides_on_every_answering_roll_and_escrow_on_what_a_siege_pays() {
     let mut sim = Sim::new(1);
-    run(
+    run_all(
         &mut sim,
         &[
             "debug_take edge_1",
@@ -218,11 +190,11 @@ fn edge_rides_on_every_answering_roll_and_escrow_on_what_a_siege_pays() {
 fn garrison_raises_the_most() {
     use orbs_sim::tower::siege::{GARRISON_MOST, Garrison};
     let mut sim = Sim::new(1);
-    run(&mut sim, &["debug_take garrison_1"]);
+    run_all(&mut sim, &["debug_take garrison_1"]);
     sim.world_mut()
         .resource_mut::<Garrison>()
         .restore(GARRISON_MOST, 0);
-    run(
+    run_all(
         &mut sim,
         &[
             "attend menagerie",
@@ -245,7 +217,7 @@ fn garrison_raises_the_most() {
 #[test]
 fn mend_puts_more_back_per_course() {
     let mut sim = Sim::new(1);
-    run(&mut sim, &["debug_take mend_1"]);
+    run_all(&mut sim, &["debug_take mend_1"]);
     let before = sim.integrity();
     // Wear the wall first, so the mend has somewhere to land.
     orbs_sim::tower::wear_by(sim.world_mut(), 40);
@@ -296,7 +268,7 @@ fn vigilance_reaches_the_shelf() {
     let moved = (0..4).filter(|seed| {
         let mut plain = Sim::new(*seed);
         let mut vigilant = Sim::new(*seed);
-        run(&mut vigilant, &["debug_take vigilance_1"]);
+        run_all(&mut vigilant, &["debug_take vigilance_1"]);
         // The tick the line above spent, so the two clocks agree.
         plain.step();
         let unguarded = first_swap(&mut plain, 20_000);
@@ -317,7 +289,7 @@ fn vigilance_reaches_the_shelf() {
 #[test]
 fn thrift_takes_two_off_a_charm_and_never_below_one() {
     let mut plain = Sim::new(1);
-    run(
+    run_all(
         &mut plain,
         &["attend forge", "imbue mortar_and_pestle hurried"],
     );
@@ -331,7 +303,7 @@ fn thrift_takes_two_off_a_charm_and_never_below_one() {
     let base = quoted(&plain);
 
     let mut cheaper = Sim::new(1);
-    run(
+    run_all(
         &mut cheaper,
         &[
             "debug_take thrift_1",
@@ -348,17 +320,17 @@ fn haste_shortens_a_spells_run_and_not_a_players() {
     // The same grind, issued by hand and by a spell, under one tier of haste:
     // the spell's lands sooner and the player's does not.
     let mut sim = Sim::new(1);
-    run(
+    run_all(
         &mut sim,
         &["debug_take haste_1", "attend laboratory", "grind sage"],
     );
     let by_hand = sim.working().expect("the mortar is working");
     let (_, hand_total) = by_hand.progress(sim.tick());
-    run(&mut sim, &["stop mortar_and_pestle"]);
+    run_all(&mut sim, &["stop mortar_and_pestle"]);
 
     sim.write_spell("grinding", &["grind sage".to_owned()]);
     sim.step();
-    run(&mut sim, &["invoke grinding"]);
+    run_all(&mut sim, &["invoke grinding"]);
     sim.step_n(2);
     let by_spell = sim.working().expect("the spell charged the mortar");
     let (_, spell_total) = by_spell.progress(sim.tick());

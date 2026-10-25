@@ -1,83 +1,19 @@
 //! The bailey, scripted — and the arithmetic a siege spell is written with.
 //!
-//! `tests/besieging.rs` proves the game and `tests/solvers.rs` proves the
-//! shipped spells run. Neither asks whether a person could write a siege spell
-//! at all, or whether every state they would need is emitted.
+//! Whether a person could write a siege spell:
 //!
-//! 1. Every reading the domain declares is reachable. A declared word no state
-//!    publishes reads nought for ever with the suite green — the die prices
-//!    shipped that way, raised only by `defend::publish`, so a fresh tower
-//!    priced every die at nothing and every solver's affordability guard said
-//!    *yes* on an empty pool.
+//! 1. Every declared reading is reachable, since an unpublished one reads
+//!    nought.
 //! 2. A hand-written spell can use each of them, compiled through the real
 //!    editor and run through the real schedule.
 //! 3. The arithmetic is exact against numbers this domain fixes: the pool opens
 //!    at 24 and a `d20` costs 5.
 
+mod common;
+
+use common::{assert_all_published, at_the_wall, cast, complaints, run, said, words};
 use orbs_render::{FieldName, Value};
 use orbs_sim::{Sim, tower};
-
-fn run(sim: &mut Sim, line: &str) {
-    sim.submit(line);
-    sim.step();
-}
-
-fn at_the_wall(seed: u64) -> Sim {
-    let mut sim = Sim::new(seed);
-    run(&mut sim, "attend bailey");
-    sim
-}
-
-/// Every `Message` the orb has said.
-fn said(sim: &Sim) -> Vec<String> {
-    sim.scrollback()
-        .records()
-        .iter()
-        .filter_map(|record| match record.field(FieldName::Message) {
-            Some(Value::Text(text)) => Some(text.to_owned()),
-            _ => None,
-        })
-        .collect()
-}
-
-/// Every bare word `survey` has printed — a reading with no number on it.
-fn words(sim: &Sim) -> Vec<String> {
-    sim.scrollback()
-        .records()
-        .iter()
-        .filter_map(|record| match record.field(FieldName::Name) {
-            Some(Value::Text(text)) => Some(text.to_owned()),
-            _ => None,
-        })
-        .collect()
-}
-
-/// Write a spell into the bailey and cast it, then hand back the log.
-///
-/// Through `write` and `invoke`, never by hand: poking a `Program` into the
-/// world proves the runner works, not that a person could get there.
-fn cast(sim: &mut Sim, name: &str, lines: &[&str]) {
-    let body: Vec<String> = lines.iter().map(|line| (*line).to_owned()).collect();
-    sim.write_spell(name, &body);
-    sim.step();
-    run(sim, &format!("invoke {name}"));
-}
-
-/// Whether a spell the orb was given reads clean.
-///
-/// The thing to assert on: a spell that silently does nothing looks identical
-/// to one that ran.
-fn complaints(sim: &Sim) -> Vec<String> {
-    said(sim)
-        .into_iter()
-        .filter(|line| {
-            line.contains("means nothing")
-                || line.contains("cannot read")
-                || line.contains("is not a")
-                || line.contains("no part of this")
-        })
-        .collect()
-}
 
 // ---------------------------------------------------------------------------
 // 1. Every declared reading is one the world actually publishes
@@ -85,11 +21,7 @@ fn complaints(sim: &Sim) -> Vec<String> {
 
 /// The lint that would have caught the die prices.
 ///
-/// `scene_at` registers every declared word unconditionally, so all of them
-/// compile whether or not anything publishes them — the declaration is the only
-/// thing between a word and silence. This walks a real siege through the states
-/// that produce each one. A reading nothing publishes is worse than a missing
-/// one: `many_at` answers absent with nought.
+/// This walks a real siege through the states that produce each one.
 #[test]
 fn every_reading_the_domain_declares_is_one_some_state_reaches() {
     let mut seen: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
@@ -143,15 +75,7 @@ fn every_reading_the_domain_declares_is_one_some_state_reaches() {
     run(&mut sim, &format!("survey {}", tower::siege::ROSTER));
     seen.extend(words(&sim));
 
-    let missing: Vec<&str> = tower::siege::readings()
-        .into_iter()
-        .filter(|word| !seen.contains(*word))
-        .collect();
-    assert!(
-        missing.is_empty(),
-        "the domain declares readings no state ever publishes, so a spell asking \
-         for one gets nought for ever: {missing:?}",
-    );
+    assert_all_published(tower::siege::readings(), seen);
 }
 
 /// A die's price is there before the first siege, which it was not: raised by

@@ -1,13 +1,7 @@
 //! What the function keys do, what a finished line does, and how a session ends.
 //!
-//! Split out of `plugin.rs`, which CLAUDE.md restricts to registration. These
-//! are the acts that belong to no surface: they work from inside the editor, the
-//! weave screen and the maze alike, which is why they are gathered rather than
-//! filed under whichever screen happens to be open.
-//!
-//! The rules behind them are `orbs_shell::shortcuts`'s, so the two builds cannot
-//! disagree about where `Tampered` sits in the register cycle or what the trace
-//! file is called.
+//! The acts belonging to no surface. Their rules are `orbs_shell::shortcuts`'s,
+//! so both builds agree.
 
 use bevy::prelude::*;
 
@@ -51,7 +45,7 @@ pub(super) fn submit(
             if let Some(raise) = tower.submit_installing(install, &submitted.line, reader) {
                 swapping.write(super::menuing::SwapMessage {
                     seed: raise.seed,
-                    raising: super::menuing::Raising::Installed(raise),
+                    raising: orbs_shell::Raising::Installed(raise),
                 });
                 woke = true;
                 break;
@@ -84,11 +78,7 @@ pub(super) fn export_trace(tower: Res<Tower>) {
 
 /// Step the orb's tonal register.
 ///
-/// Type a command with the register on and the echo comes back in a different
-/// face; then `peruse orb.log` and the log lines come back plain, because §3
-/// exempts the diagnostic surfaces from the eldritch treatment and only from
-/// that one. A sabotage tell is not exempt anywhere, which is the asymmetry the
-/// whole disjointness rule buys.
+/// The echo changes face; `peruse orb.log` stays plain (§3).
 pub(super) fn cycle_register(mut tower: ResMut<Tower>) {
     info!("register: {:?}", tower.cycle_register());
 }
@@ -100,27 +90,11 @@ pub(super) fn quit(mut exit: MessageWriter<AppExit>) {
 
 /// Leave the orb, because the word was typed and confirmed.
 ///
-/// The sim asks first: `quit` once puts the question, `quit` again answers it,
-/// and any other command answers *no*, so `Quitting::take` is only ever true for
-/// a decision made twice. `execute::quit` has why leaving is the one word that
-/// asks — it cannot be undone, waited out or repeated away.
-///
-/// The take-once handshake beside `scribe`, `unfurl`, `weave`, `wander` and
-/// `menu`: the sim records the decision and the frontend decides what leaving
-/// *means*. Here it is an `AppExit`; in the terminal build it is raw mode being
-/// put back.
+/// `Quitting::take` is true only for `quit` twice (`execute::quit`). A
+/// handshake: the sim decides, and here leaving means an `AppExit`.
 pub(super) fn quit_requested(mut tower: ResMut<Tower>, mut exit: MessageWriter<AppExit>) {
-    // Peeked before it is taken, exactly as the other handshakes are.
-    // `quitting` needs `&mut`, and reaching through `ResMut` for it stamps
-    // `Tower`'s change tick — and this system's own run condition is
-    // `resource_changed::<Tower>`, so from the first frame Tower changed it
-    // re-armed itself for ever and dragged `refresh_panel`, `suggest` and the
-    // five `open_requested` systems back to frame rate with it. `Panel::refresh`
-    // calls `Sim::briefs`, which walks every built room and builds two
-    // `QueryState`s per call.
-    //
-    // `editing::open_requested`'s comment records this happening once already.
-    // The peek that stops it was added with `quit` and then called by nothing.
+    // Peeked first: a `ResMut` stamps `Tower` changed, which re-arms this
+    // system's own `resource_changed::<Tower>` and every system on it.
     if !tower.is_quitting() {
         return;
     }

@@ -2,22 +2,17 @@
 
 use bevy::prelude::*;
 
-use orbs_shell::settings::{self, Category, Pair, Row, SWITCH, switched};
+use orbs_shell::settings::{self, Category, Pair, Row, SWITCH, rows, switched};
 
-use super::held::{CRT, ELEVEN, FOCUS, LINEAR, Naming, READING, SIGHT, Skipping, THEME, VOICE};
+use super::held::{CRT, ELEVEN, Naming, Skipping, THEME, VOICE};
 use crate::crt::CrtSettings;
 use crate::render::{Theme, palette};
 use crate::sight::Vision;
 
 /// Everything a settings row is read from.
 ///
-/// One `SystemParam` because two systems open the menu — `menuing`'s for the
-/// `menu` verb and `thresholding`'s for the screen before a tower — and a second
-/// copy of this list is a settings page that differs by which door you came
-/// through. `input::Surfaces` is the precedent.
-///
-/// Every field is optional for that module's reason: half the tests here build
-/// the shell alone, and a bare `Res` fails parameter validation in one.
+/// One `SystemParam` for both systems that open the menu, as
+/// `input::Surfaces`. Optional fields, for tests that build the shell alone.
 #[derive(bevy::ecs::system::SystemParam)]
 pub(crate) struct Settable<'w, 's> {
     /// The tube, which is a component on the camera rather than a resource.
@@ -177,81 +172,35 @@ fn rows(read: Readings) -> Vec<Row> {
             fit.word(),
             &orbs_shell::Fit::ALL.map(orbs_shell::Fit::word),
         ),
-        Row::new(
-            Category::Access,
-            SIGHT,
-            vision.name(),
-            &crate::sight::Sight::ALL.map(crate::sight::Sight::name),
-        ),
-        Row::new(Category::Access, LINEAR, switched(linear), &SWITCH),
+        rows::sight(vision),
+        rows::linear(linear),
         // Its own switch, and never one that can bring motion back: `moving`
         // asks this *and* the tube, so `motion on` with the tube off is still.
-        Row::new(
-            Category::Access,
-            settings::MOTION,
-            switched(!still),
-            &SWITCH,
-        ),
+        rows::motion(!still),
         read.contrast.unwrap_or_default().row(Category::Access),
         read.weight.unwrap_or_default().row(Category::Access),
         read.echoing.unwrap_or_default().row(Category::Access),
-        // `reading` to a player, `driver` in the file: the word says what it
-        // does and the key is what `0.13.17` wrote, so no file migrates. See
-        // `Row::key`.
-        Row::new(
-            Category::Habits,
-            READING,
-            read.driver.word(),
-            &orbs_shell::Driver::ALL.map(orbs_shell::Driver::word),
-        )
-        .keyed(settings::DRIVER),
-        Row::new(
-            Category::Habits,
-            FOCUS,
-            mode.word(),
-            &orbs_render::DisplayMode::ALL.map(orbs_render::DisplayMode::word),
-        ),
+        rows::reading(read.driver),
+        rows::focus(mode),
         // §4 has owed this since Phase 0.5: *"skip is a sticky setting, not a
         // per-launch keypress"*, and §19 removed the keypress rather than keep
         // it, because the first thing a player does to the game should not be
         // dismissing it.
         // From the resource, never the file — see [`Skipping`] for the two
         // defects that came of this row reading `orbs-settings.toml` directly.
-        Row::new(
-            Category::Habits,
-            settings::SKIP,
-            switched(read.skipping.unwrap_or_default().on()),
-            &SWITCH,
-        ),
+        rows::skip(read.skipping.unwrap_or_default().on()),
         // From the resource, for `skip`'s reason. With none — the dump — it is
         // the file's answer, which on a first launch is on.
-        Row::new(
-            Category::Habits,
-            settings::INSTALL,
-            switched(
-                read.installs
-                    .map_or_else(settings::installs, |installs| installs.0),
-            ),
-            &SWITCH,
+        rows::install(
+            read.installs
+                .map_or_else(settings::installs, |installs| installs.0),
         ),
-        Row::new(
-            Category::Habits,
-            settings::PACE,
-            read.paced.unwrap_or_default().0.word(),
-            &orbs_shell::Pace::ALL.map(orbs_shell::Pace::word),
-        ),
+        rows::pace(read.paced.unwrap_or_default().0),
         read.away.unwrap_or_default().row(Category::Habits),
-        // No list: it takes what it is given, and shows what a new tower would
-        // take.
-        Row::new(
-            Category::Habits,
-            settings::NAME,
-            &orbs_shell::new_wizard(
-                read.naming
-                    .map_or_else(settings::chosen_name, |naming| naming.0.clone())
-                    .as_deref(),
-            ),
-            &[],
+        rows::name(
+            read.naming
+                .map_or_else(settings::chosen_name, |naming| naming.0.clone())
+                .as_deref(),
         ),
     ]);
     // One row per effect, each a ceiling on whatever state `crt` chose.

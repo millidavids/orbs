@@ -61,16 +61,7 @@ impl Sight {
     /// chose.
     #[must_use]
     pub fn seeded() -> Self {
-        chosen(
-            // An exported-but-empty `ORBS_SIGHT=` is not the switch being set —
-            // `save::chosen`'s rule. Discarding a *saved accessibility choice*
-            // over an empty variable is the worst version of it.
-            std::env::var(SIGHT_VAR)
-                .ok()
-                .filter(|value| !value.trim().is_empty())
-                .or_else(|| crate::settings::get(crate::settings::SIGHT))
-                .as_deref(),
-        )
+        chosen(crate::settings::seeded(SIGHT_VAR, crate::settings::SIGHT).as_deref())
     }
 }
 

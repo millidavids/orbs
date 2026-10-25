@@ -99,11 +99,8 @@ impl Circle {
 
     /// The board's size in character cells, border excluded.
     ///
-    /// Fixed, never sized to what is standing: a board growing a row the first
-    /// time the beast was called would move the transcript under the player's
-    /// eye as they read the answer. The same for a lesser circle, which draws
-    /// one line of wiring and two senses and leaves the foot blank, so the
-    /// transcript does not move the day the whole circle opens either.
+    /// Fixed, even for a lesser circle, so the transcript never moves under
+    /// the player's eye.
     #[must_use]
     pub const fn size() -> (u16, u16) {
         (Self::COLS, Self::HEIGHT)
@@ -269,10 +266,8 @@ impl Circle {
 /// A row's name, exactly [`Circle::LABEL`] cells wide: clipped to leave one
 /// blank before the cells, and padded.
 ///
-/// Clipped, not only padded, because the senses' names and the two labels are
-/// prose a writer can reload: a name of twelve or more pushed its row's cells
-/// right while the numbers and marks stayed put, putting a mark under the wrong
-/// row — the one failure this board most has to avoid.
+/// Clipped, since the names are reloadable prose, or a long one misaligns its
+/// row's marks.
 fn label(name: &str) -> String {
     let clipped: String = name.chars().take(Circle::LABEL - 1).collect();
     format!("{clipped:<width$}", width = Circle::LABEL)

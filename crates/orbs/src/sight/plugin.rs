@@ -6,8 +6,9 @@ use bevy::input::common_conditions::input_just_pressed;
 use bevy::prelude::*;
 use bevy::render::{ExtractSchedule, Render, RenderApp, RenderStartup, RenderSystems};
 
-use super::pass::{SightUniformBuffer, extract, init_pipeline, prepare, sight_pass};
-use super::settings::{Vision, cycle, seeded};
+use super::pass::extract;
+use super::settings::{SightUniform, Vision, cycle};
+use crate::fullscreen::{UniformBuffer, init_pipeline, pass, prepare};
 
 /// Take the hue out for players who need it (DESIGN.md §14).
 pub struct SightPlugin;
@@ -17,7 +18,7 @@ impl Plugin for SightPlugin {
         // Compiled in, not loaded from disk: §13 ships no loose asset directory.
         embedded_asset!(app, "sight.wgsl");
 
-        app.insert_resource(Vision(seeded()))
+        app.insert_resource(Vision(orbs_shell::Sight::seeded()))
             // F8, because §14's rule is that a player can reach it. The phosphor
             // got `F2` and the tube `F3` for the same reason: an accommodation
             // reachable only through an environment variable is not reachable by
@@ -36,10 +37,13 @@ impl Plugin for SightPlugin {
             return;
         };
         render_app
-            .init_resource::<SightUniformBuffer>()
+            .init_resource::<UniformBuffer<SightUniform>>()
             .add_systems(ExtractSchedule, extract)
-            .add_systems(RenderStartup, init_pipeline)
-            .add_systems(Render, prepare.in_set(RenderSystems::Prepare))
+            .add_systems(RenderStartup, init_pipeline::<SightUniform>)
+            .add_systems(
+                Render,
+                prepare::<SightUniform>.in_set(RenderSystems::Prepare),
+            )
             // `.after(crt::CrtPass)`, and the `in_set` is load-bearing.
             // `crt/plugin.rs` records what an edge to `tonemapping` alone cost:
             // unordered against `main_pass_2d` and `upscaling` the pass landed
@@ -49,7 +53,7 @@ impl Plugin for SightPlugin {
             // into a pixel that had none.
             .add_systems(
                 Core2d,
-                sight_pass
+                pass::<SightUniform>
                     .in_set(Core2dSystems::PostProcess)
                     .after(crate::crt::CrtPass),
             );

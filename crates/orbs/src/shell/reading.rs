@@ -1,21 +1,29 @@
 //! Reading back through the transcript — `unfurl`, and the keys that page it.
 //!
-//! Split out of `plugin.rs`, which CLAUDE.md restricts to registration.
-//!
 //! How far a page moves is `orbs-shell`'s, deliberately: it is what the
 //! transcript would fit, measured with the same `RecordView` it is drawn with,
-//! so a second measure would page by a different amount than it showed. What
-//! lives here is this frontend's `Tower` being unwrapped for it.
+//! so a second measure would page by a different amount than it showed.
 
 use bevy::prelude::*;
+use orbs_shell::{Key, Scroll};
 
 use super::Screen;
 use crate::sim::Tower;
 
-/// The shared measurement, with this frontend's `Tower` unwrapped.
-pub(super) fn page_step(screen: &Screen, tower: &Tower, back: usize) -> usize {
-    orbs_shell::page_step(screen, tower.sim(), back)
-}
+/// The keys that move through the transcript while reading, as the table both
+/// builds read (`orbs_shell::apply_to_reading`) names them.
+///
+/// Up and Down are a record, Home and End an end. Escape leaves, as it leaves
+/// the editor: one meaning in every mode. It does not scroll back to the newest
+/// output — a player who read back and pressed Escape wants to type, not to
+/// lose their place.
+const READING_KEYS: [(KeyCode, Key); 5] = [
+    (KeyCode::ArrowUp, Key::Up),
+    (KeyCode::ArrowDown, Key::Down),
+    (KeyCode::Home, Key::Home),
+    (KeyCode::End, Key::End),
+    (KeyCode::Escape, Key::Escape),
+];
 
 /// Hand the transcript the keyboard when `unfurl` has asked for it.
 ///
@@ -28,7 +36,7 @@ pub(super) fn page_step(screen: &Screen, tower: &Tower, back: usize) -> usize {
 /// the word did anything.
 pub(super) fn start_reading(
     mut tower: ResMut<Tower>,
-    mut scroll: ResMut<orbs_shell::Scroll>,
+    mut scroll: ResMut<Scroll>,
     screen: Res<Screen>,
 ) {
     // Peeked first — see `editing::open_requested` for why reaching for `&mut`
@@ -38,74 +46,49 @@ pub(super) fn start_reading(
     }
     tower.unfurling();
     scroll.read();
-    let total = tower.sim().scrollback().records().drawn_len();
-    let step = page_step(&screen, &tower, scroll.back());
-    scroll.page(step, true, total);
+    page(&mut scroll, &screen, &tower, true);
 }
 
-/// Give the keyboard back to the prompt.
+/// Move through the transcript while reading.
 ///
-/// Escape, the same as the editor: one meaning in every mode, step out of the
-/// one you are in. It does not scroll back to the newest output — a player who
-/// read back and pressed Escape wants to type, not to lose their place.
-pub(super) fn stop_reading(scroll: ResMut<orbs_shell::Scroll>, tower: Res<Tower>) {
-    read_with(&orbs_shell::Key::Escape, scroll, &tower);
-}
-
-/// One record older — the up arrow while reading.
-pub(super) fn nudge_back(scroll: ResMut<orbs_shell::Scroll>, tower: Res<Tower>) {
-    read_with(&orbs_shell::Key::Up, scroll, &tower);
-}
-
-/// One record newer — the down arrow while reading.
-pub(super) fn nudge_forward(scroll: ResMut<orbs_shell::Scroll>, tower: Res<Tower>) {
-    read_with(&orbs_shell::Key::Down, scroll, &tower);
-}
-
-/// The oldest output — Home while reading.
-pub(super) fn to_oldest(scroll: ResMut<orbs_shell::Scroll>, tower: Res<Tower>) {
-    read_with(&orbs_shell::Key::Home, scroll, &tower);
-}
-
-/// The newest output — End while reading.
-pub(super) fn to_newest(scroll: ResMut<orbs_shell::Scroll>, tower: Res<Tower>) {
-    read_with(&orbs_shell::Key::End, scroll, &tower);
-}
-
-/// A key through the table both builds read, `orbs_shell::apply_to_reading`.
-///
-/// One `input_just_pressed` system a key rather than one reading
-/// `KeyboardInput`: a gated message reader keeps its cursor and re-reads the
-/// key that closed the manual on the frame it next runs (`plugin.rs` records
-/// that shipping once for the menu).
-fn read_with(key: &orbs_shell::Key, mut scroll: ResMut<orbs_shell::Scroll>, tower: &Tower) {
+/// `ButtonInput` rather than `KeyboardInput`: a gated message reader keeps its
+/// cursor and re-reads the key that closed the manual on the frame it next
+/// runs (`plugin.rs` records that shipping once for the menu).
+pub(super) fn read_keys(
+    pressed: Res<ButtonInput<KeyCode>>,
+    mut scroll: ResMut<Scroll>,
+    tower: Res<Tower>,
+) {
     let total = tower.sim().scrollback().records().drawn_len();
-    orbs_shell::apply_to_reading(key, &mut scroll, total);
+    for (code, key) in &READING_KEYS {
+        if pressed.just_pressed(*code) {
+            orbs_shell::apply_to_reading(key, &mut scroll, total);
+        }
+    }
+}
+
+/// Whether a key [`read_keys`] answers was pressed this frame.
+pub(super) fn reading_key(pressed: Res<ButtonInput<KeyCode>>) -> bool {
+    pressed.any_just_pressed(READING_KEYS.map(|(code, _)| code))
 }
 
 /// Look further back through the transcript.
-pub(super) fn scroll_back(
-    mut scroll: ResMut<orbs_shell::Scroll>,
-    screen: Res<Screen>,
-    tower: Res<Tower>,
-) {
-    let total = tower.sim().scrollback().records().drawn_len();
-    let step = page_step(&screen, &tower, scroll.back());
-    scroll.page(step, true, total);
+pub(super) fn scroll_back(mut scroll: ResMut<Scroll>, screen: Res<Screen>, tower: Res<Tower>) {
+    page(&mut scroll, &screen, &tower, true);
 }
 
 /// Come back toward the newest output.
-pub(super) fn scroll_forward(
-    mut scroll: ResMut<orbs_shell::Scroll>,
-    screen: Res<Screen>,
-    tower: Res<Tower>,
-) {
-    // The real count, not a fabricated nought. This passed `0` while the
-    // terminal build passes the record count into the same shared `Scroll::page`
-    // — two frontends calling one function with different arguments. Inert only
-    // because the forward branch ignores `total` today, so the next change to it
-    // would corrupt scrolling in this build alone.
+pub(super) fn scroll_forward(mut scroll: ResMut<Scroll>, screen: Res<Screen>, tower: Res<Tower>) {
+    page(&mut scroll, &screen, &tower, false);
+}
+
+/// A screenful older, or newer.
+///
+/// The real record count both ways, as the terminal build passes it. The
+/// forward branch once had `0`, inert only because `Scroll::page` ignores
+/// `total` going forward today.
+fn page(scroll: &mut Scroll, screen: &Screen, tower: &Tower, older: bool) {
     let total = tower.sim().scrollback().records().drawn_len();
-    let step = page_step(&screen, &tower, scroll.back());
-    scroll.page(step, false, total);
+    let step = orbs_shell::page_step(screen, tower.sim(), scroll.back());
+    scroll.page(step, older, total);
 }

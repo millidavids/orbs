@@ -60,5 +60,6 @@ if [ $# -gt 0 ] && [ "${1}" != "--" ]; then
 fi
 [ "${1:-}" = "--" ] && shift
 
-exec cargo test --manifest-path "$root/Cargo.toml" \
+# Not `exec`: that replaces the shell, and the trap above would never fire.
+cargo test --manifest-path "$root/Cargo.toml" \
   -p orbs-tui --test playing -- --ignored ${filter:+"$filter"} "$@"

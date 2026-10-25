@@ -1,34 +1,17 @@
 //! The See-it line, as a test: *a sweep's curve and a hand-played session agree*.
 //!
-//! The one claim a balance harness cannot be trusted without: if the synthetic
-//! player and a person typing the same commands reach different numbers, every
-//! sweep after it measures a game nobody plays — §13's divergence risk arriving
-//! through the instrument built to prevent it. The hand-played reference is
-//! CLAUDE.md's own worked line for a clarity, run through the public `Sim`.
-//!
-//! Four claims, two of which arrived late. The first two tests drive `Sim`
-//! directly and hold the *anchor*: one clarity by hand earns exactly the 16
-//! §11.5's first threshold is derived from. Both would pass with this crate's
-//! entire harness deleted, which is what the last two are for — they run real
-//! [`Policy`]s through [`drive::run`] and compare a sweep against the
-//! hand-played number and against [`report::expected`]'s pins.
+//! Without it every sweep may measure a game nobody plays (§13). The first two
+//! tests hold the anchor, a hand-played clarity's 16; the last two run real
+//! [`Policy`]s through [`drive::run`] against it and [`report::expected`].
 
 use orbs_balance::{drive, policy::Policy, report};
 use orbs_sim::Sim;
 
 /// How long a swept policy runs here.
 ///
-/// Two hours, and an hour was not enough: a policy amortises its first lap's
-/// setup over the run, and ambient sabotage costs a few minutes an hour, so at
-/// 3600 ticks one badly-timed swap moves the rate past the tolerance band.
-///
-/// Length alone does not fix it, which this file used to claim it did. Over
-/// seeds 0, 3, 11 and 42, clarity spans 0.1244 to 0.1383 against a pinned
-/// 0.140 — a seed-to-seed spread wider than the 10% band, so seed 3 fails and
-/// seed 0 passes on identical code. Sabotage is part of the economy, so that
-/// spread is the game; what is wrong is measuring it once.
-///
-/// [`SEEDS`] is the fix: the pin is held against the **mean** of several worlds.
+/// Two hours, so one swap cannot move a rate past the band. The seed spread is
+/// the game (0.1244 to 0.1383 for clarity), so the pin holds the mean over
+/// [`SEEDS`].
 const SPAN: u64 = 7200;
 
 /// The worlds a pinned rate is averaged over.
@@ -132,15 +115,8 @@ fn a_hand_played_clarity_costs_more_ticks_than_its_recipes_do() {
 
 #[test]
 fn a_swept_clarity_and_a_hand_played_one_agree() {
-    // The See-it line this file is named for, which neither test above held:
-    // both drove `Sim` by hand and would have passed with the whole harness
-    // deleted.
-    //
-    // The two numbers are not equal and must not be asserted equal — a
-    // hand-played clarity pays its setup once over 16 experience (0.130) where
-    // the looped policy amortises it over dozens of laps (0.140). What has to
-    // hold is that they measure the *same loop*: within a fifth of each other,
-    // and the policy never behind the single brew.
+    // Not equal — one brew pays its setup once (0.130), the loop amortises it
+    // (0.140) — but the same loop: within a fifth, the policy never behind.
     let mut sim = Sim::new(0);
     for line in BY_HAND {
         sim.submit(line);
@@ -178,17 +154,9 @@ const AUTOMATION_KEEPS: f64 = 0.910;
 
 #[test]
 fn a_bound_spell_keeps_a_known_fraction_of_the_loop_it_automates() {
-    // The instrument the harness did not have: five policies shipped and not one
-    // invoked or bound a spell, so `SCRIPT_BUDGET`, `PATIENCE`, the wait on the
-    // production slot and a binding's re-cast were all unmeasured — and §19's
-    // decision that *a step still costs a tick* is a claim about this number.
-    //
-    // The ratio is pinned and the rate is not, deliberately: an absolute pin
-    // would pin the world's luck, since `bound` reads 0.0814 on seed 3 against
-    // 0.0910 on seed 0 and `grind` moves with it. The quotient cancels that.
-    //
-    // If the language overhaul moves this it is *meant* to, and the failure here
-    // is the report rather than a regression to paper over.
+    // §19's *a step still costs a tick* is a claim about this number. The
+    // quotient, since the rate follows a world's luck; a language change that
+    // moves it should report here.
     for seed in SEEDS {
         let grind = drive::run(
             Policy::named("grind").expect("the rate floor exists"),
@@ -256,14 +224,8 @@ fn the_bound_policy_actually_gets_a_spell_bound() {
 
 #[test]
 fn every_pinned_rate_is_one_a_sweep_still_reaches() {
-    // The pin, made load-bearing: `report::EXPECTED` is documented as a
-    // regression pin, but nothing failed when a measurement left its band — a
-    // `<-- drifted` marker is a pin only while somebody reads the column.
-    //
-    // It caught the first thing it was pointed at: the ambient reagent swap
-    // shipped taking the alphabetically-first endless pile, which is `charcoal`,
-    // so every session lost its fire and clarity fell from 0.140 to 0.074. Four
-    // policies, all four flagged, and the suite was green.
+    // `report::EXPECTED` made a failing pin, not a column somebody must read.
+    // Its first catch was the charcoal swap.
     for policy in Policy::ALL {
         let Some(want) = report::expected(policy.name) else {
             // `stacks` is deliberately unpinned: a maze is generated per seed, so

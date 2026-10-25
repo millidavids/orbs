@@ -1,15 +1,10 @@
 //! The arsenal: where finished work is kept, and the one room you can reach from
 //! any other.
 //!
-//! §7 scopes naming to where you are standing, which left no route for a thing
-//! made in one domain and spent in another. The exemption is narrow: what
-//! reaches everywhere is the arsenal's *contents*, and it refuses stock at the
-//! door, so acting on a domain you are not in is still Phase 10's unlock.
-//!
-//! Nameable is not enough — every lookup that can name what is in here has to
-//! reach it, or a word resolves at full confidence and reports "no such thing".
-//! That is [`kept`], with three callers: `pipeline::reachable`,
-//! `pipeline::purge` and `files::here_or_place`.
+//! §7's one exemption: a thing made in one domain and spent in another needs a
+//! route. Narrow — only the contents reach everywhere, and stock is refused at
+//! the door. Every lookup that can name what is here must reach it, or a word
+//! resolves and reports "no such thing"; that is [`kept`].
 
 use bevy_ecs::prelude::*;
 
@@ -57,12 +52,8 @@ pub fn kept(world: &World, named: &str) -> Option<Entity> {
 /// Whether the arsenal will take `node`.
 ///
 /// Finished work only: an [`Essence`](NounKind::Essence) or a
-/// [`Scroll`](NounKind::Scroll). A reagent, a fragment, a file or a vessel is
-/// refused at the door and stays where it is.
-///
-/// Asked of the kind, never of the name — telling finished work from stock by
-/// name would mean the tower deciding which reagents are waste, which §10.1
-/// refuses.
+/// [`Scroll`](NounKind::Scroll). By kind, never name, or the tower would decide
+/// which reagents are waste, which §10.1 refuses.
 #[must_use]
 pub fn admits(world: &World, node: Entity) -> bool {
     matches!(

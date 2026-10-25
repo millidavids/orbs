@@ -1,18 +1,8 @@
 //! What a settings page is made of: rows, and the words that set them.
 //!
-//! A row carries its own value and the frontend fills it in. The menu does not
-//! know what a phosphor theme is, how many there are, or which one is on — the
-//! answer differs between the two builds, and one of them has no tube at all. So
-//! a [`Row`] is *data*: a word, the value it is set to, and the values it takes.
-//!
-//! That is also what makes *unsupported* simple. No mask and no dimmed row:
-//! `orbs-tui` binds five function keys and has no audio, so it builds fewer
-//! rows, and a page that ends up with none is not offered at all. A control that
-//! does nothing is the dead affordance §15 weighs heaviest.
-//!
-//! A word cycles a setting; a word and a value set it. `crt` steps to the next
-//! state, `crt off` goes straight there — and neither needs a page of its own,
-//! which is the difference between two levels under `settings` and three.
+//! A [`Row`] is data the frontend fills — a word, its value, its values — since
+//! the builds differ. *Unsupported* is fewer rows, and a page with none is not
+//! offered (§15). A word cycles a setting; a word and value set it.
 
 /// Which page of the settings a row belongs to.
 ///
@@ -65,9 +55,7 @@ impl Category {
     /// The page `typed` names, by unambiguous prefix.
     #[must_use]
     pub fn named(typed: &str) -> Option<Self> {
-        Self::ALL
-            .into_iter()
-            .find(|page| page.word().starts_with(typed))
+        crate::prefix::unique_prefix(Self::ALL.map(|page| (page.word(), page)), typed)
     }
 }
 
@@ -84,10 +72,8 @@ pub struct Row {
     pub word: String,
     /// What it is called in the settings file.
     ///
-    /// The same as [`word`](Self::word) unless [`keyed`](Self::keyed) says
-    /// otherwise, and the one that does is the parse driver: a player types
-    /// `reading`, the file says `driver`, which is what `0.13.17` already wrote.
-    /// A word people read is not a file format.
+    /// [`word`](Self::word) unless [`keyed`](Self::keyed): the player types
+    /// `reading`, the file says `driver`.
     pub key: String,
     /// What it is set to, as one of [`values`](Self::values).
     pub value: String,
@@ -173,24 +159,17 @@ impl Row {
 
     /// The value `typed` names, by unambiguous prefix.
     ///
-    /// Unambiguous is enforced. This said `find`, which takes the first match:
-    /// `palette::ALL` is `[amber, green, muted violet, monochrome]`, so `theme m`
-    /// silently meant muted violet and monochrome — §14's accessibility phosphor
-    /// — could not be reached by its first letter at all. An exact match wins
-    /// outright, so a value that prefixes another is still reachable by typing
-    /// the whole of it.
-    ///
-    /// The values come from the *frontend's* palette, which this crate cannot
-    /// see, so no lint here could have caught it —
-    /// `every_value_on_a_row_is_reachable` lives where the rows are built.
+    /// Unambiguous, enforced; an exact match wins. The frontend's values are
+    /// checked where the rows are built
+    /// (`every_value_on_every_row_is_reachable_by_a_prefix`).
     #[must_use]
     pub fn value_named(&self, typed: &str) -> Option<&str> {
-        if let Some(exact) = self.values.iter().find(|value| *value == typed) {
-            return Some(exact.as_str());
-        }
-        let mut matched = self.values.iter().filter(|value| value.starts_with(typed));
-        let first = matched.next()?;
-        matched.next().is_none().then_some(first.as_str())
+        crate::prefix::unique_prefix(
+            self.values
+                .iter()
+                .map(|value| (value.as_str(), value.as_str())),
+            typed,
+        )
     }
 }
 
@@ -207,13 +186,8 @@ pub const SWITCH: [&str; 2] = [ON, OFF];
 
 /// How loud a thing is, quietest first.
 ///
-/// Four steps rather than a number: the menu is typed and has no slider to drag,
-/// so a volume would otherwise be `voice 0.35` — a value nobody can guess, cycle
-/// through, or read back off the page.
-///
-/// `off` first, because it is the one people go looking for; `full` is the
-/// default and cycling from it wraps straight to silence. No two share a first
-/// letter, like every other list in the game.
+/// Four words, since a typed menu has no slider. `off` first, the one people
+/// look for; no two share a first letter.
 pub const LEVELS: [&str; 4] = [OFF, "quiet", "half", "full"];
 
 /// How loud [`LEVELS`] mean, as a multiplier.

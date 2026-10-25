@@ -1,18 +1,8 @@
 //! The waveform. Every sound in the game is made here, from numbers.
 //!
-//! Generated, never sampled, which is a licence decision: §13 permits either,
-//! and a cue made in code has no provenance question, no file to ship and no
-//! third party to credit (`assets/README.md`). It also matches §4 — a terminal
-//! in a scrying orb makes electrical noises, not orchestral ones.
-//!
-//! A [`Cue`] is a handful of [`Tone`]s summed: a frequency, when it starts, how
-//! long it runs, and how loud. Two tones a beat apart is a rise or a fall; one
-//! tone eight milliseconds long is a click. The vocabulary is deliberately
-//! small, so [`cues`](super::cues) reads as a table.
-//!
-//! The envelope is a raised cosine and has no parameters. A square gate on a
-//! sine starts and ends mid-cycle, audible as a click at both edges — on a
-//! short cue the clicks are most of what you hear.
+//! Generated, never sampled, so nothing has provenance (§13). A [`Cue`] is a
+//! few [`Tone`]s summed, small enough that [`cues`](super::cues) reads as a
+//! table. A raised-cosine envelope, since a square gate clicks at both edges.
 
 use std::num::NonZero;
 use std::time::Duration;

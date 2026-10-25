@@ -1,20 +1,17 @@
 //! Scrolls, and the errand one of them sets.
 //!
-//! The lectern assembled a scroll and nothing spent it — a name, a colour and no
-//! use, which §15 weighs as a dead end. This file says the other half works.
-//!
-//! Every claim is driven through a real `Sim`: there is no public way to hand
-//! the world a scroll, an errand or a fragment count, so a test that set one
-//! would be testing a state the game cannot arrive at.
+//! A scroll is spent, not a dead end (§15), driven through a real `Sim`, since
+//! nothing public hands the world one.
 
+mod common;
+
+#[cfg(debug_assertions)]
+use common::meter;
+use common::said;
+#[cfg(debug_assertions)]
 use orbs_render::{FieldName, Value};
-// Most of this file is `cfg(debug_assertions)` because of the scroll: the honest
-// route to one is four solved mazes, and `debug_spawn` — which makes it testable
-// — does not exist in a release build, where the test would fail against a world
-// that was never built.
-//
-// Gated per test rather than per file, this project's convention: the handful
-// below that need no door still run in either profile.
+// Mostly debug-only, `debug_spawn` standing in for four solved mazes; gated
+// per test, so the rest run in both profiles.
 
 use orbs_sim::Sim;
 use orbs_sim::parser::NounKind;
@@ -22,11 +19,8 @@ use orbs_sim::parser::NounKind;
 /// Standing in the archive holding enough of the scroll this file is about to
 /// open its supply: four, the slowest rate (§19, *Supply*).
 ///
-/// Spawned, not assembled: what four fragments become is drawn, so assembling
-/// one would start failing on a coin toss the day a third scroll is authored.
-/// [`assembled`] exercises that half.
-///
-/// A scroll's home is the arsenal, reachable from every room (`tower::keep`).
+/// Spawned, since what fragments become is drawn ([`assembled`] covers that).
+/// It lives in the arsenal (`tower::keep`).
 fn with_a_gleaning_scroll(seed: u64) -> Sim {
     let mut sim = Sim::new(seed);
     sim.submit("attend archive");
@@ -50,19 +44,6 @@ fn assembled(seed: u64) -> Sim {
     sim.submit("wield lectern");
     sim.step_n(25);
     sim
-}
-
-/// Every message the orb has said.
-fn messages(sim: &Sim) -> Vec<String> {
-    sim.scrollback()
-        .records()
-        .iter()
-        .filter_map(|record| record.field(FieldName::Message))
-        .filter_map(|value| match value {
-            Value::Text(text) => Some(text.to_owned()),
-            _ => None,
-        })
-        .collect()
 }
 
 /// Every scroll the content says the lectern can make.
@@ -98,11 +79,7 @@ fn four_fragments_become_a_scroll_that_is_a_scroll() {
     let sim = assembled(1);
     let made: Vec<String> = scrolls()
         .into_iter()
-        .filter(|scroll| {
-            messages(&sim)
-                .iter()
-                .any(|line| line.contains(scroll.as_str()))
-        })
+        .filter(|scroll| said(&sim).iter().any(|line| line.contains(scroll.as_str())))
         .collect();
     assert_eq!(
         made.len(),
@@ -169,14 +146,14 @@ fn the_lectern_still_assembles_with_an_errand_published_on_it() {
     sim.submit("wield lectern");
     sim.step_n(25);
 
-    let made = messages(&sim)
+    let made = said(&sim)
         .iter()
         .filter(|line| scrolls().iter().any(|scroll| line.contains(scroll)))
         .count();
     assert!(
         made >= 2,
         "the lectern stopped assembling once an errand was on it: {:?}",
-        messages(&sim),
+        said(&sim),
     );
 }
 
@@ -241,14 +218,17 @@ const fn since(before: (usize, usize), after: (usize, usize)) -> (usize, usize) 
 /// How often each of the two branches has run, by what it verified.
 ///
 /// `Source` is where `verify` files its target; `Name` is the verb, the same on
-/// both branches. Reading the wrong one looks like the condition failing.
+/// both branches, and keeps out the other lines filed to the stacks.
 #[cfg(debug_assertions)]
 fn verified(sim: &Sim) -> (usize, usize) {
     let named = |wanted: &str| {
         sim.scrollback()
             .records()
             .iter()
-            .filter(|record| record.field(FieldName::Source) == Some(Value::Text(wanted)))
+            .filter(|record| {
+                record.field(FieldName::Name) == Some(Value::Text("verify"))
+                    && record.field(FieldName::Source) == Some(Value::Text(wanted))
+            })
             .count()
     };
     (named("stacks"), named("north"))
@@ -264,11 +244,11 @@ fn gleaning_opened_before_research_sets_the_next_maze_gathering() {
     sim.submit("wield gleaning-scroll");
     sim.step();
     assert!(
-        messages(&sim)
+        said(&sim)
             .iter()
             .any(|line| line.contains("the next stacks you open will gather 4")),
         "opening with no maze did not say what it will do: {:?}",
-        messages(&sim),
+        said(&sim),
     );
 
     sim.submit("research");
@@ -293,7 +273,7 @@ fn gleaning_opened_from_another_room_sets_the_open_maze() {
     sim.submit("attend archive");
     sim.step();
     let maze = sim.stacks().expect("the stacks are open");
-    assert_eq!(maze.spoils.len(), 4, "{:?}", messages(&sim));
+    assert_eq!(maze.spoils.len(), 4, "{:?}", said(&sim));
     assert!(
         maze.exit.is_none(),
         "the open maze still walks for its exit"
@@ -318,11 +298,11 @@ fn gleaning_opened_over_a_gathering_maze_says_it_gathers_already() {
         sim.step();
     }
     assert!(
-        messages(&sim)
+        said(&sim)
             .iter()
             .any(|line| line.contains("the open stacks gather already")),
         "{:?}",
-        messages(&sim),
+        said(&sim),
     );
 }
 
@@ -346,11 +326,9 @@ fn one_gleaning_scroll_sets_nothing_gathering() {
         "three scrolls set the maze gathering"
     );
     assert!(
-        messages(&sim)
-            .iter()
-            .any(|line| line.contains("flows from 4")),
+        said(&sim).iter().any(|line| line.contains("flows from 4")),
         "the refusal did not say how many it wants: {:?}",
-        messages(&sim),
+        said(&sim),
     );
 }
 
@@ -377,7 +355,7 @@ fn spending_a_scroll_takes_no_production_slot() {
         maze.spoils.len(),
         4,
         "the scroll was refused for want of a production slot: {:?}",
-        messages(&sim),
+        said(&sim),
     );
 }
 
@@ -425,15 +403,8 @@ fn gathering_the_last_spoil_ends_the_walk() {
 #[cfg(debug_assertions)]
 #[test]
 fn one_ladder_solves_a_maze_walked_for_its_exit_and_one_set_to_gather() {
-    // "One solver for both errands" was a doc comment, and `sweeper` was only
-    // ever pointed at a gleaning maze — a regression in the exit half would have
-    // left this file green. Both halves below run the same `threading()` text,
-    // the file `debug_spell` hands a tester.
-    //
-    // Four seeds: `tests/solver.rs` carries the wide sweep at 12, and this asks
-    // the narrower question. What costs is the headroom rather than the count —
-    // a step runs whether the walk is over or not, so these budgets are ~2.5x
-    // the measured worst rather than four times it.
+    // One solver for both errands, the `threading()` a tester is handed. Four
+    // seeds, `solver.rs` sweeping wide; budgets ~2.5x the measured worst.
     const SEEDS: [u64; 4] = [3, 11, 17, 23];
     const EXIT_TICKS: u64 = 13_000;
     const GLEAN_TICKS: u64 = 22_000;
@@ -488,12 +459,8 @@ fn fragments(sim: &Sim) -> u32 {
 
 /// The ladder a tester gets from `debug_spell`, read from the content file.
 ///
-/// The same text, not a second copy: two expressions of one algorithm that had
-/// to agree and nothing made them (§19). Reading `dev_spells.toml` makes the
-/// ladder under test and the one a tester is handed the same by construction.
-///
-/// `tests/solver.rs` keeps its own on purpose: it pins a tick budget, and the
-/// four always-false `spoil` rungs here would blow it by ~2800 ticks.
+/// The same text, not a copy (§19). `tests/solver.rs` keeps its own, since
+/// these `spoil` rungs would blow its budget.
 #[cfg(debug_assertions)]
 fn threading() -> Vec<String> {
     orbs_sim::execute::dev_spells()
@@ -579,15 +546,6 @@ fn distilling(seed: u64) -> Sim {
     sim
 }
 
-/// How far through the one run in flight the tower is, as `(done, total)`.
-#[cfg(debug_assertions)]
-fn meter(sim: &Sim) -> Option<(u64, u64)> {
-    sim.instruments()
-        .into_iter()
-        .find_map(|instrument| instrument.meter)
-        .map(|meter| (meter.done, meter.total))
-}
-
 #[cfg(debug_assertions)]
 #[test]
 fn quickening_halves_what_is_left_and_the_run_lands_early() {
@@ -613,9 +571,9 @@ fn quickening_halves_what_is_left_and_the_run_lands_early() {
 
     sim.step_n(30);
     assert!(
-        messages(&sim).iter().any(|line| line.contains("clarity")),
+        said(&sim).iter().any(|line| line.contains("clarity")),
         "the quickened run did not land: {:?}",
-        messages(&sim),
+        said(&sim),
     );
 }
 
@@ -649,7 +607,7 @@ fn a_quickened_run_is_the_same_however_the_ticks_are_taken() {
     // What the run said, not how much was said: `meditate` narrates itself, so
     // counting the skipped arm's lines would measure the fixture.
     let landed = |sim: &Sim| {
-        messages(sim)
+        said(sim)
             .into_iter()
             .filter(|line| line.contains("clarity"))
             .collect::<Vec<_>>()
@@ -706,13 +664,8 @@ fn quickening_with_nothing_running_makes_the_next_run_short() {
 #[cfg(debug_assertions)]
 #[test]
 fn a_run_started_in_the_window_stays_short_when_it_closes() {
-    // Speed follows heat: §10.1 checks the athanor when a run begins and lets it
-    // finish even if the fire dies under it, because pausing would be the
-    // countdown §19 refused.
-    //
-    // The window has to actually close, which the first version quietly skipped
-    // by meditating 25 ticks against a 120-tick window. So the run starts near
-    // the end of the window and the boundary is crossed while it is going.
+    // Speed is read at a run's start, as heat is (§10.1, §19), so the run
+    // starts near the window's end and crosses it.
     let mut sim = Sim::new(5);
     for line in [
         "attend laboratory",
@@ -749,7 +702,7 @@ fn a_run_started_in_the_window_stays_short_when_it_closes() {
     sim.submit("meditate 10");
     sim.step();
     assert!(
-        messages(&sim).iter().any(|line| line.contains("clarity")),
+        said(&sim).iter().any(|line| line.contains("clarity")),
         "the quickened run did not land inside its shortened interval",
     );
 }
@@ -814,7 +767,7 @@ fn scouring(quickened: bool) -> Sim {
 fn scoured_after(sim: &mut Sim) -> u64 {
     for tick in 1..40 {
         sim.step();
-        if messages(sim).iter().any(|line| line.contains("clean")) {
+        if said(sim).iter().any(|line| line.contains("clean")) {
             return tick;
         }
     }
@@ -921,9 +874,9 @@ fn verdant_flowers_once_enough_is_drawn_and_keeps_its_progress() {
         "the growth was lost when the supply ran dry"
     );
     assert!(
-        messages(&sim).iter().any(|line| line.contains("runs dry")),
+        said(&sim).iter().any(|line| line.contains("runs dry")),
         "{:?}",
-        messages(&sim),
+        said(&sim),
     );
 
     // Restocked, the third draw flowers it.
@@ -966,7 +919,7 @@ fn herbs_flower_alphabetically_then_the_supply_rolls_itself_up() {
     let mut sim = cultivating(40, 1);
     sim.submit("meditate 1500");
     sim.step();
-    let flowered: Vec<String> = messages(&sim)
+    let flowered: Vec<String> = said(&sim)
         .into_iter()
         .filter(|line| line.contains("flowers on the shelf"))
         .collect();
@@ -979,11 +932,11 @@ fn herbs_flower_alphabetically_then_the_supply_rolls_itself_up() {
         ],
     );
     assert!(
-        messages(&sim)
+        said(&sim)
             .iter()
             .any(|line| line.contains("every herb has flowered")),
         "{:?}",
-        messages(&sim),
+        said(&sim),
     );
     let open = sim
         .world()
@@ -1032,17 +985,15 @@ fn a_herb_the_swap_has_renamed_is_not_grown_again() {
     sim.submit("wield verdant-scroll");
     sim.step();
     assert!(
-        !messages(&sim)
-            .iter()
-            .any(|line| line.contains("sage flowers")),
+        !said(&sim).iter().any(|line| line.contains("sage flowers")),
         "a swapped sage was grown as a new herb",
     );
     assert!(
-        messages(&sim)
+        said(&sim)
             .iter()
             .any(|line| line.contains("the shelf holds every herb")),
         "{:?}",
-        messages(&sim),
+        said(&sim),
     );
 }
 
@@ -1102,10 +1053,10 @@ fn the_ported_herbs_reach_a_potion() {
     }
 
     assert!(
-        messages(&sim)
+        said(&sim)
             .iter()
             .any(|line| line.contains("yields") && line.contains("insight")),
         "the ported route does not reach its potion: {:?}",
-        messages(&sim),
+        said(&sim),
     );
 }

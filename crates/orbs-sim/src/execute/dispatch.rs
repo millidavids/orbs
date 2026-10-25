@@ -15,23 +15,18 @@ use super::{files, navigate, pipeline, recall, scribe};
 
 /// The name the scrollback answers to.
 ///
-/// §3: unlogged output is forbidden, so the record stream *is* the log. The
-/// filename is not a debugging affordance — it is the same object the player
-/// will `peruse` and pipe.
+/// The record stream *is* the log (§3), and this is the file the player
+/// `peruse`s.
 pub const LOG: &str = "orb.log";
 
 /// The most ticks one `meditate` may pass.
 ///
-/// An hour of world time. A cap exists because the loop runs inside a single
-/// `step()`: at ~microseconds a tick this is imperceptible, and an uncapped
-/// count typed by a curious player should not be able to stall a frame.
+/// An hour of world time, capped because the loop runs inside one `step()`.
 pub const MAX_MEDITATE: u64 = 3600;
 
 /// Run everything the player queued since the last tick.
 ///
-/// Exclusive: a command reads and writes whatever its domain touches, and
-/// enumerating that as system parameters would be a guess about domains that do
-/// not exist yet.
+/// Exclusive, since a command touches whatever its domain does.
 pub fn run_pending(world: &mut World) {
     let queued = world.resource_mut::<Pending>().drain();
     for item in queued {
@@ -58,11 +53,9 @@ pub fn run_pending(world: &mut World) {
 
 /// Run one resolved command, from wherever the caller is standing.
 ///
-/// The script runner's door into the same dispatch a typed line takes: a
-/// script with its own copy of any verb is §13's live-game/harness divergence.
-/// Not through [`Pending`], which the `commands` schedule drains *before* the
-/// one the runner is in — a script routed that way would manage one instruction
-/// per tick whatever its budget said.
+/// The script runner's door into the same dispatch a typed line takes (§13).
+/// Not through [`Pending`], drained before the runner's schedule, which would
+/// allow one instruction a tick whatever the budget.
 pub fn execute_one(intent: &Intent, world: &mut World) {
     execute(intent, world, false);
 }
@@ -128,16 +121,9 @@ fn execute(intent: &Intent, world: &mut World, divined: bool) {
 
 /// Whether the orb does this verb's work yet, or only says it heard.
 ///
-/// Beside `execute` rather than on [`Verb`] because this *is* that function's
-/// dispatch read as data: the parser knows the whole §6.1 vocabulary, while
-/// what the world can act on is a fact about this module. Written out rather
-/// than probed, because a match arm is not data;
-/// `a_dark_verb_only_acknowledges_and_a_live_one_does_not` catches the drift.
-///
-/// §15's scaffold tutorial reads it: naming a verb that only acknowledges walks
-/// a tester into a dead end.
-///
-/// Live is not the same as available — [`is_gated`] is the second question.
+/// `execute`'s dispatch read as data, so it lives here, not on [`Verb`];
+/// `a_dark_verb_only_acknowledges_and_a_live_one_does_not` catches drift.
+/// Live is not available — [`is_gated`] is the second question.
 #[must_use]
 pub const fn is_live(verb: Verb) -> bool {
     matches!(
@@ -224,20 +210,9 @@ pub const fn is_live(verb: Verb) -> bool {
 
 /// Every verb worth offering where the player is standing.
 ///
-/// One filter, shared: the boot report and `recall`'s overview list the same
-/// thing, and two copies of *live, ungated, in scope* is two chances for them
-/// to disagree.
-///
-/// Three exclusions, because a word that can only refuse is worse than a word
-/// that is absent:
-///
-/// - not [`is_live`]: nobody has built it, so it acknowledges and does nothing.
-/// - [`is_gated`]: it works and the tower has not earned it, like `bind` at
-///   concentration 0.
-/// - not offered by the [`Scene`](crate::parser::Scene): a per-instrument verb
-///   whose instrument is elsewhere. At the tower root this is the
-///   `!is_operation()` the boot report used to hardcode, so generalising it
-///   changed no list.
+/// One filter for the boot report and `recall`'s overview: [`is_live`], not
+/// [`is_gated`], and offered by the [`Scene`](crate::parser::Scene). A word
+/// that can only refuse is worse than one that is absent.
 #[must_use]
 pub fn offered(world: &World) -> Vec<Verb> {
     let scene = world.resource::<crate::parser::Scene>();
@@ -249,15 +224,9 @@ pub fn offered(world: &World) -> Vec<Verb> {
 
 /// The verbs a spell written for `domain` may actually use.
 ///
-/// Two filters, both the spell's rather than the player's. [`offered`] reads
-/// the scene of the room the player stands in; a spell is written *for* a
-/// domain and runs there however far away it is edited from, so the scene is
-/// built for that domain. The second is `may_issue` — nine verbs are refused
-/// inside a spell, and a listing offering them is worse than a short one.
-///
-/// An unknown domain answers with the verbs that need no fixture: those work
-/// anywhere, and inventing a room's vocabulary would be a guide making things
-/// up.
+/// The scene is built for `domain`, not the player's room, since a spell runs
+/// where it is written for; and `may_issue` filters what a spell may say. An
+/// unknown domain answers with the verbs that need no fixture.
 #[must_use]
 pub fn spell_vocabulary(world: &World, domain: &str) -> Vec<Verb> {
     let scene = super::navigate::find_domain(world, domain)
@@ -272,14 +241,9 @@ pub fn spell_vocabulary(world: &World, domain: &str) -> Vec<Verb> {
 
 /// What may come next in a line of a spell written for `domain`.
 ///
-/// [`expect`](crate::parser::expect) against the scene of the domain the
-/// *file* belongs to, not the room the player is standing in — a laboratory
-/// spell offers `grind` however far away it is being edited from.
-///
-/// The scene is built here rather than handed out, because `scene_at` rebuilds
-/// every recipe, topic and node and is not something a painter should reach
-/// for. An unknown domain answers against an empty scene, which offers the
-/// language's own words and no verbs.
+/// [`expect`](crate::parser::expect) against the file's domain, not the
+/// player's room. Built here, since `scene_at` is no painter's to call; an
+/// unknown domain answers against an empty scene.
 #[must_use]
 pub fn spell_expect(
     world: &World,
@@ -311,11 +275,8 @@ pub fn spell_expect(
 
 /// Whether `verb` works but is not available *yet*.
 ///
-/// [`is_live`]'s companion: the difference between *"nobody built this"* and
-/// *"you have not earned it"*. Both keep a word off §15's scaffold list.
-///
-/// A question about the world, so not `const`: the gate moves, and the boot
-/// report is written before a player has earned anything.
+/// [`is_live`]'s companion: *you have not earned it*, where that is *nobody
+/// built this*. A question about the world, so not `const`.
 #[must_use]
 pub fn is_gated(verb: Verb, world: &World) -> bool {
     match verb {
@@ -350,9 +311,8 @@ fn meditate(intent: &Intent, world: &mut World) {
 
 /// The parser named something that has since stopped existing.
 ///
-/// §8's failure taxonomy calls this a missing referent, and it is reachable
-/// because resolution happens on submit while execution happens on the next
-/// tick — enough of a gap for one command to remove what the next one names.
+/// §8's missing referent, reachable because resolution is on submit and
+/// execution on the next tick.
 pub(super) fn missing(verb: Verb, target: &str, world: &mut World) {
     // The fields carry the facts (rule 4); the sentence is authored (rule 6).
     // Without it this drew as two bare values — `mix sage` — which never says

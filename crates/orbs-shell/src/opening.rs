@@ -1,11 +1,102 @@
 //! A tower out of what reading a save found — one copy for both builds
 //! (DESIGN.md §19, *A swap replaces the tower and nothing else*).
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use orbs_sim::Sim;
 
+use crate::install::{Begun, Raise};
 use crate::save::{Opened, away_for, read_from};
+
+/// Which tower a swap raises.
+///
+/// An enum rather than two optional fields: a path beside a length spells four
+/// states for three meanings, and the fourth — a load with no file — would be a
+/// dead branch.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Raising {
+    /// Open the tower already in this file.
+    ///
+    /// A path, not a slot number: the game being left is written to the file it
+    /// came from, and a number resolved twice disagrees if `ORBS_SAVE` changes.
+    Load(std::path::PathBuf),
+    /// Begin a tower at this length — installed first, when the frontend's
+    /// setting says so.
+    Begin {
+        /// Where it will be kept, and written back to — or [`None`] for a
+        /// session that keeps nothing (`ORBS_SAVE=off`), which is how every
+        /// played scenario and instrument runs.
+        keep: Option<crate::save::Keep>,
+        /// How long it is to be.
+        length: orbs_sim::content::Length,
+    },
+    /// The installation has woken this tower: raise it, never install it.
+    Installed(Raise),
+}
+
+/// What a swap needs from the orb it happens in.
+#[derive(Debug)]
+pub struct Swapping<'a> {
+    /// Where the tower being left is kept.
+    pub kept: Option<&'a Path>,
+    /// Whether writing it there just now worked. A load of that same slot after
+    /// a failed write is refused unread: it would put an older autosave over
+    /// the live tower.
+    pub written: bool,
+    /// A new tower's seed.
+    pub seed: u64,
+    /// A new tower's wizard: the name held, not the file's, so a name chosen
+    /// where nothing can be written still names the tower.
+    pub wizard: Option<String>,
+    /// Whether a new tower is installed first.
+    pub installs: bool,
+}
+
+/// A tower a swap raised, and the live content files that would not load into
+/// it (see [`load`](crate::load)).
+pub struct Raised {
+    /// The tower, its slot and any installation.
+    pub begun: Begun,
+    /// What [`load`](crate::load) could not read.
+    pub missed: Vec<&'static str>,
+}
+
+impl Raising {
+    /// The tower this asks for, with `ORBS_CONTENT` poured in. One copy for
+    /// both builds; each tears down its own.
+    ///
+    /// # Errors
+    ///
+    /// The path and why, when a load gives no tower. The player stays where
+    /// they were.
+    pub fn raise(self, at: Swapping<'_>) -> Result<Raised, (PathBuf, Refused)> {
+        let mut begun = match self {
+            Self::Begin { keep, length } => Raise {
+                keep,
+                length,
+                seed: at.seed,
+                wizard: at.wizard,
+            }
+            .begin(at.installs),
+            Self::Installed(raise) => raise.wake(),
+            Self::Load(path) => match loaded(&path, at.kept, at.written) {
+                Ok(sim) => Begun {
+                    sim,
+                    install: None,
+                    keep: Some(path),
+                },
+                Err(why) => {
+                    tracing::error!("the tower in {} was not opened: {why:?}", path.display());
+                    return Err((path, why));
+                }
+            },
+        };
+        // A new world holds the built-in text, and a swap is the only way to a
+        // tower, so without this a writer's edits vanish at the menu.
+        let missed = crate::prose::load(&mut begun.sim);
+        Ok(Raised { begun, missed })
+    }
+}
 
 /// Why a load from the menu left the player where they were.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -21,7 +112,8 @@ pub enum Refused {
 /// The tower a launch starts on: the save's, or a fresh one when there is none
 /// or it would not read, which is said.
 ///
-/// Startup only. A load from the menu is [`loaded`], which never raises one.
+/// Startup only. A load from the menu is [`Raising::raise`], which never raises
+/// one.
 /// `wizard` names a *new* tower's wizard; a restored tower keeps its own.
 #[must_use]
 pub fn tower_from(opened: Opened, seed: u64, wizard: Option<&str>) -> Sim {
@@ -46,7 +138,7 @@ pub fn tower_from(opened: Opened, seed: u64, wizard: Option<&str>) -> Sim {
 /// # Errors
 ///
 /// [`Refused`], when the file will not give a tower.
-pub fn loaded(path: &Path, kept: Option<&Path>, written: bool) -> Result<Sim, Refused> {
+fn loaded(path: &Path, kept: Option<&Path>, written: bool) -> Result<Sim, Refused> {
     if !written && kept == Some(path) {
         return Err(Refused::Unwritten);
     }

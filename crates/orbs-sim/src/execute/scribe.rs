@@ -1,17 +1,9 @@
 //! Writing a spell down — and, deliberately, doing nothing else to it.
 //!
-//! The rewriter that canonicalised each line as it landed is gone: it worked on
-//! whole lines and wrote the rest out of existence — `if a has x or b has x`
-//! saved as `if a has x`, one of four such bugs in §19. `Held` holds exactly
-//! what was typed, and the reading happens at cast, where the program is
-//! already *"derived, never stored"*
-//! ([`spell::compile`](crate::tower::spell::compile)). §8's requirement is met
-//! at a better moment: names are fixed in the world the spell is about to run
-//! in, and one that stops matching is reported rather than guessed at.
-//!
-//! §8's *the orb writes down what you meant* moved to `interpret` in the
-//! editor, where the player asks for it and can see a wrong reading before it
-//! runs.
+//! `Held` holds exactly what was typed; the reading happens at cast
+//! ([`spell::compile`](crate::tower::spell::compile)), where names are fixed in
+//! the world the spell runs in (§19). §8's *the orb writes down what you meant*
+//! is the editor's `interpret`, where a wrong reading shows before it runs.
 
 use bevy_ecs::prelude::*;
 use orbs_render::{FieldName, RecordKind, Role};
@@ -27,12 +19,8 @@ use super::navigate::find_script;
 ///
 /// Returns the node, so a caller can report on what it just wrote.
 ///
-/// A save says nothing. The buffer writes itself out after every pause in the
-/// typing, so the old *"{name}: {count} lines, written down"* filled one
-/// editing session's transcript with sixteen copies of itself. Nothing was lost
-/// with it: the runner names an unreadable line individually, with its number,
-/// when the spell is cast (`spell_missing`, `spell_unreadable_if`,
-/// `spell_forbidden`), and the editor marks it as it is written.
+/// A save says nothing: the buffer saves after every pause, and the runner and
+/// editor already name an unreadable line.
 pub fn write(world: &mut World, name: &str, lines: &[String], read: &[String], by: u64) -> Entity {
     let filename = with_extension(name);
     let existing = find_script(world, &filename);
@@ -65,37 +53,22 @@ pub fn write(world: &mut World, name: &str, lines: &[String], read: &[String], b
         node
     });
 
-    // `lines`, exactly as given — the line the whole rewrite was for. `read`
-    // lands beside it and is what `compile` compiles; it equals `lines`
-    // wherever nothing read them, so the default is the identity case and the
-    // game is what it was. `by` is whose reading it is, which the next write
-    // asks before keeping any of it.
+    // `lines` exactly as given; `read` beside it is what `compile` compiles,
+    // equal to `lines` unless something read them. `by` is whose reading it
+    // is, asked by the next write.
     world.entity_mut(node).insert((
         Held(lines.to_vec()),
         tower::Read::new(lines, read.to_vec(), Some(by)),
         Domain(domain_name),
     ));
 
-    // A running spell takes the change now, not on its next casting. §8's
-    // *"reloads queue to the next tick boundary, so a file cannot change under
-    // a script mid-execution"* holds: a save is queued through `Pending` like
-    // every other effect, so the program swaps between steps, never inside one.
-    //
-    // The position is kept as it stands, because matching old lines to new ones
-    // is a diff and a wrong guess moves a running spell to a line the player
-    // did not point it at.
+    // A running spell takes the change now, between steps, since a save is
+    // queued through `Pending` (§8). The position is kept: matching old lines
+    // to new is a diff, and a wrong guess moves the spell.
     if world.get::<crate::tower::spell::Running>(node).is_some() {
-        // Through `compile`, like every other way a program is made: a swap
-        // that skipped name resolution would leave a running spell asking about
-        // words the tower does not use. Its complaints are not said here —
-        // `invoke` says them once at cast, and a save happens after every pause
-        // in the typing. Nothing is hidden by that: the editor marks the line
-        // and counts it on the status row (`Sim::read_spell`), and the runner
-        // still names a missing place every casting, because `said` is cleared
-        // just below.
-        //
-        // `read`, not `lines` — the reading is what a program is built from,
-        // and this reload must agree with the cast that will follow it.
+        // Through `compile`, like every program, from `read`, so the reload
+        // agrees with the next cast. Its complaints are `invoke`'s and the
+        // editor's to say, not every save's.
         let program = crate::tower::spell::compile(world, from, read);
         if let Some(mut running) = world.get_mut::<crate::tower::spell::Running>(node) {
             running.program = program;
@@ -109,12 +82,8 @@ pub fn write(world: &mut World, name: &str, lines: &[String], read: &[String], b
         if let Some(mut bound) = world.get_mut::<crate::tower::spell::Bound>(node) {
             bound.said.clear();
         }
-        // A spell shortened past its own marker needs no case here: `at`
-        // returns nothing and the runner finishes it, which is how a spell ends
-        // anyway.
-        //
-        // Said once per session, not once per save — see [`Reloaded`]. The swap
-        // above happens every time; only the sentence is rationed.
+        // A spell shortened past its marker just finishes. Said once per
+        // session — see [`Reloaded`].
         if world.resource_mut::<Reloaded>().first() {
             let message = world
                 .resource::<Prose>()
@@ -136,14 +105,8 @@ pub fn write(world: &mut World, name: &str, lines: &[String], read: &[String], b
 
 /// Whether this editing session has already been told the orb took a change up.
 ///
-/// Once per session, not once per save. `spell_reloaded` is worth saying —
-/// picking a change up between steps is safe, invisible and otherwise
-/// indistinguishable from being ignored — but the buffer saves after every
-/// pause in the typing, so per-save is the same sentence every few seconds.
-///
-/// Reset by [`scribe`], the only way an editing session begins, so it is
-/// derived from the submission stream alone and a replay says the same things
-/// in the same order.
+/// Once per session, since the buffer saves after every pause. Reset by
+/// [`scribe`], so it derives from the submission stream and replays alike.
 #[derive(Resource, Debug, Default)]
 pub(crate) struct Reloaded(bool);
 
@@ -187,15 +150,9 @@ fn grimoire(world: &World) -> Entity {
 
 /// Ask the frontend to open a spell for editing.
 ///
-/// A request rather than a buffer: the editor's buffer lives in the frontend,
-/// beside the prompt's own line editor, because its keystrokes reach no
-/// decision and enter neither `Submissions` nor `ParseLog`. Rule 2 also keeps
-/// layout out of this crate (`tests/boundaries.rs` enforces it by *substring*,
-/// so even this sentence may not name the type), so a buffer here could not
-/// know its own pane height or own its viewport.
-///
-/// The sim owns the *decision*: which spell, and what it currently holds. The
-/// frontend takes this, edits, and calls `Sim::write_spell` on `:w`.
+/// A request, not a buffer: keystrokes reach no decision, and layout stays out
+/// of this crate (rule 2). The sim owns which spell and what it holds; the
+/// frontend edits and calls `Sim::write_spell` on `:w`.
 #[derive(Resource, Debug, Default, Clone)]
 pub struct Opening(Option<Request>);
 
@@ -221,8 +178,7 @@ impl Opening {
 
     /// Take the pending request, if there is one.
     ///
-    /// Taking rather than reading: an editor opens once per `scribe`, and a
-    /// frontend that polled a persistent flag would reopen it every frame.
+    /// Taking, not reading, so the editor opens once per `scribe`.
     pub const fn take(&mut self) -> Option<Request> {
         self.0.take()
     }
@@ -283,10 +239,8 @@ pub(super) fn scribe(intent: &Intent, world: &mut World) {
     // A fresh session, so the reload notice below is worth saying once more.
     world.resource_mut::<Reloaded>().begin();
 
-    // A running spell opens and says so. The program is derived at cast, so
-    // saving over it cannot disturb the copy in flight (§8: *"a file cannot
-    // change under a script mid-execution"*) — safe, and unsaid
-    // indistinguishable from being ignored.
+    // A running spell opens and says so: saving is safe (§8), and unsaid would
+    // look like being ignored.
     let running =
         existing.is_some_and(|node| world.get::<crate::tower::spell::Running>(node).is_some());
     let key = if running {

@@ -1,10 +1,7 @@
 //! Which scroll a `wield` names, and where it goes.
 //!
-//! Spent with `wield` rather than a word of its own: spending a scroll is
-//! *setting a thing going*, so the verb learned a second argument kind
-//! ([`NounKind::Workable`]) instead of the tower gaining another word.
-//!
-//! Rule 6, as everywhere in `execute`: facts here, sentences looked up by key.
+//! Spent with `wield`, since spending is setting a thing going
+//! ([`NounKind::Workable`]).
 
 use bevy_ecs::prelude::*;
 use orbs_render::{FieldName, RecordKind, Role};
@@ -16,10 +13,8 @@ use crate::tower;
 
 /// A scroll the archive can assemble, and what it does.
 ///
-/// A table of facts, not prose — the shape of `Verb::canonical`. The words are
-/// authored in `recipes.toml`; this says which the game can act on, and
-/// `every_scroll_the_lectern_makes_can_be_spent` fails the build if the two
-/// disagree.
+/// Which of `recipes.toml`'s scrolls the game can act on;
+/// `every_scroll_the_lectern_makes_can_be_spent` holds the two together.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Scroll {
     /// While open, the stacks gather rather than escape.
@@ -57,13 +52,9 @@ pub(super) const SAGE: &str = "sage";
 
 /// The scroll this `wield` spends, if it spends one rather than charging a tool.
 ///
-/// The one expression of that question, for [`spend`] below and for
-/// `tower::spell::block`, which must *not* charge a spend to the production
-/// slot. Asking it twice went wrong once: a scripted `wield quickening-scroll`
-/// waited out the brew it was meant to hurry.
-///
-/// Branches on the argument's *kind*, not its name: `Recipes::kind_of` decides
-/// what a scroll is, from the content file.
+/// One answer, for [`spend`] and for `tower::spell::block`, which must not
+/// charge a spend to the production slot. By the argument's kind
+/// (`Recipes::kind_of`), not its name.
 pub(crate) fn spending(intent: &Intent) -> Option<&str> {
     intent
         .arguments

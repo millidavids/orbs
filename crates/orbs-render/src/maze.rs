@@ -1,22 +1,8 @@
 //! The archive's stacks, as a picture (DESIGN.md §10, §19).
 //!
-//! `orbs-sim` depends on *this* crate, never the other way round, so the type a
-//! frontend draws lives here and the sim builds one — the arrangement
-//! `Instrument`'s [`Wash`](crate::Wash) already has. What crosses is a
-//! *description*, so the sim's `Maze` keeps its cells private.
-//!
-//! One character per square. The maze was cells with the walls *between* them,
-//! drawn `2w+1` across, so one step moved the reading two characters and read
-//! as two. A wall is a square of its own now.
-//!
-//! The whole maze is drawn and the fog is gone (§19). The trade: a sighted
-//! player sees more than the linear stream carries, the asymmetry §14 exists to
-//! prevent. What survives it is that a spell still solves the maze from the
-//! four `survey` readings alone.
-//!
-//! Unwalked floor draws as nothing. The walls around it are on screen, so a
-//! corridor is a gap in them; a glyph there says what the wall already says,
-//! which is what the `·` was and why it went.
+//! A description the sim builds, as [`Wash`](crate::Wash), so its `Maze`
+//! keeps its cells private. One character a square, a wall included, and
+//! unwalked floor is blank. Drawn whole, unfogged (§19).
 
 use crate::geometry::Rect;
 use crate::style::Style;
@@ -169,10 +155,8 @@ pub(crate) fn cell(maze: &Stacks, col: u16, row: u16) -> (char, Style) {
 /// Returns the rectangle on screen to draw into, and the maze coordinate of its
 /// top-left corner.
 ///
-/// It pans rather than refusing. Handing back nothing unless the whole picture
-/// fitted was fine at 15 squares; at 33 the map vanished from every small pane.
-/// So a pane too small gets a window centred on the reading, clamped inside the
-/// maze. When the whole picture fits, nothing moves.
+/// Pans rather than refusing: centred on the reading, clamped to the maze, and
+/// still when the whole fits.
 #[must_use]
 pub(crate) fn viewport(maze: &Stacks, area: Rect) -> Option<(Rect, u16, u16)> {
     let (cols, rows) = maze.size();

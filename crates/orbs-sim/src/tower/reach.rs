@@ -1,24 +1,9 @@
 //! One rule for turning a name into a node.
 //!
-//! Ten call sites answered *"what does this word reach"* and differed on five
-//! axes — where they looked, which kind they accepted, leaf or path, search
-//! order, and what they did on a miss. Nothing named those axes, so each site
-//! chose again from scratch and three of the ten were byte-identical copies of
-//! *the spell node called X, wherever it is kept*.
-//!
-//! §19 records the cost twice, both times as a word that resolves and then finds
-//! nothing: `peruse first_light.spell` read a three-line file as zero lines, and
-//! `move clarity to arsenal` reported *"no such thing"* about a potion the player
-//! could see. Both were nameable and findable drifting apart.
-//!
-//! The failure-mode axis stays at the call site: whether a miss is a record, a
-//! `None` or an entry on a `missing` vec is about what the player is told, which
-//! is presentation. The other four are questions about the world.
-//!
-//! This is a game rule rather than a helper. [`Scope::Fetch`] is §10.1's search
-//! order and decides what `digest ground-sage` picks up; it is here rather than
-//! inlined because a spell resolves a name at cast and a verb body looks it up
-//! at execution, and the two have to agree — see `spell::compile`.
+//! Where to look, which kind, leaf or path, and in what order — named axes, so
+//! nameable and findable cannot drift (§19 records it twice). What a miss tells
+//! the player stays at the call site. [`Scope::Fetch`] is §10.1's search order,
+//! a game rule a spell's cast and a verb's run must agree on.
 
 use bevy_ecs::prelude::*;
 
@@ -45,16 +30,9 @@ pub enum Scope {
     Tower,
     /// §10.1's fetch order — a game rule, and the reason this module exists.
     ///
-    /// Unbusy instruments in raise order, then stores, then the arsenal. The
-    /// instruments come first because the thing a player names mid-pipeline is
-    /// the output of the last stage and it is still inside the tool that made
-    /// it; that is what retired `siphon`. Busy ones are skipped, because §10.1's
-    /// lock covers taking as much as putting. The store is the fallback, and the
-    /// arsenal is last so a reagent in the room always outranks one carried.
-    ///
-    /// Takes the room rather than reading `Cwd`, because a spell installs its
-    /// own domain around each instruction and a fetch reading the resource would
-    /// be right only for as long as that stayed true.
+    /// Unbusy instruments in raise order — a pipeline's input is still in the
+    /// tool that made it — then stores, then the arsenal, so a reagent in the
+    /// room outranks one carried. Takes the room rather than reading `Cwd`.
     Fetch(Entity),
     /// The arsenal, wherever it is.
     ///
@@ -70,12 +48,8 @@ pub enum Naming {
     Leaf,
     /// Its name or its full path.
     ///
-    /// §7 makes a place answer to both — `attend laboratory` and `attend
-    /// /tower/laboratory` are one command — and a `Place` argument resolves to
-    /// the path while a node carries only its last segment. Comparing one to the
-    /// other matched nothing for an instrument, which is how `purge alembic`
-    /// came to work at a distance through a fallback that was the only path ever
-    /// taken.
+    /// §7 makes a place answer to both, and a `Place` argument resolves to the
+    /// path while a node carries its leaf.
     LeafOrPath,
     /// Its name, with `.spell` supplied if the caller left it off.
     ///
@@ -202,10 +176,7 @@ fn descend(world: &World, node: Entity) -> Vec<Entity> {
 
 /// §10.1's fetch order, and there is no floor in it.
 ///
-/// A tier used to come first for things lying loose in a room. Nothing can be
-/// there any more: `siphon` was the only thing that ever put a reagent on the
-/// floor, and a `move` destination resolves to a fixture. The bench and the shelf
-/// are one place now, and it is the dispensary.
+/// Nothing lies loose in a room since `siphon` went.
 fn fetch(world: &World, cwd: Entity) -> Vec<Entity> {
     let here = children_of(world, cwd);
     let mut order: Vec<Entity> = Vec::new();
@@ -376,11 +347,7 @@ mod tests {
 
     #[test]
     fn the_fetch_order_is_instruments_then_stores_then_the_arsenal() {
-        // §10.1's search order, which is a game rule. Instruments first, because
-        // the thing a player names mid-pipeline is the last stage's output still
-        // inside the tool that made it — that is what retired `siphon`. The
-        // store is the fallback, and the arsenal last, so a reagent in the room
-        // outranks one carried.
+        // §10.1's search order — see [`Scope::Fetch`].
         let sim = tower();
         let world = sim.world();
         let order: Vec<String> = look(world)

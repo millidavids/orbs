@@ -3,15 +3,8 @@
 //! Names and facts, no sentences — rule 6. The moment the splash wants one it
 //! belongs in a content file.
 //!
-//! The versions are real. `tower/boot.rs` exists because *"a boot report that
-//! could go stale would be a lie the player reads first"*, and invented version
-//! numbers would be the same lie one screen earlier: the game's version is its
-//! own package's and Bevy's is the exact pin, held by a test.
-//!
-//! The Rust version is the one that compiled the binary, captured by `build.rs`.
-//! `env!("CARGO_PKG_RUST_VERSION")` is empty here — this crate does not inherit
-//! `rust-version` — and the workspace's `1.95` is a floor rather than the
-//! compiler in use, which `rust-toolchain.toml` pins to something else again.
+//! The versions are real: the game's package version, Bevy's exact pin (held
+//! by a test), and the compiler that built the binary (`build.rs`).
 
 use orbs_render::{Crossing, Frame, Passage, Pos, Rect, Span, Style, Toward, UtteranceKind};
 
@@ -62,12 +55,8 @@ fn expansion_places() -> [usize; 4] {
 
 /// Where each character of [`NAME`] sits in [`ART`], as `(first column, width)`.
 ///
-/// The letterforms are column-separable — no glyph shares a column with its
-/// neighbour — which is what lets a pair be grown into place by a `Gather` over
-/// its own columns without reaching the letters standing whole beside it. The
-/// widths are eight cells, nine for `O` and three for a full stop: not regular
-/// enough to compute, so a table, held to covering the art exactly by
-/// `the_glyph_table_tiles_the_art`.
+/// The letterforms share no columns, so each pair can grow into place alone. A
+/// table, held to the art by `the_glyph_table_tiles_the_art`.
 const GLYPHS: [(usize, usize); 8] = [
     (0, 9),
     (9, 3),
@@ -81,14 +70,8 @@ const GLYPHS: [(usize, usize); 8] = [
 
 /// The game's own name, in the block glyphs CP437 has for exactly this.
 ///
-/// Every character is in the repertoire — full block plus the double box-drawing
-/// set — which `nothing_it_draws_is_outside_the_font` holds it to. 45 cells wide,
-/// so it fits §4's 80-column floor with sixteen columns either side.
-///
-/// The first four rows are shorter than the last two: only the full stops reach
-/// the bottom line, and trailing spaces are not padded on. Every column index in
-/// [`GLYPHS`] is therefore beyond the end of some row, which [`columns`] treats
-/// as empty rather than as an error.
+/// All CP437 (`nothing_it_draws_is_outside_the_font`), 45 cells, inside §4's
+/// floor. Rows are unpadded, so [`columns`] reads past a row's end as empty.
 const ART: [&str; 6] = [
     r" ██████╗    ██████╗    ██████╗    ███████╗",
     r"██╔═══██╗   ██╔══██╗   ██╔══██╗   ██╔════╝",
@@ -100,13 +83,8 @@ const ART: [&str; 6] = [
 
 /// What the POST reports, in the order it reports them.
 ///
-/// The studio first, then what the orb is built out of. The game's own version
-/// is not among them: a version line under a six-row logo would be the only
-/// small text on the card.
-///
-/// `engine` is the frontend's to supply and the other two are not — it is `bevy`
-/// here and `crossterm` in a terminal, and a card naming the wrong one would be
-/// inventing a component. See the frontend's own `boot::engine`.
+/// The studio, then what the orb is built of; the version is in the corner.
+/// `engine` is the frontend's (`boot::engine`).
 fn reported(engine: &str) -> [String; 3] {
     [
         STUDIO.to_owned(),
@@ -193,18 +171,9 @@ fn pairs() -> [(usize, usize); PAIRS] {
 
 /// Paint the boot screen for `stage`, `progress` of the way through it.
 ///
-/// Takes no Bevy resources on purpose: `shell::dump` builds no `App`, so a
-/// screen that needed one could never be dumped as text.
-///
-/// The words do not type; the dots do. A name arriving one letter at a time
-/// reads as a slow machine, where a POST line should read as *this thing is
-/// being checked* — so the label lands whole, the leader fills, `ok` snaps in
-/// behind it, and then a pause.
-///
-/// The logo does not print at all, it grows in from the middle:
-/// [`Passage::Gather`]'s arriving half, the same motion the game uses whenever a
-/// surface takes the pane. [`GLYPHS`] survives that because the subtitle still
-/// lands word by word underneath.
+/// No Bevy resources, so a dump can draw it. A label lands whole and its dots
+/// fill, reading as *being checked* rather than a slow machine. The logo grows
+/// in by [`Passage::Gather`], as a full-pane surface does.
 pub fn paint(frame: &mut Frame, stage: Stage, progress: f32, engine: &str) {
     if !matches!(stage, Stage::Post | Stage::Close) {
         return;
@@ -257,14 +226,9 @@ pub fn paint(frame: &mut Frame, stage: Stage, progress: f32, engine: &str) {
     // settled screen, because a reader must never wait out an animation.
     painter.announce(UtteranceKind::Heading, Style::BRIGHT.role, NAME);
 
-    // Every line spans the logo, edge to edge: the label under its left edge,
-    // `ok` flush with its right, the leader filling between. Not centred, which
-    // made the card twitch — a centred line's width grows by two the moment `ok`
-    // lands, so the whole row shunted sideways at the end of every check.
-    //
-    // The subtitle is positioned from the whole subtitle's width and drawn word
-    // by word at fixed offsets, never re-centred on what has arrived: four words
-    // arriving would otherwise make it crawl left four times.
+    // Every line spans the logo edge to edge, not centred, or it shunts when
+    // `ok` lands. The subtitle is placed by its whole width, so it never
+    // crawls.
     let subtitle_col = area
         .col
         .saturating_add(area.cols.saturating_sub(to_row(expansion_width())) / 2);
@@ -385,19 +349,11 @@ fn leader(label: &str, width: usize) -> usize {
 
 /// The columns `start..start + width` of `row`, by character.
 ///
-/// Borrowed rather than collected: this runs for every glyph of every row of
-/// every frame the logo is printing, and the art is `&'static str`. A column
-/// past the end of a short row yields nothing, which is what makes the four
-/// unpadded rows work.
+/// Borrowed, since it runs per glyph per frame. Past a row's end yields
+/// nothing.
 fn columns(row: &str, start: usize, width: usize) -> &str {
-    let begin = row
-        .char_indices()
-        .nth(start)
-        .map_or(row.len(), |(index, _)| index);
-    let end = row
-        .char_indices()
-        .nth(start + width)
-        .map_or(row.len(), |(index, _)| index);
+    let begin = orbs_render::char_index(row, start);
+    let end = orbs_render::char_index(row, start + width);
     row.get(begin..end).unwrap_or("")
 }
 

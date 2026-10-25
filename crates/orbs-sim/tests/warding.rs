@@ -5,13 +5,12 @@
 //! a haul costs the tower nothing, and a finished course pays what
 //! `progression.toml` says it does.
 //!
-//! The solver here is the one `dev_spells.toml` ships, run through `invoke`
-//! rather than reimplemented: a Rust copy would prove the algorithm, which
-//! `tower::pylon` already does. What is worth proving is that §8's language can
-//! *express* it — no variables in the loop body, a part called three times with
-//! different bindings, and a parity read off the world.
+//! The solver is the shipped one, invoked, proving §8's language can express
+//! it; `tower::pylon` proves the algorithm.
 
-use orbs_render::{FieldName, Value};
+mod common;
+
+use common::{attended, ever_said, run, said};
 use orbs_sim::Sim;
 
 /// The three stations, spelled out — a test that imported them from the sim could
@@ -24,28 +23,6 @@ const STATIONS: [&str; 3] = ["wellspring", "conduit", "barrier"];
 /// gone and this reads as dead rather than deliberate.
 #[cfg(debug_assertions)]
 const SOLVER: &str = "holding";
-
-fn run(sim: &mut Sim, line: &str) {
-    sim.submit(line);
-    sim.step();
-}
-
-/// Every sentence the tower has said so far.
-fn said(sim: &Sim) -> Vec<String> {
-    sim.scrollback()
-        .records()
-        .iter()
-        .filter_map(|record| match record.field(FieldName::Message) {
-            Some(Value::Text(text)) => Some(text.to_owned()),
-            _ => None,
-        })
-        .collect()
-}
-
-/// Whether anything said so far contains `needle`.
-fn ever_said(sim: &Sim, needle: &str) -> bool {
-    said(sim).iter().any(|line| line.contains(needle))
-}
 
 /// Every field of every record, as one line each.
 ///
@@ -74,9 +51,7 @@ fn ever_shown(sim: &Sim, needle: &str) -> bool {
 
 /// Standing in the sanctum, with nothing done yet.
 fn in_the_sanctum(seed: u64) -> Sim {
-    let mut sim = Sim::new(seed);
-    run(&mut sim, "attend sanctum");
-    sim
+    attended(seed, "sanctum")
 }
 
 #[test]
@@ -141,12 +116,8 @@ fn a_course_refused_on_load_leaves_no_potency_behind() {
 
 #[test]
 fn the_barrier_says_how_it_stands_before_anything_has_happened() {
-    // The defect this is here for, and the worse of the two: `integrity` was
-    // published by `erode`, which only writes when the number moves, so for the
-    // first thirty ticks of every session there was no reading — and
-    // `watch::many_at` answers an absent child with nought, making `if the pylon
-    // has fewer than 60 integrity` true of a barrier in perfect repair. No test
-    // that mustered first could have seen it.
+    // `integrity` must publish before it first moves, or an absent reading is
+    // nought and a whole barrier reads as failing.
     let sim = in_the_sanctum(1);
     assert_eq!(sim.integrity(), 100);
 
@@ -185,15 +156,9 @@ fn a_haul_is_instant_and_takes_no_slot() {
 #[test]
 #[cfg(debug_assertions)]
 fn a_scripted_course_runs_while_the_laboratory_is_busy() {
-    // The claim the whole domain rests on, and it shipped false. `muster` and
-    // `haul` are in `Verb::is_operation` — the *scope* question — and
-    // `spell::block::begins_work` reads that same predicate to decide whether a
-    // line waits on the production slot. The `Dial` exemption was written for
-    // exactly this and these two were left out.
-    //
-    // The symptom: `holding.spell waits: the alembic is distilling` for ever,
-    // then `spell_gave_up` with a fault on the rail. Every other test here runs
-    // in an idle tower.
+    // A haul must not wait on the production slot, which
+    // `spell::block::begins_work` once made it do. In a busy tower, unlike the
+    // rest.
     let mut sim = Sim::new(1);
     for line in [
         "attend laboratory",
@@ -221,12 +186,8 @@ fn a_scripted_course_runs_while_the_laboratory_is_busy() {
 
 #[test]
 fn the_rail_says_the_barrier_and_never_the_course() {
-    // The rail's recorded defect, arriving for the third time (§19, `st 350t`
-    // and `pr 4t`): the pylon's meter was wards-still-to-haul while a course
-    // stood, and `detail_of` prints a remainder — so the sanctum read `py 4` and
-    // counted *down* as a solver won. Worse here, because the number vanished
-    // into course progress exactly while a bound solver was working, which is
-    // the one time the player is in another room and glancing.
+    // The rail's remainder defect, a third time (§19): the meter must not count
+    // down as a solver wins.
     let detail = |sim: &Sim| {
         sim.briefs()
             .into_iter()
@@ -337,14 +298,8 @@ fn the_words_mean_nothing_in_the_laboratory() {
 #[test]
 #[cfg(debug_assertions)]
 fn the_shipped_solver_finishes_a_course_in_the_optimal_number_of_hauls() {
-    // The acceptance test for the whole domain: §8's language has no arguments
-    // to a part and no per-descent variables, so the only way to write the
-    // cyclic solution is `holding`'s — bind `here` and `there` before each call
-    // and let the part read them.
-    //
-    // Optimality is the sharp half. A wrong cycle direction still *finishes* —
-    // in the conduit — and a ladder that guessed would take more hauls, so
-    // the count is what catches both.
+    // The domain's acceptance test: `holding` binds before each call. The haul
+    // count catches a wrong direction, which still finishes.
     for seed in [1, 3, 11] {
         let mut sim = in_the_sanctum(seed);
         run(&mut sim, &format!("invoke {SOLVER}"));

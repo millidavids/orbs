@@ -4,23 +4,20 @@
 //! the player acts — so the rounds here are the dump's rounds, whatever the
 //! wall clock did between keystrokes.
 
-use crate::play::{Game, available};
+use crate::play::Game;
 
 /// At the wall, with a siege up.
-fn besieged() -> Game {
-    let game = Game::start();
+fn besieged() -> Option<Game> {
+    let game = Game::start()?;
     game.does("attend bailey", "/tower/bailey")
         .does("defend", "come up the road");
-    game
+    Some(game)
 }
 
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn stillness_ends_a_siege() {
-    if !available() {
-        return;
-    }
-    let game = besieged();
+    let Some(game) = besieged() else { return };
     game.does("hold", "they onslaught")
         .does("debug_spawn stillness 3", "all along")
         .does(
@@ -33,10 +30,7 @@ fn stillness_ends_a_siege() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn a_spell_cannot_end_a_siege() {
-    if !available() {
-        return;
-    }
-    let game = besieged();
+    let Some(game) = besieged() else { return };
     game.does("debug_spawn stillness 3", "all along")
         .opens("scribe calming", "calming.spell in ");
     game.type_raw("edit");
@@ -55,10 +49,7 @@ fn a_spell_cannot_end_a_siege() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn vigour_raises_the_wall() {
-    if !available() {
-        return;
-    }
-    let game = besieged();
+    let Some(game) = besieged() else { return };
     game.does("hold", "they onslaught").expect_drawn("/18");
     game.does("debug_spawn vigour 6", "all along")
         .does("quaff vigour", "the vigour flows, 2 a round")
@@ -68,10 +59,7 @@ fn vigour_raises_the_wall() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn recall_names_what_a_brew_costs_in_quintessence() {
-    if !available() {
-        return;
-    }
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.does("attend laboratory", "/tower/laboratory")
         .does("recall stillness", "20 quintessence, lost if stopped");
 }
@@ -79,12 +67,9 @@ fn recall_names_what_a_brew_costs_in_quintessence() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn a_siege_leaves_a_lie_until_it_is_purged() {
-    if !available() {
-        return;
-    }
     // On the quiet seed the second round gets something past the wall and it
     // lands on the menagerie's log.
-    let game = besieged();
+    let Some(game) = besieged() else { return };
     game.does("hold", "they onslaught").does(
         "hold",
         "something got past the wall. a log is not telling the truth",

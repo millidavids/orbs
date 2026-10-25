@@ -19,8 +19,8 @@ use crate::tower::besieged;
 
 /// `imbue <tool> <charm>` — open a lattice.
 ///
-/// Instant and free; `anneal` is what costs. §11.5 is *"cost is the resource,
-/// never progress"*, and charging for looking is what §5.1 forbids.
+/// Instant and free; `anneal` is what costs, since looking is never charged
+/// (§5.1).
 pub(in crate::execute) fn imbue(world: &mut World, intent: &Intent) {
     let Some(lattice) = fixture(world) else {
         say(world, Verb::Imbue, "forge_nowhere", &[], Role::Cost);
@@ -224,10 +224,8 @@ pub(in crate::execute) fn anneal(world: &mut World) {
             world,
             Verb::Anneal,
             "forge_short",
-            // `quantity`, not `state` — `forge_short` reads *"…and you hold
-            // {quantity}"*, and the wrong key printed that literal at a
-            // player. A refusal without its two numbers cannot be planned
-            // around, and planning around it is the mechanic.
+            // `quantity`, which `forge_short` reads: a refusal needs both
+            // numbers to be planned around.
             &[
                 ("name", &binding.kind),
                 ("kind", &cost.to_string()),
@@ -238,13 +236,8 @@ pub(in crate::execute) fn anneal(world: &mut World) {
         return;
     }
 
-    // The fall takes time, and the tower's one slot with it. This resolved
-    // instantly for a whole step, so `Charm::takes` was dead and §10's scarcity
-    // for the domain did not exist at all.
-    //
-    // The outcome is decided when the work lands, not here: a lattice that
-    // resolved at once and then held the slot would be a charm you already had,
-    // being paid for afterwards.
+    // The fall takes `Charm::takes` and the tower's one slot (§10), and its
+    // outcome is decided when the work lands, not paid for afterwards.
     let Some(subject) = world.get::<tower::NodeId>(lattice).copied() else {
         return;
     };
@@ -293,13 +286,9 @@ pub(crate) fn land(world: &mut World, lattice: Entity) {
     if lit {
         lay(world, &binding, kind);
         world.entity_mut(lattice).remove::<Binding>();
-        // A fall that lights earns; one that springs back does not.
-        // `land::finish` credits in the generic branch this one `continue`s
-        // past, so without this the forge paid nothing and `orbs-balance` read
-        // it as `0.0000/tick`. Only on success: a spell that reads the residue
-        // earns every fall, `tending_blindly` one in eight.
+        // Only a fall that lights earns. `land::finish` credits in the branch
+        // this one skips, so without it the forge paid nothing.
         let earned = tower::worth(world, charm::LATTICE);
-        tower::done(world, &tower::Work::at(charm::LATTICE), earned);
         publish(world, lattice);
         say(
             world,
@@ -311,6 +300,8 @@ pub(crate) fn land(world: &mut World, lattice: Entity) {
             ],
             Role::Success,
         );
+        // After the sentence, as every paying site does: the level is what it bought.
+        tower::done(world, &tower::Work::at(charm::LATTICE), earned);
         return;
     }
 

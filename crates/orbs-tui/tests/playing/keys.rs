@@ -1,17 +1,14 @@
 //! The keys that are neither the prompt nor a surface, and the ways out.
 
-use crate::play::{Game, available};
+use crate::play::Game;
 
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn f4_flips_the_focus_the_border_advertises() {
-    if !available() {
-        return;
-    }
     // `prompt.rs` draws `F4 deep` into the border every frame and this build
     // shipped without answering it. Until multiplexing returns the second pane
     // in Phase 9a, moving the hint is the whole claim.
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.expect_drawn("F4 deep");
     game.press("F4");
     game.expect_drawn("F4 wide");
@@ -22,12 +19,9 @@ fn f4_flips_the_focus_the_border_advertises() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn f5_shows_the_linear_stream_the_screen_reader_would_hear() {
-    if !available() {
-        return;
-    }
     // Rule 5's linear stream: structured — `name:`, `qty:`, `state:` — where
     // the pane is prose.
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.does("attend laboratory", "/tower/laboratory")
         .does("survey dispensary", "sage");
     game.press("F5");
@@ -37,13 +31,10 @@ fn f5_shows_the_linear_stream_the_screen_reader_would_hear() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn f6_writes_the_parse_trace_where_the_game_is_running() {
-    if !available() {
-        return;
-    }
     // `F6` says nothing on the transcript and the register `F7` cycles is
     // invisible on screen but is a column in the file, so this is the only way
     // to see either key is bound.
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.does("attend laboratory", "/tower/laboratory")
         .does("grind sage", "to mortar_and_pestle");
     game.press("F7");
@@ -58,13 +49,10 @@ fn f6_writes_the_parse_trace_where_the_game_is_running() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn quit_asks_before_it_ends_the_session() {
-    if !available() {
-        return;
-    }
     // It asks because a `quit` meant for the spell editor and typed one surface
     // too high would end the game instead of closing a buffer. Each half lands
     // at the tick rather than at `submit` — the same beat every other word has.
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.send("quit");
     game.expect_drawn("leave the orb?");
 
@@ -81,14 +69,11 @@ fn quit_asks_before_it_ends_the_session() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn menu_opens_the_orbs_own_screen_and_resume_comes_back() {
-    if !available() {
-        return;
-    }
     // `menu` is its own word, not `quit` (§19). Also the only thing that would
     // have caught the menu's shipping defect: a gated `type_into_menu` kept its
     // cursor and typed the opening word back into the menu, while `ORBS_DUMP`
     // presses no key and drew it perfectly throughout.
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.send("menu");
     game.expect_drawn("the tower waits");
     game.expect_drawn("resume");
@@ -106,13 +91,10 @@ fn menu_opens_the_orbs_own_screen_and_resume_comes_back() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn f10_leaves_from_anywhere() {
-    if !available() {
-        return;
-    }
     // Not Escape — all four surfaces use it to leave something *smaller*. F10
     // matches the Bevy build, so a player who learns one build's exit is not
     // trapped in the other.
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.does("attend laboratory", "/tower/laboratory")
         .opens("scribe morning", "morning.spell in ");
     game.press("F10");
@@ -122,12 +104,9 @@ fn f10_leaves_from_anywhere() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn ctrl_c_is_answered_rather_than_ignored() {
-    if !available() {
-        return;
-    }
     // Raw mode means no SIGINT, so it is ours to answer — and a full-screen
     // program nobody can leave by the chord everybody tries is a trap.
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.press("C-c");
     game.expect_gone();
 }
@@ -135,10 +114,7 @@ fn ctrl_c_is_answered_rather_than_ignored() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn ctrl_d_leaves_too() {
-    if !available() {
-        return;
-    }
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.press("C-d");
     game.expect_gone();
 }
@@ -146,11 +122,8 @@ fn ctrl_d_leaves_too() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn every_other_chord_is_swallowed_rather_than_typed() {
-    if !available() {
-        return;
-    }
     // A chord that reached the line would put a stray character in a command.
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.press("C-a");
     game.press("C-k");
     game.wait_ticks(2);
@@ -161,12 +134,9 @@ fn every_other_chord_is_swallowed_rather_than_typed() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn shift_tab_completes_as_tab_does() {
-    if !available() {
-        return;
-    }
     // crossterm reports Shift+Tab as its own code, and it was dropped; winit
     // reads the logical key and calls it Tab. tmux's name for it is `BTab`.
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.send_text("atte");
     game.press("BTab");
     game.expect_drawn("wizard $ attend");
@@ -175,13 +145,10 @@ fn shift_tab_completes_as_tab_does() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn f7_silences_the_menus_secrets() {
-    if !available() {
-        return;
-    }
     // A tense register keeps the menu's jokes quiet (§3), and `F7` can change
     // the register with the menu up. The surfaces unit test is the exact guard;
     // this is the same thing on a keyboard.
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.send("menu");
     game.expect_drawn("the tower waits");
     game.type_raw("xyzzy");
@@ -194,14 +161,11 @@ fn f7_silences_the_menus_secrets() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn the_manual_opens_on_the_room_and_then_the_words() {
-    if !available() {
-        return;
-    }
     // `help` is bare `recall`: the room's primer before twenty-five verbs,
     // because a player who types it in the lens is asking what a ward is. A
     // room lists only its own operations — `research`, `follow` and `wander`
     // used to be offered in the laboratory.
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.does("attend lens", "/tower/lens")
         .does("help", "four sigils")
         .expect("probe");

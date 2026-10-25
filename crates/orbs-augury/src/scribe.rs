@@ -1,24 +1,9 @@
 //! The trained reader for `.spell` files, answering as a [`Scrivener`].
 //!
-//! The stricter half (§19): a spell resolves with nobody watching, so where the
-//! prompt's reader offers four candidates against the room, this offers a line
-//! back into the player's own file — and a candidate survives five checks before
-//! it is offered at all. See [`Scribe::reading`].
-//!
-//! Nothing that already reads is touched. §19 deleted `scribe::canonicalise`
-//! because save-time rewriting destroyed the player's words whenever it
-//! understood only part of one, so the first defence is answering [`None`] for
-//! every line `spell::reads_cleanly` accepts — those never reach the model.
-//!
-//! Not `parser::is_literal`, which is the prompt's predicate rather than a
-//! spell's: it answers true for any line whose first word is a spell word, and
-//! half the loose phrasings this exists for begin with one. *"if the alembic is
-//! not busy"* is the line the feature is for, and that gate refused it.
-//!
-//! Two readers, because a spell body is mostly commands. `grind sage` is not
-//! control flow and [`spelling::command`] says so, which puts the line with the
-//! *prompt's* reader — the one trained on verbs — so this holds one of those and
-//! hands the line over. A build with no prompt weights leaves them alone.
+//! The stricter half (§19): a spell resolves unwatched, so a candidate passes
+//! five checks ([`Scribe::reading`]). A line `spell::reads_cleanly` accepts
+//! never reaches the model — not `parser::is_literal`, the prompt's gate.
+//! Command lines ([`spelling::command`]) go to the prompt's reader, held here.
 
 use burn::prelude::*;
 use orbs_sim::Scrivener;
@@ -56,14 +41,8 @@ pub struct Scribe<B: Backend> {
     reader: Reader<B>,
     /// The prompt's reader, for the lines that turn out to be commands.
     ///
-    /// [`None`] where this checkout has spell weights and no prompt weights,
-    /// which is not a state anyone would train on purpose but is one a partial
-    /// build reaches. Command lines are then left exactly as written.
-    ///
-    /// Its own copy, not the frontend's: holding both readers loads the prompt's
-    /// weights twice, about 1.4MB and one extra file read at start-up. Sharing
-    /// would mean an `Arc` across the `Augur`/`Scrivener` seam and a lifetime on
-    /// this type, which is a lot of structure to save a megabyte.
+    /// [`None`] in a partial build, leaving command lines as written. Its own
+    /// copy, since sharing would cost an `Arc` across the seam to save 1.4MB.
     prompt: Option<Trained<B>>,
     vocabulary: Vocabulary,
     device: B::Device,
@@ -78,10 +57,8 @@ impl<B: Backend> Scribe<B> {
     ///
     /// # Errors
     ///
-    /// If no spell weights have been trained yet, or they were written for a
-    /// different vocabulary or a different set of shapes — a hard error rather
-    /// than a degradation, because a table that has shifted under trained
-    /// weights produces confident nonsense rather than an obvious failure.
+    /// If no spell weights exist, or they fit another vocabulary or shape set —
+    /// hard, since shifted weights give confident nonsense.
     pub fn load(device: B::Device) -> Result<Self, burn::record::RecorderError> {
         Self::load_from(SCRIBE_WEIGHTS, WEIGHTS, device)
     }
@@ -89,9 +66,8 @@ impl<B: Backend> Scribe<B> {
     /// Load the spell register's weights from `spell`, and the prompt's — for
     /// the command lines — from `prompt`, each without its `.bin`.
     ///
-    /// For runs nobody has shipped yet, as [`Trained::load_from`]. Both paths,
-    /// because a spell reader's command lines are only as good as the prompt
-    /// reader it hands them to, and two can only be compared through one.
+    /// As [`Trained::load_from`]. Both paths, so two spell readers compare
+    /// through one prompt reader.
     ///
     /// # Errors
     ///
@@ -171,19 +147,9 @@ impl<B: Backend> Scribe<B> {
             return None;
         }
 
-        // No reading may drop a name, measured rather than supposed. On `let`'s
-        // holdout the head ranked *command* first 299 times in 576 with `let`
-        // second, and every one of those `let` readings was built correctly
-        // while the prompt's reader answered `stop`, `move bailey`, `attend
-        // lectern` — so a command dropping a word the game does not know lost
-        // to a statement that kept it.
-        //
-        // A statement was taken to be unable to drop one, being built from the
-        // tagger's spans, and it could whenever the tagger missed the name:
-        // *"name the alembic bertha"* came back `if alembic is empty`. Every
-        // reading with room for a name is held to it now, and a shape with no
-        // room has to say so (`spelling::holds_a_name`). `spelling::names_in`
-        // separates a name from a typo the reader may spend.
+        // No reading may drop a name, measured: a command dropping one loses to
+        // a statement keeping it. `spelling::holds_a_name` and
+        // `spelling::names_in` decide which readings and which words.
         let names = spelling::names_in(line, &read.placed, &self.vocabulary);
         read.ranked
             .into_iter()
@@ -410,13 +376,11 @@ mod tests {
 
     #[test]
     fn it_reads_control_flow_the_matcher_cannot() {
+        // `wait ten ticks` is not here: the shipped weights do not read it.
         let Some(scribe) = scribe() else { return };
-        for line in [
-            "when the mortar_and_pestle is free",
-            "wait ten ticks",
-            "that is all",
-        ] {
-            println!("{line:?} -> {:?}", scribe.read(line));
+        for line in ["when the mortar_and_pestle is free", "that is all"] {
+            let read = scribe.read(line);
+            assert!(read.is_some(), "{line:?} was not read: {read:?}");
         }
     }
 }

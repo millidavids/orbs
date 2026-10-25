@@ -6,17 +6,14 @@
 //! consuming one keystroke is invisible until a player types `:wq` and finds it
 //! in their command history.
 
-use crate::play::{Game, available};
+use crate::play::Game;
 
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn arrows_walk_the_maze_and_never_reach_the_prompt() {
-    if !available() {
-        return;
-    }
     // At the prompt an arrow means *recall history*. Inside `wander` it means
     // *walk*, and the prompt must see none of it.
-    let game = Game::seeded(11);
+    let Some(game) = Game::seeded(11) else { return };
     game.does("attend archive", "/tower/archive")
         .does("research", "a way out is in them")
         .opens("wander", "arrows walk")
@@ -43,12 +40,9 @@ fn arrows_walk_the_maze_and_never_reach_the_prompt() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn walking_the_maze_spends_no_world_time() {
-    if !available() {
-        return;
-    }
     // `Sim::walk` reaches the world without a tick boundary, so a player walks
     // as fast as they can press. Eight presses must not be eight seconds.
-    let game = Game::seeded(11);
+    let Some(game) = Game::seeded(11) else { return };
     game.does("attend archive", "/tower/archive")
         .does("research", "a way out is in them")
         .opens("wander", "arrows walk");
@@ -67,15 +61,12 @@ fn walking_the_maze_spends_no_world_time() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn the_map_keeps_up_with_the_keys_rather_than_the_clock() {
-    if !available() {
-        return;
-    }
     // `Panel` is rebuilt once a tick and the map is drawn from `panel.stacks`,
     // so every arrow was invisible for up to a second — and `walk` is the one
     // thing that moves the world between ticks. The Bevy build never had this:
     // `walk` takes `Tower` by `&mut` and `refresh_panel` hangs on
     // `resource_changed`.
-    let game = Game::seeded(11);
+    let Some(game) = Game::seeded(11) else { return };
     game.does("attend archive", "/tower/archive")
         .does("research", "a way out is in them")
         .opens("wander", "arrows walk");
@@ -107,10 +98,7 @@ fn reading(game: &Game) -> Option<(usize, usize)> {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn leaving_the_maze_gives_the_keyboard_back() {
-    if !available() {
-        return;
-    }
-    let game = Game::seeded(11);
+    let Some(game) = Game::seeded(11) else { return };
     game.does("attend archive", "/tower/archive")
         .does("research", "a way out is in them")
         .opens("wander", "arrows walk")
@@ -122,12 +110,9 @@ fn leaving_the_maze_gives_the_keyboard_back() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn the_weave_screen_takes_the_arrows_only_after_a_word() {
-    if !available() {
-        return;
-    }
     // `ley` or `mastery` hands the arrows over, the way `edit` drops into the
     // editor's buffer — so pressing an arrow first is testing the refusal.
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.opens("weave", "say ley or mastery")
         .expect_drawn("say ley or mastery");
     game.press("Down");
@@ -139,13 +124,10 @@ fn the_weave_screen_takes_the_arrows_only_after_a_word() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn escape_inside_the_weave_goes_back_a_step_and_not_out() {
-    if !available() {
-        return;
-    }
     // One Escape returns from browsing to aiming, not out — a player who
     // assumes it left types their next command into the weave, which answers
     // *"the orb weaves nothing called scribe morning"*. You must type `quit`.
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.opens("weave", "say ley or mastery");
     game.type_raw("mastery");
     game.expect_drawn("arrows move");
@@ -160,10 +142,7 @@ fn escape_inside_the_weave_goes_back_a_step_and_not_out() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn typing_while_the_weave_is_open_goes_to_the_weave() {
-    if !available() {
-        return;
-    }
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.opens("weave", "say ley or mastery");
     game.type_raw("scribe morning");
     game.expect_drawn("weaves nothing called");
@@ -172,16 +151,13 @@ fn typing_while_the_weave_is_open_goes_to_the_weave() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn a_function_key_works_from_inside_a_surface() {
-    if !available() {
-        return;
-    }
     // The function keys are ungated by surface, as in the Bevy build.
     //
     // The proof comes after the editor closes, which is a fact about the screen
     // rather than the key: the linear stream is drawn instead of the transcript,
     // and the editor owns the whole pane. `F5` being on when you leave is the
     // claim that the editor did not swallow it.
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.does("attend laboratory", "/tower/laboratory")
         .does("survey dispensary", "sage")
         .opens("scribe morning", "morning.spell in ");
@@ -200,10 +176,7 @@ fn a_function_key_works_from_inside_a_surface() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn the_manual_pages_and_the_transcript_behind_it_does_not() {
-    if !available() {
-        return;
-    }
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     // A transcript with more in it than fits, so it has somewhere to scroll to.
     game.does("attend laboratory", "/tower/laboratory")
         .does("help", "the work")
@@ -266,18 +239,14 @@ fn the_manual_pages_and_the_transcript_behind_it_does_not() {
 
 /// The front door, played: a menu, a choice, and a tower behind it.
 ///
-/// `ORBS_DUMP` is answered before the `App` is built and makes its own `Sim`,
-/// so `Threshold`, the clock gate and the keyboard routing are absent from
-/// every capture — the usual proof-of-no-change proves nothing here. Every
-/// other scenario passes `ORBS_THRESHOLD=0`, so this is the only thing in the
-/// project that opens the game the way a player does.
+/// The only scenario without `ORBS_THRESHOLD=0`, and a dump builds no `App`:
+/// this alone opens the game as a player does.
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn the_threshold_reaches_a_tower() {
-    if !available() {
+    let Some(game) = Game::at_the_threshold() else {
         return;
-    }
-    let game = Game::at_the_threshold();
+    };
     // The menu, not a prompt: the orb is awake and has raised nothing.
     game.expect_drawn("no tower yet");
     // `resume` is refused rather than silently ignored (§6), and the menu is

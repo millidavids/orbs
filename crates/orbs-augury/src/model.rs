@@ -1,17 +1,8 @@
 //! The reader itself.
 //!
-//! Small because the corpus is small, not because a GPU is slow. With no
-//! pretrained English underneath it (§19, *the augury*), the corpus is the only
-//! source of capability, so the model is sized against 11,243 examples rather
-//! than the hardware: `d_model` 128 and two layers is ~341k parameters, about
-//! 30 per example — the ratio that makes learning rather than memorising
-//! plausible. Most of it is the encoder: 466 words is a 60k table against 262k
-//! of attention.
-//!
-//! Two heads, one pass. `<cls>` carries *which command this is*; every other
-//! row carries *what this word is doing in it*. Both read the same encoding,
-//! because the verb and its arguments are not independent — *"put the sage in
-//! the mortar"* is `grind` because of where the sage went.
+//! Sized against the corpus, not the hardware (§19): ~341k parameters, about
+//! 30 an example. Two heads on one encoding — `<cls>` for the command, every
+//! other row for its word's role — since a verb depends on its arguments.
 
 use burn::nn::transformer::{
     TransformerEncoder, TransformerEncoderConfig, TransformerEncoderInput,
@@ -156,16 +147,8 @@ impl<B: Backend> Reader<B> {
 
         let tags = self.tag.forward(encoded.clone());
 
-        // The verb head is told what the tagger found, because the two were
-        // asymmetric: tagging reads 97.1% and verbs 72.3%, so the slot
-        // predictions are reliable evidence the verb head was never given.
-        // (Slot-gating, in the intent/slot literature.)
-        //
-        // Aimed at a specific confusion: `can you take me over to the lectern`
-        // came back `move lectern` rather than `attend lectern`, and what
-        // separates them is how many slots are filled. Pooling per *slot*
-        // rather than over the whole sentence puts that in front of the head
-        // that needs it.
+        // Slot-gating: the far better tagger informs the verb head, pooled per
+        // slot, since how many slots fill separates `move` from `attend`.
         let weights = burn::tensor::activation::softmax(tags.clone(), 2);
         // Padding has an encoding like anything else and must not vote. `pad` is
         // true where a row is padding, so the mask is its inverse.

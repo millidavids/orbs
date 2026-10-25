@@ -7,27 +7,18 @@
 //! cargo run --release -p orbs-augury --example measure --features train -- --reader target/seeds/try/reader-7 --scores
 //! ```
 //!
-//! The fourth line of `orbs-sim`'s `--bench`, and it has to live here: rule 1
-//! forbids `orbs-sim` depending on this crate, so the bench that measures the
-//! matcher cannot reach the model. The scoring rule is deliberately the same — a
-//! reading counts when the command it produces resolves to the canonical form
-//! the corpus meant, which is what `Sim::submit_reading` would do.
+//! `orbs-sim`'s `--bench`'s fourth line, here by rule 1, scored the same way: a
+//! reading counts when it resolves to the canonical form.
 //!
-//! `--spells` measures the scrivener instead, stricter for §9999's reason — *"a
-//! spell resolves with nobody watching"*. A statement counts only when the line
-//! it produces *is* the canonical one; a command line inside a spell is scored
-//! the prompt's way, because that is the reader it is handed to.
-//!
-//! `--reader` and `--scribe` measure weights other than the shipped ones, each a
-//! path without its `.bin`, and `--scores` prints nothing but the numbers — one
-//! `name<TAB>value` a line — for `scripts/seeds.sh` to average across seeds. The
-//! spell register takes both, because its command lines are handed to a prompt
-//! reader and two spell readers can only be compared through the same one.
+//! `--spells` measures the scrivener, stricter since a spell resolves unwatched
+//! (§19): a statement must be the canonical line. `--reader` and `--scribe`
+//! take other weights, without `.bin`; `--scores` prints `name<TAB>value` for
+//! `scripts/seeds.sh`.
 
 use burn::backend::NdArray;
-use orbs_augury::cli::{missing, weights};
-use orbs_augury::trained::{SCRIBE_WEIGHTS, WEIGHTS};
-use orbs_augury::{Register, Scribe, Trained};
+use orbs_augury::cli::{missing, percent, scribe, weights};
+use orbs_augury::trained::WEIGHTS;
+use orbs_augury::{Register, Trained};
 use orbs_sim::augur::{Augur as _, Grammar, Scrivener as _};
 use orbs_sim::content::{Phrasings, corpus_scene};
 use orbs_sim::parser::{Mode, Resolution, Scene, resolve};
@@ -56,16 +47,7 @@ fn spells(scores: bool) {
         );
     }
 
-    let Ok(scribe) = Scribe::<NdArray<f32>>::load_from(
-        &weights("--scribe", SCRIBE_WEIGHTS),
-        &weights("--reader", WEIGHTS),
-        Default::default(),
-    ) else {
-        missing(
-            scores,
-            "spell weights",
-            "cargo run --release -p orbs-augury --example train --features train -- --spells",
-        );
+    let Some(scribe) = scribe(scores) else {
         return;
     };
 
@@ -350,17 +332,6 @@ fn reaches(said: &str, meant: &str, scene: &Scene) -> bool {
         resolve(said, scene, Mode::Calm),
         Resolution::Resolved { ref intent, .. } if intent.echo() == meant
     )
-}
-
-#[expect(
-    clippy::cast_precision_loss,
-    reason = "a holdout is thousands of lines, not 2^24"
-)]
-fn percent(part: usize, whole: usize) -> f32 {
-    if whole == 0 {
-        return 0.0;
-    }
-    part as f32 / whole as f32 * 100.0
 }
 
 /// The average of some percentages, weighting each equally.

@@ -1,27 +1,14 @@
 //! Actions that take time.
 //!
-//! DESIGN.md §5.0: *"Issuing an action is free; **actions take time to
-//! complete.**"* Ticks are world time, not currency — there is no pool to spend
-//! and a fast typist gains nothing over a slow one. The scarcity is **duration**,
-//! and it is expressed as concurrency: how many things you can have in flight at
-//! once.
-//!
-//! That is why this is the economy. §5.0 again: *"Concurrency is therefore the
-//! real scarcity: how many duration-actions you can have in flight at once …
-//! which means the economy and the focus system are the same system rather than
-//! two bolted together."*
-//!
-//! One production slot: §11.5 starts the player at multiplex capacity 1, and
-//! §9's fourth invariant reserves that slot for an in-flight manual action for
-//! its whole duration. So brewing occupies the tower rather than the laboratory
-//! — start a brew and you are not also deciphering. That is the trade the focus
-//! track is built on, and a slot per domain would delete it while being more
-//! code.
+//! §5.0: issuing is free and actions take time, so the scarcity is concurrency —
+//! the economy and the focus system are one. One production slot for the whole
+//! tower (§11.5, §9): start a brew and you are not also deciphering, the trade
+//! the focus track is built on.
 //!
 //! | Module | What |
 //! |---|---|
 //! | [`slot`] | the intervals, the pools, `begin`, `stop`, and the busy contract |
-//! | [`produce`] | `transmute` and `siphon` — what an instrument makes |
+//! | [`produce`] | `transmute` — what an instrument makes |
 //! | [`quicken`] | a domain working at double speed, for a while |
 //! | [`triage`] | `purge` — §7's destruction-as-maintenance |
 //! | [`land`] | the once-per-tick pass that completes both pools |

@@ -7,21 +7,14 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 
-# The trained reader behind §6's deterministic pipeline (DESIGN.md §19, *the
-# augury*). It implements `orbs_sim::Augur` and nothing else depends on it —
-# `orbs-sim` must never gain a dependency here, or the headless boundary
-# CLAUDE.md rule 1 protects would go with it.
+# The trained reader (§19): `orbs_sim::Augur`, which the sim never depends on
+# (rule 1).
 [dependencies]
 orbs-sim = { path = "../orbs-sim" }
 
-# No default features: they pull a dataset layer, sqlite, a network client and
-# an audio decoder, and a reader needs none of them.
-#
-# A reader is `ndarray` only. One line takes 436µs there against 3.0ms on
-# `wgpu`, where a batch of one is mostly kernel-launch overhead, and keeping the
-# GPU behind `train` lets `orbs-tui` hold the same reader without a graphics
-# stack. `burn-train` is left out: its `Learner` brings a TUI dashboard and
-# system probes, and the training loop needs only `autodiff` and `burn::optim`.
+# No defaults, which pull sqlite and a network client. A reader is `ndarray`
+# only, faster for one line and GPU-free; no `burn-train`, which the loop
+# does not need.
 burn = { version = "0.21", default-features = false, features = [
     "std",
     "ndarray",
@@ -34,9 +27,8 @@ wgpu = { version = "29", default-features = false, optional = true }
 
 [features]
 default = []
-# What the trainer needs and a reader never does. The three examples name it in
-# `required-features`, so `cargo build -p orbs-augury` stays an inference build
-# and `cargo run --example train` turns it on by itself.
+# The trainer's alone; the examples require it, so a plain build stays
+# inference.
 train = ["burn/wgpu", "burn/autodiff", "dep:wgpu"]
 
 [[example]]
@@ -51,11 +43,8 @@ required-features = ["train"]
 name = "device"
 required-features = ["train"]
 
-# **A dev-dependency, and only the spike's.** `examples/device.rs` has to make a
-# wgpu device the way Bevy does, and `request_adapter` is `async`. Rule 8 bars
-# async from the sim and bars `tokio` outright; `pollster` is neither — it is a
-# four-function blocking shim with no runtime, no threads and no scheduler, and
-# it never reaches a shipped binary.
+# For `examples/device.rs`'s async `request_adapter`: a blocking shim, no
+# runtime (rule 8), never shipped.
 [dev-dependencies]
 pollster = "1"
 

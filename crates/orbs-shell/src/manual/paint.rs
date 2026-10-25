@@ -25,33 +25,19 @@ use super::state::{Reader, Showing};
 const MIN_ROWS: u16 = 10;
 const MIN_COLS: u16 = 34;
 
-/// The caret's lead-in, and what the typed line is indented by.
-const LEAD: &str = "> ";
-
 /// Draw the manual into `pane`.
 ///
 /// `reader` is `&mut` for `Editor`'s reason: the viewport follows the content
 /// and only the painter knows how tall the pane is. See [`Reader::measured`].
 pub fn paint(frame: &mut Frame, reader: &mut Reader, pane: Rect, prose: &Prose) {
-    if pane.is_empty() {
-        return;
-    }
-    let caret = {
-        let mut painter = frame.painter(pane);
-        let area = painter.area();
-        painter.border(area, Some(&prose.line("manual_title", &[])), Style::DIM);
-        let inner = area.inset(1);
-        if inner.is_empty() {
-            return;
-        }
-        if area.rows < MIN_ROWS || area.cols < MIN_COLS {
-            painter.paragraph(inner, &Span::new(&prose.line("manual_too_small", &[])));
-            None
-        } else {
-            Some(body(&mut painter, reader, inner, prose))
-        }
-    };
-    frame.set_cursor(caret);
+    crate::framed::paint(
+        frame,
+        pane,
+        &prose.line("manual_title", &[]),
+        (MIN_ROWS, MIN_COLS),
+        &prose.line("manual_too_small", &[]),
+        |painter, inner| body(painter, reader, inner, prose),
+    );
 }
 
 /// The manual's rows, and where the caret ends up.
@@ -69,30 +55,15 @@ fn body(painter: &mut Painter<'_>, reader: &mut Reader, inner: Rect, prose: &Pro
         Showing::Chapter { at, top } => chapter(painter, reader, at, top, page, prose),
     }
 
-    painter.span(
-        Pos::new(inner.col, line_row),
-        &Span::new(&format!("{LEAD}{}", reader.command())),
-    );
-    if let Some(missing) = reader.complaint() {
-        painter.span(
-            Pos::new(inner.col, line_row.saturating_add(1)),
-            &Span::new(&prose.line("manual_unknown", &[("detail", missing)]))
-                .with_style(Style::DIM),
-        );
-    }
-
-    // Clamped to the pane, for `menu/paint.rs`'s reason and by the same rule
-    // `sheet.rs` has always used.
-    let typed = LEAD
-        .chars()
-        .count()
-        .saturating_add(reader.command().chars().count());
-    Pos::new(
-        inner
-            .col
-            .saturating_add(u16::try_from(typed).unwrap_or(u16::MAX))
-            .min(inner.col.saturating_add(inner.cols).saturating_sub(1)),
+    let complaint = reader
+        .complaint()
+        .map(|missing| prose.line("manual_unknown", &[("detail", missing)]));
+    crate::framed::typed_line(
+        painter,
+        inner,
         line_row,
+        reader.command(),
+        complaint.as_deref(),
     )
 }
 

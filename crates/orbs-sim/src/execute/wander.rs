@@ -1,56 +1,15 @@
 //! `wander` — hand the arrow keys the archive's stacks (§10, §19).
 //!
-//! It buys the keys and nothing else. The map draws whenever a maze is open,
-//! said or not — which is what makes watching a bound solver work. So unlike
-//! `scribe` and `weave`, this opens no surface: it changes *who owns the
-//! arrows*, and a player walking by hand sees the picture a spell walks.
-//!
-//! The sim owns only the request. Where the arrows point and whether the border
-//! is lit are facts about a pane, and rule 2 keeps panes out of this crate. The
-//! *steps* are not: an arrow becomes an ordinary `follow <way>` submission, so
-//! by hand and by spell are one code path and replay from `(seed, submissions)`
-//! is untouched by anybody having looked.
+//! It buys the keys and nothing else: the map draws whenever a maze is open,
+//! so this opens no surface. The sim owns only the request; an arrow becomes
+//! an ordinary `follow <way>` submission, so hand and spell are one path.
 
 use bevy_ecs::prelude::*;
-use orbs_render::{FieldName, RecordKind, Role};
+use orbs_render::Role;
 
-use crate::content::Prose;
+use super::Wandering;
 use crate::parser::Verb;
-use crate::session::Scrollback;
 use crate::tower::Maze;
-
-/// Whether `wander` has asked for the arrow keys.
-///
-/// A request, not a state, for the reason [`Opening`](super::Opening) and
-/// [`Weaving`](super::Weaving) both give: the verb asks once, and a frontend
-/// polling a persistent flag would seize the keyboard again on the frame after
-/// the player let it go.
-#[derive(Resource, Debug, Default, Clone, Copy)]
-pub struct Wandering(bool);
-
-impl Wandering {
-    /// Ask for the arrows.
-    pub const fn ask(&mut self) {
-        self.0 = true;
-    }
-
-    /// Whether a request is waiting, without taking it.
-    ///
-    /// The peek exists because taking needs `&mut`, and a system reaching for it
-    /// stamps the resource's change tick merely by asking — which leaves its own
-    /// `resource_changed` run condition true for ever.
-    #[must_use]
-    pub const fn pending(&self) -> bool {
-        self.0
-    }
-
-    /// Take the pending request, if there is one.
-    pub const fn take(&mut self) -> bool {
-        let asked = self.0;
-        self.0 = false;
-        asked
-    }
-}
 
 /// `wander` — walk the stacks by hand.
 pub(super) fn wander(world: &mut World) {
@@ -69,37 +28,15 @@ pub(super) fn wander(world: &mut World) {
     say(world, "wander_opens", Role::Success);
 }
 
-/// One authored line about the walking.
+/// One authored line about the walking, filed as the archive's other lines are.
 fn say(world: &mut World, key: &str, role: Role) {
-    let message = world.resource::<Prose>().line(key, &[]);
-    world
-        .resource_mut::<Scrollback>()
-        .records_mut()
-        .push(RecordKind::Completion)
-        .text(FieldName::Name, Verb::Wander.canonical())
-        .text(FieldName::Message, &message)
-        .role(role)
-        .finish();
+    super::research::say(world, Verb::Wander, key, &[], role);
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::Sim;
-    use orbs_render::Value;
-
-    /// Every message the orb has said.
-    fn messages(sim: &Sim) -> Vec<String> {
-        sim.scrollback()
-            .records()
-            .iter()
-            .filter_map(|record| record.field(FieldName::Message))
-            .filter_map(|value| match value {
-                Value::Text(text) => Some(text.to_owned()),
-                _ => None,
-            })
-            .collect()
-    }
+    use crate::testing::said;
 
     /// A wizard standing in the archive with the stacks open.
     fn opened() -> Sim {
@@ -140,9 +77,9 @@ mod tests {
             "the arrows were given a maze that is not there"
         );
         assert!(
-            messages(&sim).iter().any(|line| line.contains("research")),
+            said(&sim).iter().any(|line| line.contains("research")),
             "the refusal did not say what would have worked: {:?}",
-            messages(&sim),
+            said(&sim),
         );
     }
 
@@ -158,18 +95,35 @@ mod tests {
         // The stacks, where the maze lives since it moved off the lectern —
         // and §6 wants the refusal to name what the laboratory has not got.
         assert!(
-            messages(&sim).iter().any(|line| line.contains("stacks")),
+            said(&sim).iter().any(|line| line.contains("stacks")),
             "the refusal did not say what was missing: {:?}",
-            messages(&sim),
+            said(&sim),
         );
     }
 
     #[test]
+    fn walking_and_letting_go_are_in_the_archive_log() {
+        let mut sim = opened();
+        for line in ["wander", "stop stacks"] {
+            sim.submit(line);
+            sim.step();
+        }
+        let before = said(&sim).len();
+        sim.submit("peruse archive.log");
+        sim.step();
+        let log = said(&sim).split_off(before);
+        for line in ["you step into the stacks", "you let the stacks close"] {
+            assert!(
+                log.iter().any(|said| said.contains(line)),
+                "archive.log is missing {line:?}: {log:?}",
+            );
+        }
+    }
+
+    #[test]
     fn a_spell_cannot_seize_the_keyboard() {
-        // Driven, not asserted against `may_issue`: that list is a `matches!`
-        // nothing makes the compiler check. `repeat 100 / wander` is a
-        // soft-lock — the prompt is dead while the arrows have the maze, so
-        // Escape would race the script for the keyboard.
+        // Driven, since `may_issue` is a `matches!`. A spell that wanders in a
+        // `repeat` would race Escape for the keyboard.
         let mut sim = opened();
         sim.write_spell("threading", &["wander".to_owned()]);
         sim.step();
@@ -181,9 +135,9 @@ mod tests {
             "a spell took the arrow keys away from the player",
         );
         assert!(
-            messages(&sim).iter().any(|line| line.contains("will not")),
+            said(&sim).iter().any(|line| line.contains("will not")),
             "the spell was refused silently: {:?}",
-            messages(&sim),
+            said(&sim),
         );
     }
 }

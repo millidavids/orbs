@@ -1,42 +1,23 @@
 //! `debug_spell` — a known-good spell written out, in the builds a tester runs.
 //!
-//! Two properties nothing else can hold: the door is shut in release, which only
-//! a `--release` run can check because the code is `cfg`'d away, and one input
-//! records one submission, which only a look at `Submissions` can check because
-//! the scrollback shows one line either way.
-//!
-//! That second one is the whole reason this word does not simply mirror
-//! `debug_spawn`. `debug_spawn` records the typed line and re-runs it on replay;
-//! `write_spell` already records a `Wrote`. Doing both would push two
-//! submissions for one input and a replay would push two more.
+//! The door is shut in release, and one input records one submission — only
+//! the `Wrote`, unlike `debug_spawn`, or a replay doubles.
 
-use orbs_render::{FieldName, Value};
+mod common;
+
+use common::attended;
 use orbs_sim::Sim;
 #[cfg(debug_assertions)]
 use orbs_sim::session::Submission;
 
 /// A wizard standing in the archive, which is where these spells are written for.
 fn archive() -> Sim {
-    let mut sim = Sim::new(1);
-    sim.submit("attend archive");
-    sim.step();
-    sim
+    attended(1, "archive")
 }
 
-fn messages(sim: &Sim) -> Vec<String> {
-    sim.scrollback()
-        .records()
-        .iter()
-        .filter_map(|record| record.field(FieldName::Message))
-        .filter_map(|value| match value {
-            Value::Text(text) => Some(text.to_owned()),
-            _ => None,
-        })
-        .collect()
-}
-
+/// Everything the orb said, on one line for a failure message.
 fn said(sim: &Sim) -> String {
-    messages(sim).join(" | ")
+    common::said(sim).join(" | ")
 }
 
 // ---------------------------------------------------------------------------
@@ -63,14 +44,8 @@ fn the_word_does_nothing_in_a_release_build() {
 #[cfg(not(debug_assertions))]
 #[test]
 fn a_release_shelf_holds_only_the_shipped_spells() {
-    // The other half of shelving them, and the half that matters to a player.
-    // `raise_grimoire` puts the dev ladders on the shelf under
-    // `cfg(debug_assertions)`; drop that guard and a release build ships a
-    // working maze solver, a working ward solver and the answer to the archive's
-    // central puzzle, which §12 wants the player to find.
-    //
-    // Named rather than derived: `execute::dev_spells` does not exist in this
-    // build, so there is nothing to iterate. That absence is the point.
+    // A release build must not ship the answers §12 wants found. Named, since
+    // `execute::dev_spells` does not exist here.
     let sim = archive();
     for name in ["threading", "breaking", "assembling"] {
         assert!(
@@ -124,35 +99,18 @@ fn one_input_records_exactly_one_submission_and_it_is_the_write() {
 #[cfg(debug_assertions)]
 #[test]
 fn a_session_that_used_it_replays_to_the_same_world() {
-    // The world replays, the tester's console chatter does not — the shape
-    // rather than a shortfall. Only the write is recorded, so a replay re-writes
-    // the spell without re-running the word: the two lines `debug_spell` said
-    // are absent, and every line the world produced is identical.
-    //
-    // That is the right side to be on. `debug_spawn` records its typed line and
-    // therefore replays its own announcement; the cost is that its replay is
-    // pinned to the tool still existing and still meaning the same thing. Here
-    // the recorded lines are the spell itself, so a replay reproduces what ran
-    // even after `dev_spells.toml` is edited.
+    // The world replays, the word's chatter does not: only the write is
+    // recorded, so a replay holds even after `dev_spells.toml` changes.
     let mut live = archive();
     live.submit("debug_spell threading");
     live.step();
     live.submit("research");
     live.step_n(40);
 
-    let mut replayed = Sim::new(1);
-    for (tick, submission) in live.submissions().all().to_vec() {
-        while replayed.tick() < tick {
-            replayed.step();
-        }
-        replayed.replay(submission);
-    }
-    while replayed.tick() < live.tick() {
-        replayed.step();
-    }
+    let mut replayed = common::replayed(&live, Sim::new(1));
 
     let world_lines = |sim: &Sim| -> Vec<String> {
-        messages(sim)
+        common::said(sim)
             .into_iter()
             .filter(|line| !line.contains("debug_spell") && !line.contains("grimoire remembers"))
             .collect()
@@ -181,20 +139,9 @@ fn a_session_that_used_it_replays_to_the_same_world() {
 #[cfg(debug_assertions)]
 #[test]
 fn the_dev_spells_are_on_the_shelf_from_the_first_tick() {
-    // Reversed deliberately. This used to assert the opposite — that a dev
-    // ladder reached the grimoire only when `debug_spell` wrote it — on the
-    // argument that a tester should not see scaffolding. In practice the first
-    // thing a tester does with one is cast it. They are shelved at construction
-    // now, in a debug build only.
-    //
-    // A shelved spell carries its own `Domain` from the file, which is why this
-    // skips the room check `debug_spell` needs: `scribe::write` homes a new
-    // spell to where the player stands, and nothing here is new.
-    //
-    // `Sim::spell`, not the transcript: the version that asserted the opposite
-    // read `said(&sim)`, which contains no spell name either way, so it passed
-    // against a grimoire holding every ladder. An absence test that cannot see
-    // the thing it forbids is not a test.
+    // Shelved at construction in a debug build, since a tester casts them.
+    // Each carries its file's `Domain`. Through `Sim::spell`, which can see
+    // what the transcript cannot.
     let sim = archive();
     for (name, spell) in orbs_sim::execute::dev_spells().iter() {
         let held = sim

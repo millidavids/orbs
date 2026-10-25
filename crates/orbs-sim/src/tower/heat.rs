@@ -1,23 +1,11 @@
 //! The athanor: shared heat, and the one instrument that takes no Focus.
 //!
-//! §10.1. Four instruments consume the tower's production pool and §11.5's
-//! capacity tops out at four; the athanor is infrastructure, not a stage.
-//!
-//! An interval, not a countdown, so in-flight state stays idempotent under a
-//! `meditate` of hundreds of ticks (§19). Fuel is stored as when it was lit and
-//! how much was in it, and `remaining = ticks - (now - lit_at)`. It is also why
-//! the rate cannot vary with load: charging more for two heated instruments
-//! would make fuel an integration over history.
-//!
-//! It burns whether or not anything is mounted, so idle lit time is waste and
-//! you want both heated stages inside one lighting — a window at 1 Hz, never a
-//! reflex. That is also §8's automation argument made mechanical: a script that
-//! ends its loop with `stop athanor` wastes nothing.
-//!
-//! Heat is checked when work starts and the run then completes. Pausing would
-//! be a countdown by another name; spoiling would cost progress, against
-//! §11.5's "never ruinous, only slower". The batching pressure comes from the
-//! burn being time-based, not from spoilage.
+//! §10.1: infrastructure, not a stage. An interval, not a countdown, so it is
+//! idempotent under a long `meditate` (§19) — which is also why the burn cannot
+//! vary with load. It burns whether or not anything is mounted, so the batching
+//! pressure is time, and a script ending with `stop athanor` wastes nothing.
+//! Heat is checked when work starts and the run then completes: spoiling would
+//! be ruinous, against §11.5.
 
 use bevy_ecs::prelude::*;
 use orbs_render::{FieldName, RecordKind, Role};
@@ -51,12 +39,9 @@ impl Burning {
         self.ticks.saturating_sub(elapsed)
     }
 
-    /// Fuel left and fuel total, for a meter.
-    ///
-    /// Remaining over total, where
-    /// [`Working::progress`](super::Working::progress) reports elapsed over
-    /// total, so a meter drawn from this drains rather than fills. Same
-    /// fraction, shrinking numerator — the render side needs to know nothing.
+    /// Fuel left and fuel total, for a meter — remaining, where
+    /// [`Working::progress`](super::Working::progress) reports elapsed, so it
+    /// drains rather than fills and the render side needs to know nothing.
     #[must_use]
     pub const fn fuel(&self, now: Tick) -> (u64, u64) {
         (self.remaining(now), self.ticks)
@@ -93,11 +78,8 @@ pub fn lit(world: &mut World, athanor: Entity) -> bool {
         .is_some_and(|fire| fire.remaining(now) > 0)
 }
 
-/// The heat source among the current room's fixtures, if there is one.
-///
-/// The marker, not the name, and a fixture, not any child: `siphon` deposits
-/// products at `cwd`, so matching on `Name == ATHANOR` could find a reagent
-/// called `athanor` on the floor and ask *it* whether it was alight.
+/// The heat source among the current room's fixtures, if there is one — by
+/// marker, since a name could find a reagent called `athanor` on the floor.
 #[must_use]
 pub fn find(world: &mut World, cwd: Entity) -> Option<Entity> {
     super::node::children_of(world, cwd)
@@ -244,10 +226,8 @@ fn spend(world: &mut World, athanor: Entity) {
 
 /// Spend any fire whose fuel has run out.
 ///
-/// Runs in the sim schedule beside [`finish`](super::finish). Ash lands once,
-/// at burn-out: spawning per tick issues ids into `Children` at a rate that
-/// depends on how the ticks were consumed, and insertion order is the parse
-/// (§19).
+/// Ash lands once, at burn-out: spawning per tick would issue ids at a rate
+/// that depends on how the ticks were consumed (§19).
 pub fn burn(world: &mut World) {
     let now = *world.resource::<Tick>();
     let spent: Vec<Entity> = world
@@ -262,11 +242,9 @@ pub fn burn(world: &mut World) {
     }
 }
 
-/// Say what just happened to the fire, and how much fuel it has.
-///
-/// The number is not decoration: banked fuel is a component rather than a node
-/// to `survey`, so without it in the sentence a player who damps sees an empty
-/// athanor and concludes their charcoal is gone. Reported as exactly that.
+/// Say what just happened to the fire, and how much fuel it has — banked fuel
+/// is not a node to `survey`, so without the number a damped athanor reads as
+/// lost charcoal.
 fn report(world: &mut World, key: &str, role: Role, state: &str, fuel: Option<u64>) {
     let ticks = fuel.map(|fuel| fuel.to_string()).unwrap_or_default();
     let message = world.resource::<Prose>().line(key, &[("left", &ticks)]);
@@ -306,6 +284,7 @@ pub fn refuse_cold(world: &mut World, instrument: &str) {
 mod tests {
     use super::*;
     use crate::Sim;
+    use crate::testing::drawn;
 
     /// Everything where the player is standing.
     fn here(sim: &mut Sim) -> Vec<String> {
@@ -316,10 +295,8 @@ mod tests {
             .collect()
     }
 
-    /// How long one charcoal burns, read from the content rather than repeated.
-    ///
-    /// Three tests broke the day the burn was slowed, each having `40` written
-    /// into it. A test that pins a tuning number fails on tuning.
+    /// How long one charcoal burns, read from the content: a test that pins a
+    /// tuning number fails on tuning.
     fn charcoal_ticks() -> u64 {
         Fuels::builtin()
             .get("charcoal")
@@ -448,15 +425,6 @@ mod tests {
         );
     }
 
-    /// Everything the orb has said this session.
-    fn said(sim: &Sim) -> Vec<String> {
-        sim.scrollback()
-            .records()
-            .iter()
-            .map(|record| record.to_line())
-            .collect()
-    }
-
     #[test]
     fn damping_says_how_much_fuel_keeps() {
         // Reported as "stopping early got rid of the charcoal". The mechanic
@@ -468,11 +436,11 @@ mod tests {
         sim.step();
 
         assert!(
-            said(&sim)
+            drawn(&sim)
                 .iter()
                 .any(|line| line.contains("ticks of fuel keep")),
             "damping did not say what it kept: {:?}",
-            said(&sim)
+            drawn(&sim)
         );
     }
 
@@ -488,9 +456,9 @@ mod tests {
         sim.step();
 
         assert!(
-            said(&sim).iter().any(|line| line.contains("banked fuel")),
+            drawn(&sim).iter().any(|line| line.contains("banked fuel")),
             "relighting did not mention the banked fuel: {:?}",
-            said(&sim)
+            drawn(&sim)
         );
     }
 
@@ -511,7 +479,7 @@ mod tests {
         assert!(
             lit(sim.world_mut(), athanor),
             "`light athanor` did not light it: {:?}",
-            said(&sim)
+            drawn(&sim)
         );
     }
 

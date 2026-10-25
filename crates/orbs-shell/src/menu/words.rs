@@ -56,14 +56,6 @@ pub const WORDS: [(&str, Word); COUNT as usize] = [
     ("quit", Word::Quit),
 ];
 
-/// The word that steps one page back, on every inner page.
-///
-/// Not in [`WORDS`], which is the top page's list. It shares no first letter
-/// with the lengths (`short`, `medium`, `long`), the drivers, or `new` on the
-/// play page, and cannot collide with a slot number — which is the whole of what
-/// it has to avoid.
-pub(super) const BACK: &str = "back";
-
 /// The word that raises a tower, on the play page.
 ///
 /// Not in [`WORDS`] either: it sits beside the listing rather than above it, so
@@ -108,15 +100,14 @@ pub(super) fn offered(stance: Stance) -> impl Iterator<Item = (&'static str, Wor
 
 /// The word `typed` names, by unambiguous prefix, among those `stance` offers.
 pub(super) fn word(typed: &str, stance: Stance) -> Option<Word> {
-    offered(stance)
-        .find(|(name, _)| name.starts_with(typed))
-        .map(|(_, word)| word)
+    crate::prefix::unique_prefix(offered(stance), typed)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::menu::state::Driver;
+    use crate::prefix::BACK;
     use orbs_sim::content::Length;
 
     #[test]

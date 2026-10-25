@@ -39,15 +39,9 @@ impl Menu {
         // A whole word wins, then a prefix only one row has — `Row::value_named`'s
         // rule. Taking the first match made a page's order decide which of two
         // rows a letter meant.
-        let chosen = {
-            let exact = self.rows(page).find(|row| row.word == word);
-            let mut prefixed = self.rows(page).filter(|row| row.word.starts_with(word));
-            let unique = match (prefixed.next(), prefixed.next()) {
-                (Some(only), None) => Some(only),
-                _ => None,
-            };
-            exact.or(unique).cloned()
-        };
+        let chosen =
+            crate::prefix::unique_prefix(self.rows(page).map(|row| (row.word.as_str(), row)), word)
+                .cloned();
         let Some(row) = chosen else {
             self.complaint = Some(Complaint::Unknown(typed.to_owned()));
             return None;

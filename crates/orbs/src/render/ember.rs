@@ -1,26 +1,10 @@
 //! What fire looks like.
 //!
-//! The colours a [`Depiction`] resolves to. Split from [`palette`](super::palette)
-//! because that file was already at CLAUDE.md's ~300-line limit and this is a
-//! feature of its own rather than more of the same table — but it is the same
-//! rule 2 boundary: `orbs-render` says *this cell is flame, and this hot*, and
-//! nothing below decides anything but the hue.
+//! The colours a [`Depiction`] resolves to, beside [`palette`](super::palette).
 //!
-//! Fire is orange on every tube. This shipped as four ramps, one per phosphor,
-//! on the argument that §4's premise is a single curved CRT whose base hue
-//! carries the picture. That argument was about the *tube*; the thing being
-//! drawn is a fire, and a green fire reads as the meter having changed colour.
-//! One ramp is also one thing to solve for, which is what the contrast table
-//! below now checks *across* the themes instead of within each.
-//!
-//! It costs monochrome its no-hue promise — a real cost recorded in DESIGN.md
-//! §19. Nothing *informational* moves: [`Depiction`] carries no meaning by
-//! construction and the meter's value is read off the glyph boundary, so a
-//! colourblind player loses nothing they could have used.
-//!
-//! Smoke is two cool steps, low and near the background. It is what is left
-//! when the fire is not there, so it reads by being dimmer than everything
-//! around it rather than by being a colour.
+//! Fire is orange on every tube, since a green fire reads as a changed meter;
+//! it costs monochrome its no-hue promise and no information (§19). Smoke is
+//! two cool steps near the background, read by being dim.
 
 use bevy::prelude::*;
 use orbs_render::{Depiction, Heat};
@@ -68,13 +52,8 @@ pub(crate) const FIRE: Ember = Ember {
 /// The balneum mariae's liquid, at [`Depiction::LiquidStill`],
 /// [`Depiction::LiquidStirred`], [`Depiction::LiquidRolling`].
 ///
-/// Teal, the fire's opposite, and that is the whole selection criterion beyond
-/// the contrast floor: the two heated instruments sit next to each other on the
-/// panel and a glance has to answer which is which, so the bath is as far from
-/// orange as the repertoire allows while still reading as a liquid.
-///
-/// Solved against all four backgrounds like the fire: 4.7:1 at the stillest
-/// step, on a floor of 3.0.
+/// Teal, the fire's opposite, since the two sit side by side. 4.7:1 at the
+/// stillest step on every tube.
 pub(crate) const LIQUID: [Srgba; 3] = [
     rgb(0.28, 0.52, 0.58),
     rgb(0.40, 0.70, 0.76),
@@ -111,26 +90,10 @@ pub(crate) const fn resolve(depiction: Depiction) -> Option<Srgba> {
 
 /// A gauge's fill, red through yellow to green — see [`Fill`](orbs_render::Fill).
 ///
-/// The only ramp here not monotonic in brightness: it peaks in the middle,
-/// where yellow is. Allowed because the fill's *length* carries the reading —
-/// take every colour away and the bar still says how full it is, which is §14's
-/// test for anything decorative. The top half turns green by losing red rather
-/// than by gaining it, so luminance peaks at `GaugeHigh` and falls after.
-///
-/// Six steps walked in even sixths, so the bar warms as it fills rather than
-/// switching like a traffic light. The hues are pulled off full saturation and
-/// lifted off the floor so each sits clear of the ground the tube paints, and
-/// so the red end reads as *early* rather than as `Role::Danger` — which is
-/// also why a gauge is a depiction and never an accent.
-///
-/// Brightness is the axis with room in it: every theme's danger is a *bright*
-/// saturated red, and a bar barely begun should read dim anyway. The first pass
-/// ran the low end at `0.78, 0.24, 0.20` and sat 0.18 from danger on three of
-/// the four tubes — it *was* the accent this doc denies — because the ramp
-/// shipped without the test every other ramp here has. It now clears every
-/// accent by 0.36 and every background by 3.06:1, held by
-/// `no_step_of_the_gauge_reads_as_an_accent` and
-/// `every_step_of_the_gauge_is_visible_on_every_tube`.
+/// Peaks in brightness at yellow, allowed since the length carries the reading
+/// (§14). Even sixths, off full saturation, and a dim red end so it reads as
+/// early, not `Role::Danger` — held by `no_step_of_the_gauge_reads_as_an_accent`
+/// and `every_step_of_the_gauge_is_visible_on_every_tube`.
 const GAUGE: [Srgba; 6] = [
     rgb(0.64, 0.25, 0.05),
     rgb(0.78, 0.42, 0.10),
@@ -195,13 +158,8 @@ mod tests {
 
     #[test]
     fn the_one_fire_is_visible_on_every_tube() {
-        // Harder since the ramps merged, and the reason the merge is safe: one
-        // ramp has to clear the floor against all four backgrounds where four
-        // ramps each cleared one — the only thing between "fire is orange
-        // everywhere" and a bar nobody can see on the green phosphor.
-        //
-        // Smoke is chrome rather than text, so it is held to
-        // `even_dim_text_stays_visible`'s 3.0 rather than to body text's 4.5.
+        // One ramp against all four backgrounds, which is what makes it safe.
+        // Smoke is chrome, held to 3.0, not body text's 4.5.
         for theme in EVERY {
             for (index, step) in FIRE.flame.iter().enumerate() {
                 let ratio = contrast(*step, theme.background);
@@ -240,15 +198,7 @@ mod tests {
 
     #[test]
     fn monochromes_own_text_is_still_hueless() {
-        // The theme used to guarantee a colourblind player lost nothing. One
-        // fire ramp on every tube and material tints retired that, and the
-        // guarantee moved to a Phase 13 roadmap item (colour-vision filters and
-        // a true greyscale mode) — a better home, since a theme made the
-        // accommodation an aesthetic choice a player had to give up to get
-        // amber. DESIGN.md §19 records the trade.
-        //
-        // What still holds is narrower: monochrome's *text* is grey. A grey
-        // aesthetic with a faintly warm body hue would just be a bad amber.
+        // Narrower than it was (§19): monochrome's text is grey.
         let monochrome = EVERY
             .iter()
             .find(|theme| theme.name == "monochrome")
@@ -362,14 +312,8 @@ mod tests {
 
     /// No step reads as an accent, which is why this ramp is a depiction.
     ///
-    /// The red end must read as *early* rather than as `Role::Danger`, and
-    /// nothing checked it. The terminal build made that mistake with the same
-    /// ramp — its low step was `Color::Red`, byte-for-byte Danger's ink, and
-    /// its full step was Success's.
-    ///
-    /// Measured through `resolve`, the path the frontend takes, rather than
-    /// against the constants: an accent and a depiction reach the screen by
-    /// different arms of the same function.
+    /// Measured through `resolve`, the frontend's path, where accent and
+    /// depiction are different arms.
     #[test]
     fn no_step_of_the_gauge_reads_as_an_accent() {
         let gauges: Vec<_> = Depiction::ALL

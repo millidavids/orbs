@@ -11,32 +11,13 @@
 //! cargo run --release -p orbs-augury --example train --features train -- --seed 7 --out target/seeds/try/reader-7
 //! ```
 //!
-//! A run is seeded so it can be repeated, and it is one run, so it cannot say
-//! whether a change beat the seed or the seed beat the change — `--seed` and
-//! `--out` are what `scripts/seeds.sh` drives to find out. Given neither it
-//! starts from seed 181 and writes over the shipped weights, which are chosen
-//! from a `seeds.sh` run and copied into place rather than trained here.
+//! Seeded, and one run cannot tell a change from a seed, so `scripts/seeds.sh`
+//! drives `--seed` and `--out`; given neither, seed 181 over the shipped
+//! weights. An example, since it needs a GPU and minutes.
 //!
-//! An example rather than a test, because it needs a GPU and minutes and
-//! `cargo test --workspace` must run on a machine with neither.
-//!
-//! `--spells` trains the reader for `.spell` files instead of the prompt's.
-//! Everything else is shared, because the two ask an identical question of an
-//! identical sentence over a different set of answers; what differs is gathered
-//! in [`Corpus`], and a second trainer would be the two-expressions-of-one-rule
-//! defect (§19).
-//!
-//! It learns from `content/phrasings.toml` and `content/spellings.toml` expanded
-//! over the content tables, and nothing else: no pretrained weights, no
-//! pretrained embeddings, no downloaded tokenizer, no other model's outputs
-//! (§19, *the augury*). The vocabulary comes from the game's own tables, so no
-//! artefact here has provenance outside this repository.
-//!
-//! Holdout accuracy is the only number worth reading — the corpus is what the
-//! reader is shown, so scoring on it says the optimiser worked rather than that
-//! anything was learned. Tagging is scored over real words only, since a
-//! five-word sentence sits in a thirty-two row buffer and counting padding would
-//! report seven-eighths for predicting nothing.
+//! `--spells` trains the `.spell` reader; the difference is [`Corpus`]'s, one
+//! trainer (§19). Only this repository's content, nothing pretrained (§19).
+//! Read the holdout; tagging counts real words, not padding.
 
 use burn::backend::{Autodiff, NdArray, Wgpu};
 use burn::module::AutodiffModule;
@@ -45,7 +26,7 @@ use burn::optim::{AdamConfig, GradientsParams, Optimizer};
 use burn::prelude::*;
 use burn::record::{BinFileRecorder, FullPrecisionSettings};
 
-use orbs_augury::cli::argument;
+use orbs_augury::cli::{argument, percent};
 use orbs_augury::{Batch, Corpus, Reader, ReaderConfig, Register, Sample, Vocabulary};
 
 /// How many sentences the reader sees at once.
@@ -276,15 +257,8 @@ fn run<B: burn::tensor::backend::AutodiffBackend>(
         // agreed there was nothing being asked for.
         let refusals = score(&valid, refused, &device.clone()).commands;
 
-        // All three, because any two was an incomplete criterion and it showed
-        // each time. Verbs alone missed slot-to-verb conditioning dropping
-        // refusals 91.1% → 82.5%; verbs and refusals missed the spell register's
-        // tagging swinging 88–94%, and a spell reading is assembled out of the
-        // spans — so a pass that names the right statement and mis-tags one word
-        // produces `let tool be refer alembic` and counts as a win.
-        //
-        // §15 weighs the dead-end rate above the raw resolution rate, so they
-        // are averaged rather than one preferred.
+        // All three averaged, since any two missed a regression in the third
+        // (§15 weighs dead ends above resolution).
         let together = (verbs + tags + refusals) / 3.0;
         let best_yet = together > best;
         if best_yet {
@@ -385,13 +359,6 @@ struct Scored {
 /// A summed count, off the device and into a number.
 fn counted<B: Backend>(sum: Tensor<B, 1, Int>) -> usize {
     usize::try_from(sum.into_scalar().to_i64()).unwrap_or(0)
-}
-
-fn percent(part: usize, whole: usize) -> f32 {
-    if whole == 0 {
-        return 0.0;
-    }
-    part as f32 / whole as f32 * 100.0
 }
 
 /// A shuffle that depends on the epoch and nothing else.

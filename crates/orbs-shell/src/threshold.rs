@@ -78,7 +78,7 @@ impl Threshold {
 
     /// [`chosen`](Self::chosen) with the lookup already done.
     ///
-    /// Split out so it can be tested. `crt::plugin::chosen` gives the reason: a
+    /// Split out so it can be tested. `crt::tube::chosen` gives the reason: a
     /// test setting the variable sets it for every other test in the process,
     /// since `cargo test` runs threads and the environment is process-global.
     #[must_use]

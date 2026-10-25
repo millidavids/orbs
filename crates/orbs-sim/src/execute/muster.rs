@@ -1,18 +1,9 @@
 //! `muster` and `haul` — the sanctum's two words (DESIGN.md §10).
 //!
-//! The shape is the lens's, one room over: `muster` draws a course up the way
-//! `probe` opens a ward, the three stations publish readings the way the four
-//! sockets do, and a spell's `if` resolves against them at cast because
-//! [`tower::pylon::readings`] is registered unconditionally in the scene.
-//!
-//! Neither word takes the production slot, for `probe`'s reason (§19): a solver
-//! holding it would starve every other spell into `spell_gave_up`. What this
-//! domain costs is time — one tick per haul, 127 of them on a neglected tower —
-//! so a bound `holding` runs *beside* a full brewing loop, additive rather than
-//! competing.
-//!
-//! A completed course does two things, in this order: the barrier goes back up
-//! (`tower::mend`), and then the orb earns — `land`'s order in the lens.
+//! The lens's shape: `muster` as `probe`, the stations' readings as the
+//! sockets', [`tower::pylon::readings`] registered unconditionally. No
+//! production slot (§19); the cost is a tick per haul. A completed course mends
+//! the barrier, then the orb earns — `land`'s order.
 
 use bevy_ecs::prelude::*;
 use orbs_render::{FieldName, RecordKind, Role};
@@ -43,10 +34,8 @@ pub(super) fn muster(world: &mut World) {
         return;
     }
 
-    // The domain's one draw, here rather than in a system:
-    // `RngStream::Battlements` advances once per `muster` and never on a tick
-    // nobody asked for, so `tower::erode` can join the schedule without
-    // shifting a replay.
+    // The domain's one draw, so `RngStream::Battlements` advances only per
+    // `muster` and `tower::erode` cannot shift a replay.
     let deficit = world.resource::<tower::Integrity>().deficit();
     let height = tower::height_for(world, deficit);
     world.entity_mut(pylon).insert(Course::new(height));
@@ -63,9 +52,7 @@ pub(super) fn muster(world: &mut World) {
 
 /// `haul <from> <to>` — carry the topmost ward from one station to another.
 ///
-/// Directional, and it refuses. A symmetric word would be unambiguous and would
-/// leave a spell nothing to read; the refusal is what makes `potency` worth
-/// publishing.
+/// Directional, and it refuses, which is what makes `potency` worth reading.
 pub(super) fn haul(intent: &Intent, world: &mut World) {
     let Some(pylon) = fixture(world) else {
         say(world, Verb::Haul, "muster_nowhere", &[], Role::Cost);
@@ -157,9 +144,8 @@ fn refuse_station(world: &mut World, wrong: &str) {
 
 /// The course is assembled. Take it down, mend the barrier, and pay for the work.
 ///
-/// The `Course` is removed first, as `scry::land` does: a solver loops `repeat
-/// until the pylon is idle`, and a course left standing one more tick would let
-/// it haul into a puzzle it had already won.
+/// The `Course` is removed first, as `scry::land` does, or a solver hauls into
+/// a puzzle already won.
 fn finish(world: &mut World, pylon: Entity) {
     let Some(course) = world.get::<Course>(pylon) else {
         return;
@@ -205,12 +191,8 @@ fn finish(world: &mut World, pylon: Entity) {
 
 /// Publish everything a course has to say, as readings a spell can ask for.
 ///
-/// Takes the pylon rather than reading `Cwd` — the bug the lens paid for: a
-/// bound solver working while the player stands elsewhere would find no pylon
-/// and leave every reading frozen at the last haul.
-///
-/// Clears and re-raises rather than diffing, as `research::refresh` does. Four
-/// nodes at most, and a stale `potency` is worse than none.
+/// Takes the pylon, never `Cwd`, the lens's rule. Clears and re-raises, as
+/// every domain does.
 pub(crate) fn publish(world: &mut World, pylon: Entity) {
     let Some(room) = room_of(world, pylon) else {
         return;
@@ -234,10 +216,7 @@ pub(crate) fn publish(world: &mut World, pylon: Entity) {
             continue;
         };
         clear(world, node);
-        // Only while the station holds a ward: `spell::watch` answers `is
-        // empty` by asking whether a node has children, so a station always
-        // carrying a `potency` could never be empty and the first two rungs of
-        // every solver would be dead.
+        // Only while the station holds a ward, or it could never be empty.
         if let Some(size) = course.as_ref().and_then(|course| course.top(index)) {
             tower::raise_count(
                 world,
@@ -249,14 +228,6 @@ pub(crate) fn publish(world: &mut World, pylon: Entity) {
     }
 }
 
-/// Republish from wherever the player is standing, for the typed path.
-pub(crate) fn refresh(world: &mut World) {
-    let Some(pylon) = fixture(world) else {
-        return;
-    };
-    publish(world, pylon);
-}
-
 /// The pylon, where the player is standing.
 fn fixture(world: &World) -> Option<Entity> {
     super::readings::fixture(world, Verb::Muster)
@@ -264,14 +235,5 @@ fn fixture(world: &World) -> Option<Entity> {
 
 /// One authored line about the sanctum.
 fn say(world: &mut World, verb: Verb, key: &str, args: &[(&str, &str)], role: Role) {
-    let message = world.resource::<Prose>().line(key, args);
-    world
-        .resource_mut::<Scrollback>()
-        .records_mut()
-        .push(RecordKind::Completion)
-        .text(FieldName::Name, verb.canonical())
-        .text(FieldName::Message, &message)
-        .text(FieldName::Source, PYLON)
-        .role(role)
-        .finish();
+    super::readings::filed(world, PYLON, verb, key, args, role);
 }

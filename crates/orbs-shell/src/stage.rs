@@ -1,26 +1,9 @@
 //! What the orb is doing between the window opening and the tower answering.
 //!
-//! DESIGN.md §4 makes *the tower's* boot a status report reflecting real world
-//! state, and that report is built and shipped (`orbs_sim::tower::boot`). This
-//! is the machine waking up in front of it: the frame drawing itself, and the
-//! dependencies reporting in.
-//!
-//! No prompt on any of these screens: every keyed system is gated on `booted`,
-//! so one that typed itself here was an affordance that did not work.
-//!
-//! It opens on black and nothing else. A CRT strike shipped here first and did
-//! not survive being looked at — an orb does not power on like a monitor.
-//!
-//! Two screens, and the split is visual as well as sequential: the POST is a
-//! centred title card with no pane, and the pane border does not exist until
-//! [`Stage::Post`] draws it. What follows is the tower's report, already in the
-//! scrollback where `Sim::new` put it.
-//!
-//! Wall-clock, so it lives here and not in the sim (rule 3): frontend state
-//! driven by `Time`, as `render::blink` is.
-//!
-//! Nothing here touches a Bevy resource, because `shell::dump` builds no `App`
-//! (§19). Painting takes a stage, a progress value and a `Frame`.
+//! The machine waking in front of the tower's report (`orbs_sim::tower::boot`):
+//! black, then the POST card drawing its border. No prompt, since nothing can
+//! be typed yet. Wall-clock, so not the sim's (rule 3); no Bevy resource, so a
+//! dump can draw it (§19).
 
 use core::time::Duration;
 
@@ -37,9 +20,6 @@ pub enum Stage {
     /// A beat of dark before the frame draws reads as the orb being *found*
     /// rather than switched on.
     Dark,
-    // A `Prompt` stage that typed an input line lived here, and went: nothing
-    // can be typed during boot. Removing only the drawing would have left
-    // 1.2 s of black indistinguishable from a slow launch.
     /// The card: the border draws itself while the logo prints and the
     /// dependencies report in.
     ///
@@ -48,12 +28,8 @@ pub enum Stage {
     Post,
     /// The card leaving: everything inside the box flies into the middle.
     ///
-    /// The handover, given a beat of its own rather than the between-frames cut
-    /// §19 spent an interlude removing from every other screen change. It is
-    /// [`Passage::Gather`](orbs_render::Passage)'s leaving half.
-    ///
-    /// The box stays: the border the card drew is the pane the game arrives in,
-    /// and the tower rail narrows it as it pushes in from the right.
+    /// [`Passage::Gather`](orbs_render::Passage)'s leaving half, not a cut
+    /// (§19). The box stays, as the game's pane.
     Close,
     /// The game.
     Live,
@@ -71,12 +47,8 @@ impl Stage {
 
     /// How long this stage lasts.
     ///
-    /// Paced to be read, not got past: at 4.4 s for the sequence the animated
-    /// stages went by faster than anyone could follow. [`Stage::Dark`] is the
-    /// exception and is short, being a screen doing nothing.
-    ///
-    /// `ORBS_BOOT=0` skips the whole thing, since every "see it" pass would
-    /// otherwise pay for it. No player-facing skip.
+    /// Paced to be read; [`Stage::Dark`] is short. `ORBS_BOOT=0` skips it for
+    /// See-it passes; players get no skip.
     #[must_use]
     pub const fn duration(self) -> Duration {
         Duration::from_millis(match self {

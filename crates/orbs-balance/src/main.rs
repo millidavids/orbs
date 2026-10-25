@@ -72,14 +72,9 @@ struct Span {
     why: bool,
     /// How long a game to measure: `baseline`, `short`, `medium` or `long`.
     ///
-    /// Baseline unless asked, which is what every pinned rate in
-    /// `report::EXPECTED` was measured against. The rates do not move with
-    /// length — thresholds are in neither the numerator nor the denominator —
-    /// but `concentration` and `renown` do, and `bound` moves most: it earns its
-    /// first slot by hand, so a longer game is a longer hand-played prefix.
-    ///
-    /// Without this flag the shipped game would run a curve the instrument never
-    /// measures, which is the divergence §13 exists to prevent.
+    /// Baseline unless asked, as `report::EXPECTED` was measured. Rates hold
+    /// across lengths; `concentration`, `renown` and `bound` move. Without it
+    /// the shipped curve goes unmeasured (§13).
     #[arg(long, default_value = "baseline")]
     length: String,
 }

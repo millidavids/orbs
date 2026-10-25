@@ -1,10 +1,7 @@
 //! The addressable parts of a record: what a field is called, and what it holds.
 //!
-//! Fields are named from a closed set. §6 fuzzy-resolves player input against
-//! closed vocabularies, and a field name is the same kind of thing the moment
-//! `sift --field stat feed.log` has to mean something. A closed enum also makes
-//! a missed case a compile error in every view: a table that silently skips a
-//! column it does not recognise is worse than one that will not build.
+//! A closed set, as every vocabulary a player names is (§6), so a view that
+//! misses one does not build.
 
 /// The name of one field of a record.
 ///
@@ -27,16 +24,9 @@ pub enum FieldName {
     Tick,
     /// Where in a file, counting from one. A position, never a time.
     ///
-    /// [`Tick`](Self::Tick) carried this for as long as a listing was numbered,
-    /// which made a spell's eleventh line announce itself as *"tick: 11"* — the
-    /// world clock, to a reader who has no other way to tell. A number spoken
-    /// under the wrong noun is worse than an unnumbered line, because it is
-    /// information rather than an absence, and it is wrong.
-    ///
-    /// It survives [`Record::write_line`](crate::Record::write_line) on a prose
-    /// record, unlike every other non-message field: the gutter of a listing is
-    /// what a player points at to say *fix line 11*, so dropping it would answer
-    /// a §14 defect by deleting the affordance it was about.
+    /// Not [`Tick`](Self::Tick), which a reader heard as the clock. Survives
+    /// [`Record::write_line`](crate::Record::write_line) on prose, since a
+    /// player points at it.
     Line,
     /// Ticks left on a duration action.
     Remaining,
@@ -55,20 +45,9 @@ pub enum FieldName {
     Origin,
     /// The place this happened, as a leaf. `mortar_and_pestle`, `athanor`.
     ///
-    /// It had to exist before a spell could watch anything. Eleven sites emitted
-    /// a completion and put the instrument in whichever field was nearest —
-    /// `Name` at `produce::fouled` and `heat`, `Path` at `refuse_busy` and
-    /// `stop`, [`Source`](Self::Source) at `land` and `transmute`, where its own
-    /// doc forbids a place — and `Name` meant one of {verb, instrument, product,
-    /// list of products} depending on who wrote the line.
-    ///
-    /// Survivable while a person is reading the log and unsurvivable the moment
-    /// a spell is, because *"wait until the mortar finishes"* has to be one
-    /// question with one answer. A completion says where it happened here,
-    /// always, and `tower::spell::watch` reads nothing else.
-    ///
-    /// Distinct from [`Path`](Self::Path), which is a full path to a thing, and
-    /// from [`Origin`](Self::Origin), which is where a thing *was*.
+    /// Where a completion happened, always, so a spell's watch has one answer.
+    /// Not [`Path`](Self::Path), a full path, nor [`Origin`](Self::Origin),
+    /// where a thing was.
     At,
     /// Free prose — a log line's text, the orb speaking.
     Message,
@@ -81,34 +60,14 @@ pub enum FieldName {
     Outcome,
     /// Which numbered option this is, when the orb is asking the player to pick.
     ///
-    /// DESIGN.md §6's disambiguation prompt is numbered and the player answers
-    /// with a digit, so the number is a *fact about the option* rather than a
-    /// position a view invents — a view cannot count reliably anyway, because it
-    /// draws a window onto a scrollback and may not hold the whole list.
-    ///
-    /// Not [`FieldName::Quantity`]: an ordinal is not an amount, and a `qty`
-    /// column reading `1` for the first of two would be a lie the closed field
-    /// set exists to prevent.
+    /// A fact about the option (§6), since a view's window cannot count. Not
+    /// [`FieldName::Quantity`]: an ordinal is not an amount.
     Choice,
     /// Which spell caused this, if a spell did rather than a player.
     ///
-    /// An annotation, like [`Outcome`](Self::Outcome) — filtered on, never
-    /// drawn. Missing that put the spell's filename on the end of every line it
-    /// caused: `peruse orb.log` read `retort watch.spell`, and a screen reader
-    /// heard the same. `is_annotation` is the one gate between a field a view
-    /// consults and a field a player reads. A spell working the laboratory
-    /// emits exactly what the same commands typed by hand emit —
-    /// which is right, and which buried the transcript: a `repeat` loop pushes a
-    /// move, a yield and an empty every few ticks for as long as it runs, and
-    /// the player's own last line scrolls off in seconds.
-    ///
-    /// So the transcript shows what *you* did and the log shows everything.
-    /// That costs no new storage and no second path, because a log is already a
-    /// view over this stream (§3, rule 4) — `peruse laboratory.log` reads the
-    /// same records the pane declined to draw.
-    ///
-    /// It also names the culprit, which §8.1 asks for on its own account: a
-    /// record that says which spell moved the sage is one `sift` can select.
+    /// An annotation, filtered on, never drawn. The transcript shows what you
+    /// did and the log everything — one stream, two views (§3, rule 4) — and
+    /// `sift` can select the culprit (§8.1).
     Spell,
 }
 
@@ -162,16 +121,9 @@ impl FieldName {
     /// Whether this field is written for views and machines rather than for a
     /// player.
     ///
-    /// The same split [`Painter`](crate::Painter) already draws one layer up,
-    /// where content speaks and structure does not. An annotation classifies a
-    /// record so a view can decide how to draw it — is this prompt selectable,
-    /// does this echo need a correction affordance — and speaking it would read
-    /// an internal token aloud.
-    ///
-    /// [`Record::speak`](crate::Record::speak) skips annotations.
-    /// [`Record::fields`](crate::Record::fields) does not: a view that names one
-    /// as a column asked for it, and `sift` searching them is how a future
-    /// pipeline filters on outcome.
+    /// [`Painter`](crate::Painter)'s split one layer down: it classifies a
+    /// record for a view. [`Record::speak`](crate::Record::speak) skips it;
+    /// [`Record::fields`](crate::Record::fields) and `sift` do not.
     #[must_use]
     pub const fn is_annotation(self) -> bool {
         matches!(self, Self::Outcome | Self::Spell)

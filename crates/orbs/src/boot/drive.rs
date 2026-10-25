@@ -25,19 +25,9 @@ pub(crate) fn booting(boot: Option<Res<Boot>>) -> bool {
 
 /// Run condition: the game is up.
 ///
-/// Everything the player can press hangs off this, and so does the sim driver.
-/// Without it `F6` would write a trace of a session that has not happened, a
-/// keystroke would land in the input line before there is one, and the world
-/// would tick through the animation — which is the one that is a correctness bug
-/// rather than an annoyance. See
-/// [`Stage::world_runs`](super::Stage::world_runs).
-///
-/// `Option<Res<_>>`, so an app without [`BootPlugin`](super::BootPlugin) behaves
-/// as it did before the sequence existed rather than panicking on a missing
-/// resource. The headless harnesses in `shell::plugin` and `sim::clock` build
-/// exactly such an app — they test typing and the clock, not the splash — and
-/// requiring every one of them to install a plugin they do not exercise would be
-/// a tax paid forever for a resource that is absent in precisely one situation.
+/// Every key and the sim driver hang off this, or the world ticks through the
+/// animation ([`Stage::world_runs`](super::Stage::world_runs)). `Option<Res<_>>`,
+/// so the headless harnesses need no [`BootPlugin`](super::BootPlugin).
 pub(crate) fn booted(boot: Option<Res<Boot>>) -> bool {
     boot.is_none_or(|boot| boot.stage().world_runs())
 }

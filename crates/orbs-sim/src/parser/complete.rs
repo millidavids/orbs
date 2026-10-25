@@ -1,32 +1,14 @@
 //! What the player might be about to type — the prompt's view of it.
 //!
-//! The answer itself is [`expect`](mod@super::expect)'s, which three surfaces share.
-//! What is left here is the shape the prompt's Tab *listing* wants — strings
-//! rather than kinds — and §6's numbered answer.
+//! The answer is [`expect`](mod@super::expect)'s; this is the shape the Tab
+//! listing wants — strings rather than kinds — and §6's numbered answer. In the
+//! parser, because it needs the vocabulary and the live [`Scene`], and both
+//! frontends must offer the same thing (rule 2).
 //!
-//! Lives here rather than in a frontend because it needs the vocabulary and the
-//! live [`Scene`], both of which are the parser's — and because rule 2 says both
-//! frontends must be able to offer the same thing. It is also the only part of
-//! the prompt's editing behaviour that can be tested without a window.
-//!
-//! The shape is `rustyline`'s, for its reasons.
-//!
-//! A range, not an append: `rustyline`'s `complete` returns where the completable
-//! word starts and `reedline`'s `Suggestion` carries the span it replaces. That
-//! matters more here, because §6's parser is deliberately fuzzy — `clarty`
-//! resolves to `clarity` — and a completer that can only extend what was typed
-//! is useless to the player this game is built for.
-//!
-//! One string, not `display` apart from `insert`. Both libraries split them and
-//! the split was taken here on the theory that a place is registered by full
-//! path and shown by leaf. It is not: the leaf is what the list shows and what
-//! goes into the line. Two fields every construction site sets equal are two
-//! that can drift, so there is one until something needs two.
-//!
-//! No debouncing, no caching, no background thread. `fish` has all three and
-//! `zsh` recommends async because their corpus is a filesystem and a history of
-//! tens of thousands of lines; ours is a few dozen scene nouns in memory with no
-//! I/O, and rule 8 forbids async here regardless.
+//! `rustyline`'s shape: a range replaced rather than an append, since the
+//! parser is fuzzy. One string where those libraries split `display` from
+//! `insert`, because here they are always equal. No debouncing, caching or
+//! background thread: a few dozen nouns in memory, and rule 8.
 
 use core::ops::Range;
 
@@ -55,14 +37,8 @@ impl Completion {
 
 /// What could finish the word ending at `caret`.
 ///
-/// The prompt's view of [`expect`](super::expect()): the same answer with the
-/// kinds dropped, because a Tab listing shows strings. `spell` is false — the
-/// prompt cannot run `repeat` or `end`, and offering them would teach a word
-/// that is refused the moment it is used.
-///
-/// `prompt_open` turns completion off entirely: while §6's numbered prompt is
-/// waiting the orb wants a digit, and offering verbs there — or ghosting one —
-/// walks the player into a dead end, which §15 weighs above resolution rate.
+/// The prompt's view of [`expect`](super::expect()), with the kinds dropped.
+/// `prompt_open` turns it off while §6's numbered prompt waits for a digit.
 #[must_use]
 pub fn complete(line: &str, caret: usize, scene: &Scene, prompt_open: bool) -> Completion {
     let found = super::expect::expect(
@@ -113,8 +89,7 @@ mod tests {
 
     #[test]
     fn the_first_word_completes_to_verbs_in_every_register() {
-        // §6 claims all three registers reach the same command, so completing
-        // only the arcane form would teach that the other two are lesser.
+        // §6: no register is lesser.
         let found = inserts("sur");
         assert!(found.contains(&"survey".to_owned()), "{found:?}");
 
@@ -125,8 +100,7 @@ mod tests {
 
     #[test]
     fn a_later_word_completes_to_the_nouns_that_slot_accepts() {
-        // `wield` takes a place; `move` takes a reagent first. Offering the
-        // wrong kind would suggest a command that cannot resolve.
+        // `wield` takes a place; `move` takes a reagent first.
         let places = inserts("wield mo");
         assert_eq!(places, ["mortar_and_pestle"]);
 
@@ -136,24 +110,18 @@ mod tests {
 
     #[test]
     fn a_place_completes_to_its_leaf_not_its_path() {
-        // The scene holds `/tower/laboratory/mortar_and_pestle`; inserting that
-        // would be valid, unreadable, and not what anyone typed.
         assert_eq!(inserts("wield mortar"), ["mortar_and_pestle"]);
     }
 
     #[test]
     fn free_text_slots_complete_nothing() {
-        // A pattern is whatever the player is searching for and a count is a
-        // number. Offering scene nouns for either lies about the slot.
         assert!(inserts("sift ma").is_empty());
         assert!(inserts("meditate 3").is_empty());
     }
 
     #[test]
     fn the_replaced_range_is_the_partial_word_only() {
-        // A range rather than an append, so a candidate can *correct* a
-        // near-miss rather than only extend a prefix — which is what §6's fuzzy
-        // matching means for a completer.
+        // So a candidate can correct a near-miss, not only extend it.
         let completion = complete("wield mo", 8, &tower(), false);
         assert_eq!(completion.replaces, 6..8);
         assert_eq!(&"wield mo"[completion.replaces], "mo");
@@ -161,18 +129,13 @@ mod tests {
 
     #[test]
     fn nothing_is_offered_while_a_numbered_prompt_is_open() {
-        // The orb wants a digit. Offering verbs — or ghosting one — walks the
-        // player into a dead end, which §15 weighs above the resolution rate.
         let completion = complete("sur", 3, &tower(), true);
         assert!(completion.is_empty());
     }
 
     #[test]
     fn a_multi_word_verb_completes_its_own_slot() {
-        // `look for` is `sift`, whose first slot is free text — so it must offer
-        // nothing. A single-word scan read the head `look` as `survey` and
-        // offered places: Tab suggesting arguments for a verb Enter would not
-        // run. §6's whole claim is that the plain register is not second class.
+        // `look for` is `sift`, whose first slot is free text, not `survey`.
         assert!(
             inserts("look for ").is_empty(),
             "{:?}",
@@ -196,27 +159,18 @@ mod tests {
         assert!(inserts("xyzzy pl").is_empty());
     }
 
-    /// Verbs come back sorted and nouns come back in scene order.
-    ///
-    /// Nine tests and only two asserted an order, both by comparing a
-    /// one-element list, which pins nothing. `common()` reads the whole list and
-    /// Tab shows it in arrival order, so the order is player-visible with no
-    /// gate on it. Written before [`expect`](super::expect) grows ranking, so
-    /// that day is a failing assertion rather than a quiet reshuffle.
+    /// Verbs come back sorted and nouns in scene order — player-visible, since
+    /// Tab lists in arrival order.
     #[test]
     fn the_order_a_completion_arrives_in_is_part_of_the_answer() {
-        // Verbs: alphabetical, from `verbs`'s `sort`. Not table order, not
-        // score order — a listing a player scans wants one they can predict.
+        // Verbs: alphabetical, an order a player can predict.
         let mut sorted = inserts("s");
         assert!(sorted.len() > 2, "too few to prove an order: {sorted:?}");
         let unsorted = sorted.clone();
         sorted.sort();
         assert_eq!(unsorted, sorted, "verbs stopped arriving alphabetically");
 
-        // Nouns: scene order, which is the tower's raise order and emphatically
-        // not alphabetical — `balneum_mariae` is registered after
-        // `mortar_and_pestle` and comes back after it. Pinned whole rather than
-        // by a pair of indices, because the sequence is what would rot.
+        // Nouns: scene order, not alphabetical, pinned whole.
         assert_eq!(
             inserts("wield "),
             [

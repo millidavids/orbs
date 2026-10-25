@@ -124,30 +124,21 @@ pub struct WorldSave {
     pub sequence: u64,
     /// Whether this tower began sealed — a laboratory and nothing else.
     ///
-    /// Part of the recorded start, beside the seed: a sealed and an open tower
-    /// with the same seed diverge at the first `attend archive`, so a replay
-    /// has to know which it is rebuilding. Absent is *open*.
+    /// Part of the recorded start, since sealed and open diverge. Absent is
+    /// *open*.
     #[serde(default)]
     pub sealed: bool,
     /// How long this game was begun to be.
     ///
-    /// Part of the recorded start, for `sealed`'s reason and more sharply: the
-    /// length decides every threshold on both tracks, so a save that lost it
-    /// loads into a world whose stations sit elsewhere.
-    ///
-    /// Absent is [`Length::Baseline`](crate::content::Length::Baseline), the
-    /// curve as authored — and what the `FORMAT` 11 bump buys, an older build
-    /// having dropped the field in silence.
+    /// Part of the recorded start: the length decides every threshold. Absent
+    /// is [`Length::Baseline`](crate::content::Length::Baseline).
     #[serde(default)]
     pub length: crate::content::Length,
 }
 
 /// When the player left, and by which clock.
 ///
-/// The sim never fills this in — a wall-clock reading inside a sim record would
-/// make two runs of one seed differ (§19) — so `orbs-shell` stamps `unix` on
-/// the way out. It exists before offline progression does because a departure
-/// time cannot be recovered after the fact.
+/// `orbs-shell` stamps it, since the sim reads no wall clock (§19).
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Away {
     /// The tick the save was written at. Equal to [`WorldSave::tick`] today;
@@ -218,19 +209,13 @@ pub struct ProgressSave {
     pub integrity: Option<u32>,
     /// What the tower holds of §11.5's mana.
     ///
-    /// `Option` for `integrity`'s reason: nought would load every returning
-    /// player with an inert forge and a siege that cannot pledge. `None`
-    /// restores to the ceiling.
+    /// `Option` for `integrity`'s reason; `None` restores to the ceiling.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub quintessence: Option<u32>,
     /// Which `verify` surfaces are cooling, and the tick each frees at.
     ///
-    /// It travels, because a cooldown that reset on load is one a player clears
-    /// by quitting (§19). Absent is *nothing is cooling*.
-    ///
-    /// Named pairs rather than a slot per surface: TOML has no null, so a
-    /// positional `Vec<Option<u64>>` does not serialise at all, and naming each
-    /// surface keeps a later one from renumbering the rest.
+    /// It travels, or quitting clears it (§19). Named pairs, since TOML has no
+    /// null. Absent is *nothing is cooling*.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub cooling: Vec<(String, u64)>,
     /// Ley Line fork nodes taken, by id.
@@ -246,14 +231,8 @@ pub struct ProgressSave {
     pub tally: std::collections::BTreeMap<String, u32>,
     /// When the tower last made each thing, lately — its stores, as a rate.
     ///
-    /// Absent is not *nothing made*: a standing is how many were made inside a
-    /// window, so an empty map reads as *every store is out*. `restore` stamps
-    /// an absent map at the loaded tick and the tower opens with full stores.
-    /// No `FORMAT` bump — an older document still loads, just generously.
-    ///
-    /// `Option`, not a bare map: only `None` tells *written before stores
-    /// existed* from *has genuinely made nothing*, and stamping both cost a
-    /// fresh save its round-trip idempotence.
+    /// `None` is an older document, which `restore` opens with full stores;
+    /// an empty map has genuinely made nothing.
     #[serde(default)]
     pub stores: Option<std::collections::BTreeMap<String, Vec<u64>>>,
     /// Mastery stations reached, by id.
@@ -264,9 +243,7 @@ pub struct ProgressSave {
     pub reached: Vec<String>,
     /// What the tower has opened: rooms, recipes, charms, the wall.
     ///
-    /// `Option`, for `integrity`'s reason: an empty list would seal every room
-    /// but the laboratory on a tower that stood in all seven. `None` restores
-    /// to everything open, because that is the tower it was.
+    /// `Option`, for `integrity`'s reason; `None` restores everything open.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub opened: Option<Vec<String>>,
     /// Solves since the last find, which is what raises the odds of the next.
@@ -280,11 +257,7 @@ pub struct ProgressSave {
     pub register: Option<String>,
     /// The line that raised an open numbered prompt, if one is open.
     ///
-    /// The line, not the resolved `Intent`s `Choices` holds, which would pin
-    /// the format against every parser change. The tie-break draws no
-    /// randomness (§19), so re-asking on the way in reproduces the same list.
-    /// Without this, a save taken with a prompt open came back with no answer
-    /// that resolved.
+    /// The line, not the `Intent`s — see `Choices`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub asked: Option<String>,
     /// One entry per domain the rail has something to say about.
@@ -338,10 +311,7 @@ pub struct MarkSave {
 
 /// One line of the record stream, as much of it as a save carries.
 ///
-/// A save carries records because a `.log` is not a file — it is `Scrollback`
-/// filtered by domain — so dropping the stream empties every log in the tower,
-/// and §8.1's poisoned-log tell, which re-emits existing lines, would answer
-/// `verify` with *tampered* over nothing at all.
+/// Carried, since every `.log` is the stream filtered by domain.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RecordSave {
     /// The record's kind, by name.

@@ -1,29 +1,15 @@
 //! Where a thing lives, derived rather than listed.
 //!
-//! A rule and not a table, because `debug_spawn`'s whole value is that a new
-//! item is testable the moment it is authored. A hand-kept list of where each
-//! thing goes is a promise kept until somebody is busy, and the person who finds
-//! out is the one who assumed the tool was right and went looking for the bug in
-//! the game.
-//!
-//! So it is a rule over the content: add a material to `recipes.toml` and it has
-//! a home the same tick, read off the recipes that name it —
-//! `every_material_has_a_home_a_move_can_reach` fails the build otherwise.
-//!
-//! The rule is where the game itself would leave it:
+//! A rule over the content, not a hand-kept list, so `debug_spawn` works on a
+//! material the moment it is authored; `every_material_has_a_home_a_move_can_reach`
+//! fails the build otherwise. Where the game itself would leave it:
 //!
 //! 1. Finished work — an [`Essence`](crate::parser::NounKind::Essence) or a
-//!    [`Scroll`](crate::parser::NounKind::Scroll) — goes to the arsenal, the
-//!    room it is *for* and the one place reachable from every other.
-//! 2. Anything a recipe produces belongs to the domain that produces it. Dust is
-//!    the archive's leavings even though a mortar will grind it.
-//! 3. Anything else — a base reagent, a fuel — belongs to the domain that
-//!    consumes it. Nothing makes sage; the laboratory is where it is wanted.
+//!    [`Scroll`](crate::parser::NounKind::Scroll) — goes to the arsenal.
+//! 2. Anything a recipe produces belongs to the domain that produces it.
+//! 3. Anything else belongs to the domain that consumes it.
 //!
-//! ...and within a domain, the store, never an instrument. A shelf is inert, so
-//! the thing sits there until it is `move`d, which is what a tester wants.
-//! Dropped into an instrument it would charge the tool, and a mortar holding
-//! something no recipe wants reads `fouled`.
+//! Within a domain, the store, never an instrument, which it would charge.
 
 use bevy_ecs::prelude::*;
 
@@ -33,9 +19,8 @@ use crate::parser::NounKind;
 
 /// Where `named` belongs, or `None` if the tower has nowhere for it.
 ///
-/// `None` is a real answer and not a shrug: it means the content names a
-/// material whose domain has no shelf, which is a build-time authoring problem
-/// the lint below reports by name.
+/// `None` means a material whose domain has no shelf — an authoring problem the
+/// lint below reports by name.
 #[must_use]
 pub fn home(world: &World, named: &str) -> Option<Entity> {
     // 1. Finished work keeps itself.
@@ -88,10 +73,8 @@ fn wanting(world: &World, named: &str) -> Option<String> {
             .then(|| instrument.to_owned())
     });
     consumed.or_else(|| {
-        // Fuel has no recipe, because the athanor transforms nothing — the one
-        // instrument with a content file of its own and no entry in
-        // `recipes.toml`. Without this arm charcoal has no home at all, and it
-        // is the reagent a tester reaches for first.
+        // Fuel has no recipe — the athanor transforms nothing — so charcoal
+        // needs this arm.
         world
             .resource::<Fuels>()
             .names()
@@ -102,10 +85,7 @@ fn wanting(world: &World, named: &str) -> Option<String> {
 
 /// The store standing in the same domain as the fixture called `instrument`.
 ///
-/// Walked from the root because a home is a fact about the world rather than
-/// about where the player is: `debug_spawn ground-sage` from the archive still
-/// means the laboratory's shelf, which is the whole point of the item having a
-/// home at all.
+/// From the root, because a home does not depend on where the player stands.
 fn store_of(world: &World, instrument: &str) -> Option<Entity> {
     let mut stack = vec![root(world)];
     while let Some(node) = stack.pop() {
@@ -143,11 +123,7 @@ mod tests {
 
     #[test]
     fn every_material_has_a_home_a_move_can_reach() {
-        // The structural guarantee, and the reason this module is a rule: a
-        // material authored tomorrow gets a home from the recipes that name it,
-        // and if it does not the build says which one and stops — rather than a
-        // tester typing `debug_spawn <thing>` and being told there is nowhere to
-        // put it.
+        // A material authored tomorrow gets a home, or the build names it.
         let sim = Sim::new(1);
         let world = sim.world();
         for material in crate::content::Materials::builtin().names() {

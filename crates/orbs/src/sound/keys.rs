@@ -1,16 +1,7 @@
 //! The click under a keystroke.
 //!
-//! A key click carries no information, which is what makes it legal under rule
-//! 2: every key sounds exactly the same, so it says only *a key moved*, which
-//! the prompt line says at the same instant.
-//!
-//! That is a constraint rather than a simplification. A click that differed by
-//! key would be a channel — audible letter-by-letter feedback a terminal player
-//! does not get — and two clicks is a reason to add a third. One click, forever.
-//!
-//! Read from `KeyboardInput` rather than from the line changing, because
-//! Backspace, Escape and Enter all move a key without lengthening anything, and
-//! a keyboard you can hear only when it agrees with you is worse than silence.
+//! One click for every key, so it carries nothing (rule 2). From
+//! `KeyboardInput`, not the line changing, so Backspace and Enter click too.
 
 use bevy::input::ButtonState;
 use bevy::input::keyboard::{Key, KeyboardInput};

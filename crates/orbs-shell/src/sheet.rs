@@ -1,19 +1,9 @@
 //! Drawing the spell editor.
 //!
-//! Here rather than in `orbs-render` because that crate holds no screen painter
-//! at all: `Painter` is a primitive with a deliberately empty `[dependencies]`,
-//! and every real surface is drawn frontend-side. Rule 2 still holds —
-//! `ScreenLayout` hands this function a rectangle and it draws inside it.
-//!
-//! §14 forbids information carried only visually, which is why the caret's
-//! position is *stated* on the status row rather than only brightened.
-//!
-//! Reaching the stream is not the same as reading well. Every line was two
-//! [`Painter::span`]s — the gutter number, then the code — and a span is one
-//! utterance, so a reader heard `1` … `attend laboratory` … `2` …. A row is
-//! [`Painter::announce`]d once, whole, and its runs drawn with the silent
-//! [`Painter::glyphs`]: §14 will not have colour decide where a sentence ends
-//! (§19).
+//! Here, since `orbs-render` holds primitives only; `ScreenLayout` hands this a
+//! rectangle (rule 2). The caret's position is stated on the status row
+//! (§14). A row is [`Painter::announce`]d once, whole, its runs drawn with
+//! the silent [`Painter::glyphs`] (§19).
 
 use orbs_render::{Frame, Intensity, Painter, Pos, Rect, Role, Span, Style, UtteranceKind};
 use orbs_sim::Prose;
@@ -122,14 +112,9 @@ pub fn paint(
         // player wrote it, and the mark below says so.
         let reading = editor.reading(index);
         let text = match (editor.mode(), reading) {
-            // Clipped through `arriving` like the buffer's own lines, which cuts
-            // on a character boundary — a byte slice can split `é` and panic.
-            // `≈` marks a line the orb read for you, the glyph the prompt draws
-            // on a divined command. Without it a line read correctly and one
-            // read wrongly look identical.
-            //
-            // A glyph rather than a colour, because §14 will not have colour
-            // carry information.
+            // Clipped by character through `arriving`. `≈` marks a line the
+            // orb read for you, as on a divined command — a glyph, not a colour
+            // (§14).
             (Mode::Reading, Some(reading)) => {
                 let heard = if reading.was.is_some() {
                     format!("≈ {}", reading.heard)
@@ -207,12 +192,8 @@ const BUFFER_FLOOR: u16 = 60;
 
 /// The narrowest pane that can hold a buffer *and* a guide.
 ///
-/// Derived rather than picked: the buffer's floor, its gutter, its two borders
-/// and the guide — 97, so the game's own editor pane (104 columns) hosts one and
-/// the 80×22 authoring floor does not.
-///
-/// Below it the guide yields whole, the tower rail's rule: a reference squeezed
-/// into the columns a spell needs has stopped being one.
+/// Derived: 97, so the game's 104-column pane hosts one. Below it the guide
+/// yields whole, the rail's rule.
 const HOSTS_GUIDE: u16 = BUFFER_FLOOR + GUTTER + 2 + GUIDE;
 
 /// Split `pane` into the buffer's part and the guide's, if it fits.
@@ -234,16 +215,9 @@ const fn split_for_guide(pane: Rect, guiding: bool) -> (Rect, Option<Rect>) {
 
 /// Draw one line of a spell, each run in its own hue.
 ///
-/// `style` arrives carrying what the *row* means — `Role::Danger` for a line
-/// `interpret` could not read, `Intensity::Bright` for the line the orb is on —
-/// and a run's `Lexeme` layers under it, never over: `Style::lexed` yields
-/// nothing on an accented cell, so an unreadable line stays wholly red.
-///
-/// The plain line goes down first, so spacing and anything the lexer declined to
-/// name is already there; the runs then redraw in their own hue.
-///
-/// Offsets are taken against the clipped text `Editor::visible` returns, so they
-/// always land, and converted from bytes to columns — `é` is two bytes.
+/// `style` is what the row means, and a run's `Lexeme` layers under it, so an
+/// unreadable line stays wholly red. The plain line first, then the runs.
+/// Offsets are against `Editor::visible`'s text, in columns, not bytes.
 fn paint_line(painter: &mut Painter<'_>, at: Pos, text: &str, style: Style) {
     painter.glyphs(at, text, style);
     for run in orbs_sim::parser::lex(text) {
@@ -256,14 +230,8 @@ fn paint_line(painter: &mut Painter<'_>, at: Pos, text: &str, style: Style) {
         let col = at.col.saturating_add(offset);
         let lit = crate::lexing::lit(style, run.kind);
         let drawn = painter.glyphs(Pos::new(col, at.row), word, lit);
-        // Over the region the glyphs actually took: a run clipped at the pane
-        // edge must not claim colour it did not draw, and the buffer sits
-        // beside the guide with a seam between them.
-        //
-        // And only where the row lets a run style itself: `lit` declines on an
-        // accent and on the running line, so a hue cannot paint over the signal
-        // saying *this line is broken*. Asked here rather than at the frontend
-        // so the two builds cannot disagree.
+        // Over the region the glyphs took, and only where the row lets a run
+        // style itself — decided here, so both builds agree.
         if crate::lexing::takes_syntax(style) {
             painter.lit(Rect::new(col, at.row, drawn, 1), run.kind);
         }
@@ -299,12 +267,8 @@ const TYPED: u16 = PROMPT + 2;
 /// Where the row's standing message begins — the word list, a complaint, the
 /// unread count.
 ///
-/// Clear of [`TYPED`] by three cells: the listing used to begin at [`PROMPT`]
-/// like the typed line, so with nothing typed the block caret sat on the `i` of
-/// `edit` — the first word a player reads.
-///
-/// Not merged with the typed column: a caret sits *after* what has been typed
-/// and *beside* what is merely offered.
+/// Clear of [`TYPED`] by three cells, so the caret never sits on the first
+/// word: a caret sits after the typed and beside the offered.
 const SAYING: u16 = TYPED + 3;
 
 /// The bottom row: the `:` line if one is open, a complaint if one is pending,

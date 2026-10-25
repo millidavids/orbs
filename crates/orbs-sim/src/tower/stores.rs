@@ -1,17 +1,9 @@
 //! How well stocked the tower is in a thing, measured as a rate (§11.5, §19).
 //!
-//! A rate, not a timestamp: §19 withdrew a perishable arsenal because a
-//! freshness clock keyed to *when one was last made* keeps a thousand potions
-//! fresh off one restock, cheaper than playing normally. Asking *how many have
-//! you made lately* instead makes one restock a rate of one. Since *Supply*
-//! (§19) the count held decides whether a supply can run at all, and this
-//! decides how fast: fresh runs any rate, thin the slowest, spent none.
-//!
-//! It does not decay while the game is closed, and that needs no code: a tick is
-//! one real second while the window is open, the counter is restored verbatim,
-//! and there is no wall clock in the sim. When offline progression lands,
-//! catch-up advances the tick and every expression below starts spanning the gap
-//! with nothing rewritten.
+//! A rate, not a timestamp, which kept a thousand potions fresh off one restock
+//! (§19). The count held decides whether a supply runs; this decides how fast.
+//! It does not decay while the game is closed, since there is no wall clock in
+//! the sim.
 
 use std::collections::BTreeMap;
 
@@ -39,11 +31,7 @@ const REMEMBERED: usize = FRESH_AT;
 
 /// How well stocked the tower is in one thing, lately.
 ///
-/// Three words, because the domain's readings are words — `few`, `hurt`,
-/// `outnumbered` — and a spell asks for them by name. A fraction is unaskable.
-///
-/// `Freshness`, where this was `Supply`: that word is the arsenal's standing
-/// supplies now (§19, *Supply*).
+/// Words, as the domain's readings are, because a fraction is unaskable.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Freshness {
@@ -180,16 +168,9 @@ pub fn readings() -> Vec<&'static str> {
 
 /// Keep every arsenal item's group and reading in step with its store.
 ///
-/// A system, not a `publish` call: every other reading is republished by the
-/// thing that changed it, but a store changes because time passed, so the clock
-/// has to notice.
-///
-/// It writes only when the word changes. Respawning a reading every tick would
-/// issue new `NodeId`s every tick, and §19 makes insertion order the parse — a
-/// live-watched hour and a `meditate`-collapsed one must issue identical ids.
-///
-/// The group marker is idempotent and goes on regardless, so a spell can walk
-/// an arsenal it has never surveyed.
+/// A system, because a store changes as time passes. It writes only when the
+/// word changes, so a watched hour and a collapsed one issue the same ids. The
+/// group marker goes on regardless, so a spell can walk an arsenal unsurveyed.
 pub fn stocktake(world: &mut World) {
     let Some(arsenal) = super::keep(world) else {
         return;

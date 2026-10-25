@@ -1,19 +1,9 @@
 //! Enchantments: temporary effects laid on the tower's tools.
 //!
-//! §10's Enchanting domain is *"Sequence + resource cost → persistent buffs"*,
-//! and ROADMAP's exit for the phase is *"a buffed instrument visibly works
-//! faster, the panel says so, and the buff decays"*. This is the model half —
-//! what a charm **is** and how a read site asks about one. The forge that lays
-//! them is `execute::imbue`; what each costs and how long it runs is authored in
-//! `content/forge.toml` (rule 6).
-//!
-//! A composition rather than another `if`. `tower::dice` had already written the
-//! objection about the one buff that existed before this: *"it works because
-//! there is exactly one source and one effect, and it does not generalise — a
-//! second source would need the call site to know about it."* The forge is that
-//! second source, five times over. So the shape is `spell::budget`'s: the world
-//! is asked a question and composes the answer, instead of every call site
-//! branching on each source it happens to know about.
+//! The model half of §10's Enchanting: what a charm is and how a read site asks
+//! about one. `execute::imbue` lays them; `content/forge.toml` prices them.
+//! `spell::budget`'s shape — the world is asked and composes the answer — rather
+//! than every call site branching on each source it knows.
 //!
 //! | | |
 //! |---|---|

@@ -7,20 +7,9 @@
 //! - The rail holds every domain, minimised. Awareness only, not commandable.
 //! - One input line, always at the bottom.
 //!
-//! The rail was a sidebar. §9 wrote the second as *"minimised to a single line"*
-//! and this laid it out as full-width rows above the input line; it was never
-//! reachable with two panes (§19). The shape it opened into is a thin vertical
-//! column on the right, one box per domain, because a row holds a name *or* a
-//! state *or* a spell where a box holds all three. Everything else §9 argued for
-//! survives: awareness only, never commandable, and it yields before the main
-//! window does.
-//!
-//! Layout is computed from a grid size, not from pixels, so it is identical
-//! under both frontends — which is what makes §9's parity rule enforceable:
-//! *"pane count and content are identical at every fidelity tier and window
-//! size."* Since the grid became [`GRID`](crate::GRID) that is nearly free under
-//! Bevy, where a resize changes the size of a cell and not the number of them.
-//! It still earns its keep for `orbs-tui` and `ORBS_GRID`.
+//! The rail is a column of boxes on the right, since a box holds a name, a
+//! state and a spell where a row held one (§19); it yields before the main
+//! window. Computed from a grid, not pixels, so both frontends match (§9).
 
 use crate::geometry::{GridSize, Rect};
 use crate::tiling;
@@ -30,17 +19,8 @@ pub const MAX_MAIN_PANES: usize = 4;
 
 /// One box per domain you work in — six of them.
 ///
-/// Not §10's seven: spellcraft is a kind of play rather than a room, and the
-/// bailey is a room you fight in rather than tend. The grimoire was the seventh
-/// until it left `DOMAINS` (§19) and this did not follow, so the rail divided
-/// itself into seven slots, drew six, and left a five-row hole; `fits_rail`
-/// measured the same phantom and dropped the rail between 39 and 43 rows, where
-/// a terminal player sits.
-///
-/// `orbs-sim`'s `DOMAINS` is the authority and this crate cannot see it (rule 1
-/// runs the other way). `orbs-shell` depends on both and pins them together in
-/// `rail::tests::the_rail_has_exactly_one_box_per_domain`, so the next domain
-/// added or removed is a compile-time conversation.
+/// `orbs-sim`'s `DOMAINS` is the authority, which this crate cannot see;
+/// `rail::tests::the_rail_has_exactly_one_box_per_domain` pins the two (§19).
 pub const MAX_PANES: usize = 6;
 
 // The caps again as pane counts. The public constants are `usize` because they
@@ -53,14 +33,8 @@ const _: () = assert!(SIDEBAR_CAP as usize == MAX_PANES);
 
 /// Columns the rail takes off the right of the main window.
 ///
-/// Sixteen, checked rather than eyeballed: inset one each side leaves 14 for
-/// content, against `laboratory` (10) plus a mark, `►tending` at 8 and
-/// `alembic 22t` at 11. The main window keeps 104 of the fixed 120.
-///
-/// The longest name shrank to 10 with the sanctum's rename (§19) and the number
-/// did not move: sixteen is set by `alembic 22t` and the unbuilt domains, and
-/// narrowing the rail would reflow every screen in `scripts/dumps.sh` for one
-/// spare column.
+/// Sixteen: 14 inside the inset, against `laboratory` plus a mark and
+/// `alembic 22t`. The main window keeps 104 of 120.
 pub const RAIL_COLS: u16 = 16;
 
 /// Rows the rail keeps at its foot for the readings that are not per-domain.
@@ -86,17 +60,8 @@ const _: () = assert!(RAIL_FOOT_ROWS >= RAIL_FOOT_CONTENT);
 
 /// The fewest rows a rail box can occupy and still say anything.
 ///
-/// A name, a state, the detail, the spell, and the rule that closes the box.
-/// Below that the rail is dropped rather than squeezed — §9's rule that the
-/// minimised half yields and the main window never does — and its readings fall
-/// back into the session border's title.
-///
-/// Five, and it has been three and then four. Each raise was the same defect one
-/// row up: a squeezed box keeps its name and its state and silently drops the
-/// `►spell` line, the one row telling a player that room is automated. It went
-/// unnoticed because the Bevy grid is fixed at 120×45, where each box gets five;
-/// a terminal's grid is whatever size the window is, and `scripts/tui.sh start
-/// 177 38` is a size a person actually sits at.
+/// Name, state, detail, spell and the closing rule. Below it the rail is
+/// dropped, never squeezed (§9) — a squeezed box loses the `►spell` row first.
 pub const MIN_RAIL_BOX: u16 = 5;
 
 /// The fewest columns the main window may be left with before the rail yields.
@@ -127,16 +92,9 @@ pub const DEEP_FOCUS_FLOOR: GridSize = GridSize::new(100, 28);
 
 /// How extra panes are shown once multiplexing is engaged (§9).
 ///
-/// A setting, not a heuristic. Both modes grant identical capacity, panes,
-/// information and synergies; only the rendering differs. If strips showed less,
-/// the setting would become a difficulty choice and a player who needs large
-/// text would pay for it in capability.
-///
-/// It no longer changes the size of the text, and §9 is superseded there: deep
-/// focus used to raise fidelity a step, and §19 fixed the grid at
-/// [`GRID`](crate::GRID), which has room for four panes either way. That leaves
-/// a debt — wide focus was §9's large-text affordance and the game has no other,
-/// so §19 names a font-scale setting as the replacement it owes.
+/// A setting: both modes grant identical capacity, or it would be a difficulty
+/// choice. It no longer changes the text size (§19, which owes a font-scale
+/// setting).
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DisplayMode {
     /// Every pane is drawn at full size, tiled in a grid.
@@ -176,11 +134,7 @@ impl DisplayMode {
 
     /// The other mode — what `F4` would give you.
     ///
-    /// A property of the mode, not of a `Screen`. It lived on `Screen`, so a
-    /// frontend holding only a `DisplayMode` had to build one with a sentinel
-    /// `window: (0, 0)` — and that sentinel means *"has the player chosen a mode
-    /// yet?"* elsewhere, so a later method consulting `window` would answer for
-    /// a screen that does not exist.
+    /// The mode's, not a `Screen`'s, so no caller builds a sentinel screen.
     #[must_use]
     pub const fn flipped(self) -> Self {
         match self {
@@ -296,17 +250,8 @@ impl ScreenLayout {
 
         // One input line, always at the bottom (§9), inset one cell each side.
         //
-        // The gutter is a safe margin: a curved tube distorts most at its
-        // corners, where the warp, the vignette and the bezel compound, and the
-        // Bevy frontend clipped the first glyph of `orbs:~$` clean off before
-        // this existed. Where content may safely go is a layout decision, so it
-        // is charged here rather than to the frontend that curves — `orbs-tui`
-        // pays a cell it does not need, which beats divergent layouts that §9's
-        // parity rule forbids.
-        //
-        // The rows come from [`INPUT_ROWS`](crate::INPUT_ROWS), which is 1, the
-        // same size as the transcript above. Two would mean double-size glyphs
-        // into half the columns.
+        // The inset is the curved tube's safe margin, charged here so both
+        // layouts match (§9). [`INPUT_ROWS`](crate::INPUT_ROWS) is 1.
         let input_rows = request.input_rows.max(1).min(grid.rows);
         let above_input = grid.rows - input_rows;
         layout.input = Rect::new(1, above_input, grid.cols.saturating_sub(2), input_rows);
@@ -367,18 +312,9 @@ impl ScreenLayout {
 
     /// A layout partway between two others.
     ///
-    /// `t` runs 0 → 1 and is the caller's to own: nothing in `orbs-render` knows
-    /// what a second is, and a frontend wanting no animation never calls this.
-    /// Where a pane arrives *from* is geometry, which is why it is here.
-    ///
-    /// A transitional layout is not a tiled one. [`compute`](Self::compute)
-    /// promises no gaps, no overlap and no zero-area panes; this suspends all
-    /// three, because a pane arriving *is* zero-area for a frame and a pane
-    /// leaving *is* a gap closing. What holds instead: no pane leaves the span
-    /// of its own two endpoints, so nothing escapes a grid both endpoints fitted.
-    ///
-    /// The sidebar and the input line are taken from `to` untouched — §9 puts
-    /// one input line below however many panes are open, so it does not move.
+    /// `t` runs 0 → 1 and is the caller's. [`compute`](Self::compute)'s tiling
+    /// promises are suspended; no pane leaves the span of its endpoints. The
+    /// rail and input line are `to`'s.
     #[must_use]
     pub fn transition(from: &Self, to: &Self, mode: DisplayMode, t: f32) -> Self {
         let mut layout = *to;

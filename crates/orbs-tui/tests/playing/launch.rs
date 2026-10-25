@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 
 use crate::play::{GRID, Game, LIFETIME, QUIET, WIZARD};
-use crate::tmux::{next_id, pane_pid, tmux};
+use crate::tmux::{available, next_id, pane_pid, tmux};
 
 /// An on/off switch handed to the game: `0`, `1`, or the setting deciding.
 #[derive(Debug, Clone, Copy)]
@@ -128,15 +128,21 @@ impl Launch {
     }
 
     /// Start it, and wait for the first prompt.
-    pub fn settled(self) -> Game {
-        let game = self.spawn();
+    pub fn settled(self) -> Option<Game> {
+        let game = self.spawn()?;
         game.settled();
-        game
+        Some(game)
     }
 
     /// Start it and wait for nothing — for a boot card or a menu, where there is
     /// no prompt to wait for.
-    pub fn spawn(self) -> Game {
+    ///
+    /// `None` when tmux is not installed, so a scenario cannot start a game
+    /// without asking.
+    pub fn spawn(self) -> Option<Game> {
+        if !available() {
+            return None;
+        }
         let binary = env!("CARGO_BIN_EXE_orbs-tui");
         // Unique per game, so scenarios inside one test binary run concurrently
         // without seeing each other's windows.
@@ -241,13 +247,13 @@ impl Launch {
         // Only a kept game needs its pid: its `Drop` waits for the exit-save, or
         // the folder it is about to remove is written back into existence.
         let pid = self.kept.as_ref().and_then(|_| pane_pid(&session));
-        Game {
+        Some(Game {
             session,
             cols: self.cols,
             rows: self.rows,
             dir,
             pid,
-        }
+        })
     }
 }
 

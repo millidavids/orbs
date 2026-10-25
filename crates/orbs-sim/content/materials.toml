@@ -1,26 +1,12 @@
 # What colour each material draws an instrument's bar in (DESIGN.md §19).
 #
-# A *hint*, never a carrier. `survey <instrument>` names the contents outright on
-# every frontend, the panel names the instrument and its state, and both reach
-# the linear stream — so a player who cannot see the colour loses a convenience
-# and nothing else. §14's rule is that colour is never the sole carrier of
-# meaning, and this is on the right side of it.
+# A hint, never a carrier: `survey` and the panel still name everything (§14).
+# One of `orbs_render::Tint`'s eight families by name — green, brown, grey,
+# gold, violet, red, blue, bone — and an unknown name is a load error. No entry
+# draws the base hue: "nobody has decided".
 #
-# The eight families are fixed in `orbs_render::Tint` and this file selects one
-# by name: green, brown, grey, gold, violet, red, blue, bone. **An unknown name
-# is a load error**, deliberately — a typo that quietly drew the base hue would
-# look exactly like a material nobody had got round to tinting yet, which is the
-# failure mode `Recipe::heat` and `craft_of` have each already paid for once.
-#
-# A material with no entry here draws in the base hue, which is the honest
-# default: it says "nobody has decided", not "this is colourless".
-#
-# **The athanor is deliberately absent from the effect, not from the file.**
-# Charcoal and ash have tints like anything else, because they are materials and
-# they sit in other instruments — `ash` grinds into `potash` in the mortar. What
-# ignores them is the *fire*: it burns one orange ramp on every tube (§19), and a
-# hearth drawing grey flames because its fuel is grey would put back the exact
-# problem that decision removed.
+# Charcoal and ash are tinted as materials elsewhere; the fire ignores them and
+# burns orange on every tube (§19).
 
 # ---------------------------------------------------------------------------
 # Reagents — what the pipeline starts from and passes along.
@@ -41,21 +27,13 @@ tint = "bone"
 [charcoal]
 tint = "grey"
 
-# **Grey, not bone.** Potash is what ash grinds down into, and it takes its
-# colour from where it came from — which also keeps the two draughts apart:
-# `clarified` is tincture + salt and `fixed` is tincture + potash, so if both
-# salts were bone the flask would make the same colour twice.
+# Grey, from the ash, which also keeps `clarified` and `fixed` apart.
 [potash]
 tint = "grey"
 
 # ---------------------------------------------------------------------------
-# The ported herbs (see recipes.toml). Colours follow the family rule the rest
-# of this file does: a substance keeps its hue through every state it passes
-# through, so the panel shows one thing changing rather than several.
-#
-# Chosen from what `court_wizard` says each one *looks like*, not from what its
-# potion does - mugwort is a silvery-green roadside weed, valerian a thick
-# pungent root out of wet woodland, amber a warm translucent resin.
+# The ported herbs, by how `court_wizard` says each looks. A substance keeps its
+# hue through every state, so the panel shows one thing changing.
 # ---------------------------------------------------------------------------
 
 [mugwort]
@@ -99,12 +77,7 @@ tint = "grey"
 # ---------------------------------------------------------------------------
 # Extracts — what the bath and the flask hand along.
 #
-# **Every one of these is tinted, and the omission was visible.** A `ready`
-# instrument holds its product, so an untinted output meant the bar went colourless
-# at the exact moment the run finished — the panel forgetting what it had just
-# spent eight ticks making. The chain now carries its colour the whole way:
-# sage is green, its tincture is green, and it only leaves the family when the
-# flask combines it with something else.
+# Every one tinted, or a `ready` bar goes colourless as the run finishes.
 # ---------------------------------------------------------------------------
 
 [sage-tincture]
@@ -115,28 +88,17 @@ tint = "green"
 [weak-tincture]
 tint = "green"
 
-# The two ported herbs, steeped. **These were missing and the tests did not
-# say so**: both colour lints `continue` when an input has no wash, so leaving
-# these out did not fail a check — it switched off the checks on `keen-draught`,
-# `quiet-draught`, `insight` and `stillness` at the same time, silently. An
-# untinted material draws in the base hue, which is the failure CLAUDE.md calls
-# total and invisible.
+# The ported herbs, steeped. The colour lints skip an untinted input, so a
+# missing row here silences the checks downstream of it.
 [mugwort-tincture]
 tint = "green"
 
 [valerian-tincture]
 tint = "brown"
 
-# **Authored as the mixture they are, not as a third colour.** The flask draws
-# its growing band by averaging its two ingredients, and these are what it leaves
-# behind — so writing them as `green` + `bone` makes the band and the product the
-# same colour *by construction*. A third colour would match only for as long as
-# two numbers happened to agree, and the day they stopped, a player would watch a
-# mixture form and then turn into something else.
-#
-# `the_flasks_products_are_the_colour_of_what_makes_them` checks this against
-# `recipes.toml` rather than trusting it, because the two files have to agree and
-# nothing else makes them.
+# Authored as the mixture they are, so the flask's averaged band and its
+# product match by construction —
+# `the_flasks_products_are_the_colour_of_what_makes_them` checks the recipes.
 [clarified-draught]
 tint = "green"
 with = "bone"
@@ -145,10 +107,7 @@ with = "bone"
 tint = "green"
 with = "grey"
 
-# Mugwort's green fixed with amber's gold, and valerian's brown cut with salt.
-# Both are authored as the mixtures they are, and
-# `the_flasks_products_are_the_colour_of_what_makes_them` checks each against the
-# recipe that makes it rather than trusting the pair to stay in step.
+# Mugwort's green with amber's gold, valerian's brown with salt.
 [keen-draught]
 tint = "green"
 with = "gold"
@@ -166,17 +125,8 @@ with = "gold"
 # ---------------------------------------------------------------------------
 # Essences — the end of the pipeline.
 #
-# **Each is the colour of the draught it was distilled from**, not gold. Gold
-# was reserved for essences so a finished potion looked like it was worth the
-# fuel; deriving them costs that and buys something better, because the alembic
-# is a *vessel* and its bar is the liquid in it. A potion that changed to an
-# unrelated colour the instant it finished would be the discontinuity the flask's
-# authored mixtures exist to remove, one stage later.
-#
-# The "worth the fuel" signal did not need a colour of its own: a finished
-# instrument is `State::Ready`, which `style_of` already draws in `Style::SUCCESS`
-# — an accent, reaching the linear stream, which is where §4 says meaning belongs.
-# DESIGN.md §19.
+# Each the colour of its draught, since the alembic's bar is the liquid in it.
+# A finished run says so with `Style::SUCCESS`, not a colour (§4, §19).
 # ---------------------------------------------------------------------------
 
 # From `clarified-draught`, which is green + bone.
@@ -193,15 +143,8 @@ with = "grey"
 [haste]
 tint = "green"
 
-# The three another wizard knew (§10, `lens/`), each **the colour of the leaving
-# it was distilled from** — which is not a flourish but the rule
-# `the_flasks_products_are_the_colour_of_what_makes_them` already enforces on
-# every alembic product. It is also what makes them read as *found* rather than
-# invented: a potion the colour of ash is one somebody worked out from what was
-# on the floor.
-#
-# `potash` is grey, `sediment` and `dregs` are brown. A first pass gave these
-# three prettier colours and the lint caught all of them.
+# The three another wizard knew, each the colour of its leaving, as the lint
+# enforces: found on the floor.
 [mending]
 tint = "grey"
 
@@ -226,13 +169,8 @@ with = "gold"
 [fragment]
 tint = "gold"
 
-# **One family, one colour, and it survives a second scroll.** The rule was
-# written when there was one and the obvious reading was "this scroll is what
-# these fragments become". It holds better than it looks: what a scroll *is* is
-# assembled knowledge, and that is one substance however the orb happens to have
-# folded it. Telling two scrolls apart is the panel's `NAME` column's job and the
-# manual's - a hue would be a second, weaker way of saying a word already says,
-# and it would spend one of the eight families per scroll for ever.
+# Every scroll gold: assembled knowledge is one substance, and the name tells
+# them apart.
 [gleaning-scroll]
 tint = "gold"
 
@@ -242,13 +180,7 @@ tint = "gold"
 [verdant-scroll]
 tint = "gold"
 
-# `troop` was here and is gone (§19, Supply). A hold refills the tower's
-# standing garrison rather than putting a thing on a shelf.
-#
-# The demons the circle binds instead are violet, which is arcane, as the
-# sanctum's wards are: a demon is a thing the tower called up rather than a
-# thing it brewed. Not gold, which this file keeps for what a *recipe*
-# finishes. No recipe makes one, so `Recipes::vocabulary` cannot see them;
+# Demons are violet, called up rather than brewed. No recipe makes one, so
 # `substances` names them from `siege.toml`'s `summoned` rows.
 [golem]
 tint = "violet"
@@ -258,8 +190,3 @@ tint = "violet"
 
 [effigy]
 tint = "violet"
-
-# **`dust` was here and is gone.** It was the lectern's byproduct, coloured grey
-# for the archive's old paper rather than brown for the laboratory's spent
-# stalks - and it existed only because `leaves` used to be compulsory. Byproducts
-# are the laboratory's mechanic now; the lectern leaves nothing.

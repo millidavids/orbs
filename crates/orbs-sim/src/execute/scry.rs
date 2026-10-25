@@ -1,16 +1,9 @@
 //! `probe` and `dial` — the lens's two words (DESIGN.md §10).
 //!
-//! The archive's shape, one room over: `probe` opens a reading as `research`
-//! opens a maze, and a spell's `if` resolves against the readings at cast
-//! because [`tower::ward::readings`] is registered unconditionally.
-//!
-//! Still named `scry` after the domain (§10) though the word lost the naming
-//! sweep — `scr` reaches `scribe`. `probe` opens and presses in one word.
-//!
-//! Like `research`, `probe` takes no production slot — `ward::PRESS_TICKS` is
-//! nought, so a press answers on the tick it is typed and a bound solver runs
-//! beside a full brewing loop. It was twelve ticks and that scarcity is
-//! withdrawn (§19).
+//! The archive's shape: `probe` opens a reading as `research` opens a maze,
+//! and [`tower::ward::readings`] is registered unconditionally so a spell's
+//! `if` resolves at cast. Named after the domain; the verb `scry` lost to
+//! `scribe`. No production slot, so a solver runs beside a brew (§19).
 
 use bevy_ecs::prelude::*;
 use orbs_render::{FieldName, RecordKind, Role};
@@ -50,12 +43,8 @@ pub(super) fn dial(intent: &Intent, world: &mut World) {
         advance(world, prism, crate::parser::leaf(socket));
         return;
     };
-    // Both slots are `NounKind::Place`, so `seat laboratory nitre` parses and
-    // has to be refused here by name — a player who swapped the two words is
-    // one word from right.
-    //
-    // The leaf, for every sentence below: a resolved place arrives as its full
-    // path, and prose echoing it puts the tower's internals in a player's line.
+    // Both slots are `Place`, so a wrong word is refused here by name. The
+    // leaf for every sentence below, never the full path.
     let socket = crate::parser::leaf(socket).to_owned();
     let sigil = crate::parser::leaf(sigil).to_owned();
     let (socket, sigil) = (socket.as_str(), sigil.as_str());
@@ -108,9 +97,8 @@ pub(super) fn dial(intent: &Intent, world: &mut World) {
 
 /// `dial <socket>` with no sigil — turn it one step round the six.
 ///
-/// What makes a solver writable: §8's language has no variables, so a spell
-/// cannot name the sigil a socket has not tried. The success line names what
-/// the ward chose, so a player watching can see what was tried.
+/// What makes a solver writable, since a spell cannot name a sigil it has not
+/// tried. The line names what was chosen.
 fn advance(world: &mut World, prism: Entity, socket: &str) {
     let Some(at) = ward::socket_of(socket) else {
         say(
@@ -155,13 +143,9 @@ fn advance(world: &mut World, prism: Entity, socket: &str) {
 
 /// `probe` — press the aperture against the ward, opening a reading if none is.
 ///
-/// Two acts in one word, §19's per-instrument idiom: finding a far orb and
-/// pressing it. The aperture opens on a fixed figure, so the first press means
-/// the same thing every time and a solver spell has a one-word body.
-///
-/// Instant, and it takes no slot: a press answers on the tick it is typed, like
-/// `dial`. The answer still goes through [`land`]; what is gone is the wait in
-/// front of it, not the step.
+/// Two acts in one word (§19). The aperture opens on a fixed figure, so a
+/// solver has a one-word body. Instant and slotless; the answer still goes
+/// through [`land`].
 pub(super) fn probe(world: &mut World) {
     let Some(prism) = fixture(world, Verb::Probe) else {
         say(world, Verb::Probe, "scry_nowhere", &[], Role::Cost);
@@ -174,7 +158,7 @@ pub(super) fn probe(world: &mut World) {
             Ward::new(&mut rngs)
         };
         world.entity_mut(prism).insert(ward);
-        refresh(world);
+        publish(world, prism);
         say(world, Verb::Probe, "scry_opens", &[], Role::Success);
     }
 
@@ -185,8 +169,8 @@ pub(super) fn probe(world: &mut World) {
 
 /// A press has finished: ask the ward, publish, and see whether the seal broke.
 ///
-/// Called from `work::land`, which is where every completed run lands — a
-/// separate per-tick system would be a second clock over the same event.
+/// Called from `work::land`, where every completed run lands, so there is one
+/// clock.
 pub fn land(world: &mut World, prism: Entity) {
     let Some(mut ward) = world.get_mut::<Ward>(prism) else {
         return;
@@ -211,7 +195,7 @@ pub fn land(world: &mut World, prism: Entity) {
         );
         // No `Detail`: the astray count is already in the sentence, and
         // carrying it twice read as `the ward is level 2`.
-        answered(world, &message, u64::from(aligned), Some(shift), None);
+        answered(world, &message, u64::from(aligned), Some(shift));
         return;
     }
 
@@ -224,7 +208,7 @@ pub fn land(world: &mut World, prism: Entity) {
     let message = world
         .resource::<Prose>()
         .line("probe_broken", &[("quantity", &spent.to_string())]);
-    answered(world, &message, earned, None, None);
+    answered(world, &message, earned, None);
     // After the sentence about the work, for the reason `transmute` gives: the
     // seal opens, *and then* the orb can hold another spell.
     tower::done(world, &tower::Work::at(PRISM), earned);
@@ -236,34 +220,13 @@ const SPILL: usize = 12;
 
 /// The far orb's log, spilling into yours. Flavour, not required reading.
 ///
-/// Quiet, so the dozen lines go to `lens.log` and not the transcript: twelve
-/// lines per solve would push the player's own last command off screen (§19).
-/// The transcript gets one sentence saying how many there were.
-///
-/// The shapes are authored (`spill_*` in `prose.toml`, rule 6) and the nouns
-/// come from `Recipes`, so a line never names an operation an instrument cannot
-/// perform — `digest sage` would teach a player something false about their own
-/// tower.
-///
-/// Now and then it is a recipe, rolled in `tower::learned`: the log spells it
-/// out and the orb writes it down, so the sentence about it is drawn while the
-/// working is not.
+/// Quiet, to `lens.log`; the transcript gets one sentence (§19). The shapes
+/// are authored and the nouns from `Recipes`, so no line names an operation
+/// that cannot happen. Sometimes a recipe (`tower::learned`), whose sentence
+/// is drawn.
 fn spill(world: &mut World) {
     for line in stolen(world, SPILL) {
-        // Quiet, but filed: `Records::drawn` skips it and `lens.log` keeps it,
-        // which is what `Source` makes true (§19).
-        world
-            .resource_mut::<Scrollback>()
-            .records_mut()
-            // `Message`, not `Entry`: an `Entry` speaks as a `TableRow` and
-            // draws every field, so a stolen line came out wrapped in the orb's
-            // own bookkeeping — `probe mix phlegm prism`.
-            .push(RecordKind::Message)
-            .text(FieldName::Name, Verb::Probe.canonical())
-            .text(FieldName::Message, &line)
-            .text(FieldName::Source, PRISM)
-            .quiet()
-            .finish();
+        overheard(world, &line);
     }
 
     let Some(found) = tower::discover(world) else {
@@ -273,18 +236,7 @@ fn spill(world: &mut World) {
     // The recipe as the far wizard wrote it, then said out loud: a discovery is
     // worth interrupting a player for.
     for line in super::recall::route_lines(world, &found) {
-        world
-            .resource_mut::<Scrollback>()
-            .records_mut()
-            // `Message`, not `Entry`: an `Entry` speaks as a `TableRow` and
-            // draws every field, so a stolen line came out wrapped in the orb's
-            // own bookkeeping — `probe mix phlegm prism`.
-            .push(RecordKind::Message)
-            .text(FieldName::Name, Verb::Probe.canonical())
-            .text(FieldName::Message, &line)
-            .text(FieldName::Source, PRISM)
-            .quiet()
-            .finish();
+        overheard(world, &line);
     }
 
     let message = world
@@ -306,6 +258,23 @@ fn spill(world: &mut World) {
 
     // The rail's green mark, so a player in another room is told (§9).
     tower::mark(world, LENS, tower::Mark::News);
+}
+
+/// One line of the far orb's log: quiet, so it reaches `lens.log` and not the
+/// transcript.
+fn overheard(world: &mut World, line: &str) {
+    world
+        .resource_mut::<Scrollback>()
+        .records_mut()
+        // `Message`, not `Entry`: an `Entry` speaks as a `TableRow` and draws
+        // every field, so a stolen line came out wrapped in the orb's own
+        // bookkeeping — `probe mix phlegm prism`.
+        .push(RecordKind::Message)
+        .text(FieldName::Name, Verb::Probe.canonical())
+        .text(FieldName::Message, line)
+        .text(FieldName::Source, PRISM)
+        .quiet()
+        .finish();
 }
 
 /// The room, for the rail's mark.
@@ -348,35 +317,17 @@ fn stolen(world: &mut World, count: usize) -> Vec<String> {
         .into_iter()
         .filter_map(|pick| {
             let (instrument, input) = steps.get(pick)?;
-            let verb = verb_for(instrument);
+            // Another wizard's instrument, by name: no entity to read an
+            // `Operation` off, so the tower's own table says what it runs.
+            let verb = tower::operation_of(instrument)
+                .unwrap_or(Verb::Wield)
+                .canonical();
             Some(world.resource::<Prose>().line(
                 "spill_step",
                 &[("name", verb), ("detail", input), ("at", instrument)],
             ))
         })
         .collect()
-}
-
-/// The word another wizard would have typed at this instrument.
-///
-/// Matched on the name, which is the one place in the tower that has to be:
-/// [`stolen`] builds its steps from the recipe table, so an instrument here is
-/// a content string describing somebody else's laboratory rather than a node of
-/// this one. There is no entity to read an `Operation` off.
-///
-/// The cost is the hazard `tower::panel::craft_of` avoids by reading the
-/// component: rename an instrument in `recipes.toml` and it falls through to
-/// `wield` here, silently, in a line of flavour nobody diffs. An instrument
-/// with no verb of its own is `wield`ed anyway, like the lectern, so the
-/// fallthrough and the correct answer look identical.
-fn verb_for(instrument: &str) -> &'static str {
-    match instrument {
-        "mortar_and_pestle" => Verb::Grind.canonical(),
-        "balneum_mariae" => Verb::Digest.canonical(),
-        "flask_and_rod" => Verb::Mix.canonical(),
-        "alembic" => Verb::Distil.canonical(),
-        _ => Verb::Wield.canonical(),
-    }
 }
 
 /// What a solve pays, given how many presses it took — `tower::worth_within_par`,
@@ -388,23 +339,10 @@ fn yield_of(world: &World, spent: u32) -> u64 {
 /// The prism's name, which is where a lens record is filed.
 const PRISM: &str = "prism";
 
-/// Publish everything the ward has to say, as readings a spell can ask for.
-///
-/// Clears and re-raises rather than diffing, as `research::refresh` does: a
-/// stale `settled` is worse than nothing, and there are six sockets at most.
-pub(crate) fn refresh(world: &mut World) {
-    let Some(prism) = fixture(world, Verb::Probe) else {
-        return;
-    };
-    publish(world, prism);
-}
-
 /// Publish a named prism's readings, whoever is standing where.
 ///
-/// Takes the entity because `land` must not resolve the prism from `Cwd`: a
-/// press finishes in the tick schedule, outside `spell::run`'s domain swap, so
-/// a bound solver working while the player stood elsewhere published nothing
-/// and left every reading frozen at the last `dial`.
+/// Takes the entity, never `Cwd`: a press lands outside `spell::run`'s domain
+/// swap, so a bound solver would publish nothing.
 pub(crate) fn publish(world: &mut World, prism: Entity) {
     let Some(room) = room_of(world, prism) else {
         return;
@@ -448,30 +386,14 @@ pub(crate) fn publish(world: &mut World, prism: Entity) {
 
 /// One authored line about the lens.
 fn say(world: &mut World, verb: Verb, key: &str, args: &[(&str, &str)], role: Role) {
-    let message = world.resource::<Prose>().line(key, args);
-    world
-        .resource_mut::<Scrollback>()
-        .records_mut()
-        .push(RecordKind::Completion)
-        .text(FieldName::Name, verb.canonical())
-        .text(FieldName::Message, &message)
-        .text(FieldName::Source, PRISM)
-        .role(role)
-        .finish();
+    super::readings::filed(world, PRISM, verb, key, args, role);
 }
 
 /// A press's own record — what the ward answered, filed where it happened.
 ///
-/// `Source` and `At` make `lens.log` a log: §3 keeps one stream, and a domain
-/// log is that stream filtered by where each line happened (§19). `At` is also
-/// what a spell reads to know the prism has finished.
-fn answered(
-    world: &mut World,
-    message: &str,
-    quantity: u64,
-    state: Option<&str>,
-    detail: Option<&str>,
-) {
+/// `Source` and `At` file it in `lens.log` (§19); `At` is also how a spell
+/// knows the prism has finished.
+fn answered(world: &mut World, message: &str, quantity: u64, state: Option<&str>) {
     // The `Mut` is bound before the chain: `state` is conditional, so the
     // builder cannot chain straight to `finish()` off a temporary guard.
     let mut scrollback = world.resource_mut::<Scrollback>();
@@ -486,9 +408,6 @@ fn answered(
         .role(Role::Success);
     if let Some(state) = state {
         builder = builder.text(FieldName::State, state);
-    }
-    if let Some(detail) = detail {
-        builder = builder.text(FieldName::Detail, detail);
     }
     builder.finish();
 }

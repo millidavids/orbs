@@ -1,15 +1,11 @@
 //! Variables and sets: `let … be …`, and `for each …`.
 //!
-//! §10 gives Spellcraft *"composition — build spells from components"*, and the
-//! language had nothing to compose with: no way to hold an answer and no way to
-//! say *"each of these"*. `threading` is what that cost — six tiers unrolled by
-//! four ways, 52 lines, because *"the way with the fewest marks"* was
-//! inexpressible.
-//!
-//! Driven through a real `Sim`, as `tests/solver.rs` does: there is no public
-//! way to put a value in a spell's store, so a test that reached in would pin a
-//! state the game cannot reach.
+//! §10's composition. Through a real `Sim`, since nothing public writes a
+//! spell's store.
 
+mod common;
+
+use common::run_all;
 use orbs_sim::Sim;
 
 /// A tower standing in the archive with a maze open.
@@ -18,20 +14,13 @@ use orbs_sim::Sim;
 /// comparing (`marks`).
 fn in_the_stacks(seed: u64) -> Sim {
     let mut sim = Sim::new(seed);
-    for line in ["attend archive", "research"] {
-        sim.submit(line);
-        sim.step();
-    }
+    run_all(&mut sim, &["attend archive", "research"]);
     sim
 }
 
 /// Write `lines` as a spell, cast it, and let it run for `ticks`.
 fn cast(sim: &mut Sim, name: &str, lines: &[&str], ticks: u64) {
-    let lines: Vec<String> = lines.iter().map(|line| (*line).to_owned()).collect();
-    sim.write_spell(name, &lines);
-    sim.step();
-    sim.submit(&format!("invoke {name}"));
-    sim.step();
+    common::cast(sim, name, lines);
     sim.step_n(ticks);
 }
 
@@ -40,7 +29,7 @@ fn cast(sim: &mut Sim, name: &str, lines: &[&str], ticks: u64) {
 /// Every text field, not just `Message`: a `survey` answers with a `Heading`
 /// and a `TableRow`, so a messages-only helper saw an empty screen and three
 /// of these tests failed against a working game.
-fn said(sim: &Sim) -> Vec<String> {
+fn said_anywhere(sim: &Sim) -> Vec<String> {
     use orbs_render::{FieldName, Value};
     sim.scrollback()
         .records()
@@ -60,7 +49,7 @@ fn said(sim: &Sim) -> Vec<String> {
 
 /// Whether anything said contains `needle`.
 fn anything_said(sim: &Sim, needle: &str) -> bool {
-    said(sim).iter().any(|line| line.contains(needle))
+    said_anywhere(sim).iter().any(|line| line.contains(needle))
 }
 
 #[test]
@@ -86,12 +75,12 @@ fn a_bound_name_stands_for_a_place_in_a_command() {
         anything_said(&sim, "mortar_and_pestle"),
         "`empty bowl` never reached the mortar, so the bound name did not stand \
          for it: {:?}",
-        said(&sim),
+        said_anywhere(&sim),
     );
     assert!(
         !anything_said(&sim, "no bowl") && !anything_said(&sim, "bowl within"),
         "the tower was asked about something called `bowl`: {:?}",
-        said(&sim),
+        said_anywhere(&sim),
     );
 }
 
@@ -127,7 +116,7 @@ fn a_bound_name_stands_for_a_place_in_a_question() {
         anything_said(&sim, "first_light"),
         "`if bowl is idle` decided nothing, so the bound name never reached the \
          question: {:?}",
-        said(&sim),
+        said_anywhere(&sim),
     );
     // A `survey` of the fresh tower's empty arsenal says nothing, so this asks
     // the other way round: the spell reached the end rather than stopping at an
@@ -135,7 +124,7 @@ fn a_bound_name_stands_for_a_place_in_a_question() {
     assert!(
         !anything_said(&sim, "there is no arsenal"),
         "a comparison against a bound place could not find it: {:?}",
-        said(&sim),
+        said_anywhere(&sim),
     );
 }
 
@@ -147,7 +136,7 @@ fn a_for_each_walks_every_member_of_its_set() {
     //
     // Counted by what the loop *says*: four passes is four surveys.
     let mut sim = in_the_stacks(3);
-    let before = said(&sim).len();
+    let before = said_anywhere(&sim).len();
     cast(
         &mut sim,
         "counting",
@@ -155,7 +144,7 @@ fn a_for_each_walks_every_member_of_its_set() {
         12,
     );
 
-    let headings = said(&sim)
+    let headings = said_anywhere(&sim)
         .into_iter()
         .skip(before)
         .filter(|line| line.split_whitespace().any(|word| word == "reading"))
@@ -168,14 +157,8 @@ fn a_for_each_walks_every_member_of_its_set() {
 
 #[test]
 fn a_for_each_over_a_set_the_room_lacks_walks_nothing() {
-    // The lens has sockets and the archive does not. A loop over a set that is
-    // not here must step *past* rather than into — descending puts the path
-    // somewhere `at` cannot resolve, which the runner reads as the end of the
-    // spell, so the lines after it never run.
-    //
-    // Both lines must be ones that always speak: `survey cabinet` on an empty
-    // shelf answers nothing, so an assertion on it passes and fails for reasons
-    // unrelated to the loop.
+    // A loop over an absent set steps past, or the runner reads the spell as
+    // ended. Both lines always speak, unlike an empty `survey cabinet`.
     let mut sim = in_the_stacks(3);
     cast(
         &mut sim,
@@ -349,14 +332,9 @@ fn a_bound_name_is_not_a_place_the_tower_is_missing() {
 
 #[test]
 fn a_binding_survives_the_orb_being_closed_and_opened() {
-    // §8 requires in-flight state be serialisable, and a store is in-flight
-    // state. Written by hand because the completeness lint keys on `TypeId`, so
-    // a new *field* on an existing component is invisible to it.
-    //
-    // The observable has to be the *value*: looking for `best` in the document
-    // found the spell's own saved text, and counting records found a run that
-    // emits either way. So the bound *pair* in the file, and a refusal naming
-    // the mortar — an unbound `bowl` says *"there is no bowl within reach"*.
+    // A store is in-flight state (§8), and the lint cannot see a new field.
+    // On the value: the bound pair in the file, and a refusal naming the
+    // mortar.
     let mut sim = Sim::new(3);
     sim.submit("attend laboratory");
     sim.step();
@@ -380,9 +358,9 @@ fn a_binding_survives_the_orb_being_closed_and_opened() {
     );
 
     let mut back = Sim::restored(&save);
-    let before = said(&back).len();
+    let before = said_anywhere(&back).len();
     back.step_n(8);
-    let after: Vec<String> = said(&back).into_iter().skip(before).collect();
+    let after: Vec<String> = said_anywhere(&back).into_iter().skip(before).collect();
     assert!(
         after.iter().any(|line| line.contains("mortar_and_pestle")),
         "the restored spell stopped naming the mortar, so its binding did not \

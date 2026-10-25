@@ -5,47 +5,22 @@
 //! keeps the tower's stream told what the player chose, swap or not.
 
 use bevy::prelude::*;
-use orbs_shell::settings::Pair;
 use orbs_shell::{Reveal, Scroll};
 
 use crate::sim::Tower;
 
-/// Whether echoes that only repeat the line are left out — `settings` →
-/// `access` → `echo`. Anything but `changed` shows every echo.
-#[derive(Resource, Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct Echoing(pub(crate) bool);
-
-impl From<bool> for Echoing {
-    fn from(terse: bool) -> Self {
-        Self(terse)
-    }
-}
-
-impl Pair for Echoing {
-    const KEY: &'static str = orbs_shell::settings::ECHO;
-    const WORDS: [&'static str; 2] = orbs_shell::settings::ECHOES;
-
-    fn raised(self) -> bool {
-        self.0
-    }
-}
-
-impl Default for Echoing {
-    fn default() -> Self {
-        Self::remembered()
-    }
+super::setting::pair! {
+    /// Whether echoes that only repeat the line are left out — `settings` →
+    /// `access` → `echo`. Anything but `changed` shows every echo.
+    pub(crate) struct Echoing(pub(crate) bool) =
+        orbs_shell::settings::ECHO, orbs_shell::settings::ECHOES;
 }
 
 /// Tell the tower's stream, whenever it does not already know.
 ///
-/// Every frame, because a swap brings a new stream that shows every echo.
-/// Asked through `sim()` first, so a frame with nothing to change does not
-/// mark the tower changed.
-///
-/// When the player changes the row, the drawn count moves under the reveal and
-/// the scroll, which both count drawn records: echoes put back are not a new
-/// burst, and a place held in records no longer names the same line. A swap's
-/// new stream is news, and types as it always has.
+/// Every frame, since a swap brings a fresh stream; asked through `sim()` first
+/// so nothing is marked changed. A change of row resets the reveal and scroll,
+/// which count drawn records.
 pub(crate) fn keep_echo(
     echoing: Res<Echoing>,
     mut tower: ResMut<Tower>,

@@ -1,20 +1,15 @@
 //! Whose hand did the work, and the ledger that says so (DESIGN.md §19,
 //! *number go up*).
 
+mod common;
+
+use common::run_all;
 use orbs_render::{FieldName, RecordKind, Value};
 use orbs_sim::Sim;
 
-/// Submit each line and give the world a tick to do it.
-fn run(sim: &mut Sim, lines: &[&str]) {
-    for line in lines {
-        sim.submit(line);
-        sim.step();
-    }
-}
-
 /// Grind one sage by hand, to completion.
 fn grind(sim: &mut Sim) {
-    run(sim, &["attend laboratory", "grind sage"]);
+    run_all(sim, &["attend laboratory", "grind sage"]);
     sim.step_n(12);
 }
 
@@ -48,7 +43,7 @@ fn the_players_own_work_is_never_a_spells() {
 #[test]
 fn a_spells_work_is_counted_twice_and_reaches_a_deed_once() {
     let mut sim = Sim::new(1);
-    run(
+    run_all(
         &mut sim,
         &[
             "attend archive",
@@ -69,7 +64,7 @@ fn a_spells_work_is_counted_twice_and_reaches_a_deed_once() {
     assert!(sim.tally("spell") >= scrolls);
     // The deed reads `scroll`, and the twin is another key: one count each.
     assert_eq!(sim.tally("at:lectern"), scrolls);
-    run(&mut sim, &["status"]);
+    run_all(&mut sim, &["status"]);
     assert!(
         sections(&sim).contains(&"ledger".to_owned()),
         "a scroll copied drew no ledger",
@@ -92,6 +87,6 @@ fn a_tower_that_has_done_nothing_counted_keeps_no_ledger() {
     // makes no potion, so no row counts it.
     let mut sim = Sim::new(1);
     grind(&mut sim);
-    run(&mut sim, &["status"]);
+    run_all(&mut sim, &["status"]);
     assert!(!sections(&sim).contains(&"ledger".to_owned()));
 }

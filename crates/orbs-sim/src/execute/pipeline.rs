@@ -1,8 +1,9 @@
 //! §10.1's brewing loop: clear, charge, wield, draw off.
 //!
-//! `move`, `wield`, `stop`, `siphon`, `purge` and `recall`. Everything here is
-//! scoped to where the player stands — see [`instrument`], the one lookup the
-//! pipeline uses, and why `purge` reaching across the tower was a defect.
+//! `move`, `wield`, the instruments' own verbs, `empty`, `stop` and `purge`.
+//! Everything here is scoped to where the player stands — see [`instrument`],
+//! the one lookup the pipeline uses, and why `purge` reaching across the tower
+//! was a defect.
 //!
 //! No prose: rule 6 and §12 put authored text in content files; these emit facts
 //! for a later layer to wrap sentences around.
@@ -20,9 +21,8 @@ use super::{acknowledge, missing};
 
 /// A place inside the current one, by name — §10.1's instruments.
 ///
-/// A `Place` slot resolves to the full path (§7) and a node carries only its
-/// leaf, so the leaf is what this compares; matching the whole string turned
-/// every pipeline command into "no such thing".
+/// Compared by leaf, since a `Place` slot resolves to the full path (§7) and a
+/// node carries only its leaf.
 fn instrument(world: &World, path: &str) -> Option<(Entity, String)> {
     let leaf = crate::parser::leaf(path).to_owned();
     let cwd = world.resource::<Cwd>().0;
@@ -39,19 +39,13 @@ fn instrument(world: &World, path: &str) -> Option<(Entity, String)> {
 
 /// Everywhere a component can be taken from, in the order it is looked for.
 ///
-/// Instruments first, in raise order: mid-pipeline the thing being moved is the
-/// last stage's output, still inside the tool that made it — which retired
-/// `siphon` (§19). Busy ones are skipped, since §10.1's lock covers taking as
-/// much as putting. The store last, being stock; there is no floor tier,
-/// because [`instrument`] finds fixtures only.
+/// Instruments first, in raise order, since mid-pipeline the thing moved is
+/// still in the tool that made it (§19); busy ones skipped (§10.1). Then the
+/// store, then the arsenal — nameable from every room, so findable from every
+/// room, and last so a reagent here outranks a carried one.
 ///
-/// The order lives in `tower::reach`, so a spell resolving a name at cast and a
-/// verb body looking it up at execution cannot disagree.
-///
-/// The arsenal is last of all: nameable from every room (`tower::keep`), so it
-/// must be findable from every room or `move clarity to flask_and_rod` resolves
-/// and then reports "no such thing" (§15). Last means a reagent in the room
-/// always outranks a carried one.
+/// The order lives in `tower::reach`, so a spell at cast and a verb at
+/// execution agree.
 fn reachable(world: &World, cwd: Entity) -> Vec<Entity> {
     tower::reach::look(world)
         .scope(tower::reach::Scope::Fetch(cwd))
@@ -60,15 +54,9 @@ fn reachable(world: &World, cwd: Entity) -> Vec<Entity> {
 
 /// Somewhere a `move` can name: an instrument here, or the arsenal.
 ///
-/// The arsenal is the only place reachable from anywhere — [`instrument`] wants
-/// a `Fixture` child of `cwd`, and a domain is neither. It stays narrow: the
-/// arsenal takes finished work only (`tower::keep`), so it cannot become the
-/// room everything ends up in. Tried after the instruments, so a room raising a
-/// fixture called `arsenal` still means its own.
-///
-/// Both ends of a `move` ask this; as the destination's alone, `move clarity
-/// from arsenal to alembic` answered *"there is no /tower/arsenal within
-/// reach"* (§15).
+/// The arsenal is the one place reachable from anywhere, and takes finished
+/// work only (`tower::keep`). Tried after the instruments, so a fixture called
+/// `arsenal` still means its own. Both ends of a `move` ask this.
 fn addressed(world: &World, path: &str) -> Option<(Entity, String)> {
     instrument(world, path).or_else(|| {
         let leaf = crate::parser::leaf(path);
@@ -242,13 +230,9 @@ pub(super) fn wield(intent: &Intent, world: &mut World) {
 
 /// Charge an instrument and start it, in one command (§10.1).
 ///
-/// `grind sage` is `move sage to mortar_and_pestle` then `wield
-/// mortar_and_pestle`. Each instrument declares its own
-/// [`Operation`](crate::tower::Operation), so this finds the fixture rather
-/// than reading a table.
-///
-/// Reagents come from the same [`reachable`] a bare `move` uses, so two ways of
-/// saying one thing cannot disagree about *which* sage they meant.
+/// `grind sage` is `move` then `wield`. The fixture is found by its declared
+/// [`Operation`](crate::tower::Operation), and reagents by the [`reachable`] a
+/// bare `move` uses, so both agree on which sage.
 pub(super) fn operate(intent: &Intent, world: &mut World) {
     let verb = intent.verb;
     let cwd = world.resource::<Cwd>().0;
@@ -303,12 +287,9 @@ pub(super) fn operate(intent: &Intent, world: &mut World) {
 /// Move `units` of whatever `node` is into `to` if it is stock, the whole thing
 /// if it is not.
 ///
-/// An endless pile yields units without shrinking, which makes the base
-/// reagents a floor. A vessel, a file and a spell simply move.
-///
-/// One function for `move` and for charging, because the two copies drifted:
-/// `grind sage` re-parented the endless pile into the mortar, where the run
-/// consumed it and the tower's sage was gone for good.
+/// An endless pile yields units without shrinking; a vessel, a file and a
+/// spell simply move. One function for `move` and charging, or an endless pile
+/// gets re-parented and consumed.
 fn hand(world: &mut World, node: Entity, to: Entity, units: u32) {
     let Some(thing) = world.get::<tower::Name>(node).map(|name| name.0.clone()) else {
         return;
@@ -331,11 +312,9 @@ fn hand(world: &mut World, node: Entity, to: Entity, units: u32) {
 
 /// How much of `node` a `move` to `to` carries.
 ///
-/// The whole batch onto a shelf, the arsenal or a store: a supply opens on how
-/// much the arsenal holds (§19, *Supply*), and six moves to open a warding was
-/// the tedium that rule exists to remove. One unit into an instrument, which
-/// is charged a unit at a time because a run spends one. An endless pile gives
-/// one, as it always did.
+/// The whole batch onto a shelf, the arsenal or a store, since a supply opens
+/// on how much the arsenal holds (§19, *Supply*). One unit into an instrument,
+/// which a run spends; one from an endless pile.
 fn carried(world: &World, node: Entity, to: Entity) -> u32 {
     let shelf = world.get::<tower::Keep>(to).is_some() || world.get::<tower::Store>(to).is_some();
     match world.get::<tower::Stock>(node) {
@@ -449,9 +428,8 @@ fn start(world: &mut World, at: Entity, name: &str, verb: Verb) {
 
 /// Refuse a run, saying why, at `Role::Cost`.
 ///
-/// `state` is a fact about the refusal that a pipe can read. `State` and not
-/// `Detail`: a view that honours prose draws `Detail` in front of the message
-/// written to explain it.
+/// `state` is a fact a pipe can read — `State`, since `Detail` draws in front
+/// of the message.
 fn refuse(
     world: &mut World,
     verb: Verb,
@@ -480,12 +458,9 @@ fn refuse(
 
 /// Turn everything an instrument holds out into the store (§10.1).
 ///
-/// The counterpart of `purge`: that destroys what you did not mean to make,
-/// this keeps it. §10.1 gives every byproduct a use, so a loop that can only
-/// clear by destroying never finds the second route to a draught.
-///
-/// Instant, like [`carry`], and it takes no triage slot: a scour's four ticks
-/// are the price of destroying, not of shelving.
+/// `purge`'s counterpart, which keeps what it clears: every byproduct has a
+/// use (§10.1). Instant, like [`carry`] — a scour's ticks are the price of
+/// destroying, not of shelving.
 pub(super) fn empty(intent: &Intent, world: &mut World) {
     let Some(name) = intent
         .arguments
@@ -575,8 +550,7 @@ pub(super) fn empty(intent: &Intent, world: &mut World) {
 
 /// One record about an emptying, with the sentence from `content/prose.toml`.
 ///
-/// `moved` rides as a fact in `State`, so `sift husks orb.log` finds the line
-/// that carried them — not `Detail`, which is drawn in front of the message.
+/// `moved` rides in `State`, so `sift husks orb.log` finds the line.
 fn say_empty(world: &mut World, key: &str, name: &str, store: &str, moved: &str, role: Role) {
     let message = world
         .resource::<Prose>()
@@ -624,35 +598,10 @@ pub(super) fn stop(intent: &Intent, world: &mut World) {
             tower::damp(world, at);
         }
         Some((at, _)) => {
-            // `divine` inserts no `Working`, so `stop lectern` would find an
-            // instrument and do nothing (§19). It does not `return` either: a
-            // lectern can hold a maze and a run at once, and one `stop` ends
-            // what is happening here.
-            //
-            // Matched exhaustively through `puzzle::Open`, so a new puzzle is a
-            // compile error here until `stop` has decided about it.
-            let abandoned = match tower::puzzle::Open::on(world, at) {
-                Some(tower::puzzle::Open::Maze) => {
-                    world.entity_mut(at).remove::<tower::Maze>();
-                    super::research::refresh(world);
-                    abandoned(world, "research_abandoned");
-                    true
-                }
-                // A course the same, because `muster_already` promises it:
-                // *"haul it across, or stop the pylon"* is §6's way forward.
-                Some(tower::puzzle::Open::Course) => {
-                    world.entity_mut(at).remove::<tower::Course>();
-                    super::muster::refresh(world);
-                    abandoned(world, "muster_abandoned");
-                    true
-                }
-                // A beast too: without this `stop circle` said the circle was
-                // not working while `if the circle is working` said it was.
-                Some(tower::puzzle::Open::Beast) => super::summon::release(world, at),
-                // Not ended by `stop` — a gap, not a decision: what letting an
-                // open ward or a part-bound charm go costs is open in §19.
-                Some(tower::puzzle::Open::Ward | tower::puzzle::Open::Binding) | None => false,
-            };
+            // A puzzle inserts no `Working`, so it is abandoned here (§19) —
+            // and then a run too, since one `stop` ends what is happening.
+            let abandoned = tower::puzzle::Open::on(world, at)
+                .is_some_and(|open| super::settle::abandon(world, open, at));
             // Nothing else to stop unless a run is also under way.
             if abandoned && world.get::<tower::Working>(at).is_none() {
                 return;
@@ -661,20 +610,6 @@ pub(super) fn stop(intent: &Intent, world: &mut World) {
         }
         None => missing(Verb::Stop, &name, world),
     }
-}
-
-/// Say that `stop` let an open puzzle go: the maze's sentence and the course's,
-/// which was the same eleven lines twice.
-fn abandoned(world: &mut World, key: &str) {
-    let message = world.resource::<crate::content::Prose>().line(key, &[]);
-    world
-        .resource_mut::<Scrollback>()
-        .records_mut()
-        .push(RecordKind::Completion)
-        .text(FieldName::Name, Verb::Stop.canonical())
-        .text(FieldName::Message, &message)
-        .role(Role::Cost)
-        .finish();
 }
 
 /// Destroy something where you stand.
@@ -691,21 +626,16 @@ pub(super) fn purge(intent: &Intent, world: &mut World) {
         return;
     };
 
-    // By leaf: a `Place` resolves to the full path (§7) and a node carries only
-    // its last segment, so comparing the two sent every `purge` through the
-    // tower-wide fallback below and made a destructive verb work at a distance.
+    // By leaf, or every `purge` falls through to the tower-wide walk below and
+    // destroys at a distance.
     let leaf = crate::parser::leaf(&target).to_owned();
     let found = tower::reach::look(world)
         .find(&leaf)
-        // ...and whatever the arsenal holds: nameable from every room, so
-        // `purge` must reach it from every room or a player is left unsure
-        // whether it is gone (§7).
+        // ...and whatever the arsenal holds, nameable from every room (§7).
         .or_else(|| tower::kept(world, &leaf));
 
-    // `purge` takes `NounKind::Any` and must reach places, or §7's guard never
-    // fires. Only as far as something that refuses, though: the fallback walks
-    // from the root, so a `purge mortar_and_pestle` from `/tower/archive`
-    // scoured the laboratory's mortar.
+    // Places too, or §7's guard never fires — but from the root only as far as
+    // something that refuses.
     let found = found.or_else(|| {
         let root = root(world);
         find_place(world, root, &target)

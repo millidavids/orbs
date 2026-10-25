@@ -1,36 +1,18 @@
 //! One screen leaving and the next arriving, in glyphs.
 //!
-//! `attend forge` swaps the laboratory's instruments for the forge's lattice
-//! between one frame and the next. §19 answered that for pane *geometry* with
-//! [`crate::ScreenLayout::transition`]; this is the same for content.
+//! [`crate::ScreenLayout::transition`] for content: the glyphs moving, never a
+//! flash (§19). [`Crossing`] is plain data with one `f32` from the frontend's
+//! clock. At `0.0` and `1.0` it draws exactly, so dumps stay still.
 //!
-//! It is the glyphs moving, not a flash, a tube effect or a stinger — §19: *"no
-//! part of this game flashes any more"*.
+//! A crossing meets none of `pulse`'s photosensitivity assumptions, so it
+//! argues twice (§19):
 //!
-//! [`Crossing`] is the counterpart of [`Burn`](crate::Burn),
-//! [`Grind`](crate::Grind), [`Steep`](crate::Steep) and [`Stir`](crate::Stir):
-//! plain data with one `f32`, handed over by whichever frontend owns the clock.
-//! Nothing here knows what a second is.
+//! - [`Passage::Wipe`] and [`Passage::Furl`] erode, and a cell's coverage
+//!   reverses once — a flash is a *pair* of changes.
+//! - [`Passage::Gather`] moves, so its property is the field's: what it can
+//!   light is inside an [`envelope`] shrinking to a point and back.
 //!
-//! `progress` of `0.0` draws the kept cells exactly and `1.0` the live frame
-//! exactly, so a settled crossing is indistinguishable from no crossing, which
-//! keeps every `scripts/dumps.sh` baseline still.
-//!
-//! `pulse`'s exemption to the 3–30 Hz photosensitive band assumes nothing turns
-//! over together, each step is small and the element stays small. A crossing
-//! meets none of those, so it argues twice:
-//!
-//! - The shapes that erode — [`Passage::Wipe`] and [`Passage::Furl`] — argue per
-//!   cell: coverage reverses once, decaying `▓ → ▒ → ░ → blank` on the way out
-//!   and building back in. §19: *"a flash is a **pair** of opposing changes"*.
-//! - The shape that moves — [`Passage::Gather`] — cannot: a glyph travelling
-//!   past a cell lights it and darkens it again. Its property is a *field* one —
-//!   everything it can light is inside an [`envelope`] shrinking monotonically
-//!   to a point and growing back. `pulse`: *"whole-field modulation is the
-//!   hazard; motion is not."*
-//!
-//! The per-cell rule was applied to all three at first and was too strict (§19).
-//! How often a crossing may *start* is the shell's, a floor of one world tick.
+//! How often one may start is the shell's.
 
 use crate::cell::Cell;
 use crate::geometry::{Pos, Rect};
@@ -76,12 +58,8 @@ pub enum Passage {
     Furl,
     /// Every glyph flies to the middle and out again from it.
     ///
-    /// A full-pane tool opening or shutting — the maze, the editor, the weave
-    /// screen. Going *into* something rather than beside it, and the one shape
-    /// that moves a glyph rather than eroding it.
-    ///
-    /// A scale about the region's centre, read per destination as its inverse,
-    /// which keeps it pure rather than a pass sorting overlapping writes.
+    /// A full-pane tool opening or shutting: going *into* something. A scale
+    /// about the centre, read per destination as its inverse, so it stays pure.
     Gather,
 }
 
@@ -201,10 +179,8 @@ impl Crossing {
 
 /// The cells of a region, kept — what a crossing departs from.
 ///
-/// Held by the shell across frames and refilled by [`Frame::keep`] while nothing
-/// is moving. The rect travels with the cells, so a window resized mid-crossing
-/// invalidates them rather than blitting last frame's cells at this frame's
-/// coordinates.
+/// Refilled by [`Frame::keep`] while nothing moves. The rect travels with the
+/// cells, so a resize invalidates them.
 ///
 /// [`Frame::keep`]: crate::Frame::keep
 #[derive(Debug, Default, Clone)]
@@ -326,14 +302,9 @@ pub(crate) fn cell_at(
 /// Where a cell of a [`Passage::Gather`] takes its glyph from, or `None` for a
 /// cell the screen has moved off.
 ///
-/// The inverse of the motion, which keeps this pure: forwards it is a *scatter*
-/// a per-destination function cannot answer, backwards a sample — `d` shows
-/// whatever was at `centre + (d - centre) / scale`.
-///
-/// Through [`tween::mix`], the crate's only `f32`-to-integer conversion, whose
-/// guards land the edge cases free: at `scale` of zero the division is infinite,
-/// every offset cell rounds outside the region, and the centre cell's `0 × ∞` is
-/// a `NaN` `mix` answers with the centre.
+/// The inverse, a sample: `d` shows what was at `centre + (d - centre) /
+/// scale`. At `scale` zero every offset cell leaves the region and the centre's
+/// `0 × ∞` is a `NaN` that [`tween::mix`] answers with the centre.
 pub(crate) fn sampled(area: Rect, crossing: Crossing, at: Pos) -> Option<Pos> {
     let (col, row) = centre(area);
     let reach = 1.0 / crossing.scale();
@@ -345,13 +316,8 @@ pub(crate) fn sampled(area: Rect, crossing: Crossing, at: Pos) -> Option<Pos> {
 
 /// One axis of a [`sampled`] position, or `None` once it has left the region.
 ///
-/// Bounded before it is rounded. [`tween::mix`] clamps into `u16`'s range, right
-/// for a coordinate and wrong for a *test*: `-∞` clamps to `0`, and `0` is
-/// inside a region whose edge is the grid origin — it drew the centre column
-/// three rows tall at the beat, and `examples/screens` showed it.
-///
-/// So the offset is judged in `f32` and `mix` is asked only for the rounding.
-/// The `NaN` is the centre cell's `0 × ∞`, the one sample that always survives.
+/// Bounded in `f32` before [`tween::mix`] rounds it, since its clamp would put
+/// `-∞` at `0`, inside a region at the grid origin. The `NaN` is the centre's.
 fn axis(centre: u16, at: u16, reach: f32, low: u16, high: u16) -> Option<u16> {
     let value = f32::from(centre) + (f32::from(at) - f32::from(centre)) * reach;
     if value.is_nan() {
@@ -404,13 +370,8 @@ pub fn envelope(area: Rect, crossing: Crossing) -> Rect {
 
 /// How far a cell is from the edge the seam starts at.
 ///
-/// The two halves measure from opposite edges, which makes a screen leave and
-/// return the *same way*: going out toward the right the seam starts at the
-/// left, and coming back the first content to appear is against the right edge.
-/// Measured alike, a screen exits rightward and arrives from the left.
-///
-/// One arithmetic line, not a second copy of the rule with its comparisons
-/// flipped.
+/// The halves measure from opposite edges, so a screen leaves and returns the
+/// same way.
 fn along(area: Rect, crossing: Crossing, at: Pos) -> u16 {
     let (step, span) = match crossing.toward {
         // Toward the right: out from the left edge, back in from the right.
@@ -569,15 +530,9 @@ mod tests {
 
     #[test]
     fn an_eroding_cell_reverses_direction_once() {
-        // The photosensitivity property for the shapes that erode. §19: "a flash
-        // is a *pair* of opposing changes", so one reversal is one flash and the
-        // shell can bound the rate with a single floor.
-        //
-        // `Gather` is held to `a_gather_never_lights_outside_its_envelope`
-        // instead: the band is about the *field* modulating.
-        //
-        // Sampled far above any frame rate, so a transient between two frames
-        // cannot hide.
+        // One reversal per cell, so the shell bounds the rate with one floor
+        // (§19); `Gather` is held to its envelope. Sampled far above any frame
+        // rate.
         const STEPS: u16 = 480;
         for passage in [Passage::Wipe, Passage::Furl] {
             for at in cells() {
@@ -628,13 +583,8 @@ mod tests {
 
     #[test]
     fn a_gather_never_lights_outside_its_envelope() {
-        // The field-level property the band is about. A cell may light and go
-        // dark as the screen passes over it, but everything a gather can light
-        // is inside a rectangle that shrinks to a point and grows back, so the
-        // *lit area* never oscillates.
-        //
-        // Nested, too: each envelope of the leaving half is inside the one
-        // before it, so the shrink is monotone rather than merely bounded.
+        // The lit area never oscillates: each leaving envelope nests inside the
+        // one before.
         const STEPS: u16 = 240;
         let mut last = envelope(AREA, shaped(Passage::Gather, 0.0));
         for step in 0..=STEPS {

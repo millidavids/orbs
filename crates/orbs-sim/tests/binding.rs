@@ -4,49 +4,19 @@
 //! is only worth buying because an *invocation* does not. Neither half means
 //! anything without the other.
 
-use orbs_render::{FieldName, Value};
+mod common;
+
+use common::{ever_said, run_all, said};
+use orbs_render::FieldName;
 use orbs_sim::Sim;
-
-/// Submit each line and give the world a tick to do it.
-fn run(sim: &mut Sim, lines: &[&str]) {
-    for line in lines {
-        sim.submit(line);
-        sim.step();
-    }
-}
-
-/// Every message the orb has said.
-fn messages(sim: &Sim) -> Vec<String> {
-    sim.scrollback()
-        .records()
-        .iter()
-        .filter_map(|record| record.field(FieldName::Message))
-        .filter_map(|value| match value {
-            Value::Text(text) => Some(text.to_owned()),
-            _ => None,
-        })
-        .collect()
-}
-
-/// Whether anything the orb said contains `needle`.
-fn mentioned(sim: &Sim, needle: &str) -> bool {
-    messages(sim).iter().any(|line| line.contains(needle))
-}
 
 /// A laboratory with a spell called `tending` and the concentration to hold it.
 ///
-/// Earned, not granted: there is no public way to hand the sim experience, so a
-/// test that skipped the work would test a state the game cannot reach. Two
-/// distillations are 16, the cheapest honest route.
-///
-/// The reagent used to be spawned, which failed this whole file under
-/// `--release`: `debug_spawn` is `cfg(debug_assertions)` and the line was gated
-/// where the test was not. §10.1's chain needs no door — sage, rock-salt and
-/// charcoal are `Holding::endless` — so both draughts are brewed and `bind` is
-/// tested in the build that ships it.
+/// Earned by two distillations, since nothing grants experience, and brewed
+/// from endless stock, so it runs in release.
 fn ready() -> Sim {
     let mut sim = Sim::new(1);
-    run(&mut sim, &["attend laboratory", "kindle charcoal"]);
+    run_all(&mut sim, &["attend laboratory", "kindle charcoal"]);
     for _ in 0..2 {
         brew_one(&mut sim);
     }
@@ -54,7 +24,7 @@ fn ready() -> Sim {
         sim.concentration(),
         1,
         "the setup did not reach a slot: {:?}",
-        messages(&sim),
+        said(&sim),
     );
 
     sim.write_spell(
@@ -74,7 +44,7 @@ fn ready() -> Sim {
 /// player has to do. `mix` and `distil` leave their instruments charged, and a
 /// charged instrument refuses a second load in silence.
 fn brew_one(sim: &mut Sim) {
-    run(
+    run_all(
         sim,
         &[
             "empty mortar_and_pestle",
@@ -99,7 +69,7 @@ fn brew_one(sim: &mut Sim) {
 
 /// How many grinds have completed.
 fn grinds(sim: &Sim) -> usize {
-    messages(sim)
+    said(sim)
         .iter()
         .filter(|line| line.contains("yields ground-sage"))
         .count()
@@ -111,17 +81,17 @@ fn the_orb_cannot_hold_a_spell_until_it_has_been_taught_to() {
     // forbids a bare error, so the sentence teaches twice: that holding a spell
     // is a thing at all, and that working is what buys it.
     let mut sim = Sim::new(1);
-    run(&mut sim, &["attend laboratory", "bind first_light"]);
+    run_all(&mut sim, &["attend laboratory", "bind first_light"]);
 
     assert!(
-        mentioned(&sim, "cannot hold a spell yet"),
+        ever_said(&sim, "cannot hold a spell yet"),
         "{:?}",
-        messages(&sim),
+        said(&sim),
     );
     assert!(
-        mentioned(&sim, "work, and it will learn"),
+        ever_said(&sim, "work, and it will learn"),
         "the refusal did not say what to do about it: {:?}",
-        messages(&sim),
+        said(&sim),
     );
     assert_eq!(sim.concentration(), 0);
 }
@@ -132,24 +102,24 @@ fn an_invocation_ends_when_you_walk_out_and_a_binding_does_not() {
     // first half before this — the domain is fixed at cast and the player's
     // position was never read again — so `bind` had nothing to sell.
     let mut invoked = ready();
-    run(&mut invoked, &["invoke tending", "attend archive"]);
+    run_all(&mut invoked, &["invoke tending", "attend archive"]);
     invoked.step_n(40);
 
     assert!(
-        mentioned(&invoked, "needed you there"),
+        ever_said(&invoked, "needed you there"),
         "the invocation survived the player leaving: {:?}",
-        messages(&invoked),
+        said(&invoked),
     );
     let left_running = grinds(&invoked);
 
     let mut bound = ready();
-    run(&mut bound, &["bind tending", "attend archive"]);
+    run_all(&mut bound, &["bind tending", "attend archive"]);
     bound.step_n(40);
 
     assert!(
-        !mentioned(&bound, "needed you there"),
+        !ever_said(&bound, "needed you there"),
         "a bound spell stopped when the player left: {:?}",
-        messages(&bound),
+        said(&bound),
     );
     assert!(
         grinds(&bound) > left_running,
@@ -164,7 +134,7 @@ fn a_held_spell_stands_rather_than_finishing() {
     // *"walk away, come back to work done"* would be false for every spell not
     // already wrapped in a `repeat`. `tending` is two lines and no loop.
     let mut sim = ready();
-    run(&mut sim, &["bind tending"]);
+    run_all(&mut sim, &["bind tending"]);
     sim.step_n(60);
 
     assert!(
@@ -180,11 +150,11 @@ fn standing_up_again_says_nothing() {
     // held spell laps every few ticks for as long as it is held. The work it
     // does still reports itself.
     let mut sim = ready();
-    run(&mut sim, &["bind tending"]);
+    run_all(&mut sim, &["bind tending"]);
     sim.step_n(60);
 
     // Once, for the `bind` the player typed, and not for the laps after it.
-    let begun = messages(&sim)
+    let begun = said(&sim)
         .iter()
         .filter(|line| line.contains("takes up"))
         .count();
@@ -194,7 +164,7 @@ fn standing_up_again_says_nothing() {
     // And no finish either: a silenced recast still said *"tending.spell is
     // finished"* once a lap, contradicted a tick later with no beginning to
     // match it. A held spell has not finished; it is being held.
-    let done = messages(&sim)
+    let done = said(&sim)
         .iter()
         .filter(|line| line.contains("is finished"))
         .count();
@@ -217,10 +187,10 @@ fn a_bad_name_in_a_held_spell_is_said_once_and_not_once_a_lap() {
         ],
     );
     sim.step();
-    run(&mut sim, &["bind wrong"]);
+    run_all(&mut sim, &["bind wrong"]);
     sim.step_n(60);
 
-    let complained = messages(&sim)
+    let complained = said(&sim)
         .iter()
         .filter(|line| line.contains("mortr"))
         .count();
@@ -236,27 +206,27 @@ fn binding_a_running_invocation_takes_it_up_where_it_stands() {
     // `invoke x` then `bind x` is the recommended sequence — and `bind` used to
     // cast again unconditionally, restarting at line 1.
     let mut sim = ready();
-    run(&mut sim, &["invoke tending"]);
+    run_all(&mut sim, &["invoke tending"]);
     sim.step_n(3);
     let mid = sim
         .running_line("tending.spell")
         .expect("the invocation never started");
 
-    run(&mut sim, &["bind tending"]);
+    run_all(&mut sim, &["bind tending"]);
     assert_eq!(
         sim.running_line("tending.spell"),
         Some(mid),
         "binding restarted the run: {:?}",
-        messages(&sim),
+        said(&sim),
     );
 
     // ...and it is genuinely held now, not merely left running.
-    run(&mut sim, &["attend archive"]);
+    run_all(&mut sim, &["attend archive"]);
     sim.step_n(20);
     assert!(
-        !mentioned(&sim, "needed you there"),
+        !ever_said(&sim, "needed you there"),
         "it was taken up and then walked out on anyway: {:?}",
-        messages(&sim),
+        said(&sim),
     );
 }
 
@@ -278,13 +248,13 @@ fn a_held_spell_may_invoke_another_and_keep_it() {
     );
     sim.step();
 
-    run(&mut sim, &["bind outer", "attend archive"]);
+    run_all(&mut sim, &["bind outer", "attend archive"]);
     sim.step_n(60);
 
     assert!(
-        !mentioned(&sim, "needed you there"),
+        !ever_said(&sim, "needed you there"),
         "the nested spell was ended by the player leaving: {:?}",
-        messages(&sim),
+        said(&sim),
     );
     assert!(
         grinds(&sim) > 1,
@@ -310,14 +280,14 @@ fn a_spell_an_invocation_starts_dies_with_it() {
     );
     sim.step();
 
-    run(&mut sim, &["invoke outer", "attend archive"]);
+    run_all(&mut sim, &["invoke outer", "attend archive"]);
     sim.step_n(60);
 
     assert_eq!(
         sim.running_line("inner.spell"),
         None,
         "the nested spell outlived the invocation that started it: {:?}",
-        messages(&sim),
+        said(&sim),
     );
 }
 
@@ -329,25 +299,25 @@ fn a_second_spell_is_refused_and_names_what_is_held() {
     let mut sim = ready();
     sim.write_spell("morning", &["survey".to_owned()]);
     sim.step();
-    run(&mut sim, &["bind tending", "bind morning"]);
+    run_all(&mut sim, &["bind tending", "bind morning"]);
 
     assert!(
-        mentioned(&sim, "the orb holds 1: tending.spell"),
+        ever_said(&sim, "the orb holds 1: tending.spell"),
         "the refusal did not name what is held: {:?}",
-        messages(&sim),
+        said(&sim),
     );
 
     // ...and letting go is what makes room.
-    run(&mut sim, &["stop tending", "bind morning"]);
+    run_all(&mut sim, &["stop tending", "bind morning"]);
     assert!(
-        mentioned(&sim, "you let tending.spell go"),
+        ever_said(&sim, "you let tending.spell go"),
         "{:?}",
-        messages(&sim)
+        said(&sim)
     );
     assert!(
-        mentioned(&sim, "takes up morning.spell"),
+        ever_said(&sim, "takes up morning.spell"),
         "the slot did not free: {:?}",
-        messages(&sim),
+        said(&sim),
     );
 }
 
@@ -356,11 +326,11 @@ fn letting_go_really_stops_it() {
     // `stop` releases before it un-runs, or `stand` puts the spell back on the
     // next tick and the player watches nothing happen.
     let mut sim = ready();
-    run(&mut sim, &["bind tending"]);
+    run_all(&mut sim, &["bind tending"]);
     sim.step_n(20);
     let before = grinds(&sim);
 
-    run(&mut sim, &["stop tending"]);
+    run_all(&mut sim, &["stop tending"]);
     sim.step_n(40);
 
     assert_eq!(grinds(&sim), before, "it stood back up after being let go");

@@ -68,18 +68,10 @@ pub const HUMOURS: &str = "humour";
 
 /// The reading on the circle: how many rows of the waiting beast's temper are lit.
 ///
-/// A fact about the temper the player can see, never a verdict on a glyph — so
-/// a spell that knows the logic can skip humours that cannot be the keystone: a
-/// temper lit on one row of eight is a yoke or an eschew there.
-///
-/// Always between one and seven while a beast waits, because a temper lit on
-/// every row or none is refused when the table is built — so its absence means
-/// no beast, which is what `is empty` answers.
-///
-/// Two words came first: `lit` is the forge's and scores 750 against `list`,
-/// and `choler` survived a scrape of the crate's constants and then failed at
-/// 667 against the lens's `closer`. A scrape is not the sweep; `tests/naming.rs`
-/// is.
+/// A fact the player can see, never a verdict on a glyph — enough for a spell
+/// that knows the logic to skip humours. Between one and seven while a beast
+/// waits, so absence is `is empty`. Not `lit` (750 against `list`) or `choler`
+/// (667 against `closer`).
 pub const FERVOUR: &str = "fervour";
 
 /// The words a spell may ask the menagerie for.

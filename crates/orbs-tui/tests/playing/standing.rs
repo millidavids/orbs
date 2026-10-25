@@ -1,14 +1,11 @@
 //! The siege board counting, and renown moving — what a fight costs and earns.
 
-use crate::play::{Game, available};
+use crate::play::Game;
 
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn a_pledge_counts_the_coffer_down() {
-    if !available() {
-        return;
-    }
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.does("attend bailey", "/tower/bailey")
         .does("defend", "come up the road")
         .expect_drawn("coffer d6 1 d8 2 d20 5 24")
@@ -20,10 +17,7 @@ fn a_pledge_counts_the_coffer_down() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn petition_buys_a_smaller_crowd_with_renown() {
-    if !available() {
-        return;
-    }
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.does("attend bailey", "/tower/bailey")
         .does("petition", "that would take 7 renown, and you hold 0")
         .does("debug_renown 9000", "")
@@ -36,10 +30,7 @@ fn petition_buys_a_smaller_crowd_with_renown() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn a_won_fight_is_sung_about_once() {
-    if !available() {
-        return;
-    }
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.does("attend bailey", "/tower/bailey")
         .does("defend", "come up the road")
         .does("debug_siege", "")

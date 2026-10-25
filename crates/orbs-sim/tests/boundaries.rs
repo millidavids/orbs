@@ -1,15 +1,8 @@
 //! Guards on the two architectural rules this crate can now break silently.
 //!
-//! `orbs-sim` gained a dependency on `orbs-render` when the record model landed:
-//! a record is the interface between the two crates, and an interface belongs to
-//! whichever side both can depend on. The cost is that this crate can now name
-//! [`Painter`] and `Frame`, which rule 2 forbids it from using.
-//!
-//! A comment would not hold and this does — the instrument §16 already uses,
-//! failing the build if `unscii-16-full` appears in `assets/`.
-//!
-//! These read the crate's own source, deliberately: what is being asserted is
-//! what the source may mention, which no runtime behaviour can express.
+//! The record model gives this crate `orbs-render`, so it can name [`Painter`]
+//! and `Frame`, which rule 2 forbids. These read its own source, since what
+//! the source may mention is no runtime behaviour.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -38,26 +31,29 @@ fn sources() -> Vec<PathBuf> {
     found
 }
 
-#[test]
-fn the_sim_never_reaches_for_the_painter() {
-    // Rule 2. The sim emits records; where one lands on the grid is
-    // `orbs-render`'s job. Changing that is a §19 decision, not a use statement.
-    //
-    // `Fidelity` was the fifth name until §19 fixed the grid and deleted it, and
-    // guarding a name that cannot exist is a boundary test getting weaker — so
-    // `scale_for` and `GRID` took its place.
-    const FORBIDDEN: [&str; 5] = ["Painter", "Frame", "ScreenLayout", "scale_for", "GRID"];
-
+/// Fail if any source mentions one of `needles`, naming the rule it breaks.
+fn forbid(needles: &[&str], rule: &str) {
     for path in sources() {
-        let source = fs::read_to_string(&path).unwrap_or_else(|error| panic!("{path:?}: {error}"));
-        for name in FORBIDDEN {
+        let source =
+            fs::read_to_string(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display()));
+        for name in needles {
             assert!(
                 !source.contains(name),
-                "{}: mentions `{name}` — rule 2 keeps layout out of orbs-sim",
+                "{}: mentions `{name}` — {rule}",
                 path.display(),
             );
         }
     }
+}
+
+#[test]
+fn the_sim_never_reaches_for_the_painter() {
+    // Rule 2: where a record lands is `orbs-render`'s, and changing that is a
+    // §19 decision, not a use statement.
+    forbid(
+        &["Painter", "Frame", "ScreenLayout", "scale_for", "GRID"],
+        "rule 2 keeps layout out of orbs-sim",
+    );
 }
 
 #[test]
@@ -66,16 +62,10 @@ fn the_sim_stays_synchronous() {
     // exactly what replay, offline/online parity, and the balance harness
     // matching the live game all depend on not existing. `Sim::step(&mut self)`
     // makes cross-thread driving impossible; this keeps the inside honest too.
-    for path in sources() {
-        let source = fs::read_to_string(&path).unwrap_or_else(|error| panic!("{path:?}: {error}"));
-        for name in ["async fn", ".await", "tokio"] {
-            assert!(
-                !source.contains(name),
-                "{}: contains `{name}` — rule 8 forbids async in orbs-sim",
-                path.display(),
-            );
-        }
-    }
+    forbid(
+        &["async fn", ".await", "tokio"],
+        "rule 8 forbids async in orbs-sim",
+    );
 }
 
 #[test]
@@ -93,54 +83,18 @@ fn the_sim_never_depends_on_bevy_the_engine() {
         );
     }
 
-    for path in sources() {
-        let source = fs::read_to_string(&path).unwrap_or_else(|error| panic!("{path:?}: {error}"));
-        assert!(
-            !source.contains("use bevy::"),
-            "{}: imports from `bevy` the engine",
-            path.display(),
-        );
-    }
+    forbid(&["use bevy::"], "rule 1: an import from `bevy` the engine");
 }
 
 #[test]
 fn the_sim_never_touches_the_filesystem() {
-    // Rule 1. This crate must compile and test headlessly, in milliseconds, with
-    // no window — and `crates/orbs-sim/Cargo.toml` states the corollary in as
-    // many words: *"this crate never watches a file — a frontend owns the
-    // watcher and hands new content in at a tick boundary."* `orbs/src/sim/
-    // content.rs` gives the reason the other way round: *"a watcher inside the
-    // sim would also make every headless test touch the filesystem, which is the
-    // thing rule 1 exists to prevent."*
-    //
-    // Until the save format landed, nothing here was *tempted*. `save::capture`
-    // and `save::restore` turn a world into a document and back, and the obvious
-    // next line is the one that writes it to a file. It belongs in `orbs-shell`,
-    // beside `prose::read` and `shortcuts::export_trace`, and this is what says
-    // so at build time rather than in a comment nobody reads in a hurried phase.
-    //
-    // `include_str!` is untouched: content compiled *into* the binary is the
-    // opposite of this, and is what makes the headless promise keepable.
-    //
-    // A tripwire, not a wall, and worth saying so. A substring scan is trivially
-    // walked around — `use std::fs;` then a bare `fs::write`, or `OpenOptions`,
-    // or `Command::new("cp")` — and it cannot see a filesystem-capable
-    // dependency arriving in `Cargo.toml`. It is aimed at the accidental
-    // `std::fs::write` in a hurried phase, which is how the rule would actually
-    // be broken. `the_sim_never_depends_on_bevy_the_engine` reads the manifest
-    // and is the shape to copy if a dependency needs guarding too.
-    for path in sources() {
-        let source = fs::read_to_string(&path).unwrap_or_else(|error| panic!("{path:?}: {error}"));
-        // `std::fs` covers the module however it is spelled at the call site.
-        // A bare `read_to_string` is deliberately *not* a needle: it is an
-        // inherent method name common enough to fail this build for a reason
-        // that has nothing to do with rule 1.
-        for name in ["std::fs", "File::open", "File::create", "File::create_new"] {
-            assert!(
-                !source.contains(name),
-                "{}: reaches for `{name}` — rule 1 keeps the filesystem out of orbs-sim",
-                path.display(),
-            );
-        }
-    }
+    // Rule 1: the sim never touches the filesystem; a save is written by
+    // `orbs-shell`. `include_str!` is fine. A tripwire for the hurried
+    // `std::fs::write`, not a wall — a manifest guard is
+    // `the_sim_never_depends_on_bevy_the_engine`'s shape. Not
+    // `read_to_string`, too common a method name.
+    forbid(
+        &["std::fs", "File::open", "File::create", "File::create_new"],
+        "rule 1 keeps the filesystem out of orbs-sim",
+    );
 }

@@ -1,50 +1,28 @@
 //! How long a game is, chosen when it begins (DESIGN.md §11.5, §19).
 //!
-//! A game has a length because the shipped curve tops out at 10,000 experience,
-//! roughly five thousand hand-played commands — reachable by hand. That makes
-//! playing manually barely worse than automating, which undercuts pillar 3. So
-//! the curve stretches, and how far is a choice the player makes once.
-//!
-//! The head is anchored and the tail is stretched, because a flat multiplier
-//! would break the thing this serves: the first station is *do the whole loop by
-//! hand once*, and six times that is six clarities brewed by hand before the
-//! first spell slot, against §12's *"a non-terminal player reaches hour two
-//! unaided"*. So the stretch ramps — nothing at the first station, full at the
-//! last.
+//! The authored curve is reachable by hand, which undercuts pillar 3, so it
+//! stretches, by a length chosen once. The head is anchored — six hand brews
+//! before the first spell slot would break §12's hour two — and the tail
+//! takes the full factor.
 //!
 //! ```text
 //! factor(i) = 1 + (k - 1) * (i / (n - 1))^2
 //! ```
 //!
-//! Quadratic rather than linear because the early game is where the ramp has to
-//! be gentlest — at medium the first four ley stations move 16 → 16, 24 → 24,
-//! 40 → 43, 56 → 67, and the last moves 10,000 → 60,000. The second station does
-//! not move at all once the integer division has had its way, which is the ramp
-//! doing exactly what it is for.
+//! Quadratic, gentlest early: at medium 16 → 16, 24 → 24, 40 → 43, 56 → 67, and
+//! the last 10,000 → 60,000. Anchoring by index leaves every line's first
+//! station unchanged with no exemption list.
 //!
-//! It also dissolves the room-reveal problem without a list: a first draft named
-//! five stations to exempt and three were wrong, and a mastery line is
-//! *sequential*, so exempting one station does not protect it when a scaled
-//! station precedes it. An index-anchored ramp leaves every line's first station
-//! unchanged by construction.
-//!
-//! The tiers are the curve, not the clock. Each is defined by what the last
-//! station reads, which is a fact; what that costs in hours is for
-//! `orbs-balance` to measure, and a tier defined in hours would be a guess
-//! wearing a fact's clothes (§19).
+//! A tier is what the last station reads, a fact; its hours are for
+//! `orbs-balance` to measure (§19).
 
 use bevy_ecs::prelude::Resource;
 use serde::{Deserialize, Serialize};
 
 /// How long a game runs.
 ///
-/// Serialised by name, so a save reads `length = "medium"` rather than a number
-/// whose meaning would drift the moment a tier is retuned.
-///
-/// A `Resource` as well as a save field, because the stretch is applied once at
-/// construction and the world then holds only its *result* — so without this,
-/// *what length is this game* would have to be reverse-engineered from the
-/// curve at save time.
+/// Serialised by name, so retuning a tier changes no save. A `Resource` too,
+/// since the world holds only the stretched result.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Resource)]
 #[serde(rename_all = "lowercase")]
 pub enum Length {
@@ -63,10 +41,8 @@ pub enum Length {
 impl Length {
     /// Every length, in the order a menu offers them.
     ///
-    /// [`Baseline`](Self::Baseline) is deliberately absent: it is what the
-    /// content already says, kept for the dump and for a save written before any
-    /// of this, and offering it to a player would be offering "the numbers we
-    /// happened to author first" as a difficulty.
+    /// Not [`Baseline`](Self::Baseline), the authored numbers, kept for the
+    /// dump and older saves rather than offered as a difficulty.
     pub const OFFERED: [Self; 3] = [Self::Short, Self::Medium, Self::Long];
 
     /// The word a save writes and a player types.
@@ -105,11 +81,8 @@ impl Length {
 
     /// What the station at `index` of `count` is multiplied by.
     ///
-    /// Nothing at the head, [`last`](Self::last)'s whole factor at the tail, and
-    /// a quadratic ramp between. Returned as a numerator over `SCALE` — a
-    /// private fixed-point denominator — so the arithmetic stays integral: a
-    /// curve that depended on float rounding would replay differently on a
-    /// different target.
+    /// Nothing at the head, [`last`](Self::last)'s factor at the tail, a
+    /// quadratic between — as a numerator over `SCALE`, so it stays integral.
     #[must_use]
     pub const fn ramp(self, index: usize, count: usize) -> u64 {
         if count <= 1 || index == 0 || matches!(self, Self::Baseline) {
@@ -142,9 +115,7 @@ impl Length {
 /// The fixed-point denominator [`Length::ramp`] returns over. Private, so its
 /// doc link there is plain text — the ratio is the contract, not this number.
 ///
-/// Integer arithmetic throughout: a curve computed in floats could replay
-/// differently on a different target, which is the one property §13 will not
-/// spend.
+/// Integer throughout, so the curve replays on every target (§13).
 const SCALE: u64 = 1_000;
 
 #[cfg(test)]
@@ -235,12 +206,8 @@ mod tests {
 
     #[test]
     fn stretching_never_touches_what_a_run_earns() {
-        // The failure that would cancel the feature in silence: `earns` is what a
-        // run is worth and the thresholds are what it is worth against, so
-        // stretching both multiplies numerator and denominator — the curve looks
-        // longer, plays identically, and every pinned rate still passes. Every
-        // instrument `[earns]` prices, so a name added there is covered here
-        // rather than by a second list nobody updates.
+        // Stretching `earns` too would cancel the feature in silence. Every
+        // instrument `[earns]` prices, so a new one is covered.
         const PRICED: [&str; 10] = [
             "mortar_and_pestle",
             "balneum_mariae",
@@ -268,9 +235,8 @@ mod tests {
 
     #[test]
     fn every_rooms_line_is_ramped_on_its_own() {
-        // Mastery is seven lines, not one. A station's ramp is its place on its
-        // *room's* line — indexing the flat file would put the menagerie's first
-        // deed a third of the way up the ramp for no reason a player could see.
+        // Mastery is a line per room, not one: a station ramps by its place on
+        // its room's line, not in the flat file.
         let stretched = crate::content::Progression::builtin().stretched(Length::Long);
         for domain in [
             "laboratory",

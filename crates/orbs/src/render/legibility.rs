@@ -20,32 +20,12 @@ pub(crate) const HIGH: f32 = 7.0;
 /// dim recedes, bright advances — still reads.
 pub(crate) const LADDER: f32 = 1.25;
 
-/// Whether the player asked for more contrast — `settings` → `access`.
-///
-/// Anything but `high` is normal: the palette as solved is the fallback that
-/// is always legible.
-#[derive(Resource, Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct Contrast(bool);
-
-impl From<bool> for Contrast {
-    fn from(high: bool) -> Self {
-        Self(high)
-    }
-}
-
-impl Pair for Contrast {
-    const KEY: &'static str = "contrast";
-    const WORDS: [&'static str; 2] = ["normal", "high"];
-
-    fn raised(self) -> bool {
-        self.0
-    }
-}
-
-impl Default for Contrast {
-    fn default() -> Self {
-        Self::remembered()
-    }
+crate::shell::pair! {
+    /// Whether the player asked for more contrast — `settings` → `access`.
+    ///
+    /// Anything but `high` is normal: the palette as solved is the fallback
+    /// that is always legible.
+    pub(crate) struct Contrast(bool) = "contrast", ["normal", "high"];
 }
 
 /// Relative luminance, per WCAG.

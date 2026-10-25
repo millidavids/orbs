@@ -1,15 +1,10 @@
 //! The record stream: what commands emit, and the only thing views read.
 //!
-//! One `String` arena, one `Vec` of fields, one `Vec` of record headers — the
-//! shape [`Speech`](crate::Speech) uses, for the same reason: `ls` on a full
-//! `/laboratory` is a few hundred records, and a `String` per field would be a
-//! thousand allocations to draw one directory. So a [`Record`] is a borrowed
-//! view, `Copy` and free to pass around, never an owned struct.
+//! One arena, as [`Speech`](crate::Speech), so a [`Record`] is a `Copy`
+//! borrowed view and a listing is not a thousand allocations.
 //!
-//! This is the log. DESIGN.md §3: *"Unlogged output is forbidden."* Scrollback,
-//! the log files a player greps, the pipe source and the balance harness's
-//! transcript are one stream read differently; a representation each is how
-//! `sift` ends up searching something other than what is on screen.
+//! This is the log (§3). Scrollback, log files, pipes and the harness read one
+//! stream, so `sift` searches what is on screen.
 
 use crate::linear::UtteranceKind;
 use crate::record::field::{FieldName, Value};
@@ -77,12 +72,8 @@ impl Records {
 
     /// An empty stream that has already dropped `dropped` records.
     ///
-    /// A save carries a bounded tail: the stream grows without bound and `.log`
-    /// files are a view over it, so dropping it would empty every log in the
-    /// tower. [`sequence`](Self::sequence) cannot be dropped — a running spell's
-    /// cursor is a position in it, and [`dropped`](Self::dropped) turns that
-    /// back into an index — so a restore opens here with the count of records it
-    /// is *not* carrying, then pushes the tail.
+    /// A restore opens here with the count it is not carrying, then pushes its
+    /// tail, so a spell's [`sequence`](Self::sequence) cursor still lands.
     #[must_use]
     pub fn resume(dropped: u64) -> Self {
         Self {
@@ -93,19 +84,10 @@ impl Records {
 
     /// The register everything emitted from now on is spoken in.
     ///
-    /// DESIGN.md §3 puts the eldritch treatment on *messages*, not on call
-    /// sites: it is how the orb is currently speaking, driven in Phase 8 by
-    /// threat. Setting it once keeps a register change from being a
-    /// hundred-line diff that misses four of them.
-    ///
-    /// Two things hold, and neither is this function's to override:
-    ///
-    /// - §3's corruption exemption. A [`RecordKind::LogLine`] refuses eldritch
-    ///   however the register is set, so the diagnostic surfaces stay
-    ///   trustworthy *as renderings* — see [`RecordKind::allows`].
-    /// - The text stays faithful. §3: *"the renderer corrupts it; the model
-    ///   records it faithfully."* The register changes the face, never the
-    ///   characters, so a register-set record needs no authored spoken variant.
+    /// Set once, on the stream, not per call site (§3). A
+    /// [`RecordKind::LogLine`] still refuses eldritch ([`RecordKind::allows`]),
+    /// and the register changes the face, never the characters, so it owes no
+    /// spoken variant.
     pub const fn set_register(&mut self, register: Presentation) {
         self.register = register;
     }
@@ -130,13 +112,8 @@ impl Records {
 
     /// How many records have **ever** been pushed.
     ///
-    /// A sequence number, not a length. A watching script keeps a cursor into
-    /// the stream, and the obvious cursor — an index, `len()` — is correct only
-    /// while the stream is never truncated. It never is today, but it grows
-    /// without bound and §5's Phase 11a offline catch-up is ~29k steps, so the
-    /// day someone adds rotation every saved cursor would point at the wrong
-    /// record and spells would re-fire or skip events with no test catching it.
-    /// This does not reset, so a cursor survives a truncation.
+    /// A sequence, not a length: it never resets, so a watching spell's cursor
+    /// survives a truncation.
     #[must_use]
     pub const fn sequence(&self) -> u64 {
         self.pushed
@@ -144,19 +121,9 @@ impl Records {
 
     /// Every record a transcript should draw: the ones nobody's spell caused.
     ///
-    /// One definition, because four callers measure this stream. As a closure in
-    /// the frontend's paint it left paging, the scroll clamp and the typewriter
-    /// reveal counting the *whole* stream while the pane drew a subset — two
-    /// units for one `Scroll::back`, so `PageUp` jumped whole screens with a
-    /// spell running. Anything needing "what the player sees" asks here.
-    ///
-    /// Two reasons to skip, one rule: a record is undrawn because it was a
-    /// spell's rather than the player's ([`FieldName::Spell`]), or because the
-    /// screen already says it ([`RecordBuilder::quiet`]). Neither is a deletion.
-    ///
-    /// A third, when [`set_terse_echo`](Self::set_terse_echo) asks: an echo
-    /// that only repeats the player's line (§6, §14 — *echo verbosity is a
-    /// setting*).
+    /// One definition for everything measuring what the player sees. Skipped:
+    /// a spell's ([`FieldName::Spell`]), the [`quiet`](RecordBuilder::quiet),
+    /// and with [`set_terse_echo`](Self::set_terse_echo) a bare echo (§14).
     pub fn drawn(&self) -> impl Iterator<Item = Record<'_>> + Clone {
         self.iter().filter(|record| {
             record.field(FieldName::Spell).is_none()
@@ -205,15 +172,9 @@ impl Records {
 
     /// Every drawn record pushed at or after `sequence`.
     ///
-    /// [`drawn`](Self::drawn) with a watermark, for anything that reacts to the
-    /// stream rather than painting it — the audio cues are the first. A
-    /// [`sequence`](Self::sequence) rather than an index, because an index is
-    /// broken by [`clear`](Self::clear), which empties the stream between
-    /// commands, and by a restore, which opens with a truncated tail.
-    ///
-    /// A `sequence` from the future yields nothing rather than panicking — a
-    /// swapped tower can rewind the count, and the caller's answer is to take
-    /// the new mark and say nothing.
+    /// [`drawn`](Self::drawn) after a [`sequence`](Self::sequence) mark, which
+    /// survives [`clear`](Self::clear) and a restore. A mark from the future,
+    /// after a swap, yields nothing.
     pub fn since(&self, sequence: u64) -> impl Iterator<Item = Record<'_>> + Clone {
         let dropped = self.dropped();
         let from = usize::try_from(sequence.saturating_sub(dropped)).unwrap_or(usize::MAX);
@@ -464,11 +425,8 @@ impl<'a> Record<'a> {
     ///    | `TableRow` | `label: value` | `"name: sage, state: ready, qty: 12"` |
     ///    | anything else | values alone | `"the ward has failed"` |
     ///
-    /// §14 requires labels *specifically for tables* — "a reader must never have
-    /// to reconstruct columns from spacing" — and reciting them elsewhere reads
-    /// prose out as a form. Taking it from the kind rather than the field count
-    /// stops an annotation, or a second clause, flipping a sentence into a
-    /// recital. Either way the labels come from the record.
+    /// §14 wants labels for tables only, and the kind decides it, not the
+    /// field count.
     pub fn speak(&self, out: &mut String) {
         if let Some(spoken) = self.spoken() {
             out.push_str(spoken);
@@ -510,15 +468,8 @@ impl<'a> Record<'a> {
 
     /// Whether this record carries authored prose that speaks *for* its facts.
     ///
-    /// The presentation half of rule 4. A record may carry both: a refusal holds
-    /// `name`, `state` and `source` so `sift` and a pipe can filter it, and an
-    /// authored `message` so a player reads a sentence. Drawing both put the
-    /// sentence next to the values it explains — `decoct decoct laboratory the
-    /// laboratory is busy…`.
-    ///
-    /// A `TableRow` is excluded by construction: it *is* columns and §14
-    /// requires their labels, so prose winning there would delete what a
-    /// listener needs to reconstruct the row.
+    /// Rule 4's presentation half: facts for `sift`, the sentence for the
+    /// player, and only the sentence drawn. Never a `TableRow` (§14).
     fn is_prose(&self) -> bool {
         self.kind().utterance() != UtteranceKind::TableRow
             && self.field(FieldName::Message).is_some()
@@ -526,15 +477,8 @@ impl<'a> Record<'a> {
 
     /// The fields a view should show, given whether this record is prose.
     ///
-    /// Facts stay on the record either way — this narrows what is *drawn and
-    /// spoken*, never what is stored or searched. `sift` matches a field's own
-    /// value and never comes through here (see [`sift`](super::sift)).
-    ///
-    /// [`FieldName::Line`] is prose's one exception, because it is a listing's
-    /// gutter: prose keeps what a person would read aloud, which is wrong for a
-    /// numbered file, where the number is how a player names the line they mean.
-    /// Every other field a prose record carries classifies it rather than
-    /// saying anything.
+    /// Narrows what is drawn and spoken, never what [`sift`](super::sift)
+    /// searches. Prose keeps [`FieldName::Line`], how a player names a line.
     fn presented(&self, prose: bool) -> impl Iterator<Item = (FieldName, Value<'a>)> + Clone {
         self.content().filter(move |(name, _)| {
             !prose
@@ -555,15 +499,9 @@ impl<'a> Record<'a> {
 
     /// Every field, prose or not — a search result, not a drawn line.
     ///
-    /// [`matches`](Self::matches) runs over all field values and never over
-    /// rendered text (rule 4, §7: *"the only model that survives the eldritch
-    /// renderer corrupting output"*), but [`to_line`](Self::to_line) draws a
-    /// prose record as its sentence alone — so `sift wield orb.log` returned
-    /// rows matching `Name = "wield"` that drew as *"the `balneum_mariae` is
-    /// empty"*, a filter that looks broken because the term is nowhere in the
-    /// result. Narrowing `matches` instead would make what a pipe can find
-    /// depend on what a view shows, the coupling rule 4 forbids, so the *result*
-    /// widens and only for search.
+    /// [`matches`](Self::matches) searches every field (rule 4, §7), so a
+    /// result drawn as its sentence alone would hide the match; the result
+    /// widens, for search only.
     #[must_use]
     pub fn to_line_verbatim(&self) -> String {
         let mut out = String::new();
@@ -613,18 +551,8 @@ pub struct RecordBuilder<'a> {
 impl RecordBuilder<'_> {
     /// Log this, but keep it out of the transcript.
     ///
-    /// For a fact the screen is already showing. The archive's `follow` emitted
-    /// *"the reading goes north"* on every step of a hundreds-of-steps maze, so
-    /// walking one buried the pane in a line per press restating what the map
-    /// had just drawn — and scrolled the player's own typing away.
-    ///
-    /// Not a deletion: §3 forbids unlogged output, and this is emitted, stored,
-    /// `sift`-able and spoken as before, so `peruse archive.log` reads every
-    /// step. It is [`FieldName::Spell`]'s "log, not pane" rule for the other
-    /// reason there is to invoke it — that one is *whose* doing, this one is
-    /// *worth drawing*. Only where something else on screen already says this: a
-    /// refusal is never quiet, and `follow` into a wall stays drawn because
-    /// nothing moves and the map reports nothing at all.
+    /// For a fact the screen already shows, like a maze step. Still logged,
+    /// stored, sifted and spoken (§3). A refusal is never quiet.
     pub const fn quiet(mut self) -> Self {
         self.quiet = true;
         self
@@ -674,12 +602,9 @@ impl RecordBuilder<'_> {
 
     /// Ask for a presentation treatment on this record alone.
     ///
-    /// *Ask*, not set: §3's exemption may deny it, and
-    /// [`Record::presentation`] reports the answer. Asking explicitly means the
-    /// drawn text may itself be damaged, which is what the authored spoken
-    /// variant exists for, so this record now owes one. Inheriting the stream's
-    /// [register](Records::set_register) does not: a register never alters the
-    /// characters.
+    /// *Ask*: §3's exemption may deny it ([`Record::presentation`]). Asking
+    /// owes a spoken variant, which the stream's
+    /// [register](Records::set_register) does not.
     pub const fn presentation(mut self, presentation: Presentation) -> Self {
         self.presentation = presentation;
         self.faithful = false;
@@ -697,10 +622,8 @@ impl RecordBuilder<'_> {
     /// # Panics
     ///
     /// In debug builds, if the record will render as [`Presentation::Eldritch`]
-    /// without an authored spoken variant. §3 requires one on *every* eldritch
-    /// message, and not catching it at the emit site means shipping a register
-    /// screen-reader players cannot hear. Mirrors the assertion in
-    /// [`Painter::span`](crate::Painter::span), one layer earlier.
+    /// without an authored spoken variant (§3), as
+    /// [`Painter::span`](crate::Painter::span) does a layer later.
     pub fn finish(self) {
         let effective = if self.kind.allows(self.presentation) {
             self.presentation

@@ -1,15 +1,11 @@
 //! The forge's charms, driven through the real schedule.
 //!
-//! `tests/persistence.rs` proves a charm survives a save and `tower::charm`'s
-//! own tests prove the arithmetic. Neither asks whether a charm actually
-//! reaches the number it is supposed to change, through the same `Sim` a player
-//! drives — and a test that checks the component is present would pass against
-//! a composition that reaches no call site at all.
-//!
-//! Charms are placed through `world_mut` until the forge exists: `imbue`
-//! arrives with the room, two steps after the component, and waiting until then
-//! is how a thing gets carried on faith.
+//! Whether a charm reaches the number it changes, through the `Sim` a player
+//! drives — not whether the component is present.
 
+mod common;
+
+use common::{attended, meter};
 use orbs_sim::Sim;
 use orbs_sim::tower::{Charm, Charmed, charm::Kind};
 
@@ -32,18 +28,7 @@ fn lay(sim: &mut Sim, on: bevy_ecs::entity::Entity, kind: Kind, ticks: u64) {
 
 /// The laboratory, with the mortar loaded and nothing else going on.
 fn laboratory() -> Sim {
-    let mut sim = Sim::new(3);
-    sim.submit("attend laboratory");
-    sim.step();
-    sim
-}
-
-/// What the one run in flight has left to do, as `(done, total)`.
-fn meter(sim: &Sim) -> Option<(u64, u64)> {
-    sim.instruments()
-        .into_iter()
-        .find_map(|instrument| instrument.meter)
-        .map(|meter| (meter.done, meter.total))
+    attended(3, "laboratory")
 }
 
 /// The mortar, wherever it is.
@@ -230,13 +215,8 @@ fn a_scroll_and_a_charm_reach_the_same_rate() {
 
 /// The forge replays, through a fall that fails and a charm it cannot pay for.
 ///
-/// Determinism has no partial failure mode: a divergent replay still looks like
-/// a working game while making the balance harness, offline catch-up and every
-/// regression test unsound. The forge is where it would land — `imbue` is the
-/// only thing in the domain that draws.
-///
-/// A run that never hits the refusal tests the path that did not change, which
-/// the assertion below guards against.
+/// `imbue` is the domain's only draw. The run must reach the refusal, which
+/// the assertion below checks.
 #[cfg(debug_assertions)]
 #[test]
 fn a_forge_session_replays_through_a_failed_fall_and_an_empty_pool() {
@@ -280,16 +260,7 @@ fn a_forge_session_replays_through_a_failed_fall_and_an_empty_pool() {
         spoken(&played),
     );
 
-    let mut replayed = Sim::new(5);
-    for (tick, submission) in played.submissions().all().to_vec() {
-        while replayed.tick() < tick {
-            replayed.step();
-        }
-        replayed.replay(submission);
-    }
-    while replayed.tick() < played.tick() {
-        replayed.step();
-    }
+    let replayed = common::replayed(&played, Sim::new(5));
 
     assert_eq!(
         spoken(&played),

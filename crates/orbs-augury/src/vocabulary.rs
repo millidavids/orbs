@@ -13,13 +13,8 @@
 //! That is the whole of the language the game speaks. A word outside it is a
 //! word the player invented, and [`Token::Hashed`] is what happens to it.
 //!
-//! A hash rather than one `<unk>`, because a single unknown token throws away
-//! everything about a word the reader has not seen — and with no pretrained
-//! embeddings underneath, unseen words are common. Hashing character trigrams
-//! keeps the shape: `powdered` and `powder` collide in most of their buckets, so
-//! a model can learn they behave alike without either being in the vocabulary.
-//! The cheapest substitute for the subword vocabulary a pretrained encoder would
-//! have brought, and there is no such encoder here.
+//! Hashed trigrams rather than one `<unk>`, so `powdered` and `powder` share
+//! buckets — the cheap stand-in for a subword vocabulary.
 
 use std::collections::BTreeMap;
 
@@ -78,9 +73,7 @@ impl Default for Vocabulary {
 impl Vocabulary {
     /// Assembled from the content compiled into the binary.
     ///
-    /// Sorted, so a word's row does not depend on the order four tables were
-    /// walked in: weights are trained against these indices, and a vocabulary
-    /// that reshuffled when a synonym was added would silently invalidate them.
+    /// Sorted, so the rows trained weights index do not move with table order.
     ///
     /// # Panics
     ///
@@ -107,19 +100,9 @@ impl Vocabulary {
         );
         words.extend(Materials::builtin().names().into_iter().map(str::to_owned));
 
-        // The templates' own words — everything a phrasing says that is not a
-        // slot. This is what makes the corpus and the vocabulary agree by
-        // construction rather than by anyone remembering to keep them in step.
-        //
-        // Both corpora, one table: the spell register shares this vocabulary,
-        // because a sentence is a sentence, so a word authored in
-        // `spellings.toml` and missing here would reach the reader as a hash
-        // bucket — the treatment reserved for words the game does not have.
-        //
-        // What is taught, and nothing only a holdout says: a word no `say` line
-        // uses is a row nothing trained, met in exactly the lines the holdout
-        // measures, where a word the table lacks lands in a bucket every unseen
-        // word has trained. *"pound that sage"* came back `purge sage` that way.
+        // Both corpora's template words, so corpus and vocabulary agree by
+        // construction. Only taught words: an untrained row is worse than a
+        // trained bucket.
         let phrasings = Phrasings::builtin();
         let spellings = Phrasings::spellings();
         for entry in phrasings.entries().iter().chain(spellings.entries()) {
@@ -192,21 +175,9 @@ impl Vocabulary {
 
     /// The row `word` sits at, known or hashed.
     ///
-    /// A word is read without its punctuation or its contraction, one row out.
-    /// *"free."* and *"else,"* were rows of their own — unknown and hashed — so
-    /// a line differing from a corpus line by a full stop read as a sentence
-    /// about something the game had never heard of, and punctuation read 36% of
-    /// the trials that carry it. A word ending *n't* becomes `not`, because the
-    /// negation is what that word is for. Still one row per word, because the
-    /// tagger's rows are the sentence's words and splitting *"isn't"* would move
-    /// every span after it.
-    ///
-    /// The word as the table has it, first. Folding first took the brackets off
-    /// `<cls>`: every training sentence encoded through `token("<cls>")` folded
-    /// to `cls`, an unknown word, while inference opened on the real `<cls>`
-    /// row — so the reader learned the opening row alone said whether anything
-    /// was being asked, scored 98.6% in the trainer, and refused every line a
-    /// player typed.
+    /// Without punctuation, and *n't* as `not`, still one row a word so spans
+    /// stay put. The word as the table has it is tried first, or `<cls>`
+    /// folds to `cls`.
     #[must_use]
     pub fn token(&self, word: &str) -> Token {
         if let Some(row) = self.index.get(&word.to_lowercase()) {
@@ -231,14 +202,8 @@ impl Vocabulary {
     /// Whether `word` is one slip from a word the table has — a letter
     /// dropped, added or changed, or two side by side swapped.
     ///
-    /// What tells a typo from a name, with the tagger's help: both arrive as
-    /// hash buckets — *"teh"* and *"bertha"* alike — but a typo is a word the
-    /// game has with one thing wrong in it. `spelling::names_in` is the use.
-    ///
-    /// Three letters, a swap only. At three, a changed letter makes another word
-    /// as often as a typo (*"pip"* from *"tip"*, and it is a name) where two
-    /// letters swapped is a slip of the hand. At two, almost everything is one
-    /// slip from something, so nothing is.
+    /// Tells a typo from a name (`spelling::names_in`). At three letters a swap
+    /// only, since a changed letter makes another word; at two, nothing.
     #[must_use]
     pub fn near(&self, word: &str) -> bool {
         let word: Vec<char> = fold_word(word).chars().collect();

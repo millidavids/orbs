@@ -14,17 +14,8 @@
 //!
 //! `frame_rate_does_not_change_world_speed` asserts it.
 //!
-//! The default clamp had to change. `Time<Virtual>` refuses to report a delta
-//! larger than `max_delta` and silently discards the excess, leaving only a
-//! `debug!` that is off in release. Bevy's 250 ms default is wrong here in one
-//! direction and right in the other: an ordinary hitch — a shader compile, an
-//! asset load — must be caught up, because ticks are world time and every drift
-//! accumulates against a clock the player can see; but a genuine absence must
-//! not be, because that is what offline progression is for (§5), and replaying
-//! an hour of ticks on resume would bypass it.
-//!
-//! So the clamp is kept at [`MAX_CATCH_UP`]: long enough that no realistic
-//! hitch loses time, short enough that a real absence falls through.
+//! `Time<Virtual>` silently discards a delta past `max_delta`. A hitch must be
+//! caught up and an absence must not (§5), so the clamp is [`MAX_CATCH_UP`].
 
 use core::time::Duration;
 

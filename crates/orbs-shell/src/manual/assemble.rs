@@ -1,20 +1,11 @@
 //! Where the book comes from.
 //!
-//! Two sources, one of them new. The authored chapters are `manual.toml`'s; the
-//! rest are built from the 578 `man_`, `recall_` and `using_` keys `recall` has
-//! accumulated since Phase 1, already held by that module's fourteen lints.
+//! `manual.toml`'s chapters, and the rest built from the `man_`, `recall_`
+//! and `using_` keys `recall`'s lints already hold — the cheapest words being
+//! the written ones (§12).
 //!
-//! §12 puts writing at the top of the risk list and budgets ~88k words. The
-//! cheapest words are the ones already written, and a second copy would be a
-//! verb's page saying one thing in `help` and another in the manual.
-//!
-//! ⚠ Indentation does not survive. `Wrap::new` trims leading spaces — it must,
-//! or a wrapped line would inherit the indent of the one it broke from — so a
-//! line cannot be nested by putting spaces in front of it. Internal padding is
-//! untouched, which is what makes a two-column row work.
-//!
-//! So hierarchy is made of columns, blank lines and words, never indentation,
-//! in `manual.toml` exactly as in the two chapters built here.
+//! ⚠ Indentation does not survive `Wrap::new`, so hierarchy is columns, blank
+//! lines and words, here and in `manual.toml`.
 
 use orbs_sim::Sim;
 use orbs_sim::content::Chapter;
@@ -66,13 +57,7 @@ pub fn book(sim: &Sim) -> Vec<Chapter> {
 
 /// Every room, in the three lines `man` gives the one you are standing in.
 ///
-/// The depth the authored *rooms* chapter deliberately does not carry: that one
-/// is a paragraph read before you have a tower, this is `primer`'s thirty lines
-/// — what the place is, how to begin its puzzle, how to finish one. Authoring it
-/// again would be a second copy of thirty sentences.
-///
-/// The difference from `man` is `commands`' difference from `help`: `man`
-/// answers *where am I*, not *what is behind a door the tower has not opened*.
+/// `primer`'s lines for every room, where `man` answers only *where am I*.
 fn inside(sim: &Sim) -> Chapter {
     let prose = sim.prose();
     let mut lines = vec![
@@ -113,13 +98,8 @@ fn inside(sim: &Sim) -> Chapter {
 
 /// Every command, grouped as `help` groups them.
 ///
-/// The same table and prose `help` uses, not a second listing beside it:
-/// `recall.rs` holds fourteen completeness lints over these keys, and a manual
-/// with its own copy would be outside all of them.
-///
-/// The difference from `help` is what this chapter exists for: `help` lists what
-/// works where you are standing, which is no answer to *what is there*. This is
-/// every verb, including ones whose rooms a sealed tower has not opened.
+/// `help`'s table and prose, inside `recall.rs`'s lints — but every verb,
+/// where `help` lists what works here.
 fn commands(sim: &Sim) -> Chapter {
     let prose = sim.prose();
     let mut lines = vec![
@@ -166,10 +146,8 @@ fn commands(sim: &Sim) -> Chapter {
 
 /// Every word a spell is written with.
 ///
-/// Built from `recall_<word>` and `using_<word>` — the 98 entries
-/// `every_word_a_spell_is_written_with_has_a_page` already holds, and the same
-/// ones the editor's scribing guide draws beside the caret. A word authored
-/// tomorrow appears here with no code change, which is `guide.rs`'s own rule.
+/// From the keys the scribing guide draws, which
+/// `every_word_a_spell_is_written_with_has_a_page` holds.
 fn language(sim: &Sim) -> Chapter {
     let prose = sim.prose();
     let mut lines = vec![prose.line("manual_language_lead", &[]), String::new()];

@@ -1,10 +1,7 @@
 //! Frame / cell-buffer, layout, and semantic styling.
 //!
-//! `orbs-render` decides *what appears and where*. Frontends decide only *how a
-//! cell is drawn* — and how big, which is why the grid is a constant here and
-//! the letterbox is the frontend's. They may add enrichment the others cannot
-//! reproduce (CRT, audio) provided it carries no information absent from the
-//! Frame. See CLAUDE.md, architectural rule 2.
+//! What appears and where; frontends decide how a cell is drawn, and how big
+//! (rule 2).
 //!
 //! ```text
 //! orbs-sim ──records──▶ orbs-render ──Frame──▶ orbs      (GPU cell grid + CRT)
@@ -13,23 +10,11 @@
 //!
 //! Four things this crate exists to guarantee:
 //!
-//! 1. Commands emit records; presentation is a view over the record. Screen,
-//!    screen reader, `sift` and the balance harness are four views of the
-//!    [`Records`] stream, which is what lets the tube corrupt the first without
-//!    the other three noticing. See [`record`] for why the model lives here
-//!    rather than in `orbs-sim`.
-//! 2. No colour. A [`Cell`] carries a [`Style`] — a [`Role`], an
-//!    [`Intensity`], a [`Presentation`], a [`Depiction`] — and never a hue;
-//!    each frontend resolves those against its own palette. [`Depiction`] is
-//!    the exception, selecting a ramp and saying nothing, so the athanor's
-//!    meter can be a *picture* of a fire rather than a reading of one;
-//!    [`Style::depicted`] keeps it off anything that means something.
-//! 3. A linear stream, always. Every frame carries a [`Speech`] beside its
-//!    cells, because a cell grid read back row by row is box-drawing and column
-//!    fragments, not sentences (§14). It is the piece that genuinely cannot be
-//!    retrofitted.
-//! 4. A bounded alphabet — the CP437 repertoire, expressed as Unicode, being
-//!    what both frontends can draw. See [`cp437`].
+//! 1. Presentation is a view over [`Records`] (rule 4); see [`record`].
+//! 2. No colour: a [`Style`] means, a frontend resolves. [`Depiction`] picks a
+//!    ramp and says nothing, kept off meaning by [`Style::depicted`].
+//! 3. A [`Speech`] beside every frame's cells (§14).
+//! 4. The CP437 repertoire as Unicode ([`cp437`]).
 //!
 //! Painting a screen:
 //!
@@ -172,13 +157,8 @@ pub fn arriving(text: &str, cells: u32) -> &str {
 
 /// The byte index of character `count`, or the end of `text`.
 ///
-/// The counterpart to [`arriving`], and here for the same reason: count
-/// characters, never bytes, or a byte offset splits `░` and panics.
-///
-/// It lives in this crate because the two callers have to *agree* — the shell
-/// places the caret with it, `orbs-sim`'s completer computes the range a Tab
-/// replaces, and the shell splices one into the other. As two private copies,
-/// the first nuance either grew would have had Tab overwrite the wrong bytes.
+/// [`arriving`]'s counterpart, counting characters, never bytes. Here so the
+/// shell's caret and the sim's completer agree.
 #[must_use]
 pub fn char_index(text: &str, count: usize) -> usize {
     text.char_indices()

@@ -1,17 +1,8 @@
 //! The intervals themselves: what is in flight, and what may start.
 //!
-//! Stored as an interval, not a countdown: §8 wants in-flight actions to be
-//! *"first-class serialisable entities with start and completion ticks"*, and
-//! comparing against the clock is idempotent, survives `meditate` running
-//! hundreds of ticks inside one `step`, and makes the progress fraction a pure
-//! function of the tick.
-//!
-//! Two pools, and two types. §9 reserves the production slot for a manual action
-//! and grants a per-pane triage slot beside it so short work still runs during a
-//! brew. [`Triaging`] is a separate component rather than a flag on [`Working`]
-//! because [`in_flight`] and [`CAPACITY`] must not see it: one shared type means
-//! every counter has to remember to filter, and the first that forgot would
-//! refuse a purge during a brew.
+//! Intervals, not countdowns, as §8 asks: idempotent under a long `meditate`.
+//! Two pools, two types: §9's triage slot runs short work during a brew, and
+//! [`Triaging`] is its own component so [`in_flight`] cannot forget to filter it.
 
 use bevy_ecs::prelude::*;
 use orbs_render::{FieldName, RecordKind, Role};
@@ -185,14 +176,9 @@ pub fn begin(world: &mut World, place: Entity, verb: Verb, subject: NodeId, tick
         ends: Tick::new(now.get().saturating_add(ticks)),
         hurried_by,
     });
-    // Who asked for this run, carried on the instrument so the completion can be
-    // credited to them ticks later: a spell charges the mortar and the mortar
-    // yields on its own schedule, in a different system.
-    //
-    // Set or cleared, never just set. An insert with no matching clear left the
-    // credit on a cancelled run, so the player's own next run on that tool
-    // inherited it and the transcript filtered their completion out entirely —
-    // they typed a command, waited twenty seconds, and nothing appeared.
+    // Who asked, so a completion ticks later is credited to them. Set or
+    // cleared, never just set, or a cancelled spell's credit swallowed the
+    // player's own next completion.
     match bidder(world) {
         Some(spell) => {
             world.entity_mut(place).insert(Bidden(spell));
@@ -278,11 +264,8 @@ pub fn busy(world: &World, place: Entity) -> Option<Busy> {
 
 /// Refuse `verb` because `place` is mid-something, and say so.
 ///
-/// One shape, one site. Hand-built at four call sites, three of them disagreed:
-/// `purge`'s put the instrument in `Name` with no `Path`, `move`'s and `wield`'s
-/// put the *verb* in `Name`. Rule 4 makes fields what `sift`, pipes and §14's
-/// linearisation read, so `sift working orb.log` returned rows whose columns
-/// meant different things.
+/// One shape, one site: four hand-built copies disagreed about fields that
+/// `sift` and §14 read (rule 4).
 pub fn refuse_busy(world: &mut World, verb: Verb, place: Entity, why: Busy) {
     let name = world
         .get::<Name>(place)
@@ -302,14 +285,9 @@ pub fn refuse_busy(world: &mut World, verb: Verb, place: Entity, why: Busy) {
         .finish();
 }
 
-/// Push one completion record about an instrument.
-/// Say something happened, naming **what** and **where** separately.
-///
-/// `at` is not optional and not derivable from `name`, which is the whole point:
-/// callers passed the instrument here sometimes and the *product* other times
-/// (`siphon` says `ground-sage`), so nothing downstream could tell which. A
-/// spell asking *"has the mortar finished?"* needs one field with one meaning —
-/// see [`FieldName::At`].
+/// Push one completion record about an instrument, naming what and where
+/// separately: a spell asking *has the mortar finished?* needs one field with
+/// one meaning — see [`FieldName::At`].
 pub(super) fn say(world: &mut World, name: &str, at: &str, state: &str, message: &str, role: Role) {
     world
         .resource_mut::<Scrollback>()

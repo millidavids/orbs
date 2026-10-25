@@ -255,15 +255,6 @@ impl Install {
         Step::ALL.get(self.done).copied()
     }
 
-    /// Whether `step` is done.
-    #[must_use]
-    pub fn has_done(&self, step: Step) -> bool {
-        Step::ALL
-            .iter()
-            .position(|each| *each == step)
-            .is_some_and(|at| at < self.done)
-    }
-
     /// Whether every step is done.
     #[must_use]
     pub fn is_complete(&self) -> bool {
@@ -340,10 +331,7 @@ impl Install {
         {
             return Some(self.raise.clone());
         }
-        match augur {
-            Some(augur) => sim.submit_reading(line, augur),
-            None => sim.submit(line),
-        }
+        sim.submit_with(line, augur);
         self.observe(sim);
         None
     }

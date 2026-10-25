@@ -5,41 +5,18 @@
 //! asks for are published, that the arsenal reaches the dice, and that a siege
 //! survives being saved.
 //!
-//! Eleven are `cfg(debug_assertions)`: `debug_siege` and `debug_spawn` make a
-//! siege testable in a hundredth of a second, and neither word exists in a
-//! release build, where the test fails against a world that was never built.
-//! Gated per test rather than per file, as `tests/gleaning.rs` records, so the
-//! thirty-two that need no door run in either profile.
+//! The tests using `debug_siege` or `debug_spawn` are gated one by one, so the
+//! rest run in both profiles.
 
+mod common;
+
+#[cfg(debug_assertions)]
+use common::the_siege;
+use common::{at_the_wall, ever_said, reloaded, run, said, words};
 use orbs_render::{FieldName, Value};
+#[cfg(debug_assertions)]
 use orbs_sim::content::SupplyKind;
 use orbs_sim::{Save, Sim, tower};
-
-fn run(sim: &mut Sim, line: &str) {
-    sim.submit(line);
-    sim.step();
-}
-
-fn at_the_wall(seed: u64) -> Sim {
-    let mut sim = Sim::new(seed);
-    run(&mut sim, "attend bailey");
-    sim
-}
-
-fn said(sim: &Sim) -> Vec<String> {
-    sim.scrollback()
-        .records()
-        .iter()
-        .filter_map(|record| match record.field(FieldName::Message) {
-            Some(Value::Text(text)) => Some(text.to_owned()),
-            _ => None,
-        })
-        .collect()
-}
-
-fn ever_said(sim: &Sim, needle: &str) -> bool {
-    said(sim).iter().any(|line| line.contains(needle))
-}
 
 /// Whether any record carries `wanted` in its `State` field.
 ///
@@ -72,21 +49,6 @@ fn readings(sim: &Sim) -> Vec<(String, u64)> {
         .collect()
 }
 
-/// Every bare word `survey` has printed — a reading with no number on it.
-///
-/// The third field. `said` reads `Message` and `readings` reads `Name` plus
-/// `Quantity`, so neither can see a bare `moot` or `d20`.
-fn words(sim: &Sim) -> Vec<String> {
-    sim.scrollback()
-        .records()
-        .iter()
-        .filter_map(|record| match record.field(FieldName::Name) {
-            Some(Value::Text(text)) => Some(text.to_owned()),
-            _ => None,
-        })
-        .collect()
-}
-
 /// The spells an audit has just called tampered, in the order it named them.
 ///
 /// Asked rather than assumed: a hardcoded `holding.spell` broke when the dice
@@ -105,6 +67,29 @@ fn tampered(sim: &Sim) -> Vec<String> {
         })
         .filter(|name| name.ends_with("spell"))
         .collect()
+}
+
+/// A siege that got past the wall, audited, and the spell the audit named.
+///
+/// §8.1's *"the skill is knowing which surface to inspect, not deciphering an
+/// obscure clue"*: `verify` has to name the spell it was just told about.
+fn sabotaged() -> (Sim, String) {
+    let mut sim = at_the_wall(3);
+    run(&mut sim, "defend");
+    for _ in 0..6 {
+        run(&mut sim, "hold");
+    }
+    assert!(
+        ever_said(&sim, "got past the wall"),
+        "nothing was sabotaged"
+    );
+    run(&mut sim, "verify");
+    sim.step_n(80);
+    let target = tampered(&sim)
+        .first()
+        .expect("the audit missed the spell it had just been told about")
+        .clone();
+    (sim, target)
 }
 
 /// The last value `survey` gave for one reading.
@@ -263,30 +248,31 @@ fn the_wrong_word_is_refused_and_names_the_right_one() {
     );
 }
 
+/// What the wall cannot do is refused, and the refusal says why.
 #[test]
-fn something_the_wall_has_no_use_for_is_refused_rather_than_spent() {
-    // An item with no `siege.toml` entry cannot be spent at all, which is what
-    // stops `quaff sage` resolving and quietly doing nothing.
-    let mut sim = at_the_wall(11);
-    run(&mut sim, "defend");
-    run(&mut sim, "deploy sage");
-    assert!(
-        ever_said(&sim, "worth nothing"),
-        "a reagent was spendable on a wall: {:?}",
-        said(&sim),
-    );
-}
-
-#[test]
-fn spending_something_you_do_not_have_is_refused() {
-    let mut sim = at_the_wall(11);
-    run(&mut sim, "defend");
-    run(&mut sim, "quaff warding");
-    assert!(
-        ever_said(&sim, "no warding in the arsenal"),
-        "a warding nobody had was drunk: {:?}",
-        said(&sim),
-    );
+fn what_the_wall_cannot_take_is_refused_and_says_why() {
+    let refusals: [(&[&str], &str); 3] = [
+        // An item with no `siege.toml` entry cannot be spent at all, which is
+        // what stops `quaff sage` resolving and quietly doing nothing.
+        (&["deploy sage"], "worth nothing"),
+        (&["quaff warding"], "no warding in the arsenal"),
+        (
+            &["pledge d20 buckler", "pledge d20 sortie"],
+            "already pledged to the buckler",
+        ),
+    ];
+    for (lines, refusal) in refusals {
+        let mut sim = at_the_wall(11);
+        run(&mut sim, "defend");
+        for line in lines {
+            run(&mut sim, line);
+        }
+        assert!(
+            ever_said(&sim, refusal),
+            "{lines:?} was not refused with {refusal:?}: {:?}",
+            said(&sim),
+        );
+    }
 }
 
 #[test]
@@ -638,8 +624,7 @@ fn a_siege_survives_being_saved() {
     run(&mut sim, "hold");
     run(&mut sim, "hold");
 
-    let text = sim.snapshot().to_toml().expect("a save renders");
-    let mut restored = Sim::restored(&Save::from_toml(&text).expect("a save reads back"));
+    let mut restored = reloaded(&sim.snapshot());
     run(&mut restored, "attend bailey");
     run(&mut restored, "survey rampart");
 
@@ -690,13 +675,8 @@ fn a_siege_rolls_its_own_stream_and_does_not_move_the_sabotage_schedule() {
     quiet.step_n(40);
     fighting.step_n(40);
 
-    // Shelves only. A siege is expected to corrupt spells and logs — §5.1's
-    // adversarial half, drawing from `Siege` — so the claim is narrower: the
-    // ambient schedule, which draws from `Threat`, is untouched.
-    //
-    // The names are parsed off the sentence rather than filtered inside it:
-    // splitting the whole line and dropping chunks ending in `spell` took the
-    // prefix with it whenever the first name was a spell.
+    // Shelves only: a siege corrupts spells and logs from `Siege` (§5.1), and
+    // the ambient `Threat` schedule is untouched.
     let ambient = |sim: &Sim| -> Vec<String> {
         said(sim)
             .into_iter()
@@ -899,6 +879,7 @@ fn a_lie_outlasts_the_siege_until_purged() {
 }
 
 /// Read the board's ceiling for the garrison off the rampart.
+#[cfg(debug_assertions)]
 fn garrison_full(sim: &mut Sim) -> u32 {
     let world = sim.world_mut();
     world
@@ -906,17 +887,6 @@ fn garrison_full(sim: &mut Sim) -> u32 {
         .iter(world)
         .next()
         .map(tower::Siege::full)
-        .expect("a siege on the rampart")
-}
-
-/// The siege on the rampart, as it stands.
-fn the_siege(sim: &mut Sim) -> tower::Siege {
-    let world = sim.world_mut();
-    world
-        .query::<&tower::Siege>()
-        .iter(world)
-        .next()
-        .cloned()
         .expect("a siege on the rampart")
 }
 
@@ -1188,34 +1158,9 @@ fn the_calm_layer_never_sees_an_adversarial_aberration() {
 /// The whole loop §5.1 calls *"diagnose and repair under pressure"*.
 #[test]
 fn a_sabotaged_spell_is_found_by_verify_and_mended_by_purge() {
-    let mut sim = at_the_wall(3);
-    run(&mut sim, "defend");
-    for _ in 0..6 {
-        run(&mut sim, "hold");
-    }
-    assert!(
-        ever_said(&sim, "got past the wall"),
-        "nothing was sabotaged"
-    );
-
-    // The audit finds it and names it — §8.1's *"the skill is knowing which
-    // surface to inspect, not deciphering an obscure clue"*.
-    run(&mut sim, "verify");
-    sim.step_n(80);
-    let named: Vec<String> = said(&sim)
-        .into_iter()
-        .filter(|line| line.contains("not what they say"))
-        .collect();
-    assert!(
-        named.iter().any(|line| line.contains(".spell")),
-        "the audit missed the spell it had just been told about: {named:?}",
-    );
-
-    // ...and a purge puts it back, which makes this a loop rather than a report.
-    // Whichever spell the audit named: a fixed name began purging something that
-    // was never broken once the dice allocation shifted the `Siege` stream.
-    let broken = tampered(&sim);
-    let target = broken.first().expect("the audit named a spell").clone();
+    // The audit names it, and a purge puts it back, which makes this a loop
+    // rather than a report.
+    let (mut sim, target) = sabotaged();
     run(&mut sim, "attend grimoire");
     run(&mut sim, &format!("purge {target}"));
     sim.step_n(10);
@@ -1230,15 +1175,7 @@ fn a_sabotaged_spell_is_found_by_verify_and_mended_by_purge() {
 #[test]
 fn a_repaired_spell_reads_exactly_as_it_was_written() {
     // Fight first, so the enemy chooses which spell this is about.
-    let mut sim = at_the_wall(3);
-    run(&mut sim, "defend");
-    for _ in 0..6 {
-        run(&mut sim, "hold");
-    }
-    run(&mut sim, "verify");
-    sim.step_n(80);
-    let broken = tampered(&sim);
-    let target = broken.first().expect("the audit named a spell").clone();
+    let (mut sim, target) = sabotaged();
 
     // What it said before anything touched it — the peruse output alone, not the
     // whole scrollback, which compared a spell's lines against `attend bailey`.
@@ -1277,26 +1214,8 @@ fn a_repaired_spell_reads_exactly_as_it_was_written() {
 /// and `purge` cleared the mark, said `cleansed` and repaired nothing.
 #[test]
 fn a_rewritten_spell_can_still_be_repaired_after_a_save() {
-    let mut sim = at_the_wall(3);
-    run(&mut sim, "defend");
-    for _ in 0..6 {
-        run(&mut sim, "hold");
-    }
-    assert!(
-        ever_said(&sim, "got past the wall"),
-        "nothing was sabotaged"
-    );
-
-    // Ask the audit which spell it was, rather than assuming.
-    run(&mut sim, "verify");
-    sim.step_n(80);
-    let target = tampered(&sim)
-        .first()
-        .expect("the audit named a spell")
-        .clone();
-
-    let text = sim.snapshot().to_toml().expect("a save renders");
-    let mut restored = Sim::restored(&Save::from_toml(&text).expect("a save reads back"));
+    let (sim, target) = sabotaged();
+    let mut restored = reloaded(&sim.snapshot());
 
     run(&mut restored, "attend grimoire");
     run(&mut restored, &format!("purge {target}"));
@@ -1535,8 +1454,7 @@ fn the_cadence_travels_in_the_save() {
         }
     }
 
-    let text = sim.snapshot().to_toml().expect("a save renders");
-    let mut restored = Sim::restored(&Save::from_toml(&text).expect("a save reads back"));
+    let mut restored = reloaded(&sim.snapshot());
     run(&mut restored, "attend bailey");
     run(&mut restored, "defend");
     assert!(
@@ -1584,89 +1502,69 @@ fn a_heal_at_full_draws_nothing_and_waits() {
 
 /// Replay: the same seed and the same submissions reach the same siege.
 ///
-/// Rule 3 through `Sim::replay` rather than by re-typing.
+/// Rule 3 through `Sim::replay` rather than by re-typing, over the pool running
+/// dry and, in a debug build, over a spent potion.
+///
+/// The first holds `Short` refusals, a draw that never happens. Six rounds,
+/// set by `REGEN_PER_ROUND` against a full allocation.
 #[test]
 fn a_siege_replays_from_its_submissions() {
-    let script = [
-        "attend bailey",
-        "defend",
-        "debug_spawn warding 2",
-        "quaff warding",
-        "hold",
-        "hold",
-        "hold",
-    ];
-    let mut played = Sim::new(5);
-    for line in script {
-        run(&mut played, line);
-    }
-
-    // The established idiom. A submission carries the tick it was made on, so
-    // the replay walks the clock forward to meet each one.
-    let mut replayed = Sim::new(5);
-    for (tick, submission) in played.submissions().all().to_vec() {
-        while replayed.tick() < tick {
-            replayed.step();
-        }
-        replayed.replay(submission);
-    }
-    while replayed.tick() < played.tick() {
-        replayed.step();
-    }
-
-    assert_eq!(
-        said(&played),
-        said(&replayed),
-        "a siege replayed from its own submissions diverged",
-    );
-}
-
-/// A siege replayed through the refusal, which is the path that changed.
-///
-/// A refusable pledge changes how many dice roll in a round, and a die that
-/// never rolls is a draw that never happens. The script spends the pool down and
-/// keeps pledging into an empty one, so the run contains successes, `Short`
-/// refusals and the rounds after them.
-///
-/// Six rounds, where three used to do: a resolved round grants `REGEN_PER_ROUND`
-/// back against a full allocation's eight, so the count here is arithmetic over
-/// those two constants and moves when either does.
-#[test]
-fn a_siege_replays_through_running_out_of_quintessence() {
-    let mut script = vec!["attend bailey".to_owned(), "defend".to_owned()];
+    let mut ran_dry = vec!["attend bailey".to_owned(), "defend".to_owned()];
     for _ in 0..6 {
         for die in ["d20", "d8", "d6"] {
-            script.push(format!("pledge {die} buckler"));
+            ran_dry.push(format!("pledge {die} buckler"));
         }
-        script.push("hold".to_owned());
+        ran_dry.push("hold".to_owned());
     }
+    // Each guard reads an outcome, not a word: `said` holds the typed lines too.
+    #[cfg_attr(not(debug_assertions), allow(unused_mut))]
+    let mut scripts: Vec<(Vec<String>, &str, fn(&Sim) -> bool)> =
+        vec![(ran_dry, "the pool running dry", |sim| {
+            ever_said(sim, "would take")
+        })];
+    // Six, which `siege.toml` asks before a warding draws. A debug word, so a
+    // release build replays the pool alone.
+    #[cfg(debug_assertions)]
+    scripts.push((
+        [
+            "attend bailey",
+            "defend",
+            "debug_spawn warding 6",
+            "quaff warding",
+            "hold",
+            "hold",
+            "hold",
+        ]
+        .map(str::to_owned)
+        .into(),
+        "a spent warding",
+        |sim| {
+            let arsenal = tower::keep(sim.world()).expect("the tower has an arsenal");
+            tower::held(sim.world(), arsenal, "warding")
+                .is_none_or(|held| held != tower::Stock::Counted(6))
+        },
+    ));
 
-    let mut played = Sim::new(5);
-    for line in &script {
-        run(&mut played, line);
-    }
-    assert!(
-        ever_said(&played, "would take"),
-        "the script never ran the pool dry, so it tests the unchanged path: {:?}",
-        said(&played),
-    );
-
-    let mut replayed = Sim::new(5);
-    for (tick, submission) in played.submissions().all().to_vec() {
-        while replayed.tick() < tick {
-            replayed.step();
+    for (script, reaches, reached) in scripts {
+        let mut played = Sim::new(5);
+        for line in &script {
+            run(&mut played, line);
         }
-        replayed.replay(submission);
-    }
-    while replayed.tick() < played.tick() {
-        replayed.step();
-    }
+        assert!(
+            reached(&played),
+            "the script never reached {reaches}, so it tests another path: {:?}",
+            said(&played),
+        );
 
-    assert_eq!(
-        said(&played),
-        said(&replayed),
-        "a siege that ran out of quintessence replayed differently",
-    );
+        // A submission carries the tick it was made on, so the replay walks
+        // the clock forward to meet each one.
+        let replayed = common::replayed(&played, Sim::new(5));
+        assert_eq!(
+            said(&played),
+            said(&replayed),
+            "a siege reaching {reaches:?} replayed differently",
+        );
+    }
 }
 
 /// The pool is a function of the world, not of the stream.
@@ -1773,20 +1671,6 @@ fn a_pledged_die_leaves_the_coffer_and_returns_next_round() {
     assert!(
         back.contains(&"d20".to_owned()),
         "the die never came back: {back:?}",
-    );
-}
-
-/// A die cannot be pledged twice, and the refusal says where it went.
-#[test]
-fn a_die_is_refused_a_second_pledge_and_named_where_it_is() {
-    let mut sim = at_the_wall(11);
-    run(&mut sim, "defend");
-    run(&mut sim, "pledge d20 buckler");
-    run(&mut sim, "pledge d20 sortie");
-    assert!(
-        ever_said(&sim, "already pledged to the buckler"),
-        "a die was pledged twice, or the refusal did not say where it was: {:?}",
-        said(&sim),
     );
 }
 
@@ -1914,8 +1798,7 @@ fn a_pledge_survives_being_saved() {
     run(&mut sim, "defend");
     run(&mut sim, "pledge d20 buckler");
 
-    let text = sim.snapshot().to_toml().expect("a save renders");
-    let mut restored = Sim::restored(&Save::from_toml(&text).expect("a save reads back"));
+    let mut restored = reloaded(&sim.snapshot());
     run(&mut restored, "attend bailey");
     run(&mut restored, "pledge d20 sortie");
     assert!(
@@ -1927,13 +1810,8 @@ fn a_pledge_survives_being_saved() {
 
 /// Every die the pool holds has a node, and every node has a price.
 ///
-/// The bailey's dice and areas are hardcoded `Branch` names in `tower::build`,
-/// and `publish` skips a name with no node — so a die added to [`siege::POOL`]
-/// without a matching branch is pledgeable, nameable, listed by `readings()` and
-/// priced at nought, with the whole suite green.
-///
-/// The shape `every_material_has_a_home_a_move_can_reach` already forbids
-/// elsewhere; the bailey shipped without the equivalent.
+/// `publish` skips a name with no node, so a die without a branch would price
+/// at nought — `every_material_has_a_home_a_move_can_reach`'s shape.
 #[test]
 fn every_die_and_area_the_domain_knows_is_a_node_that_answers() {
     let mut sim = at_the_wall(11);

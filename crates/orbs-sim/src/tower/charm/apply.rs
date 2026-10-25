@@ -1,20 +1,12 @@
 //! A charm on a node, and the one question every read site asks.
 //!
-//! An interval, never a countdown: [`Charm`] stores when it began and how long
-//! it lasts, and [`charmed`] compares that against the clock. Nothing ticks it
-//! down and nothing has to notice it expiring, so hundreds of ticks collapsed
-//! inside one `step` behave like hundreds watched. A charm that decayed per
-//! tick would be the countdown §19 refused, wearing a multiplier.
+//! An interval, never a countdown (§19): [`Charm`] stores when it began and how
+//! long it lasts, so a collapsed `meditate` behaves like ticks watched. With no
+//! expiry system an expired charm is still present, so `With<Charmed>` is wrong
+//! everywhere and [`charmed`] asks the clock instead.
 //!
-//! With no expiry system an expired charm is still a present component, so
-//! `With<Charmed>` is wrong at every read site. [`charmed`] asks the clock
-//! once, so no call site has to remember.
-//!
-//! One component holding many: `bevy_ecs` allows one component of a type per
-//! entity, so five charms as five types would be five queries, five save fields
-//! and five liveness tests. One `Vec` in registration order, never sorted — a
-//! list that reordered itself across a save would be a replay divergence with
-//! no symptom.
+//! One component holding a `Vec`, not five component types, in registration
+//! order and never sorted, or a save would reorder it silently.
 
 use bevy_ecs::prelude::*;
 
@@ -58,12 +50,9 @@ pub struct Charmed(pub Vec<Charm>);
 impl Charmed {
     /// Lay one, replacing any charm of the same kind.
     ///
-    /// Re-laying refreshes rather than stacks, which makes a maintenance spell
-    /// writable: `repeat until` keeps a charm alive by laying it again, and
-    /// stacking would grow the `Vec` once a lap for ever (§19).
-    ///
-    /// A refreshed charm keeps its position, so a save's row order does not
-    /// depend on how recently each was renewed.
+    /// Refreshes rather than stacks, so a maintenance loop does not grow the
+    /// `Vec` every lap (§19), and keeps its position, so a save's order does not
+    /// depend on renewal.
     pub fn lay(&mut self, charm: Charm) {
         match self.0.iter_mut().find(|held| held.kind == charm.kind) {
             Some(held) => *held = charm,

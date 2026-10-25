@@ -87,13 +87,17 @@ pub fn set(world: &mut World, total: u64) {
 /// A count, not a name: falling from magister to cunning man leaves a rank in
 /// hand, so comparing *names* read a fall as an arrival.
 pub(crate) fn reached(world: &World) -> usize {
+    held(world).count()
+}
+
+/// The ranks the tower's renown has reached, lowest first.
+fn held(world: &World) -> impl Iterator<Item = &crate::content::Rank> {
     let held = world.resource::<Renown>().get();
     world
         .resource::<crate::content::Progression>()
         .renown()
         .iter()
-        .take_while(|step| step.at <= held)
-        .count()
+        .take_while(move |step| step.at <= held)
 }
 
 /// Say the title, if the move changed it.
@@ -162,7 +166,7 @@ pub fn lose(world: &mut World, cost: u64) {
     if fell == 0 {
         return;
     }
-    say(world, "renown_lost", fell, now, Role::Danger);
+    say(world, "renown_lost", fell, now, Role::Danger, None);
     crossed(world, was);
 }
 
@@ -272,14 +276,7 @@ impl Toward {
 /// world's borrow go.
 #[must_use]
 pub fn rank(world: &World) -> Option<String> {
-    let held = world.resource::<Renown>().get();
-    world
-        .resource::<crate::content::Progression>()
-        .renown()
-        .iter()
-        .take_while(|step| step.at <= held)
-        .last()
-        .map(|step| step.id.clone())
+    held(world).last().map(|step| step.id.clone())
 }
 
 /// Where renown stands against the next rank.
@@ -301,7 +298,16 @@ pub fn toward(world: &World) -> Toward {
 /// `experience.rs`'s `say_gained`, field for field. `Quantity` is what moved;
 /// the running total is prose, because a `FieldName` for it would have to pass
 /// `save::naming`'s round-trip and be adopted by `experience.rs` too.
-fn say(world: &mut World, key: &str, moved: u64, now: u64, role: Role) {
+///
+/// `source` files it to a domain's log, for the bailey's account of a siege.
+pub(crate) fn say(
+    world: &mut World,
+    key: &str,
+    moved: u64,
+    now: u64,
+    role: Role,
+    source: Option<&str>,
+) {
     let message = world.resource::<Prose>().line(
         key,
         &[
@@ -309,11 +315,15 @@ fn say(world: &mut World, key: &str, moved: u64, now: u64, role: Role) {
             ("count", &now.to_string()),
         ],
     );
-    world
-        .resource_mut::<Scrollback>()
+    let mut scrollback = world.resource_mut::<Scrollback>();
+    let mut record = scrollback
         .records_mut()
         .push(RecordKind::Completion)
-        .text(FieldName::Name, "renown")
+        .text(FieldName::Name, "renown");
+    if let Some(source) = source {
+        record = record.text(FieldName::Source, source);
+    }
+    record
         .count(FieldName::Quantity, moved)
         .text(FieldName::Message, &message)
         .role(role)
@@ -324,23 +334,11 @@ fn say(world: &mut World, key: &str, moved: u64, now: u64, role: Role) {
 mod tests {
     use super::*;
     use crate::Sim;
+    use crate::testing::said;
     use crate::tower::Work;
 
     fn total(sim: &Sim) -> u64 {
         sim.world().resource::<Renown>().get()
-    }
-
-    fn said(sim: &Sim) -> Vec<String> {
-        sim.scrollback()
-            .records()
-            .iter()
-            .filter_map(
-                |record| match record.field(orbs_render::FieldName::Message) {
-                    Some(orbs_render::Value::Text(text)) => Some(text.to_owned()),
-                    _ => None,
-                },
-            )
-            .collect()
     }
 
     #[test]

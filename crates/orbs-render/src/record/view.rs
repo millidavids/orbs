@@ -85,21 +85,9 @@ impl<'a> RecordView<'a> {
     /// Draw only the first `cells` characters of everything after record
     /// `after`, as if it were arriving over a wire.
     ///
-    /// Records before `after` are drawn whole; from there on the budget runs
-    /// out mid-line and the rest of the run is blank. Rows are unaffected — a
-    /// record occupies the height it will occupy when it finishes, so nothing
-    /// below it moves as it arrives, and a reveal that reflowed the pane would
-    /// fight the caller's own arithmetic for which records fit.
-    ///
-    /// It costs the sim nothing, and must not. Waiting on output is meant to be
-    /// a reason to automate; as a *modelled* cost the balance harness would
-    /// have to simulate typewriter delays, offline catch-up would owe animation
-    /// time, and a player who turns the animation off for motion or attention
-    /// reasons would gain an advantage — §9's parity rule inverted, a setting
-    /// become a difficulty choice.
-    ///
-    /// A record announces only once it is whole, so a listener hears complete
-    /// records in stream order and never half of one.
+    /// Rows are unaffected — a record takes its finished height, so nothing
+    /// reflows as it arrives. It costs the sim nothing, or turning it off
+    /// would be a difficulty setting (§9). A record speaks only once whole.
     #[must_use]
     pub const fn revealing(self, after: usize, cells: u32) -> Self {
         Self {
@@ -122,23 +110,10 @@ impl<'a> RecordView<'a> {
 
     /// The command-line surface: a marker, then the line.
     ///
-    /// [`RecordView::lines`] is not sufficient: every record the parser emits
-    /// carries one canonical command form, so through a line view an unresolved
-    /// input draws as a column of bare words and `meditate` as `meditate count`
-    /// — neither the prompt DESIGN.md §6 describes.
-    ///
-    /// Two extra channels, both derived from the record and neither prose:
-    ///
-    /// - the [`Record::marker`] glyph, so a suggestion cannot be mistaken for
-    ///   the command that will run;
-    /// - the player's own [`RecordKind::Input`] lines with the shell prompt in
-    ///   front of them, so the transcript reads as a session.
-    ///
-    /// Intensity comes from [`Record::style`], which derives it the same way.
-    ///
-    /// `prompt` is what the player's own lines are drawn behind — the wizard's
-    /// name, which is world state rather than a rendering choice, so it arrives
-    /// as an argument instead of living here as a constant.
+    /// [`RecordView::lines`] plus the [`Record::marker`] glyph, so a suggestion
+    /// is never mistaken for what will run, and the player's own
+    /// [`RecordKind::Input`] lines behind `prompt` — the wizard's name, world
+    /// state, so an argument.
     #[must_use]
     pub const fn prompt(prompt: &str) -> RecordView<'_> {
         RecordView {
@@ -149,14 +124,8 @@ impl<'a> RecordView<'a> {
 
     /// Rows `records` would need at `cols` wide, without drawing anything.
     ///
-    /// A line view is no longer one row per record — a listing packs across the
-    /// pane — so a caller wanting the *newest* records has to ask rather than
-    /// count. The transcript assumed one row each, and every packed listing
-    /// left that many blank rows at the bottom while dropping as many off the
-    /// top.
-    ///
-    /// Unbounded in the record count, so a caller holding a long stream should
-    /// pass a window rather than the whole of it.
+    /// A record is not one row, so a caller wanting the newest asks rather than
+    /// counts. Pass a window of a long stream.
     #[must_use]
     pub fn height<'r>(&self, cols: u16, records: impl Iterator<Item = Record<'r>> + Clone) -> u16 {
         let prompt = match self.mode {
@@ -433,29 +402,12 @@ fn draw_lines<'r>(
         index += 1;
 
         drawn.clear();
-        // Content only: an annotation drawn as text would put an internal token
-        // — `"resolved survey"` — on screen for a player to read.
-        //
-        // A listing keeps its `=` even when it is not tiled. A run of one does
-        // not pack, and scrolling clips a run, so the last visible entry of a
-        // listing was stacking and coming out as `charcoal ∞` while the rows
-        // above read `charcoal = ∞`. One entry of a table is still a row of it.
-        // `drawn_form` is what `wrapped_rows` measures.
+        // Content only, never an annotation. A listing keeps its `=` untiled,
+        // since one entry of a table is still a row of it.
         drawn.push_str(&drawn_form(&record));
-        // A run of readings gets its values in a column — §19 asked for it
-        // outright. `tick 4` over `concentration 0` is two numbers in two
-        // places, and the reason to print six together is to be read down.
-        //
-        // Leaders here and nowhere else in the transcript, this being the one
-        // listing whose far column is right-aligned — the only shape a leader
-        // suits. Against a left-aligned column the run length is set by the
-        // near column's raggedness and the eye lands on the dots, which is why
-        // the verb listing takes a plain gap.
-        //
-        // Safe to do in the draw alone because the row count cannot change: a
-        // reading is one row either way, and the padded form is refused if it
-        // would not fit on one. So `wrapped_rows` measuring the unpadded string
-        // still gets the right answer.
+        // A run of readings gets its values in a right-aligned column (§19),
+        // the one shape a leader suits. Draw-only, since a reading stays one
+        // row and `wrapped_rows` still measures right.
         if let Some(plan) = readings.as_ref() {
             let width = wrap_width(area.cols, lead_for(&record, prompt), record.kind());
             if let Some(aligned) = plan.row(&record, width) {
@@ -504,11 +456,8 @@ fn draw_lines<'r>(
         // Wrapped, not clipped — see `wrapped_rows`, which measures with the same
         // iterator so the two cannot disagree about the row cost.
         //
-        // The whole record speaks once, on its first row, and continuations
-        // draw silently. §14's stream is whole records in order; one utterance
-        // per wrapped fragment would make a listener reassemble a sentence the
-        // screen shows whole, and hear a different number of things depending
-        // on the window width.
+        // The record speaks once, on its first row; continuations are silent
+        // (§14).
         let width = wrap_width(area.cols, lead_for(&record, prompt), record.kind());
         let mut spoke = false;
         for fragment in crate::wrap::Wrap::new(visible, width) {
@@ -534,20 +483,9 @@ fn draw_lines<'r>(
                     span = span.with_outcome(outcome);
                 }
                 let drawn = painter.span(Pos::new(at, row), &span);
-                // A heading is ruled off beside the words rather than under
-                // them, so the hierarchy costs no row on a page that already
-                // fills the floor exactly.
-                //
-                // Drawn here rather than in `drawn_form` because a rule's length
-                // is the *pane's* and `drawn_form` returns a width-independent
-                // string that `wrapped_rows` measures. Putting it there would
-                // make the measure and the draw disagree, which §19 records
-                // scrolling the transcript by a row a frame.
-                //
-                // Silent, like every rule in the game: a reader hearing a run of
-                // box-drawing between sections gets noise where a sighted player
-                // gets separation for free, and the heading's span already said
-                // what the section is.
+                // Ruled off beside the words, costing no row; here rather than
+                // in `drawn_form`, whose string is width-independent (§19).
+                // Silent, like every rule.
                 if record.kind() == RecordKind::Section {
                     let after = at.saturating_add(drawn).saturating_add(1);
                     let stop = area.col.saturating_add(rule_stop(area.cols));
@@ -580,16 +518,8 @@ const fn indent_for(prompt: Option<&str>) -> u16 {
 
 /// Rows a record's drawn line takes once wrapped.
 ///
-/// A line view wraps rather than clips. Drawing one row per record and cutting
-/// the rest is silent data loss on the surface §14 calls the game's primary
-/// output: `grimoire`'s own instructions — the one command whose job is telling
-/// a player what to type — lost the thing to type. A pane gives about 46 cells
-/// once its border and §10.1's instrument panel are out, and `sage-tincture +
-/// ground-salt -> clarified-draught` is 47.
-///
-/// Measured here and drawn by [`draw_lines`] from the same [`crate::Wrap`], so
-/// the two cannot disagree about how many rows a record costs — the failure
-/// that left blank rows at the bottom while dropping history off the top.
+/// Wrapped, never clipped, which would lose words on the primary output (§14).
+/// Measured with [`draw_lines`]' own [`crate::Wrap`], so the two agree.
 fn wrapped_rows(record: &Record<'_>, cols: u16, prompt: Option<&str>) -> u16 {
     // The same three arguments the draw uses, so the measure cannot narrow a
     // record the draw sets wide.
@@ -613,14 +543,8 @@ fn wrapped_rows(record: &Record<'_>, cols: u16, prompt: Option<&str>) -> u16 {
 /// characters — see [`wrapped_rows`].
 fn drawn_form(record: &Record<'_>) -> String {
     if record.kind() == RecordKind::Section {
-        // The brackets are gone and the rule replaced them. `[reagent]` read as
-        // a config file, and brackets are a weak heading anyway: they say *this
-        // is set apart* without saying from what. A rule to a fixed column says
-        // it and costs no row, drawn beside the heading. See `draw_lines`.
-        //
-        // It stays the view's decision either way: the record carries the bare
-        // word so `sift reagent` finds it and a reader hears a heading rather
-        // than punctuation.
+        // The bare word; `draw_lines` rules it off. The record carries it bare
+        // so `sift reagent` finds it.
         let mut out = String::new();
         record.write_line(&mut out);
         return out;
@@ -630,22 +554,9 @@ fn drawn_form(record: &Record<'_>) -> String {
 
 /// `attend` + `place` → `attend <place>`, the form a listing shows a verb in.
 ///
-/// Composed here, not in the sim: a slot's brackets are a drawing decision
-/// exactly as `[reagent]` was (rule 4), the record carrying `attend` and
-/// `place` as separate fields so `sift attend` finds one.
-///
-/// The brackets do real work. Tiled bare, a two-word entry runs into its
-/// neighbour — `distil reagent  kindle reagent` — because the gap between
-/// entries is the same two spaces as the gap *inside* one. `>` terminates the
-/// cell, and is the spelling `recall scripting` teaches for `repeat <count>`.
-///
-/// A shape that brackets its own slots is not bracketed again. A *control word*
-/// carries a whole shape from `SpellWord::shape` and those spell their own, so
-/// wrapping them drew `let <<name> be <place>>`, the one double bracket in the
-/// game. The test is "does it contain a `<`", not "is it wrapped in one": two
-/// of the shapes are neither — `each <set>` opens with a word, `<name>(...)`
-/// closes with a paren — so anything narrower leaves half of them doubled. The
-/// rule above still holds, `)` terminating a cell as `>` does.
+/// Composed here, a drawing decision (rule 4). The brackets end a cell, or a
+/// tiled two-word entry runs into the next. A shape containing a `<` brackets
+/// its own slots and is left alone.
 fn signature_of(record: &Record<'_>) -> String {
     let mut out = String::new();
     if let Some(name) = record.field(FieldName::Name) {
@@ -684,33 +595,16 @@ fn all_described<'r>(run: impl Iterator<Item = Record<'r>>) -> bool {
 
 /// Whether a record of this kind opens with a blank row above it.
 ///
-/// Two kinds, one rule, and it must be asked in both `height` and `draw_lines`.
-/// A blank row is the cheapest separator a fixed grid has — stronger than an
-/// indent, cheaper than a rule. `Input` has had one since the transcript
-/// existed, so one exchange does not run into the next.
-///
-/// `Section` earns the same one level down: a heading pressed against the last
-/// row of the previous listing says *a new thing starts here* while looking
-/// like part of it. The rule names the boundary, the gap gives the eye
-/// somewhere to land.
-///
-/// Not free: the laboratory's page carries eight sections, so it is seven more
-/// rows on a page already longer than the 80×22 floor's nineteen. §19 records
-/// that the fit is gone; this lengthens a scrolling page rather than breaking
-/// one that fitted.
+/// `Input` and `Section`, asked by both `height` and `draw_lines`: a blank row
+/// is the cheapest separator a fixed grid has (§19).
 const fn opens_with_a_gap(kind: RecordKind) -> bool {
     matches!(kind, RecordKind::Input | RecordKind::Section)
 }
 
 /// The column a section's rule runs to, given the pane.
 ///
-/// A fixed stop rather than the pane edge, measured rather than picked. Drawn
-/// to the edge the rules were the strongest marks on screen and the content
-/// went to mush — the squint test's classic failure. One column for every rule
-/// makes the headings read as a set and leaves the content dominant.
-///
-/// Never more than half the pane, so a narrow transcript does not end up mostly
-/// rule: 34 cells at the laboratory's 86, 31 at the 80x22 floor's 62.
+/// A fixed stop, never past half the pane, so the headings read as a set and
+/// the content stays dominant.
 const fn rule_stop(cols: u16) -> u16 {
     const FURTHEST: u16 = 34;
     let half = cols / 2;
@@ -719,11 +613,8 @@ const fn rule_stop(cols: u16) -> u16 {
 
 /// Cells before a record's own text begins.
 ///
-/// Per record, because an `Input` starts after the whole prompt and everything
-/// else after the marker. Measuring both at the marker width — what a single
-/// `indent` did — makes `height` believe a typed line has a dozen more cells
-/// than it draws into, so a long command measures one row and draws two and the
-/// pane scrolls by a row a frame.
+/// Per record, since an `Input` starts after the prompt, or `height` and the
+/// draw disagree.
 fn lead_for(record: &Record<'_>, prompt: Option<&str>) -> u16 {
     match prompt {
         None => 0,
@@ -741,27 +632,12 @@ fn lead_for(record: &Record<'_>, prompt: Option<&str>) -> u16 {
 
 /// Cells a wrapped line may use, leaving room for a continuation's indent.
 ///
-/// Every row of a record is wrapped to the *same* width, including the first, so
-/// [`wrapped_rows`] and [`draw_lines`] cannot count differently. The first row
-/// gives up [`CONTINUATION`] cells it could have used; that is the price of the
-/// two staying in step, and it buys the indent that makes a wrapped line read as
-/// part of the line above rather than as a new one.
+/// Every row at the same width, the first giving up [`CONTINUATION`] cells,
+/// so [`wrapped_rows`] and [`draw_lines`] agree.
 const fn wrap_width(cols: u16, lead: u16, kind: RecordKind) -> u16 {
     let available = cols.saturating_sub(lead).saturating_sub(CONTINUATION);
-    // Prose takes a measure; everything else takes the pane. A line past about
-    // seventy characters stops scanning and starts being *searched* — the eye
-    // loses its place on the return sweep, which is why typography puts the
-    // comfortable measure at 45-75. The transcript is 86 cells in the
-    // laboratory and 102 in the grimoire, 40% past the top of that range.
-    //
-    // Only `Message`. The three diagnostic surfaces are `is_diagnostic` because
-    // their job is *fidelity*: a `.spell` line wrapped at 68 inside an 86-cell
-    // pane is a line the game reformatted, on the one surface where the screen
-    // must be the file. Listings are columns and have their own arithmetic, and
-    // no `Section` heading is sixty-eight characters.
-    //
-    // At the 80x22 floor the body is 62 cells, so this never binds there: it
-    // narrows the wide rooms and leaves the tight one exactly as it was.
+    // Prose takes a reading measure, since a line past ~70 is searched, not
+    // scanned. Only `Message`: a diagnostic surface must be the file.
     if matches!(kind, RecordKind::Message) && available > MEASURE {
         MEASURE
     } else {
@@ -771,19 +647,9 @@ const fn wrap_width(cols: u16, lead: u16, kind: RecordKind) -> u16 {
 
 /// A run of readings, measured so their values share a column.
 ///
-/// Not `Tiling` and not a widening of `tiles()`: a reading is a *sequence*,
-/// `tick` then `seed` then `experience`, while `RecordKind::tiles` is the
-/// unordered question and `only_unordered_rows_tile` pins it to `Entry` alone.
-///
-/// The shape test is strict because `RecordKind::Status` has five emit sites
-/// and only one is the `status` command. The cold-start report is a contiguous
-/// run of seven drawn at every launch and `verify` carries no quantity at all,
-/// so a plan that fired on those would put `cold start` and `ok` under a column
-/// headed by a number.
-///
-/// So: two or more records, every one carrying exactly a name and a numeric
-/// quantity. The boot report is mixed and fails on its first row; a `verify` is
-/// a run of one.
+/// Not `Tiling`: readings are a sequence. Strict — two or more records, each
+/// exactly a name and a number — since `Status` has five emit sites and only
+/// `status` is this shape.
 #[derive(Debug, Clone, Copy)]
 struct Readings {
     /// Cells the widest name takes.
@@ -864,10 +730,7 @@ const CONTINUATION: u16 = 2;
 
 /// How a run of [tiling](RecordKind::tiles) records packs across a pane.
 ///
-/// Split out from the drawing so [`RecordView::height`] and [`draw_tiled`]
-/// cannot disagree: a pane that measures one way and draws another leaves blank
-/// rows at the bottom while dropping history off the top, which is what the
-/// transcript did the first time this was looked at.
+/// Split out so [`RecordView::height`] and [`draw_tiled`] agree.
 #[derive(Debug, Clone, Copy)]
 struct Tiling {
     indent: u16,
@@ -883,14 +746,8 @@ struct Tiling {
     named: Option<u16>,
     /// One entry per row, with what it does beside it.
     ///
-    /// Tiling suits a set of single words and fails for phrases. `survey` lists
-    /// names and packing them is right; `help` lists *grammar*, and two words
-    /// in a cell run into the two in the next. So a run whose records carry a
-    /// description takes one row each and gets a second column.
-    ///
-    /// It rides the tiling plan rather than being a second mechanism, because
-    /// that plan exists so `height` and `draw` cannot disagree about a run —
-    /// the property a parallel path would have to re-earn.
+    /// For a run carrying descriptions, which phrases cannot tile. Inside the
+    /// tiling plan, so `height` and `draw` still agree.
     describing: bool,
 }
 
@@ -947,12 +804,8 @@ impl Tiling {
     /// The run ends at the first record that does not tile; `run` may continue
     /// past it.
     ///
-    /// It declines because a tiled row has no room for a per-record
-    /// [marker](Record::marker), and a marker is information — the difference
-    /// between a candidate and the command that will run. A run carrying any
-    /// marker falls back to one record per line, where the marker column
-    /// exists. Nothing reaching here today carries one; this keeps that true by
-    /// construction rather than by convention.
+    /// A run carrying any [marker](Record::marker) stacks, since a tiled row
+    /// has no marker column.
     fn plan<'r>(
         cols: u16,
         indent: u16,
@@ -1111,12 +964,7 @@ fn draw_tiled<'r>(
             // Two spaces and no `=`: the second column is a sentence about the
             // first, not a value bound to it.
             //
-            // No leader between them, and that is a rule. A leader bridges to a
-            // *right-aligned* column where the gap it spans is genuinely
-            // variable, which is why the boot card's `name ....... ok` works.
-            // Here the description column is left-aligned, so the run length
-            // follows the signature column's raggedness and the eye lands on
-            // the dots instead of the words.
+            // No leader: one suits only a right-aligned column.
             drawn.push_str(&signature_of(&record));
             if let Some(named) = plan.named {
                 for _ in drawn.chars().count()..usize::from(named) {

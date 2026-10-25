@@ -20,6 +20,7 @@
 //! press/release model. Those are `orbs`'s. A terminal has none of them and
 //! loses nothing informational, which is rule 2 as a crate boundary.
 
+mod autosave;
 mod bench;
 mod beside;
 mod board;
@@ -29,6 +30,7 @@ mod dump;
 mod editor;
 mod environment;
 mod focus;
+mod framed;
 mod gauges;
 mod glance;
 mod guide;
@@ -46,6 +48,7 @@ mod opening;
 pub mod panel;
 mod passing;
 mod post;
+mod prefix;
 mod prompt;
 mod prose;
 mod pylon;
@@ -70,15 +73,14 @@ mod tapestry;
 mod threshold;
 mod transition;
 
+pub use autosave::{AUTOSAVE_TICKS, autosave_due, keep};
 pub use bench::Bench;
 pub use climb::{Climb, Rolled, Watch};
 pub use dump::{
     PASSAGE as PASSAGE_VAR, requested as dump_requested, run as dump, run_script as dump_script,
 };
 pub use editor::{Editor, Mode as EditorMode, Outcome as EditorOutcome};
-pub use environment::{
-    LENGTH, RUSTC, SEALED, augury, fresh, new_wizard, scrivener, wizard, wizard_named,
-};
+pub use environment::{LENGTH, RUSTC, Readers, SEALED, fresh, new_wizard, wizard, wizard_named};
 pub use focus::{Focus, Open};
 pub use glance::Panel;
 pub use guide::{Entry, Guide, guide};
@@ -94,7 +96,7 @@ pub use manual::{
 };
 pub use menu::{Driver, Menu, Outcome as MenuOutcome, SETTINGS_ROWS, Stance, WORDS as MENU_WORDS};
 pub use offering::{Ghost, Offered};
-pub use opening::{Refused, loaded, tower_from};
+pub use opening::{Raised, Raising, Refused, Swapping, tower_from};
 pub use passing::{Passing, Showing};
 pub use prompt::{View, paint, paint_booting, paint_too_small};
 pub use prose::{

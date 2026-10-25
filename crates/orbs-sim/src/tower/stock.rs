@@ -1,18 +1,8 @@
 //! How much of a thing a place holds.
 //!
-//! One node per kind with a count, not one node per unit. A node per unit would
-//! make five sage five entities, five `survey` rows and five names the parser
-//! has to tell apart, all called the same thing. The count lives on the one node
-//! instead, keeping every existing lookup working as it did.
-//!
-//! Endless is a component state, not a special name. §11.5 wants the laboratory
-//! to always have something to do, and a tower whose sage runs out after one
-//! grind does not, so taking from a base reagent never depletes it.
-//!
-//! A variant rather than a `sage`/`rock-salt`/`charcoal` name check, for the
-//! reason `tower::Role` records — six sites once branched on `name == ATHANOR`
-//! with nothing binding them together. Which reagents are inexhaustible is a
-//! property of the tower's stock, decided once where it is built.
+//! One node per kind with a count, not one per unit, which would be five `survey`
+//! rows and five names to tell apart. Endless is a variant, not a name check,
+//! decided where the stock is built: a base reagent never depletes (§11.5).
 
 use bevy_ecs::prelude::*;
 
@@ -24,9 +14,7 @@ use crate::parser::NounKind;
 pub enum Stock {
     /// A base reagent: the tower always has more.
     ///
-    /// Not "a very large number". A count that merely started high would still
-    /// tick down on the panel and still end, and the promise this exists to make
-    /// is that it does not.
+    /// Not a large count, which would still tick down and end.
     Endless,
     /// A made thing: this many, and no more until more is made.
     Counted(u32),
@@ -65,24 +53,12 @@ pub fn find(world: &World, place: Entity, named: &str) -> Option<Entity> {
 
 /// What `place` holds: each name once, with how many units of it are there.
 ///
-/// The shape [`Recipes::matching`](crate::content::Recipes::matching) needs, and
-/// the one place it is derived. Three callers built the name list by hand and
-/// all three dropped the count, which is invisible until a recipe wants more
-/// than one — see [`Recipe::count`](crate::content::Recipe::count).
-///
-/// [`Endless`](Stock::Endless) reports [`u32::MAX`]: the tower always has more, so
-/// no count can be short of it.
-/// `&World`, not `&mut`: `contents` is `children_of` with a mutable borrow it
-/// does not use, and demanding one here would keep this out of `panel::read`,
-/// which is the caller that most needs it to be the same rule.
-///
-/// A reading is not stock, so [`Sense`](crate::parser::NounKind::Sense) children
-/// are skipped — a general rule rather than a special case for the one place it
-/// bites. The maze publishes what it can see as named children and the lectern
-/// is an instrument, so a reading counted here would enter the multiset
-/// `Recipes::matching` compares: four fragments plus one word is not four
-/// fragments, the recipe stops matching, and the panel reads `fouled` for a
-/// lectern with nothing wrong with it.
+/// The one derivation of what
+/// [`Recipes::matching`](crate::content::Recipes::matching) needs; hand-built
+/// copies dropped the count. [`Endless`](Stock::Endless) reports [`u32::MAX`].
+/// `&World`, so `panel::read` can share the rule. A
+/// [`Sense`](crate::parser::NounKind::Sense) child is skipped, or a published
+/// word would stop a recipe matching.
 #[must_use]
 pub fn holdings(world: &World, place: Entity) -> Vec<(String, u32)> {
     super::children_of(world, place)
@@ -113,9 +89,8 @@ pub fn held(world: &World, place: Entity, named: &str) -> Option<Stock> {
 
 /// Take `wanted` of `named` out of `place`, and say whether it was there.
 ///
-/// A pile that reaches zero is despawned, so "is there any" stays the same
-/// question it always was — a node existing — and `if the mortar is empty` does
-/// not have to learn about counts.
+/// A pile at zero is despawned, so "is there any" is still whether a node
+/// exists.
 pub fn take(world: &mut World, place: Entity, named: &str, wanted: u32) -> bool {
     let Some(node) = find(world, place, named) else {
         return false;
@@ -139,9 +114,7 @@ pub fn take(world: &mut World, place: Entity, named: &str, wanted: u32) -> bool 
 
 /// Put `wanted` of `named` into `place`, merging with whatever is there.
 ///
-/// Merging is the point: without it, grinding twice leaves two nodes both called
-/// `ground-sage` in the dispensary — two `survey` rows for one thing, and a name
-/// the parser has to choose between arbitrarily.
+/// Merging, or grinding twice leaves two nodes the parser cannot tell apart.
 pub fn give(world: &mut World, place: Entity, named: &str, kind: NounKind, wanted: u32) -> Entity {
     if let Some(node) = find(world, place, named) {
         match world.get::<Stock>(node).copied() {
@@ -174,15 +147,8 @@ pub fn give(world: &mut World, place: Entity, named: &str, kind: NounKind, wante
 
 /// Put an inexhaustible pile of `named` in `place`.
 ///
-/// The shape `build` gives the three the tower starts with, reached at run time:
-/// a base reagent unlocked mid-game has to be as endless as one the laboratory
-/// opened with, or the same word means a different thing depending on when it
-/// arrived — and a recipe written against it would work for a while and then
-/// stop.
-///
-/// Idempotent, and the one that already exists wins. `give` would have converted
-/// nothing: it returns early on an `Endless` node precisely so a second gift
-/// cannot make an inexhaustible pile exhaustible.
+/// `build`'s shape at run time, so a base reagent unlocked mid-game is as
+/// endless as the first three. Idempotent; the existing pile wins.
 pub fn give_endless(world: &mut World, place: Entity, named: &str, kind: NounKind) -> Entity {
     if let Some(node) = find(world, place, named) {
         if let Some(mut stock) = world.get_mut::<Stock>(node) {

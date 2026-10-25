@@ -71,8 +71,8 @@ fn no_humour_word_is_grammar_or_a_glyph() {
 
 #[test]
 fn every_glyph_reads_back_as_itself_and_sits_at_its_index() {
+    crate::testing::assert_round_trips(&Glyph::ALL, Glyph::word, Glyph::from_word);
     for (index, glyph) in Glyph::ALL.into_iter().enumerate() {
-        assert_eq!(Glyph::from_word(glyph.word()), Some(glyph));
         assert_eq!(glyph.index(), index);
     }
     assert_eq!(Glyph::from_word("crown"), None);

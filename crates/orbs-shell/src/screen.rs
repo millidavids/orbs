@@ -142,10 +142,8 @@ impl Screen {
     /// `false` is a real state to render — a "window too small" screen — not a
     /// reason to panic. See `ScreenLayout::compute`.
     ///
-    /// Two ways to fail, both reachable: a grid below the authoring floor
-    /// (`ORBS_GRID`, a shrunk terminal), or a window too small for the glyphs
-    /// to be letters (dragging). Before the grid was fixed a small window *was*
-    /// a small grid, so the first test was the only one.
+    /// A grid below the floor (`ORBS_GRID`, a terminal), or a window too small
+    /// for the glyphs to be letters.
     #[must_use]
     pub fn is_hostable(self) -> bool {
         self.grid.fits(MIN_GRID) && self.scale() >= MIN_SCALE
@@ -167,10 +165,8 @@ impl Screen {
 
     /// A screen with no window behind it — a terminal, or a dump.
     ///
-    /// The constructor three callers were open-coding, and had drifted apart
-    /// on the mode. [`orbs_render::PICTURE`] is the honest stand-in: [`scale`]
-    /// comes out at exactly `MIN_SCALE`, so hostability turns on the *grid*,
-    /// which `for_window` hard-codes and this overrides.
+    /// On [`orbs_render::PICTURE`], so [`scale`] is exactly `MIN_SCALE` and
+    /// hostability turns on the grid.
     ///
     /// [`scale`]: Self::scale
     #[must_use]

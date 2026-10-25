@@ -155,15 +155,8 @@ fn every_value_on_every_row_is_reachable_by_a_prefix() {
 
 #[test]
 fn no_settings_page_is_taller_than_the_menu_can_draw() {
-    // The check `orbs-shell` cannot make: its own version compared two
-    // constants in the same file and could not fail. These rows are this
-    // build's, assembled from what it has, and this crate is the only one
-    // that can count them.
-    //
-    // `menu/paint.rs` refuses to draw below `MIN_ROWS`, sized for the
-    // tallest page — so a page with more rows than fit is one whose last
-    // setting a player at the 80×22 floor simply cannot see, which is §15's
-    // dead end with a scrollbar-shaped hole where the fix would go.
+    // Only this crate can count its rows; a page taller than `MIN_ROWS`
+    // hides its last setting at the 80×22 floor (§15).
     for page in orbs_shell::settings::Category::ALL {
         let rows = defaults().iter().filter(|row| row.page == page).count();
         assert!(

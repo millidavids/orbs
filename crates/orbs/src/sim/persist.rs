@@ -17,19 +17,9 @@ use super::driver::Tower;
 
 /// The file the tower in front of the player is kept in.
 ///
-/// The path is state rather than a function call, and that is what stops loading
-/// a second game destroying the first. The autosave fires every sixty ticks and
-/// again on the way out; while there was one game that path could be
-/// `save_path()`, read afresh. With a menu that can put a different tower in
-/// front of the player, a path read at the moment of writing is read *after* the
-/// swap — so the game you just left is written into the file of the one you just
-/// opened.
-///
-/// So the path travels with the `Sim`: `shell::menuing::swap` replaces both in
-/// one operation and nothing between can observe one without the other.
-///
-/// `None` when this session keeps nothing at all — `ORBS_SAVE=off`, which
-/// `scripts/dumps.sh` and the played-game suite both pin.
+/// State, not a call, travelling with the `Sim` through `menuing::swap`, or the
+/// game left is written into the file of the one opened. `None` for
+/// `ORBS_SAVE=off`.
 #[derive(Resource, Debug, Default, Clone)]
 pub(crate) struct Kept(Option<PathBuf>);
 
@@ -61,28 +51,9 @@ pub(crate) fn keep_now(tower: &Tower, kept: &Kept) -> bool {
     written.is_ok()
 }
 
-/// How often the tower writes itself out.
-///
-/// §8 asks for *"every N ticks and on significant events, not every second"*.
-/// One minute of world time is the whole of the answer for now: a save is a few
-/// hundred lines of TOML and writing it costs less than a frame, and the most a
-/// crash can cost is a minute of a game whose slowest single action is 94 ticks.
-///
-/// The *significant events* half is one event today — leaving — and it is not on
-/// this clock at all. See [`keep_on_the_way_out`].
-const AUTOSAVE_TICKS: u64 = 60;
-
-/// Whether this tick is one that writes.
-///
-/// Read from the sim's own clock, not a counter of our own: a counter drifts
-/// from world time the moment `meditate` runs three hundred ticks inside one
-/// `step`, which is the trap §19 records the instrument animations falling into.
-fn due(tower: &Tower) -> bool {
-    let tick = tower.sim().tick().get();
-    tick > 0 && tick.is_multiple_of(AUTOSAVE_TICKS)
-}
-
-/// Write the tower out, a minute of world time at a time.
+/// Write the tower out, every `orbs_shell::AUTOSAVE_TICKS` of world time. §8's
+/// *significant events* half is one event today — leaving — and it is not on
+/// this clock at all: see [`keep_on_the_way_out`].
 ///
 /// Ordered after [`advance`](super::driver::advance) in `FixedUpdate`, so the
 /// world it describes is the one the tick just finished — §8's boundary, and the
@@ -93,7 +64,7 @@ pub(super) fn autosave(mut tower: ResMut<Tower>, kept: Res<Kept>, mut said: Loca
     // `Tower`'s change tick every second, re-arming its own `resource_changed`
     // run condition for ever and dragging the panel, the suggestions and the
     // four surface watchers back to frame rate. `driver` records it.
-    if !due(&tower) {
+    if !orbs_shell::autosave_due(tower.sim().tick().get()) {
         return;
     }
     keep(&mut tower, &kept, &mut said);
@@ -101,13 +72,8 @@ pub(super) fn autosave(mut tower: ResMut<Tower>, kept: Res<Kept>, mut said: Loca
 
 /// Write the tower out because the game is closing.
 ///
-/// Every way out, not the one with a word: `F10` writes an `AppExit` directly
-/// and the window's close button produces one from `bevy_window`, neither
-/// touching the `Quitting` flag — so ordering against `quit_requested` covers
-/// one exit in three.
-///
-/// So it reads `AppExit` itself, in `Last`, the one place every route out has
-/// converged by. `quit`'s §19 entry records the mirror-image bug.
+/// Every way out: `AppExit`, in `Last`, where `F10`, the close button and
+/// `quit` converge (§19).
 pub(super) fn keep_on_the_way_out(
     leaving: MessageReader<AppExit>,
     mut tower: ResMut<Tower>,
@@ -120,12 +86,7 @@ pub(super) fn keep_on_the_way_out(
     keep(&mut tower, &kept, &mut said);
 }
 
-/// Write it, and complain once if it will not go.
-///
-/// Once, because there is no `save` verb (§19): a player never asks for one and
-/// never sees one refused, so a silent failure is the session's work gone with
-/// nothing said. But a read-only directory fails all sixty attempts an hour,
-/// which is the noise §19 deleted the editor's per-save announcement over.
+/// Write it, and complain once if it will not go — see `orbs_shell::keep`.
 ///
 /// `Local<bool>` rather than a resource, because the two callers fail for the
 /// same reason and neither needs to know about the other.
@@ -133,17 +94,7 @@ fn keep(tower: &mut Tower, kept: &Kept, said: &mut bool) {
     // The path this game came from, never `save_path()` — see `Kept`. A path
     // resolved here is resolved after a swap, which is how loading a second
     // tower writes the first one into the second one's file.
-    let Some(path) = kept.path() else {
-        *said = false;
-        return;
-    };
-    let Err(error) = orbs_shell::write_save_to(path, &tower.sim().snapshot()) else {
-        *said = false;
-        return;
-    };
-    if !*said {
-        *said = true;
-        bevy::log::error!("the tower could not be written out: {error}");
+    if orbs_shell::keep(tower.sim(), kept.path(), said) {
         // And in voice, not only in the log: §3 makes the record stream the
         // output, a player never reads `tracing`, and with no `save` verb they
         // have no reason to look for a failure they did not ask for.

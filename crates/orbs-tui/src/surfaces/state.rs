@@ -41,7 +41,7 @@ pub(crate) struct Surfaces {
     /// putting a different `Sim` in front of the player means rebuilding the
     /// whole `Session`, the terminal's answer to the Bevy build's
     /// eighteen-resource reset — a new struct forgets no derived field.
-    pub(crate) swapping: Option<Swap>,
+    pub(crate) swapping: Option<orbs_shell::Raising>,
     /// Whether the menu has asked for the manual, waiting for the book.
     ///
     /// A flag for `leaving`'s reason: `menu_took` takes no `Sim` on purpose, and
@@ -56,38 +56,9 @@ pub(crate) struct Surfaces {
     pub(crate) driving: Option<orbs_shell::Driver>,
     /// A setting the menu changed, waiting for the session to honour it.
     ///
-    /// [`driving`](Self::driving)'s shape, which it should have had from the
-    /// start: this arm was `Some(MenuOutcome::Set { .. }) => {}` under a comment
-    /// claiming the session would pick the value up from the row next frame.
-    /// Nothing did — rows flow menu-ward only — so `linear on` wrote the file,
-    /// flipped the row, and the pane kept drawing cells, with reopening the menu
-    /// flipping the row back. `Outcome::Set`'s doc is the contract that broke:
-    /// *"honour it now rather than at the next launch"*.
+    /// [`driving`](Self::driving)'s shape, since rows flow menu-ward only:
+    /// `Outcome::Set` is honoured now, not at the next launch.
     pub(crate) setting: Option<(String, String)>,
-}
-
-/// A tower the menu asked for.
-///
-/// An enum rather than two optional fields, exactly as the Bevy build's
-/// `Raising` is and for the same reason: the threshold made a new tower with
-/// nowhere to keep it reachable, and a path beside a length spells four states
-/// for three meanings. The fourth — a load with no file — would be a dead
-/// branch.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum Swap {
-    /// Open the tower already in this file.
-    Load(std::path::PathBuf),
-    /// Begin a tower at this length — installed first, when the session says.
-    Begin {
-        /// Where it will be kept, or [`None`] for a session that keeps nothing
-        /// (`ORBS_SAVE=off`) — a playable tower that is not remembered, which is
-        /// how every scenario in the played-game suite runs.
-        keep: Option<orbs_shell::Keep>,
-        /// How long it is to be.
-        length: orbs_sim::content::Length,
-    },
-    /// The installation has woken this tower: raise it, never install it.
-    Installed(orbs_shell::Raise),
 }
 
 impl Surfaces {
@@ -131,28 +102,11 @@ impl Surfaces {
         if self.editing.is_none()
             && let Some(request) = sim.opening()
         {
-            let mut editor = Editor::open(&request.name, &request.domain, &request.lines);
-            // Read before the first keystroke, so a spell opened with a fault in
-            // it says so on the way in. The pair to the settle-beat read below.
-            editor.set_reading(sim.read_spell_with(
-                &request.name,
-                &request.domain,
-                &request.lines,
-                scrivener,
-            ));
-            // Opened on the vocabulary rather than blank until the first key.
-            editor.refresh(sim);
-            self.editing = Some(editor);
+            self.editing = Some(Editor::opened(&request, sim, scrivener));
         }
         if self.weaving.is_none() && sim.weaving() {
             let mut screen = Tapestry::default();
-            screen.refresh(
-                sim.experience(),
-                sim.renown(),
-                sim.scale(),
-                sim.ley_line(),
-                sim.mastery(),
-            );
+            screen.read_from(sim);
             self.weaving = Some(screen);
         }
         if !self.walking && sim.wandering() {
@@ -162,12 +116,13 @@ impl Surfaces {
         // `quit`'s flag is the session's, set only by a *confirmed* one.
         if self.menuing.is_none() && sim.menuing() {
             // The options page marks what is *in effect*, which the session
-            // holds — see `Menu::show_driver`. `InTower`, because the word is
-            // typed at a prompt: the threshold's menu is `Session::new`'s.
-            let mut menu = Menu::at(orbs_shell::Stance::InTower);
-            menu.show_driver(held.driver());
-            menu.show_settings(crate::carried::settings(&held));
-            self.menuing = Some(menu);
+            // holds — see `Menu::open_at`. `InTower`, because the word is typed
+            // at a prompt: the threshold's menu is `Session::new`'s.
+            self.menuing = Some(Menu::open_at(
+                orbs_shell::Stance::InTower,
+                held.driver(),
+                crate::carried::settings(&held),
+            ));
         }
         // The book, assembled here because this is where the `Sim` is: the menu
         // raised the flag, and `menu_took` has no world to build one from.
@@ -197,13 +152,7 @@ impl Surfaces {
             editor.set_running_line(sim.running_line(editor.name()));
         }
         if let Some(screen) = &mut self.weaving {
-            screen.refresh(
-                sim.experience(),
-                sim.renown(),
-                sim.scale(),
-                sim.ley_line(),
-                sim.mastery(),
-            );
+            screen.read_from(sim);
         }
         if self.walking && sim.stacks().is_none() {
             self.walking = false;

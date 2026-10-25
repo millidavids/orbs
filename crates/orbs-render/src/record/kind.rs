@@ -1,16 +1,9 @@
 //! What a record *is* — and, from that, which of them the eldritch renderer may
 //! touch.
 //!
-//! DESIGN.md §3 makes script listings, schedule listings and log output
-//! corruption-exempt: they must be trustworthy as *renderings* even when their
-//! contents are not. That cuts two ways. [`Presentation::Eldritch`] is tonal
-//! and never reaches them — a player auditing a log at peak threat must be able
-//! to believe their eyes. [`Presentation::Tampered`] is diagnostic and always
-//! allowed: §8.1's structural tell *is* the sabotage on that surface.
-//!
-//! Enforcement is in [`RecordKind::allows`], and the only presentation accessor
-//! ([`Record::presentation`](super::Record::presentation)) is filtered through
-//! it, so no call site can get it wrong.
+//! Listings and logs are corruption-exempt (§3): [`Presentation::Eldritch`]
+//! never reaches them, while [`Presentation::Tampered`], the sabotage tell
+//! (§8.1), always may. [`RecordKind::allows`] filters the only accessor.
 
 use crate::linear::UtteranceKind;
 use crate::style::Presentation;
@@ -23,12 +16,8 @@ use crate::style::Presentation;
 pub enum RecordKind {
     /// What the rows under it are, in a listing that groups them.
     ///
-    /// `[reagent]`, `[place]` — the shape a `.toml` table header has, which a
-    /// player who has seen one config file already knows.
-    ///
-    /// It stacks while the rows tile: a heading packed into a column beside the
-    /// things it heads would head nothing. It also carries the `kind` that used
-    /// to sit on every row, whose repetition made a listing read as a wall.
+    /// `reagent`, `place`, ruled off by the view. It stacks while the rows
+    /// tile, and carries the `kind` once rather than on every row.
     Section,
     /// One row of a filesystem listing.
     Entry,
@@ -90,15 +79,8 @@ impl RecordKind {
 
     /// Whether a run of these packs across the pane instead of stacking down it.
     ///
-    /// A listing is a set: the reader wants one name in it and the order
-    /// carries nothing. Stacked one per line, ten belongings eat ten rows of an
-    /// 80-column pane to use eighteen columns, and the boot report pushed its
-    /// own first line off the screen. Every other kind is a sequence — a log
-    /// line's neighbours are its context, a status row wants its column aligned
-    /// with the pair above — so exactly one kind tiles.
-    ///
-    /// This costs a screen reader nothing: [`RecordView`](super::RecordView)
-    /// speaks each record separately and in stream order.
+    /// Only a listing, a set whose order carries nothing; every other kind is
+    /// a sequence. A reader still hears each record in order.
     #[must_use]
     pub const fn tiles(self) -> bool {
         matches!(self, Self::Entry)

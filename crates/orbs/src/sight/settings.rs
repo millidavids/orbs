@@ -68,14 +68,9 @@ pub(super) fn cycle(mut vision: ResMut<Vision>) {
     vision.0 = next;
     info!("sight: {}", next.name());
     // The key and the settings page are one setting seen twice — see
-    // `crt::plugin::cycle`. An accommodation that did not survive a relaunch
+    // `crt::tube::cycle`. An accommodation that did not survive a relaunch
     // would be the worst one to leave un-sticky.
-    crate::shell::remember_setting(crate::shell::SIGHT, next.name());
-}
-
-/// What the accommodation opens as: the switch, then what the player chose.
-pub(super) fn seeded() -> Sight {
-    Sight::seeded()
+    orbs_shell::settings::set(orbs_shell::settings::SIGHT, next.name());
 }
 
 #[cfg(test)]
@@ -105,16 +100,7 @@ mod tests {
         assert!(SightUniform::new(Sight::Plain, 0.6).wanted());
     }
 
-    // No test here for "the tube cannot switch the accommodation off". There was
-    // one, asserting `new(s) == new(s)` — the reflexivity of a pure function,
-    // which holds for every implementation including one that read the tube's
-    // state. A test that cannot fail stops anyone writing a real one.
-    //
-    // The guarantee is structural: `new` takes a `Sight` and nothing else, and
-    // `sight::plugin::extract` reads `Vision` and nothing else, so no value of
-    // `CrtSettings` is in scope on either path.
-    //
-    // The evidence is the four-way capture matrix in SEEING-IT's greyscale
-    // block, which drives the real binary at both tube states and counts
-    // hue-carrying pixels.
+    // "The tube cannot switch the accommodation off" is structural — no
+    // `CrtSettings` is in scope of `new` or `extract` — and SEEING-IT's
+    // greyscale matrix is its evidence.
 }

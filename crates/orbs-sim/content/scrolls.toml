@@ -1,19 +1,15 @@
 # What a scroll does in the calm layer, as a supply (§19, Supply).
 #
-# **No single scroll does anything.** `wield <scroll>` outside a siege opens its
-# supply when the arsenal holds enough for the slowest rate; the word again
-# raises it a rate; `stop <scroll>` closes it. While open it draws every `every`
-# ticks from the moment it opened, whether or not anything uses the draw —
-# leaving one open is a cost, which is what keeps it from being mindless. It
-# pauses while a siege runs and cannot be opened during one.
+# `wield <scroll>` outside a siege opens its supply, again raises a rate, `stop`
+# closes it. It draws every `every` ticks, used or not, so leaving it open
+# costs. Paused through a siege.
 #
 # Rates as `siege.toml` writes them (`content::rate` checks both files):
 #   opens  — how many the arsenal must hold to run at this rate
 #   draws  — how many each draw takes
 #   worth  — what a draw buys, per scroll below
 #
-# Separate from `siege.toml` for the reason that file is separate from
-# `materials.toml`: what a scroll does on the wall and in a room are two facts.
+# Apart from `siege.toml`: the wall and a room are two facts.
 
 # The laboratory runs faster for `every` ticks and one more after each draw, so
 # no run starts in a gap between two. `worth` divides a run's time: 2 is half,

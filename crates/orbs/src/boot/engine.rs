@@ -1,27 +1,12 @@
 //! What this binary is built out of — the one POST line only a frontend knows.
 //!
-//! The boot card is a diegetic inventory of the machine (§4), which is the whole
-//! argument for it existing: `tower/boot.rs` is built by walking the world so it
-//! cannot go stale, and a POST in front of it printing invented numbers would be
-//! the same lie one screen earlier.
-//!
-//! So the engine line cannot live with the painter. The painter is shared —
-//! `orbs-tui` draws the same card — and a terminal build does not link Bevy at
-//! all. A shared painter hard-coding `bevy 0.20.0` would put a component on the
-//! inventory that is not in the machine.
-//!
-//! This is [`crate::wizard`]'s shape: a fact only the frontend can know, handed
-//! to the shared layer, which still decides where it goes and how it reads.
+//! The card is a true inventory (§4), and the terminal build links no Bevy, so
+//! the engine line is handed to the shared painter, as [`crate::wizard`] is.
 
 /// The exact Bevy pin, held to `Cargo.toml` by the test below.
 ///
-/// A const rather than a build script because the version is *pinned* —
-/// CLAUDE.md commits to an exact pin and upgrading it is a deliberate
-/// one-window act, so a number that can only change when someone edits the
-/// manifest is exactly as live as it needs to be.
-/// A macro so the number is written once, because `concat!` takes literals and
-/// not consts — and two copies of a version is the drift this file exists to
-/// prevent.
+/// A const, since the pin changes only by hand; a macro, since `concat!` takes
+/// literals, so the number is written once.
 macro_rules! bevy_version {
     () => {
         "0.20.0"
@@ -49,19 +34,8 @@ mod tests {
 
     #[test]
     fn the_bevy_version_is_the_one_the_manifest_pins() {
-        // CLAUDE.md pins Bevy exactly and upgrading is a deliberate Phase 11c
-        // act. This is what stops the splash drifting away from the manifest
-        // silently when that window arrives.
-        //
-        // It stays in this crate on purpose: moved beside the painter it would
-        // resolve `CARGO_MANIFEST_DIR` to a crate pinning no engine and pass by
-        // asserting nothing, which is how `orbs-balance`'s first `agrees.rs` was
-        // green while measuring nothing (§19).
-        //
-        // Every declaration, not merely one. `crates/orbs/Cargo.toml` declares
-        // bevy twice — plainly, and under `cfg(target_os = "linux")` — and a
-        // `contains` passes if either still says the old pin. The half most likely
-        // to be left behind is the one that decides what a Linux build links.
+        // Here, where `CARGO_MANIFEST_DIR` pins an engine (§19). Every
+        // declaration, since the manifest declares bevy twice.
         let manifest = include_str!("../../Cargo.toml");
         let declared = manifest
             .lines()

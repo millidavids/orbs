@@ -1,12 +1,7 @@
 //! Getting around, and looking at what is there.
 //!
-//! §7: *"The directory tree **is** the tower. Navigation is diegetic; paths are
-//! places."* [`attend`] is also what makes a domain's contents nameable — the
-//! scene holds every place but only the belongings of where you stand — so this
-//! is the module every other verb depends on to have somewhere to act.
-//!
-//! No prose here: rule 6 and §12 put authored text in content files, so these
-//! emit facts and a later layer wraps sentences around them.
+//! §7: *"The directory tree **is** the tower."* [`attend`] is also what makes a
+//! domain's contents nameable.
 
 use bevy_ecs::prelude::*;
 use orbs_render::{FieldName, RecordKind, Role};
@@ -19,10 +14,8 @@ use super::{acknowledge, missing};
 
 /// Go somewhere.
 ///
-/// §7: *"Navigation is diegetic; paths are places."* Moving is also what makes a
-/// domain's contents nameable at all — the scene holds every place but only the
-/// belongings of where you stand, so `attend` is how a player reaches the nouns
-/// a brewing command needs. See [`tower::rebuild`].
+/// The scene holds every place but only the belongings of where you stand, so
+/// this is how a player reaches a command's nouns. See [`tower::rebuild`].
 pub(super) fn attend(intent: &Intent, world: &mut World) {
     let Some(target) = intent.arguments.first().map(|argument| &argument.value) else {
         acknowledge(Verb::Attend, world);
@@ -43,10 +36,8 @@ pub(super) fn attend(intent: &Intent, world: &mut World) {
         return;
     }
 
-    // A compass bearing is not a room. The archive's four ways have to be
-    // `NounKind::Place` — the only kind a spell's place question resolves
-    // against, so `if north has passage` cannot be written otherwise — which
-    // also made them somewhere you could stand (§19).
+    // A compass bearing is not a room, though a way is a `Place` so a spell
+    // can ask about it (§19).
     if world.get::<tower::Reading>(node).is_some() {
         let message = world
             .resource::<crate::content::Prose>()
@@ -64,10 +55,8 @@ pub(super) fn attend(intent: &Intent, world: &mut World) {
 
     world.insert_resource(Cwd(node));
 
-    // Walking in is the only thing that clears the rail's mark. §9's minimised
-    // half says *something happened over there*; once you are in the room the
-    // room says it, and a marker that outlived the visit is a light nobody can
-    // turn off. A timer would clear while the player was making tea.
+    // Walking in is the only thing that clears the rail's mark (§9): the room
+    // says it now. A timer would clear while the player made tea.
     if let Some(name) = world.get::<tower::Name>(node).map(|name| name.0.clone()) {
         tower::clear_mark(world, &name);
     }
@@ -85,10 +74,7 @@ pub(super) fn attend(intent: &Intent, world: &mut World) {
 
 /// List what is at a place, or here.
 ///
-/// `Verb::Survey` takes an optional place, and dropping it made the echo and the
-/// listing disagree: `survey archive` restated `/tower/archive` and showed the
-/// laboratory. §6 makes the echo how players learn the vocabulary, so an echo
-/// describing a different command is worse than no echo.
+/// The place, when named, is honoured, so the echo and the listing agree (§6).
 pub(super) fn survey(intent: &Intent, world: &mut World) {
     let at = match intent.arguments.first() {
         Some(argument) => {
@@ -110,13 +96,9 @@ pub(super) fn survey(intent: &Intent, world: &mut World) {
         return;
     }
 
-    // A satchel answers with its queue, in queue order. Everything below sorts
-    // by kind then name, which destroys the one fact a queue holds: which is
-    // next. The names are not children either (see `tower::satchel`), so the
-    // walk below would report an empty shelf.
-    //
-    // Empty falls through rather than answering here, so `the satchel holds
-    // nothing` comes from the same `survey_bare` line every bare place gets.
+    // A satchel answers in queue order, which the sort below would destroy,
+    // and its names are not children (`tower::satchel`). Empty falls through
+    // to `survey_bare`.
     if let Some(satchel) = world.get::<tower::Satchel>(at)
         && !satchel.is_empty()
     {
@@ -154,31 +136,20 @@ pub(super) fn survey(intent: &Intent, world: &mut World) {
                 // thing that is either there or not, and `x1` beside every row is a
                 // column of noise.
                 let stock = world.get::<tower::Stock>(node).map(|stock| stock.label());
-                // Only what is stocked, and `arsenal.log` is why: asking a file
-                // how well stocked the tower is in it printed `arsenal.log
-                // spent`, a warning about a thing that cannot run out.
-                // `stocktake` and the save migration filter the same way.
+                // Only what is stocked, or `arsenal.log` reads as spent — the
+                // filter `stocktake` and the save migration use.
                 let supply =
                     (keep && stock.is_some()).then(|| tower::freshness_of(world, &name).word());
                 Some((name, kind.label(), stock, supply))
             })
             .collect();
 
-    // Grouped by kind, then by name: a tree walk put the two files either side
-    // of the instruments, so the listing was something you read rather than
-    // scanned. Sorted here rather than in the frontend because §14's linear
-    // stream is the same sequence, and a view that re-ordered would carry an
-    // ordering the record stream does not.
+    // Grouped by kind, then by name, so it scans. Here, not in the frontend,
+    // since §14's linear stream is the same sequence.
     here.sort_by(|left, right| left.1.cmp(right.1).then_with(|| left.0.cmp(&right.0)));
 
-    // An empty place still answers. Every record below is pushed inside the
-    // loop, so a childless place said nothing at all — §6 allows silence
-    // nowhere. Unnoticed for four phases because the built rooms are never
-    // empty; the sanctum made it the common case, since two of three stations
-    // are bare for most of a solve.
-    //
-    // Said here rather than per-domain because the hole is `survey`'s: the
-    // lens's untouched socket and a scoured instrument are the same shape.
+    // An empty place still answers (§6), here rather than per domain, since
+    // an untouched socket and a scoured instrument are the same shape.
     if here.is_empty() {
         let name = world
             .get::<tower::Name>(at)
@@ -198,10 +169,8 @@ pub(super) fn survey(intent: &Intent, world: &mut World) {
 
     let mut scrollback = world.resource_mut::<Scrollback>();
     let records = scrollback.records_mut();
-    // A heading per kind, and the kind off every row: `sage reagent` said the
-    // word once per line for no gain, and that repetition made a listing read as
-    // a wall rather than a table. A row carries a name and, where there is one,
-    // an amount — which is what lets the view line them up (`Tiling`).
+    // A heading per kind, and a row of name and amount, so the view can line
+    // them up (`Tiling`).
     let mut section = "";
     for (name, kind, stock, supply) in here {
         if kind != section {
@@ -232,9 +201,7 @@ pub(super) fn root(world: &World) -> Entity {
 
 /// Say that `room` is not the player's yet.
 ///
-/// One sentence for every verb that reaches a shut room, so the refusal is the
-/// same whichever door was tried — and it names the room, because a player who
-/// typed `attend stacks` deserves to learn what the stacks are in.
+/// One sentence for every door, naming the room the thing is in.
 fn refuse_sealed(world: &mut World, verb: Verb, room: &str) {
     let message = world
         .resource::<crate::content::Prose>()
@@ -262,24 +229,17 @@ pub(super) fn find_place(world: &World, from: Entity, target: &str) -> Option<En
 
 /// The place `named`, searched from the top of the tree.
 ///
-/// The one lookup a spell's `Domain` needs, exported because the runner lives in
-/// `tower::spell` and this is `execute`'s answer to "which place is that". A
-/// second copy would be a second answer to a question `find_place` already
-/// settles — including that a place answers to its full path *or* its leaf.
+/// Exported for `tower::spell`'s `Domain`, so there is one answer to "which
+/// place is that", full path or leaf.
 pub fn find_domain(world: &World, named: &str) -> Option<Entity> {
     find_place(world, tower::root(world), named)
 }
 
 /// The spell `target` names, wherever it is kept.
 ///
-/// Nameable and findable are one rule. `tower::scene` registers every `.spell`
-/// from the whole tree so a spell can be named from anywhere; nothing was doing
-/// the matching half, and `peruse first_light.spell` resolved at `Clear`, found
-/// no node, fell through to the record reader and reported `peruse 0`. The
-/// lookup is global because the scene is global — change one and the other moves.
-///
-/// The extension is optional, because [`with_extension`](crate::content::with_extension)
-/// makes `first_light` and `first_light.spell` the same spell everywhere else.
+/// Global, because `tower::scene` names every `.spell` from anywhere:
+/// nameable and findable are one rule. The extension is optional, as
+/// [`with_extension`](crate::content::with_extension) makes it.
 pub(super) fn find_script(world: &World, target: &str) -> Option<Entity> {
     tower::reach::look(world)
         .scope(tower::reach::Scope::Tower)

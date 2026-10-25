@@ -8,39 +8,11 @@
 //! `debug_spawn` is the door in, so these are debug-only.
 #![cfg(debug_assertions)]
 
-use orbs_render::{FieldName, Value};
+mod common;
+
+use common::{ever_said, reloaded, run, said, the_siege};
 use orbs_sim::tower::supply::Supplies;
-use orbs_sim::{Rngs, Save, Sim, tower};
-
-fn run(sim: &mut Sim, line: &str) {
-    sim.submit(line);
-    sim.step();
-}
-
-fn said(sim: &Sim) -> Vec<String> {
-    sim.scrollback()
-        .records()
-        .iter()
-        .filter_map(|record| match record.field(FieldName::Message) {
-            Some(Value::Text(text)) => Some(text.to_owned()),
-            _ => None,
-        })
-        .collect()
-}
-
-fn ever_said(sim: &Sim, needle: &str) -> bool {
-    said(sim).iter().any(|line| line.contains(needle))
-}
-
-fn the_siege(sim: &mut Sim) -> tower::Siege {
-    let world = sim.world_mut();
-    world
-        .query::<&tower::Siege>()
-        .iter(world)
-        .next()
-        .cloned()
-        .expect("a siege on the rampart")
-}
+use orbs_sim::{Rngs, Sim, tower};
 
 fn held(sim: &Sim, named: &str) -> u32 {
     tower::supply::held_in_arsenal(sim.world(), named)
@@ -328,8 +300,7 @@ fn a_supply_open_in_a_saved_siege_comes_back_open() {
     run(&mut sim, "debug_spawn vigour 12");
     run(&mut sim, "quaff vigour");
     let full = the_siege(&mut sim).full();
-    let text = sim.snapshot().to_toml().expect("a save renders");
-    let mut loaded = Sim::restored(&Save::from_toml(&text).expect("a save reads back"));
+    let mut loaded = reloaded(&sim.snapshot());
     assert_eq!(
         loaded.world().resource::<Supplies>().get("vigour"),
         sim.world().resource::<Supplies>().get("vigour"),
@@ -427,8 +398,7 @@ fn stopping_and_reopening_in_one_round_draws_no_second_ration() {
     assert_eq!(held(&sim, "mending"), 18, "a second ration was taken");
 
     // ...and a save between the stop and the reopen remembers it too.
-    let text = sim.snapshot().to_toml().expect("a save writes");
-    let mut loaded = Sim::restored(&Save::from_toml(&text).expect("a save reads"));
+    let mut loaded = reloaded(&sim.snapshot());
     run(&mut loaded, "quaff mending");
     assert_eq!(
         held(&loaded, "mending"),
@@ -520,8 +490,7 @@ fn an_older_sieges_vigour_keeps_the_room_it_bought() {
     let full = the_siege(&mut sim).full();
     let mut save = sim.snapshot();
     save.world.format = 16;
-    let text = save.to_toml().expect("a save writes");
-    let mut loaded = Sim::restored(&Save::from_toml(&text).expect("a format-16 save reads"));
+    let mut loaded = reloaded(&save);
     run(&mut loaded, "hold");
     assert!(the_siege(&mut loaded).running(), "the round ended it");
     assert_eq!(the_siege(&mut loaded).full(), full, "the room was lost");

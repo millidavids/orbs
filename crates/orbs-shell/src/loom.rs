@@ -199,9 +199,8 @@ fn headings(
 /// at their cost on [`along`]'s logarithmic scale; where cost and cells
 /// disagree the cells win and [`pack`] says how.
 ///
-/// The totals alternate between two rows, because a five-figure label is wider
-/// than the three cells between stations and one row ran them together. Two
-/// rows buy six cells — so six figures are abbreviated (see [`figures`]).
+/// The totals alternate between two rows, buying six cells a label; six
+/// figures are abbreviated (see [`figures`]).
 fn line_track(painter: &mut Painter<'_>, screen: &Tapestry, left: u16, y: u16, inner: u16) {
     let width = track_width(screen, inner);
     stations::run(painter, Pos::new(left, y), width);
@@ -236,12 +235,8 @@ fn line_track(painter: &mut Painter<'_>, screen: &Tapestry, left: u16, y: u16, i
 
 /// A threshold as the line draws it: exact below six figures, `250k` above.
 ///
-/// Six figures is where a label stops fitting its `2 * GAP` = 6 cells; at a
-/// long game the last two ran together into `121766250000`. Nothing below six
-/// figures moves, so the dump captures do not shift.
-///
-/// Rounds up, never down — a lower label would say a station is nearer than it
-/// is. The spoken form, the details pane and `weave_locked` take it unrounded.
+/// Six figures overflow `2 * GAP` cells. Rounds up, so no station looks
+/// nearer than it is; the spoken form and details pane are exact.
 fn figures(at: u64) -> String {
     if at < 100_000 {
         return at.to_string();
@@ -285,21 +280,10 @@ struct Packed {
 /// Where a run of stations stands: never closer than they can be drawn, and
 /// never past the end of the track.
 ///
-/// Cost decides the position; the pane decides the rest. Two close totals land
-/// on the same cell of a narrow track and a framed node writes at `x-1` and
-/// `x+1`, so the second one's `[` erased the first one's mark — which
-/// `Progression::check` cannot prevent, since cells are a fact about a pane and
-/// `boundaries.rs` keeps panes out of the sim. Three moves:
-///
-/// - Frames come off before positions go wrong. Sixteen framed stations want
-///   48 cells; bare marks need two each, and a road of `·` still reads as one.
-/// - A forward pass pushes right, so consecutive stations never share a cell.
-/// - A backward pass pulls left, so the tail cannot march off the end — pushing
-///   alone clipped the last stations silently while `announce` still spoke them.
-///
-/// A split pane leaves 39 cells, which is where the frames come off. `paint`
-/// refuses anything too narrow for even the tight packing ([`track_needs`]), so
-/// the two passes never have to overlap stations to satisfy each other.
+/// Cost decides the position, the pane the rest — cells are a pane's fact, so
+/// the sim cannot check them. Frames come off first; a forward pass pushes
+/// right so no two share a cell; a backward pass pulls left so the tail stays
+/// on. `paint` refuses a pane too narrow for either ([`track_needs`]).
 fn pack(left: u16, width: u16, scale: u64, totals: &[u64]) -> Packed {
     // A station may write a frame at `x-1` and `x+1`, so the cells it can stand
     // on are one inside each end of the run.
@@ -340,18 +324,10 @@ fn track_needs(count: usize) -> u16 {
 /// How many cells along a line `width` cells wide a total of `at` stands, on
 /// a **logarithmic** scale to `scale`.
 ///
-/// Position is still cost, read the way the curve grows. The stations grow by
-/// about half each — 16, 24, 40, 56, 96 … — so linearly the first five stand
-/// inside the first cell. Equal cells for equal *ratios* spreads them as the
-/// curve does (§19).
-///
-/// A longer game moves every station *left*, `scale` being the denominator: the
-/// first sits at `ln(17)/ln(10001)` = 0.31 of the run at baseline and
-/// `ln(17)/ln(250001)` = 0.23 at long.
-///
-/// [`pack`] handles crowding, so nothing here needs a length of its own; the
-/// *label* did — see [`figures`]. A float, in a painter, which is not the sim.
-/// The last three cells are kept for the far end's frame.
+/// Position is cost read as the curve grows: stations grow by about half
+/// each, so linearly the first five share a cell (§19). A longer game moves
+/// every station left. A float, in a painter, not the sim; the last three
+/// cells are the far end's frame.
 fn along(width: u16, scale: u64, at: u64) -> u16 {
     let span = f64::from(width.saturating_sub(3));
     let scale = scale.max(2);
@@ -453,14 +429,9 @@ fn station(painter: &mut Painter<'_>, screen: &Tapestry, x: u16, y: u16, line: &
 
 /// The details panel: what the cursor is on, and the facts about it.
 ///
-/// One panel for the one thing you are pointed at, since at 48 columns a
-/// sentence cannot sit beside every node. Under the tracks rather than beside
-/// them, because a track runs the full width.
-///
-/// A node says two things: *unlocked* is whether the tower has earned enough to
-/// reach it, *active* whether what it grants is in effect. A step is both at
-/// once; a fork node can be unlocked and idle, or idle for ever once a sibling
-/// took the choice. A station says how far and what it opens.
+/// Under the tracks, which run the full width. A node says *unlocked* and
+/// *active*: a step is both, a fork node can be either. A station says how
+/// far and what it opens.
 fn details(painter: &mut Painter<'_>, screen: &Tapestry, area: Rect, prose: &Prose) {
     let width = area.cols.saturating_sub(2).min(PANEL_COLS);
     let col = area

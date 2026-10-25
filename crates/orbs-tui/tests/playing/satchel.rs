@@ -1,15 +1,9 @@
 //! §8's channel between two spells, typed at a real terminal.
 //!
-//! `orbs-sim`'s `tests/satchel.rs` and `tests/strands.rs` prove the rules
-//! against a headless world. What is only true here is that the words are
-//! *reachable by typing them* — through the editor, which filters keystrokes and
-//! re-indents as you type.
-//!
-//! The editor is the interesting half: `alongside filling()` is the first line
-//! in the language that is a word *and* a call, two things the editor indents
-//! and highlights by different rules.
+//! That the words are reachable by typing, through the editor, where
+//! `alongside filling()` is both a word and a call.
 
-use crate::play::{Game, available};
+use crate::play::Game;
 
 /// The gate, and what it says.
 ///
@@ -19,10 +13,7 @@ use crate::play::{Game, available};
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn queueing_before_the_loom_grants_it_says_where_to_go() {
-    if !available() {
-        return;
-    }
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.does("attend menagerie", "/tower/menagerie")
         .does("queue heed", "not learned to carry a satchel");
 }
@@ -35,10 +26,7 @@ fn queueing_before_the_loom_grants_it_says_where_to_go() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn a_hand_loaded_satchel_reads_back_as_a_queue() {
-    if !available() {
-        return;
-    }
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.does("attend menagerie", "/tower/menagerie")
         .does("debug_take satchel_1", "holds satchel_1")
         .does("queue heed", "1 waiting")
@@ -56,10 +44,7 @@ fn a_hand_loaded_satchel_reads_back_as_a_queue() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn a_spell_typed_at_the_keyboard_drains_the_satchel() {
-    if !available() {
-        return;
-    }
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.does("attend menagerie", "/tower/menagerie")
         .does("debug_take satchel_1", "holds satchel_1")
         .does("queue heed", "1 waiting")
@@ -86,10 +71,7 @@ fn a_spell_typed_at_the_keyboard_drains_the_satchel() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn a_forked_spell_feeds_itself() {
-    if !available() {
-        return;
-    }
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.does("attend menagerie", "/tower/menagerie")
         .does("debug_take satchel_1", "holds satchel_1")
         .does("debug_take cursors_1", "holds cursors_1")
@@ -123,10 +105,7 @@ fn a_forked_spell_feeds_itself() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn the_guide_offers_the_channels_words() {
-    if !available() {
-        return;
-    }
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.does("attend menagerie", "/tower/menagerie")
         .opens("scribe guided", "guided.spell in ");
     game.type_raw("edit");

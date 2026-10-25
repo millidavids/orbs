@@ -14,53 +14,29 @@ use orbs_shell::Screen;
 
 /// Flip the focus mode.
 ///
-/// Both modes grant identical capacity, panes, information and synergies (§9);
-/// only the rendering differs.
-///
-/// It no longer changes the glyph size, which is the one thing that cost. Deep
-/// focus used to drop a fidelity tier as well as re-dividing the panes; with one
-/// grid there is no tier to drop, so `F4` is purely `tiling::deep` against
-/// `tiling::wide`. §19 records the debt — §9 sold Wide focus as the large-text
-/// mode, and what replaces it is a font-scale setting, not this key.
+/// Both modes grant identical capacity (§9). Only the split changes, not the
+/// glyph size (§19).
 pub(crate) fn cycle_mode(mut screen: ResMut<Screen>) {
     screen.mode = screen.flipped();
     info!(
         "focus {:?} -> grid {}x{}",
         screen.mode, GRID.cols, GRID.rows
     );
-    // One setting seen twice — see `crt::plugin::cycle`. §9 makes the mode a
+    // One setting seen twice — see `crt::tube::cycle`. §9 makes the mode a
     // *setting* rather than a heuristic in as many words, and a setting that
     // does not survive a relaunch is a heuristic with extra steps.
-    super::remember_setting(super::FOCUS, screen.mode.word());
+    orbs_shell::settings::set(orbs_shell::settings::FOCUS, screen.mode.word());
 }
 
 /// The camera every frontend screen is drawn through, and the letterbox.
 pub(crate) fn spawn_camera(mut commands: Commands) {
     // The CRT is a property of the camera it curves (§4).
     //
-    // MSAA is off deliberately: every edge on screen is the border of a bitmap
-    // glyph, and adjacent cells abut exactly, so there is nothing to antialias
-    // that is not supposed to be hard. Multisampling can only soften the font §4
-    // says legibility depends on.
-    //
-    // It is *not* why the CRT used to flash — that was the pass missing its
-    // system set (see `crt::plugin`). Turning MSAA off changed the odds enough
-    // to look like a fix under screenshot sampling, which is a good reminder
-    // that "the symptom went away in my measurement" is not a diagnosis.
+    // MSAA off: every edge is a bitmap glyph's, meant to be hard (§4).
     commands.spawn((
         Camera2d,
-        // This one line is the 4:3 letterbox. `AutoMin` shows at least this
-        // much world in the window's own aspect and centres it on
-        // `viewport_origin`, which defaults to the middle — so the picture is
-        // scaled by `min(W/960, H/720)`, centred, with bars on whichever axis
-        // has room to spare. `grid::build` emits its mesh in virtual pixels
-        // around the origin, so nothing else has to know.
-        //
-        // It re-derives itself: `bevy_render`'s `camera_system` re-runs
-        // `update` on `WindowResized` and `WindowScaleFactorChanged`. That is
-        // why it is set once here rather than by a system with a resize guard —
-        // a projection left unset draws *correctly* at the opening window and
-        // wrong everywhere else, which is the worst way for this to fail.
+        // The 4:3 letterbox: scaled by `min(W/960, H/720)` and centred. Set
+        // once, since `camera_system` re-derives it on every resize.
         Projection::Orthographic(OrthographicProjection {
             scaling_mode: ScalingMode::AutoMin {
                 min_width: f32::from(orbs_render::PICTURE.0),
@@ -83,10 +59,8 @@ pub(crate) fn spawn_camera(mut commands: Commands) {
 
 /// Note the window's size whenever it changes.
 ///
-/// It no longer recomputes anything. The grid is fixed and the projection
-/// letterboxes itself, so all this does is keep [`Screen::window`] current for
-/// the two things that still read physical pixels: the CRT's cell size, which
-/// keeps the scanlines on real pixels, and [`Screen::is_hostable`].
+/// Keeps [`Screen::window`] current for the CRT's cell size and
+/// [`Screen::is_hostable`].
 pub(crate) fn track_window(
     window: Option<Single<&Window, With<PrimaryWindow>>>,
     mut screen: ResMut<Screen>,
@@ -95,19 +69,8 @@ pub(crate) fn track_window(
         return;
     };
 
-    // The mode is a setting, so a resize must not silently undo the player's
-    // choice — it is carried through rather than re-derived.
-    //
-    // Unconditionally, and that is the fix. This asked
-    // `(screen.window != (0, 0)).then_some(screen.mode)`, using the absent
-    // window as a stand-in for *"has a mode been chosen?"*. The two stopped
-    // meaning the same thing when `Screen::default` learned to read the
-    // persisted `focus`: it sets a real mode and leaves `window` at `(0, 0)`, so
-    // this system, running in `Startup`, threw the setting away on frame one.
-    // Set `focus deep`, quit, relaunch: Wide. A `Screen` always has a mode now.
-    //
-    // `screen.rs`'s own test cannot reach this: a test binary never calls
-    // `settings::keep()`, so the read is always empty there.
+    // The mode is carried, always, never re-derived from the window, or the
+    // persisted `focus` is lost on the first frame.
     let next = Screen::for_window(
         (window.physical_width(), window.physical_height()),
         Some(screen.mode),
@@ -235,15 +198,8 @@ mod tests {
 
     #[test]
     fn a_window_arriving_does_not_replace_the_mode_the_screen_already_holds() {
-        // The shipped defect, as its own rule: `track_window` derived *"has a
-        // mode been chosen?"* from `window != (0, 0)`, and the two stopped
-        // meaning the same thing when `Screen::default` learned to read the
-        // persisted `focus`. Running in `Startup`, the first window threw the
-        // setting away.
-        //
-        // Stated against `Screen::for_window` rather than the system, which
-        // wants a `Window` entity, and because the rule is the whole of what was
-        // wrong: a mode in hand is carried, never re-derived.
+        // A mode in hand is carried, never re-derived, against
+        // `Screen::for_window`, since the system wants a `Window`.
         for mode in orbs_render::DisplayMode::ALL {
             let held = Screen {
                 mode,

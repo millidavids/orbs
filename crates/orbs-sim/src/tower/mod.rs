@@ -47,7 +47,9 @@ pub use boot::report;
 pub use brief::{
     Brief, Cast, DOMAINS, Mark, Marks, briefs, clear_mark, mark, mark_fault_at, running_spells,
 };
-pub use build::{GRIMOIRE, declared, fixture_of, operated, raise, raise_count, raise_reading};
+pub use build::{
+    GRIMOIRE, declared, fixture_of, operated, operation_of, raise, raise_count, raise_reading,
+};
 pub use charm::{Charm, Charmed, charm_left, charmed};
 pub use dice::{Die, Effect, Landed, Modifier, Roll};
 pub use erosion::{
@@ -74,8 +76,8 @@ pub use maze::{Maze, Sense, Square, Way};
 pub use node::{
     Cwd, Domain, Fixture, Grouped, HeatSource, Held, Keep, Name, Nameable, NodeId, NodeIds,
     Operation, Protected, Read, Reading, Store, children_of, domain_of, filesystem_root,
-    find_by_path, first_in_tree, group_at, groups_at, path_of, path_of_id, readings_at, root,
-    where_at,
+    find_by_path, first_in_tree, group_at, groups_at, here_with, path_of, path_of_id, readings_at,
+    root, where_at,
 };
 pub use opened::{
     Key as OpenKey, Known, Opened, Sealed, Sealing, charm_key, domain_key, known, open, recipe_key,

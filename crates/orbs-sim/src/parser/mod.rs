@@ -53,10 +53,8 @@ pub use fuzzy::{EXACT, MIN_SIMILARITY, distance, is_near, similarity};
 pub use intent::{Argument, Candidate, Confidence, Intent, Mode, Resolution, leaf};
 pub use lexeme::{Lexed, lex};
 pub use literal::is_literal;
-/// The tokeniser, for the grammar reader: it has to compare a template's words
-/// against the player's *folded* ones, or an exactly-typed `powder.` counts as a
-/// near miss of `powder`. `pub(crate)`, because folding is the parser's own rule
-/// and nothing outside this crate should be re-deciding it.
+/// The tokeniser, for the grammar reader, which compares the player's *folded*
+/// words. Crate-only: folding is the parser's rule.
 pub(crate) use normalise::Tokens;
 pub use normalise::is_filler;
 pub use question::{Bound, Condition, Quantity, State as SpellState, condition, write_condition};

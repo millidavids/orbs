@@ -1,17 +1,8 @@
 //! What a material's colour family looks like.
 //!
-//! The colours a [`Tint`] resolves to. `orbs-render` says *this region holds
-//! something green*; this is the only place that decides what green is — the
-//! same rule 2 boundary [`ember`](super::ember) sits on.
-//!
-//! One base per tint, with the ramp derived: eight tints at three steps would be
-//! twenty-four hand-picked numbers and twenty-four chances for a ramp to sag. So
-//! each tint is one colour and the steps are scalings of it — monotonic by
-//! construction, eight numbers to tune. The scalings were solved, not chosen:
-//! [`DIM`] began at `0.66`, which put brown's dimmest step at 2.78:1, under the
-//! 3.0 floor `even_dim_text_stays_visible` holds everything to.
-//!
-//! Three steps serve both instruments, because both ask one question three ways:
+//! The colours a [`Tint`] resolves to, beside [`ember`](super::ember). One base
+//! per tint and solved scalings, so a ramp is monotonic by construction. Three
+//! steps serve both instruments:
 //!
 //! | Picture | Step 0 | Step 1 | Step 2 |
 //! |---|---|---|---|
@@ -27,10 +18,8 @@ use super::palette::rgb;
 
 /// How far below the base the dimmest step sits.
 ///
-/// Narrow on purpose. At `0.74`/`1.22` a step was 1.92× the last, which reads as
-/// two substances rather than one catching the light; `0.86`/`1.10` is 1.39×.
-/// Narrowing is free on contrast — the tightest ratio is the dim step against
-/// the background, so raising the floor raises it (3.28:1 became 4.17:1).
+/// Narrow, so the steps read as one substance catching the light; it raises
+/// the dim step's contrast too.
 const DIM: f32 = 0.86;
 
 /// How far above the base the brightest step sits.
@@ -83,10 +72,8 @@ const fn base_of(tint: Tint) -> Srgba {
 
 /// The colour a wash starts from — one family, or two averaged.
 ///
-/// An average, not a third hand-picked colour: the eye reads a colour between
-/// its neighbours as a mixture of them, where an authored third would read as a
-/// substitution. Averaged over the *bases* rather than the resolved steps, so
-/// the mixed band derives its own three steps and roils like any other liquid.
+/// An average of the bases, which reads as a mixture where a third colour
+/// would read as a substitution.
 const fn combined(wash: Wash) -> Srgba {
     let first = base_of(wash.tint);
     match wash.with {
@@ -105,16 +92,9 @@ const fn combined(wash: Wash) -> Srgba {
 
 /// The colour a tinted cell draws in, or `None` if the tint does not apply.
 ///
-/// Never an accent: §4 reserves the triad for meaning and a tint means nothing
-/// on its own, so a `Fouled` instrument's red label stays red. The same rule
-/// [`Style::depicted`](orbs_render::Style::depicted) enforces for pictures, and
-/// it needs enforcing twice because they are two channels.
-///
-/// Never a fire either — the athanor burns orange on every tube (§19), and fuel
-/// has a tint in the data that the flame simply does not consult.
-///
-/// What it does colour is the material: the mortar through [`Intensity`], the
-/// bath through [`Depiction`].
+/// Never over an accent (§4), as
+/// [`Style::depicted`](orbs_render::Style::depicted), and never a fire (§19).
+/// The mortar through [`Intensity`], the bath through [`Depiction`].
 pub(crate) const fn resolve(
     wash: Wash,
     role: orbs_render::Role,

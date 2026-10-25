@@ -19,8 +19,7 @@ use crate::tower::{self, siege, siege::Siege};
 /// Open a supply on the wall, or raise the one that is open by a rate.
 ///
 /// One body for `deploy`, `quaff` and a scroll's `wield`, which differ only in
-/// what they may open. Two copies of *find the siege, find the thing, check the
-/// threshold, draw* is two chances to disagree about a refusal.
+/// what they may open.
 pub(super) fn spend(intent: &Intent, world: &mut World, verb: Verb) {
     let Some(rampart) = fixture(world) else {
         say(world, verb, "defend_nowhere", &[], Role::Cost);

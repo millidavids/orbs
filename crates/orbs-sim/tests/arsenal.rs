@@ -1,15 +1,12 @@
 //! The arsenal: finished work, and the one room reachable from every other.
 //!
-//! §7 scopes naming to where you are standing, and that held while nothing a
-//! domain made was wanted anywhere else. A finished thing breaks it — and
-//! nothing in the tower could be carried between rooms at all, because `carry`'s
-//! destination lookup wants a `Fixture` child of `cwd` and a domain is neither.
-//!
-//! `tower::keep` states the narrow exemption. What this file holds is the part
-//! that is easy to get wrong: nameable is not enough. Every lookup that can now
-//! name what is in here has to reach it, or a word resolves at full confidence
-//! and then reports "no such thing" — §15's dead end.
+//! `tower::keep`'s exemption to §7's scoping. Nameable is not enough: every
+//! lookup that names what is here must reach it, or a word resolves and then
+//! finds nothing (§15).
 
+mod common;
+
+use common::said;
 use orbs_render::{FieldName, Value};
 use orbs_sim::Sim;
 
@@ -20,13 +17,8 @@ use orbs_sim::Sim;
 /// in reverse.
 fn with_a_potion() -> Sim {
     let mut sim = Sim::new(1);
-    // §10.1's whole chain, from endless stock, with no debug door in it. It
-    // opened with `debug_spawn clarified-draught`, which is
-    // `cfg(debug_assertions)`, so every test in this file failed under `cargo
-    // test --release`. Gating the file off in release is the wrong answer,
-    // because the arsenal is a shipped room. Brewing properly costs about fifty
-    // ticks and needs no door: sage, rock-salt and charcoal are all
-    // `Holding::endless`.
+    // §10.1's chain from endless stock, with no debug door, so the file runs
+    // in release: the arsenal is a shipped room.
     sim.submit("attend laboratory");
     sim.step();
     sim.submit("kindle charcoal");
@@ -81,25 +73,12 @@ fn brew_one(sim: &mut Sim) {
     sim.step();
 }
 
-/// Every message the orb has said.
-fn messages(sim: &Sim) -> Vec<String> {
-    sim.scrollback()
-        .records()
-        .iter()
-        .filter_map(|record| record.field(FieldName::Message))
-        .filter_map(|value| match value {
-            Value::Text(text) => Some(text.to_owned()),
-            _ => None,
-        })
-        .collect()
-}
-
 /// Whether the orb's last answer was *"there is no ... within reach"*.
 ///
 /// The shape of the failure this file is about: a verb that can name a thing and
 /// cannot reach it says the thing is not there, which is the one false answer.
 fn said_missing(sim: &Sim, since: usize) -> bool {
-    messages(sim)
+    said(sim)
         .into_iter()
         .skip(since)
         .any(|line| line.contains("within reach"))
@@ -141,11 +120,11 @@ fn a_move_to_the_arsenal_carries_the_whole_batch() {
         3
     );
     assert!(
-        messages(&sim)
+        said(&sim)
             .iter()
             .any(|line| line == "3 clarity: dispensary to arsenal"),
         "{:?}",
-        messages(&sim)
+        said(&sim)
     );
 }
 
@@ -169,7 +148,7 @@ fn a_move_into_an_instrument_still_carries_one() {
         orbs_sim::tower::held(world, lectern, "fragment"),
         Some(orbs_sim::tower::Stock::Counted(1)),
         "{:?}",
-        messages(&sim)
+        said(&sim)
     );
 }
 
@@ -179,7 +158,7 @@ fn the_arsenal_takes_finished_work_and_refuses_stock() {
     // never the name: telling finished work from stock by name would mean the
     // tower deciding which reagents are waste, which §10.1 refuses.
     let mut sim = with_a_potion();
-    let before = messages(&sim).len();
+    let before = said(&sim).len();
     sim.submit("move sage to arsenal");
     sim.step();
 
@@ -187,39 +166,34 @@ fn the_arsenal_takes_finished_work_and_refuses_stock() {
     assert!(
         !said_missing(&sim, before),
         "the sage was reported absent rather than refused: {:?}",
-        messages(&sim),
+        said(&sim),
     );
     // §6 forbids a bare error, so the refusal says where sage *does* belong.
     assert!(
-        messages(&sim)
+        said(&sim)
             .into_iter()
             .skip(before)
             .any(|line| line.contains("shelf")),
         "the refusal did not say where a reagent goes: {:?}",
-        messages(&sim),
+        said(&sim),
     );
 }
 
 #[test]
 fn every_verb_that_can_name_a_kept_thing_can_reach_it() {
-    // The trap the exemption turns on: registering the arsenal's contents in the
-    // scene makes them nameable everywhere, and `purge` and `verify` take
-    // `NounKind::Any`. Both searched `cwd`'s children and nothing else, so both
-    // would have resolved at full confidence and reported the potion absent.
-    //
-    // Driven per verb, not asserted on `accepts`: what has to be true is the
-    // answer the player gets.
+    // `purge` and `verify` take `NounKind::Any`, so they must find what the
+    // scene names. Driven per verb, on the answer the player gets.
     for verb in ["verify clarity", "peruse arsenal.log", "purge clarity"] {
         let mut sim = with_a_potion();
         sim.submit("attend archive");
         sim.step();
-        let before = messages(&sim).len();
+        let before = said(&sim).len();
         sim.submit(verb);
         sim.step_n(6);
         assert!(
             !said_missing(&sim, before),
             "`{verb}` named what it could not reach: {:?}",
-            messages(&sim),
+            said(&sim),
         );
     }
 
@@ -274,11 +248,11 @@ fn the_arsenal_keeps_a_log_that_fills() {
     let mut sim = with_a_potion();
     sim.submit("attend archive");
     sim.step();
-    let before = messages(&sim).len();
+    let before = said(&sim).len();
     sim.submit("peruse arsenal.log");
     sim.step();
 
-    let read: Vec<String> = messages(&sim).into_iter().skip(before).collect();
+    let read: Vec<String> = said(&sim).into_iter().skip(before).collect();
     assert!(
         read.iter().any(|line| line.contains("arsenal")),
         "arsenal.log is empty: {read:?}",
@@ -311,14 +285,14 @@ fn a_spell_can_use_what_the_arsenal_holds() {
     sim.step();
     sim.write_spell("checking", &["verify clarity".to_owned()]);
     sim.step();
-    let before = messages(&sim).len();
+    let before = said(&sim).len();
     sim.submit("invoke checking");
     sim.step_n(6);
 
     assert!(
         !said_missing(&sim, before),
         "a spell could not reach the arsenal: {:?}",
-        messages(&sim),
+        said(&sim),
     );
     assert!(
         sim.scrollback()

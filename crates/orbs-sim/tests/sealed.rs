@@ -5,34 +5,15 @@
 //! way to hand the sim a deed, so a station is reached the way a player reaches
 //! it, and the door that opens is the door the player finds open.
 
-use orbs_render::{FieldName, Value};
+mod common;
+
+use common::{run_all, said, words};
 use orbs_sim::Sim;
-
-/// Every message the orb has said, in order.
-fn said(sim: &Sim) -> Vec<String> {
-    sim.scrollback()
-        .records()
-        .iter()
-        .filter_map(|record| record.field(FieldName::Message))
-        .filter_map(|value| match value {
-            Value::Text(text) => Some(text.to_owned()),
-            _ => None,
-        })
-        .collect()
-}
-
-/// Type each line and give the world a tick.
-fn run(sim: &mut Sim, lines: &[&str]) {
-    for line in lines {
-        sim.submit(line);
-        sim.step();
-    }
-}
 
 /// Distil one clarity in a sealed tower, the cheap way.
 #[cfg(debug_assertions)]
 fn brew_a_clarity(sim: &mut Sim) {
-    run(
+    run_all(
         sim,
         &[
             "attend laboratory",
@@ -92,7 +73,7 @@ fn a_sealed_tower_is_a_laboratory_and_an_open_one_is_everything() {
 #[test]
 fn a_shut_room_refuses_from_every_door() {
     let mut sim = Sim::sealed(1);
-    run(&mut sim, &["attend archive"]);
+    run_all(&mut sim, &["attend archive"]);
     assert!(
         said(&sim).iter().any(|line| line.contains("not yours yet")),
         "attend did not refuse in voice: {:?}",
@@ -102,7 +83,7 @@ fn a_shut_room_refuses_from_every_door() {
 
     // By a path that is not the room's name, which is why the gate asks the node
     // rather than the name.
-    run(&mut sim, &["attend stacks", "attend /tower/archive/stacks"]);
+    run_all(&mut sim, &["attend stacks", "attend /tower/archive/stacks"]);
     assert!(
         !sim.location().contains("archive"),
         "a path into a shut room was allowed: {}",
@@ -111,7 +92,7 @@ fn a_shut_room_refuses_from_every_door() {
 
     // Looking in from the doorway is the same door.
     let before = said(&sim).len();
-    run(&mut sim, &["survey archive"]);
+    run_all(&mut sim, &["survey archive"]);
     assert!(
         said(&sim)[before..]
             .iter()
@@ -125,17 +106,8 @@ fn a_shut_room_refuses_from_every_door() {
 fn a_shut_room_is_not_listed_named_or_reported() {
     let mut sim = Sim::sealed(1);
     // The tower's listing names what is open and nothing else.
-    run(&mut sim, &["attend /tower", "survey"]);
-    let listing: Vec<String> = sim
-        .scrollback()
-        .records()
-        .iter()
-        .filter_map(|record| record.field(FieldName::Name))
-        .filter_map(|value| match value {
-            Value::Text(text) => Some(text.to_owned()),
-            _ => None,
-        })
-        .collect();
+    run_all(&mut sim, &["attend /tower", "survey"]);
+    let listing = words(&sim);
     assert!(
         listing.iter().any(|name| name == "laboratory"),
         "{listing:?}"
@@ -182,7 +154,7 @@ fn brewing_a_clarity_opens_the_archive_and_says_so_once() {
         said(&sim)
     );
 
-    run(&mut sim, &["attend archive"]);
+    run_all(&mut sim, &["attend archive"]);
     assert_eq!(sim.location(), "/tower/archive", "the opened room refused");
     assert!(
         sim.briefs()
@@ -265,15 +237,9 @@ fn marked(sim: &Sim) -> Vec<String> {
 
 #[test]
 fn a_document_whose_line_outran_its_rooms_catches_up_on_load_and_says_nothing() {
-    // The total and what a step opened are two records of one fact, and only
-    // the second is written down — so a document with the experience and not
-    // the room would keep that room shut for ever, since the crossing happens
-    // at an edge already in the past. Caught up silently on load, for
-    // `Experience::restore`'s reason.
-    //
-    // Built from an *open* tower, so nothing about the grimoire was ever said
-    // in the stream the save carries: what the load does or does not say is
-    // then the only thing the count can be measuring.
+    // A document with the experience and not the room catches up silently, as
+    // `Experience::restore` does. From an open tower, so the load is all the
+    // count measures.
     let mut sim = Sim::new(1);
     orbs_sim::tower::credit(sim.world_mut(), 16);
     let mut save = sim.snapshot();
@@ -353,7 +319,7 @@ fn a_capability_no_station_gates_outlives_a_document_that_never_named_it() {
 #[test]
 fn the_wall_is_armed_by_the_sanctum_and_a_charm_by_its_station() {
     let mut sim = Sim::sealed(1);
-    run(&mut sim, &["debug_reach laboratory_3"]);
+    run_all(&mut sim, &["debug_reach laboratory_3"]);
     assert!(
         sim.is_open("sanctum"),
         "the third station did not open the sanctum"
@@ -364,26 +330,26 @@ fn the_wall_is_armed_by_the_sanctum_and_a_charm_by_its_station() {
     );
 
     // The bailey follows the wall.
-    run(&mut sim, &["attend bailey", "defend"]);
+    run_all(&mut sim, &["attend bailey", "defend"]);
     assert!(
         !sim.location().contains("bailey"),
         "the bailey opened before the wall: {}",
         sim.location(),
     );
 
-    run(&mut sim, &["debug_reach sanctum_1"]);
+    run_all(&mut sim, &["debug_reach sanctum_1"]);
     assert!(sim.has_opened("siege"));
-    run(&mut sim, &["attend bailey"]);
+    run_all(&mut sim, &["attend bailey"]);
     assert_eq!(sim.location(), "/tower/bailey");
 
     // A charm the forge has not earned.
-    run(&mut sim, &["debug_reach lens_1"]);
+    run_all(&mut sim, &["debug_reach lens_1"]);
     assert!(
         sim.has_opened("charm:hurried"),
         "the flagship charm is shut"
     );
     assert!(!sim.has_opened("charm:shielded"));
-    run(&mut sim, &["debug_reach lens_2"]);
+    run_all(&mut sim, &["debug_reach lens_2"]);
     assert!(
         sim.has_opened("charm:shielded"),
         "the lens's second station did not open it"
@@ -395,18 +361,9 @@ fn the_wall_is_armed_by_the_sanctum_and_a_charm_by_its_station() {
 fn a_sealed_tower_replays_to_the_same_world() {
     let mut live = Sim::sealed(1);
     brew_a_clarity(&mut live);
-    run(&mut live, &["attend archive"]);
+    run_all(&mut live, &["attend archive"]);
 
-    let mut replayed = Sim::sealed(1);
-    for (tick, submission) in live.submissions().all().to_vec() {
-        while replayed.tick() < tick {
-            replayed.step();
-        }
-        replayed.replay(submission);
-    }
-    while replayed.tick() < live.tick() {
-        replayed.step();
-    }
+    let replayed = common::replayed(&live, Sim::sealed(1));
     assert_eq!(replayed.location(), live.location());
     assert_eq!(replayed.reached(), live.reached());
     assert!(replayed.is_open("archive"));
@@ -469,7 +426,7 @@ fn sabotage_never_strikes_a_shut_room() {
     for seed in 0..8 {
         let mut sim = Sim::sealed(seed);
         // The sanctum's first station arms the wall, so a siege can be fought.
-        run(
+        run_all(
             &mut sim,
             &["debug_reach laboratory_3", "debug_reach sanctum_1"],
         );
@@ -479,10 +436,10 @@ fn sabotage_never_strikes_a_shut_room() {
             .map(|domain| format!("/{domain}"))
             .collect();
         assert!(!shut.is_empty(), "seed {seed}: no room is still shut");
-        run(&mut sim, &["attend bailey", "defend"]);
+        run_all(&mut sim, &["attend bailey", "defend"]);
         // Checked every round, because `settle` clears the logs at the end.
         for _ in 0..12 {
-            run(&mut sim, &["hold"]);
+            run_all(&mut sim, &["hold"]);
             let lying: Vec<String> = sim
                 .snapshot()
                 .nodes

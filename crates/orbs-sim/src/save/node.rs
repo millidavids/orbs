@@ -1,13 +1,8 @@
 //! One node of the tower, and everything that can be true of it.
 //!
-//! Every field past `path` and `kind` is optional and skipped when it is not
-//! there, so a shelf with three reagents on it is four short rows and the
-//! instrument that is halfway through a run is the one that catches the eye.
-//! That is §15's readable save doing its job rather than being claimed.
-//!
-//! The filesystem root is not here. It is nameless, so `path` would have to be
-//! optional for exactly one row — and it need not be, because a restore raises
-//! the tower before it adopts. See [`mod@super::restore`].
+//! Every field past `path` and `kind` is skipped when absent, so the node
+//! halfway through a run catches the eye (§15). The nameless root is not here:
+//! a restore raises the tower before it adopts ([`mod@super::restore`]).
 
 use std::collections::BTreeMap;
 
@@ -37,11 +32,8 @@ pub struct NodeSave {
     /// The node's `NodeId`. Data, not an address — nothing is looked up by it,
     /// [`path`](Self::path) is the identity.
     ///
-    /// It travels because the sim reads a `NodeId` as an ordering key:
-    /// `spell::advance` sorts running spells by it so two spells interleave the
-    /// same way on every run from a seed. Ids are issued in spawn order, so a
-    /// world that re-issued them would give two player-written spells their ids
-    /// in walk order and swap which took the production slot first.
+    /// It travels because `spell::advance` orders running spells by it;
+    /// re-issued ids would swap which spell took the slot first.
     pub id: u64,
     /// What kind of noun it is, in the save's own words — see `save::naming`.
     pub kind: String,
@@ -67,10 +59,8 @@ pub struct NodeSave {
     pub reading: bool,
     /// The set a spell's `for each` walks this node as one of — `way`, `socket`.
     ///
-    /// Carried, exactly as [`reading`](Self::reading) is: both are declared by
-    /// `build`'s tables and re-inserted by `adopt`, so a restore that dropped
-    /// them leaves a tower whose ways answer `survey` and whose `for each way`
-    /// walks nothing. A save says what a node *is*.
+    /// Carried, as [`reading`](Self::reading) is, or `for each way` walks
+    /// nothing after a load.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub group: String,
     /// What a recipe was for, as opposed to what it left behind.
@@ -97,15 +87,9 @@ pub struct NodeSave {
     /// The lines a reader made something else of, each beside the text it read
     /// — what compiles in their place.
     ///
-    /// Carried, not re-derived: `analyse` is deterministic and re-read on load,
-    /// but once a trained reader did part of it, a machine with no weights — or
-    /// different ones — would build a different program from the same file.
-    ///
-    /// Only those lines, found by their text. It was every line by position: a
-    /// spell no reader touched was written out twice, and a hand-edited `held`
-    /// compiled the reading of whatever line used to be there. Absent in a save
-    /// written before readings existed, which is a spell that is its own reading
-    /// throughout.
+    /// Carried, since a trained reader may not read alike on another machine.
+    /// Only those lines, keyed by text, so a hand-edited line compiles as
+    /// written. Absent is a spell that is its own reading.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub read: Option<Vec<ReadSave>>,
     /// Which domain a spell was written for.
@@ -124,10 +108,8 @@ pub struct NodeSave {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bound: Option<Vec<usize>>,
 
-    // --- the intervals. Absolute start and end ticks, never countdowns:
-    // §8 wants in-flight actions serialisable *with start and completion
-    // ticks*, and comparing against the clock is what makes `meditate 300`
-    // inside one `step` behave like three hundred watched ticks.
+    // --- the intervals: absolute start and end ticks, never countdowns (§8),
+    // so `meditate 300` behaves like three hundred watched ticks.
     /// Work in flight.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub working: Option<WorkingSave>,
@@ -146,10 +128,8 @@ pub struct NodeSave {
     pub quickened_by: Option<u64>,
     /// The forge's enchantments, in the order they were laid.
     ///
-    /// A `Vec` rather than an `Option<Vec>`: empty and absent both mean *nothing
-    /// charmed*, and `skip_serializing_if` keeps the file quiet either way. No
-    /// format bump needed for that reason (the `cooling` precedent) — a document
-    /// written before charms existed reads back honestly.
+    /// A `Vec`: empty and absent both mean *nothing charmed*, so an older
+    /// document reads back honestly with no format bump.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub charms: Vec<CharmSave>,
     /// A reagent claiming a name that is not its own.
@@ -168,48 +148,37 @@ pub struct NodeSave {
     pub course: Option<CourseSave>,
     /// The beast waiting at the menagerie's circle.
     ///
-    /// A format-11 document's `chant` is simply not read — `NodeSave` allows
-    /// unknown fields, so a figure mid-song loads as a circle with no beast,
-    /// which is a `summon` away from fine. Its *nodes* are another matter, and
-    /// `document::migrate` removes them.
+    /// An older document's `chant` is not read; `document::migrate` removes
+    /// its nodes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub beast: Option<BeastSave>,
     /// The bailey's siege.
     ///
-    /// The component itself, not a derived shape, unlike the sanctum's course: a
-    /// `Course` stores what it was raised at because the rest is computed, where
-    /// a `Siege` *is* its state, so a second shape would be a copy that can
-    /// disagree. A siege that has ended still travels, so a save taken after
-    /// `settle` reopens on the same postmortem.
+    /// The component itself, since a `Siege` *is* its state, where a `Course`
+    /// is computed from its raising. An ended siege travels too, for the
+    /// postmortem.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub siege: Option<tower::Siege>,
     /// The forge's open lattice.
     ///
-    /// The component itself, which is `siege`'s decision for `siege`'s reason: a
-    /// binding *is* its state. The tool travels as a path, because an entity id
-    /// means nothing across a save.
+    /// The component itself, as `siege` is; the tool as a path.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub binding: Option<tower::lattice::Binding>,
     /// What a rewritten spell actually said (§8.1's script-text surface).
     ///
-    /// Without this the corruption travels and the truth does not, which is
-    /// worse than saving neither: the spell reloads corrupt and still
-    /// `Poisoned`, and `purge` clears the mark, reports `cleansed` and repairs
-    /// nothing — the player's words gone with no path back.
+    /// Or the corruption travels and the truth does not, and `purge` repairs
+    /// nothing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rewritten: Option<Vec<String>>,
     /// How much a retimed spell's clock is dragged by.
     ///
-    /// Same rule as [`rewritten`](Self::rewritten), and the mirror failure: the
-    /// drag would vanish on load while `Poisoned` stayed, leaving `verify`
-    /// reporting a permanent tampering with nothing behind it.
+    /// [`rewritten`](Self::rewritten)'s rule, or `verify` reports tampering
+    /// with nothing behind it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub retimed: Option<u64>,
     /// What is waiting in this room's satchel, oldest first.
     ///
-    /// A list rather than a table, because it is a queue: children plus `Stock`
-    /// collapses duplicates and has no order, and a satchel holding `heed` twice
-    /// with one of them first is the whole point. Empty is `None`.
+    /// A list, since a queue has order and duplicates. Empty is `None`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub satchel: Option<Vec<String>>,
     /// A spell part-way through running.
@@ -242,11 +211,8 @@ pub struct WorkingSave {
 
 /// An interval, as §8 asks for one: a start and a completion tick.
 ///
-/// Both absolute, though `Burning` and `Quickened` hold a *budget* in the world.
-/// One `SpanSave` used to carry whichever the component had in a field called
-/// `ticks`, so the same name meant a tick in one row and a duration two rows
-/// down. Both round-tripped; it was a trap for the reader, and §15 makes
-/// hand-editability a criterion.
+/// Both absolute, though `Burning` and `Quickened` hold a budget, so one name
+/// never means a tick in one row and a duration in the next (§15).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SpanSave {
     /// The tick it began.
@@ -257,13 +223,8 @@ pub struct SpanSave {
 
 /// One enchantment on a tool: what it does, and the span it runs for.
 ///
-/// Named rather than positional, which is `Cooling`'s decision one resource
-/// over: `[["log", 120]]` says what `[null, 120]` cannot, and adding a sixth
-/// charm renumbers nothing in an older save. The word is `charm::Kind::word`,
-/// the same one a player types, so there is no second spelling.
-///
-/// A start and a completion tick, like every other interval in this file — the
-/// component holds a *budget*, and the conversion is at the boundary.
+/// Named, as `Cooling` is, by `charm::Kind::word`, so a new charm renumbers
+/// nothing. A start and a completion tick, like every interval here.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CharmSave {
     /// Which charm, by the word a player would type.
@@ -285,11 +246,8 @@ pub struct SubstitutedSave {
 
 /// The labyrinth, written as a picture.
 ///
-/// A picture and not 759 tables: `SPAN_X × SPAN_Y` is 33 × 23, so an
-/// array-of-tables of `Square` *is* the save file — hundreds of lines of
-/// `{ wall = true, marks = 0 }` around the dozen rows anyone wants to read, and
-/// §15 makes readable-and-editable a criterion. So the walls are the map as
-/// drawn, one character per square, and the marks are sparse.
+/// A picture, not 759 tables (§15): the walls one character a square, the
+/// marks sparse.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MazeSave {
     /// Squares per row.
@@ -308,9 +266,8 @@ pub struct MazeSave {
     pub spoils: Vec<usize>,
     /// The maze as a picture: `#` is a wall, `.` is floor, one row per line.
     ///
-    /// One string with newlines, not a list of them: `toml` renders that as a
-    /// `"""` block and a list on one line, and a labyrinth on one line is not a
-    /// labyrinth.
+    /// One string, which `toml` renders as a `"""` block; a list would be one
+    /// line.
     pub walls: String,
     /// `[square, times walked]`, for the squares that have been walked at all.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -319,11 +276,7 @@ pub struct MazeSave {
 
 /// A ward, mid-solve.
 ///
-/// Seven fields shorter than it was: `held`, `best`, `sigil_marks`,
-/// `socket_marks`, `tried`, `settled` and `touched` were all scaffolding under
-/// the exchange ambiguity, which repeats deleted. A save written against the old
-/// shape cannot be read — `code` and `aperture` are all it shares. See
-/// `tower::ward`.
+/// See `tower::ward`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WardSave {
     /// The answer. Sigil indices, one per socket.
@@ -362,13 +315,8 @@ pub struct HistorySave {
 
 /// A course of wards, mid-solve.
 ///
-/// Three lists of numbers and nothing else, which is why `save/naming.rs` gains
-/// no table for this domain: a station is an index rather than a named enum, so
-/// there is no word to spell two ways.
-///
-/// The height travels though it is derivable, because a course is *raised* at a
-/// height and the parity and the meter are facts about the raising rather than
-/// about how many wards happen to stand. `Course::from_save` recomputes and
+/// Three lists of numbers: a station is an index, so `naming.rs` has no table.
+/// The height travels, since a course is raised at one; `Course::from_save`
 /// clamps it anyway.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CourseSave {
@@ -382,16 +330,9 @@ pub struct CourseSave {
 
 /// A beast waiting at the menagerie's circle, part-limned.
 ///
-/// The wiring, the turned wires and the temper travel, never an index into the
-/// circuits a draw picks from: a beast is drawn once from
-/// `RngStream::Menagerie` and cannot be re-rolled without moving that stream,
-/// and an index would mean a different beast the day the list grew. So the
-/// document says what the beast *is*, and `Beast::restored` checks some circuit
-/// could have made it.
-///
-/// A lesser beast is four rows and no wiring, a whole one eight rows and both
-/// pairs. The length of `temper` is which circle it is, so there is no third
-/// field to disagree.
+/// What the beast *is*, never an index into the circuits, which would mean
+/// another beast the day the list grew; `Beast::restored` checks it. The
+/// length of `temper` says which circle.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BeastSave {
     /// The two senses the sunwise glyph is given, by index, lower first. Absent
@@ -426,11 +367,8 @@ pub struct BeastSave {
 
 /// A spell part-way through, which §8 requires a save to carry.
 ///
-/// The compiled `Program` is **not** here: it is a derived view rebuilt from the
-/// spell's own text at every cast, and `tower::spell::program` is explicit that
-/// the text is the single source of truth. What is here instead is a
-/// [`fingerprint`](Self::fingerprint) of the text it was compiled *from* — see
-/// `save::restore` for why re-deriving it blind would not be safe.
+/// Not the `Program`, which is rebuilt from the text at every cast, but a
+/// [`fingerprint`](Self::fingerprint) of that text — see `save::restore`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RunningSave {
     /// The spell being run, as a path.
@@ -445,9 +383,7 @@ pub struct RunningSave {
     /// which counts nothing. `-2` is a branch of an `if`, which runs once. `-3`
     /// and below is a `for each`, at member `-3 - code` of its set.
     ///
-    /// One integer per block rather than a tagged table: `loops = [2, -2, -4]`
-    /// is legible beside the `pc` it belongs to, where three tables of one field
-    /// each would bury it.
+    /// One integer per block, so `loops = [2, -2, -4]` reads beside its `pc`.
     pub loops: Vec<i64>,
     /// How far into the record stream this run has read.
     pub seen: u64,
@@ -462,11 +398,8 @@ pub struct RunningSave {
     pub waiting_since: Option<u64>,
     /// How many ticks the running `bide` was told to spend, if one is running.
     ///
-    /// The pair with `waiting_since`, and it was left out: a `bide` is the two
-    /// together, so carrying one made `run::bide` fall to its start arm and
-    /// stamp a fresh `waiting_since`. `bide 3600` reloaded into another hour.
-    /// It was defensible while `bide until` existed and the delay came off the
-    /// world; a count is a literal with nothing to re-derive it from.
+    /// `waiting_since`'s pair: with one alone, `bide 3600` reloads into
+    /// another hour.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub biding: Option<u32>,
     /// Lines whose bad name has already been complained about.
@@ -474,10 +407,8 @@ pub struct RunningSave {
     pub said: Vec<usize>,
     /// What each name the spell has bound stands for.
     ///
-    /// A map, so the file reads `[node.running.vars]` / `best = "north"` — which
-    /// §15's hand-editable criterion is what asks for. Ordered by key, because a
-    /// document whose rows moved between two runs of one seed would fail the
-    /// lockstep test that pins a snapshot as complete.
+    /// A map, so the file reads `best = "north"` (§15), ordered by key so one
+    /// seed writes one document.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub vars: BTreeMap<String, String>,
     /// Which part the spell is inside, if it is inside one.
@@ -485,9 +416,7 @@ pub struct RunningSave {
     pub part: Option<String>,
     /// The callers waiting on it, outermost first.
     ///
-    /// Defaulted rather than required: it is absent from a save written before
-    /// parts existed, and from every save of a spell that never calls one. An
-    /// empty stack is the ordinary case.
+    /// Defaulted: an empty stack is the ordinary case.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub stack: Vec<DescentSave>,
     /// A fingerprint of the spell text this program was compiled from.
@@ -499,22 +428,16 @@ pub struct RunningSave {
     /// Every cursor after the first, for a spell that has forked (§8,
     /// `alongside`).
     ///
-    /// Written only when there is more than one, and the fields above are always
-    /// the first — so an ordinary spell's save is byte-for-byte what it was
-    /// before forking existed, rather than carrying
-    /// `[[node.running.strands]]` in every tower anybody saves. The flat fields
-    /// are not a duplicate of `strands[0]`: they *are* it, and `capture` writes
-    /// them from it.
+    /// Only when there is more than one: the flat fields above *are* the
+    /// first, so an ordinary spell's save is unchanged by forking.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub strands: Vec<StrandSave>,
 }
 
 /// One forked cursor of a spell, as a save writes it.
 ///
-/// [`RunningSave`]'s per-position half, and nothing else: which spell it is, how
-/// deep it sits and where it runs are facts about the *cast* and stay up there.
-/// `seen` is here rather than there, and a review is what moved it — two cursors
-/// sharing one record-stream mark makes one satisfy the other's `wait`.
+/// [`RunningSave`]'s per-position half. `seen` is per cursor, or one cursor
+/// satisfies another's `wait`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StrandSave {
     /// Where this cursor is — see [`RunningSave::pc`].
@@ -555,10 +478,8 @@ pub struct DescentSave {
     pub loops: Vec<i64>,
     /// Its bindings, which the part it called cannot see.
     ///
-    /// Defaulted rather than required, as `stack` is: absent from a save written
-    /// before parts took arguments, and from every frame that had bound nothing.
-    /// An old save reading as empty is correct — before parameters there was one
-    /// shared store, carried by [`RunningSave::vars`].
+    /// Defaulted, as `stack` is; an older save's one shared store is
+    /// [`RunningSave::vars`].
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub vars: BTreeMap<String, String>,
 }

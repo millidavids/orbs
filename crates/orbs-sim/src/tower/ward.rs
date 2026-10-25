@@ -1,28 +1,15 @@
 //! The seal on a far wizard's orb, and the two ways a player breaks it.
 //!
-//! DESIGN.md §10 gives scrying *deduction*, and this is the shape it took: four
-//! sigils drawn from six, **repeats allowed**, 1296 codes. You press figures
-//! against the ward and read how it answers. It is Mastermind, and §19 records
-//! the version that was Mastermind-shaped without being Mastermind.
+//! §10's deduction, as Mastermind: four sigils of six, repeats allowed, 1296
+//! codes (§19).
 //!
-//! The orb keeps no candidate set and deduces nothing — the load-bearing rule of
-//! the domain, broken by two designs already (§19). Tracking consistent codes
-//! solves in ~4.2 presses, so the orb would have done the puzzle; saying
-//! `settled` per socket is the same leak more quietly, since no codemaker answers
-//! about one position. So this stores only what a player could keep on paper: the
-//! code, the aperture, the last answer, and which way each half moved.
+//! The orb keeps no candidate set and deduces nothing — the domain's rule, broken
+//! twice before (§19). It stores only what a player could keep on paper.
 //!
-//! Two channels onto one ward — the player reads `aligned`/`astray` as numbers
-//! and deduces (~5.15 presses); a spell reads only which way they moved and
-//! walks one socket at a time (~11.93). The spell's channel is strictly *less*,
-//! which is what lets §8's variable-less language automate a puzzle it cannot
-//! solve.
-//!
-//! The sweep terminates, and that is why the domain works: move one socket and
-//! `aligned` can only change because of it, so stepping cyclically through six
-//! reaches the code's sigil within five and says so. A rule, not a search —
-//! Trémaux's role for the maze. `dev_spells.toml`'s `breaking` is the shape a
-//! player writes.
+//! Two channels: a player reads `aligned`/`astray` as numbers and deduces (~5.15
+//! presses); a spell reads only which way they moved and walks one socket at a
+//! time (~11.93). The walk terminates because moving one socket is the only
+//! thing that can change `aligned` — a rule, not a search.
 
 use bevy_ecs::prelude::*;
 use rand::RngExt as _;
@@ -53,14 +40,6 @@ pub const WIDTH: usize = SOCKETS.len();
 /// worst case 9, so five put half of competent hand play in `yield_of`'s reduced
 /// tier — a penalty for playing well. It was five at 360 codes.
 pub const PAR: u32 = 6;
-
-/// What one press costs the tower, in ticks.
-///
-/// Nought: a press is instant and takes no slot. It was twelve, and that
-/// scarcity is withdrawn — a press is `dial`'s equal, so the lens competes with
-/// the laboratory for nothing. Kept as a named nought because the domain's rates
-/// were derived against it and pricing a press again should be one line.
-pub const PRESS_TICKS: u64 = 0;
 
 /// Whether the last press helped, held, or hurt.
 ///
@@ -96,14 +75,9 @@ impl Shift {
 
     /// The word for the same movement in `astray`.
     ///
-    /// A second set, because one word cannot mean two things: `closer` is about
-    /// placement, this is about *membership*. A spell that could not tell them
-    /// apart could not tell *swap two of these* from *none of these belong*.
-    ///
-    /// Swept, not judged. `warmer`/`even`/`cooler` scores 667 and 600 against
-    /// `closer` and `level` — two readings colliding inside one domain;
-    /// `fuller`/`steady`/`thinner` hits `filter` and `study` at 667 each;
-    /// `thicker`/`thinner` score 715 against each other.
+    /// A second set, since membership is not placement. Swept: `warmer` and
+    /// `cooler` collide with `closer` and `level`, `fuller` and `steady` with
+    /// `filter` and `study`.
     #[must_use]
     pub const fn drift_word(self) -> &'static str {
         match self {
@@ -163,12 +137,6 @@ const fn shift_of(now: u32, before: u32) -> Shift {
         Shift::Held
     }
 }
-
-/// The readings the prism publishes, beside [`Shift::ALL`].
-///
-/// Counted, so the existing comparison grammar works on them:
-/// `if the prism has 3 or more aligned`.
-pub const COUNTS: [&str; 3] = [ALIGNED, ASTRAY, SPENT];
 
 /// Right sigil, right socket.
 pub const ALIGNED: &str = "aligned";
@@ -236,13 +204,8 @@ impl Ward {
     #[must_use]
     pub fn new(rngs: &mut Rngs) -> Self {
         let rng = rngs.stream(RngStream::Lens);
-        // Four independent draws, repeats and all — 1296 codes. Distinct sigils
-        // meant a dial had to *exchange* two sockets, which makes a rising
-        // `aligned` unattributable, which is why the ward once needed a ratchet,
-        // a settle-lock and a per-socket tally. Repeats delete all three (§19).
-        //
-        // Still exactly four draws: replay needs the count not to vary with the
-        // values, which is why the old form used Fisher-Yates over rejection.
+        // Four independent draws, repeats and all, so a dial moves one socket
+        // (§19). Always exactly four, so the count never varies with the values.
         let mut code = [0usize; WIDTH];
         for slot in &mut code {
             *slot = rng.random_range(0..SIGILS.len());
@@ -269,12 +232,8 @@ impl Ward {
 
     /// Turn `socket` to the next sigil round, and say which.
     ///
-    /// A cursor the ward no longer keeps. Taking the first sigil untried *since
-    /// the last gain* meant storing a per-socket list, and that list was
-    /// readable as `untried` — the orb doing the player's bookkeeping (§19).
-    /// Cyclic-next needs no cursor: the sigil a socket holds is the cursor, and
-    /// it is on the board. Six dials return it, which is what makes a blind
-    /// sweep exhaustive without remembering anything.
+    /// Cyclic, so the sigil a socket holds is its own cursor, on the board — no
+    /// per-socket list doing the player's bookkeeping (§19). Six dials return it.
     ///
     /// Always moves, so always `true`.
     pub const fn advance(&mut self, socket: usize) -> bool {
@@ -285,22 +244,10 @@ impl Ward {
         self.seat(socket, next)
     }
 
-    // `replenish`, `next_untried` and `best` are gone with the state they served.
-    // `replenish` gave candidates back so an `untried`-guarded ladder would not
-    // stall; a cyclic `advance` cannot exhaust, so termination is the dial's
-    // property now. `best` was honest only because of the ratchet — without it a
-    // high-water mark describes a figure the player no longer has, which is
-    // `panel.rs`'s "reporting the guess rather than the reading" failure. The
-    // meter reads [`last`](Self::last) instead.
-
     /// Put `sigil` in `socket`. Returns whether anything moved.
     ///
-    /// One socket, always, which is the whole of what allowing repeats buys.
-    /// This used to *exchange*, and a press after a two-socket move could not
-    /// say which socket the answer moved for — the ambiguity all the ward's old
-    /// scaffolding worked around. Now `aligned` rising is entailed to be that
-    /// socket's doing, and the player makes that inference themselves, which is
-    /// the only inference Mastermind offers (§19).
+    /// One socket, always, so `aligned` rising is entailed to be that socket's
+    /// doing — the player's inference to make (§19).
     pub const fn seat(&mut self, socket: usize, sigil: usize) -> bool {
         if socket >= WIDTH || sigil >= SIGILS.len() {
             return false;
@@ -314,14 +261,8 @@ impl Ward {
 
     /// Send the aperture against the ward and record what came back.
     ///
-    /// It no longer ratchets. Snapping back to the best figure on a non-gaining
-    /// press was the orb remembering which of the *player's* guesses was best,
-    /// which is the whole labour of Mastermind. What you dialled stands, so
-    /// `aligned` can fall — and a fallen `aligned` is real information, because
-    /// dialling off a correct socket is the only thing that causes it.
-    ///
-    /// Nothing settles here either: the orb makes no claim about any socket
-    /// (§19).
+    /// No ratchet: what you dialled stands, so `aligned` can fall, and a fall is
+    /// real information. The orb claims nothing about any socket (§19).
     pub fn press(&mut self) {
         let (aligned, astray) = self.answer();
         self.spent = self.spent.saturating_add(1);
@@ -350,15 +291,9 @@ impl Ward {
 
     /// What the ward says about the aperture, without recording it.
     ///
-    /// `astray` is a multiset intersection and was once a set test — the two
-    /// coincide only while no sigil may repeat, which is why nothing caught it.
-    /// `code.contains(sigil)` counted four of one sigil against a code holding
-    /// one of it as four pegs. A sigil may only be answered for by a code sigil
-    /// no other has claimed.
-    ///
-    /// `an_answer_is_always_one_figure_s_and_never_two` cannot see the
-    /// difference: the set form satisfies `aligned + astray <= 4` by
-    /// construction while being wrong about 30% of a repeating space's pairs.
+    /// `astray` is a multiset intersection: a set test counts four of one sigil
+    /// against a code holding one as four pegs, and passes
+    /// `aligned + astray <= 4` while wrong about 30% of pairs.
     #[must_use]
     pub fn answer(&self) -> (u32, u32) {
         let aligned = (0..WIDTH)
@@ -456,14 +391,8 @@ impl Ward {
 
     /// The sheet a frontend draws.
     ///
-    /// `orbs-sim` builds it and `orbs-render` owns the type — the only
-    /// arrangement available, and the better one: `code` stays private and what
-    /// a board may show is decided once rather than per painter. `Maze::view` is
-    /// the precedent.
-    ///
-    /// The code is not in it and cannot be: every field is one the player has
-    /// already been told, so the board carries nothing the linear stream lacks
-    /// (rule 2).
+    /// Built here so `code` stays private, as `Maze::view` is. Every field is one
+    /// the player has been told (rule 2).
     #[must_use]
     pub fn view(&self) -> orbs_render::Board {
         orbs_render::Board {
@@ -507,10 +436,8 @@ pub fn socket_of(name: &str) -> Option<usize> {
 
 /// Reading a ward out into a save, and back.
 ///
-/// Here rather than in `crate::save` because every field of [`Ward`] is private
-/// deliberately — `code` is the answer, and ten public getters would put it
-/// within reach of any system wanting a shortcut. One pair of methods beside the
-/// fields also puts the compiler error in this file when a field is added.
+/// Here, because [`Ward`]'s fields are private — `code` is the answer — and a
+/// field added is a compile error in this file.
 impl Ward {
     /// Everything a save needs to put this ward back.
     pub(crate) fn to_save(&self) -> crate::save::WardSave {

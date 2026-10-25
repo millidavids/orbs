@@ -8,24 +8,13 @@
 //! cols·CELL_WIDTH / (rows·CELL_HEIGHT) = 4/3   ⇔   cols : rows = 8 : 3
 //! ```
 //!
-//! So [`GRID`] is a constant and the window decides only [`scale_for`] — how
-//! many physical pixels one virtual pixel is worth. Resizing changes the size of
-//! the text and nothing else.
+//! So [`GRID`] is a constant and the window decides only [`scale_for`]: a
+//! larger window buys bigger text, not more (§19).
 //!
-//! This replaced `Fidelity`, an integer scale chosen from the window with the
-//! grid falling out of the division. Every layout constant then existed to
-//! manage a grid moving under it, and `F4` changed the grid as a side effect of
-//! changing the split (§19). The cost is that a larger window buys bigger text
-//! rather than more of it.
-//!
-//! The frontend does not compute the letterbox — `ScalingMode::AutoMin` does,
-//! in logical pixels. [`scale_for`] is the same number in the open, in physical
-//! pixels, for the two callers outside the projection: the CRT's cell size and
-//! the legibility floor. They agree because aspect ratio is scale-factor
-//! invariant, so do not "fix" one to match the other's units.
-//!
-//! The terminal frontend has no use for any of this: a terminal is whatever size
-//! the user made it, so `orbs-tui` reports its grid directly.
+//! `ScalingMode::AutoMin` letterboxes in logical pixels; [`scale_for`] is the
+//! same number in physical pixels, for the CRT and the legibility floor. Aspect
+//! is scale-factor invariant, so do not "fix" one to the other's units.
+//! `orbs-tui` reports its grid directly.
 
 use crate::geometry::GridSize;
 
@@ -38,10 +27,8 @@ pub const CELL_HEIGHT: u16 = 16;
 /// The grid, fixed. 4:3 at native cell size, and the same 45 rows the game drew
 /// before the grid stopped following the window.
 ///
-/// 120 columns is 40 fewer than the old default window yielded, which is the
-/// price of the aspect: 8:3 is the only ratio of columns to rows that is 4:3 in
-/// pixels, and the next step up the family — 160×60 — puts every common display
-/// on a fractional scale and costs 1080p 44% of its glyph height. See §19.
+/// 160×60, the next 8:3 step, puts every common display on a fractional scale
+/// (§19).
 pub const GRID: GridSize = GridSize::new(120, 45);
 
 /// [`GRID`] in pixels at native cell size — the picture the window letterboxes.
@@ -57,11 +44,8 @@ const _: () = assert!(
 
 /// The declared minimum grid. All layout is authored against this floor.
 ///
-/// [`GRID`] clears it comfortably, so nothing the game draws is ever below it.
-/// It survives as the *authoring* floor: `ORBS_GRID=80x22` is how a surface is
-/// checked against the tightest screen the design admits, and it is still half
-/// of the frontend's "can this host the game" test, because a dump can be handed
-/// a grid smaller than any window would produce.
+/// [`GRID`] clears it; it survives for `ORBS_GRID=80x22` and a terminal, both
+/// smaller than any window.
 pub const MIN_GRID: GridSize = GridSize::new(80, 22);
 
 /// Below this the bitmap font stops getting smaller and starts losing strokes.
@@ -73,23 +57,12 @@ pub const MIN_SCALE: f32 = 1.0;
 
 /// Rows the input line occupies.
 ///
-/// One, at the same size as everything else. This used to be derived, spending a
-/// second row at the finest tier to buy back the pixel height a fine cell took
-/// away. With one grid there is no tier to compensate for, so the doubling
-/// became magnification — a prompt twice the size of the transcript at every
-/// window, three times at 4K (§19).
-///
-/// It mattered for more than looks: at 2× the line was written into half the
-/// columns, so a 120-column grid gave the player 60 cells to type into. It now
-/// gives 118.
+/// One, at the transcript's size, so the line gets every column (§19).
 pub const INPUT_ROWS: u16 = 1;
 
 /// Physical pixels per virtual pixel: how much of the window one cell is worth.
 ///
-/// The picture fits *inside* the window on both axes, so the smaller ratio wins
-/// and the other axis gets bars. This is the number `ScalingMode::AutoMin`
-/// arrives at inside the projection; see the module header for why it is
-/// restated here in different units.
+/// The smaller ratio wins and the other axis gets bars, as `AutoMin`.
 ///
 /// ```
 /// use orbs_render::{PICTURE, scale_for};

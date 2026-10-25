@@ -68,12 +68,7 @@ pub fn purge(world: &mut World, target: Entity) {
             .records_mut()
             .push(RecordKind::Completion)
             .text(FieldName::Name, Verb::Purge.canonical())
-            // The target is a *fact*, so it belongs in `Path`, not `Detail` —
-            // `FieldName::Detail` is secondary prose subordinate to `Message`,
-            // and a view that honours prose draws it as a sentence. It sat in
-            // `Detail` while nothing read the distinction; the moment the
-            // refusal gained a written line, the target started leaking in
-            // front of it as a bare `tower`.
+            // A fact, so `Path`: `Detail` is prose a view draws as a sentence.
             .text(FieldName::Path, &name)
             .text(FieldName::State, "protected")
             .text(FieldName::Message, &message)
@@ -82,14 +77,8 @@ pub fn purge(world: &mut World, target: Entity) {
         return;
     }
 
-    // A place is **emptied**, never destroyed. §10.1's loop opens with clearing
-    // an instrument of what the last brew left in it, and `purge alembic` has to
-    // mean that — deleting the alembic would leave a laboratory that cannot
-    // distil, from a verb §7 calls everyday maintenance.
-    //
-    // Being a place is what makes an instrument safe, which is why instruments
-    // are not `Protected`: that tier is for the root, the live domains, and the
-    // dispensary, which refuse above and are never emptied either.
+    // A place is emptied, never destroyed: `purge alembic` is everyday
+    // maintenance (§7, §10.1). Being a place is what makes an instrument safe.
     if world.get::<Nameable>(target).map(|kind| kind.0) == Some(NounKind::Place) {
         // §10.1's lock covers clearing as much as charging: you cannot scour an
         // instrument out from under its own run, nor start a second scour.
@@ -98,14 +87,8 @@ pub fn purge(world: &mut World, target: Entity) {
             return;
         }
 
-        // Clearing **takes time** — §11.5 puts it in the Triage band — but it
-        // runs in §9's triage slot, which is a different pool from the
-        // production one. So a purge starts happily during a brew, and this is
-        // the one action in the domain that does not answer to `CAPACITY`.
-        // A quickened room scours quickly too, and this was the one duration in
-        // the tower that did not ask. §19 says of the scroll that *"everything
-        // the room starts inside that window takes half as long"*, and reaching
-        // for `PURGE_TICKS` raw made that sentence false silently.
+        // In §9's triage slot, so a purge starts during a brew. A quickened
+        // room scours quickly too (§19).
         let now = *world.resource::<Tick>();
         let ticks = super::quicken::hastened(world, target, PURGE_TICKS);
         world.entity_mut(target).insert(Triaging {

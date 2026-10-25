@@ -7,9 +7,7 @@ use super::ink::{Ink, Weight};
 
 /// Resolve one cell.
 ///
-/// The order is the Bevy build's `Phosphor::resolve_tinted`, and has to be: a
-/// tint that declines there and resolves here would mean the two frontends
-/// disagree about what a fouled instrument looks like.
+/// In `Phosphor::resolve_tinted`'s order, so both builds agree.
 ///
 /// 1. A material's [`Wash`], if there is one and it does not decline.
 /// 2. Otherwise the [`Lexeme`] over it, if a spell is being read here.
@@ -131,14 +129,8 @@ pub(super) const fn hue(tint: Tint) -> Color {
 
 /// What a cell is a *picture* of, if it is a picture of anything.
 ///
-/// Carries no meaning by design (§19's fourth channel), which is why it may be
-/// colour alone: a channel that says nothing has nothing to withhold.
-///
-/// Four steps out of two hues, using the weight axis. Sixteen indices hold only
-/// `DarkYellow` and `Yellow` in the fire's family, so [`Weight`] supplies the
-/// rest: dim-dark, dark, bright, bold-bright — monotonic, and every step still
-/// orange (§19). The liquid ramp takes the same fix, so a rolling bath is teal
-/// rather than briefly colourless.
+/// Meaningless by design, so colour alone (§19). Four steps from two hues,
+/// with [`Weight`] supplying the rest, for fire and liquid alike.
 pub(super) const fn depicted(depiction: Depiction) -> Option<Ink> {
     let (colour, weight) = match depiction {
         Depiction::None => return None,
@@ -156,16 +148,9 @@ pub(super) const fn depicted(depiction: Depiction) -> Option<Ink> {
         // Waste declines the tint so that waste always looks like waste, and it
         // must not be mistakable for smoke — hence grey rather than a dark grey.
         Depiction::Sediment => (Color::Grey, Weight::Dim),
-        // The gauge ramp, red through yellow to green — the one ramp that is
-        // not monotonic in brightness, since it shows a distance being closed
-        // rather than a substance getting hotter. The fill length says that on
-        // its own, so the tests do not walk it.
-        //
-        // Three hue families, six steps, and none of them the triad's ink:
-        // `Red` and `Green` are byte-for-byte `Role::Danger` and
-        // `Role::Success`, so a ley gauge drew the exact red of every error
-        // line. [`Weight`] supplies the steps within each family instead, and
-        // `the_gauge_ramp_never_wears_an_accents_ink` keeps it that way.
+        // The gauge, red to green, never the triad's own ink
+        // (`the_gauge_ramp_never_wears_an_accents_ink`); [`Weight`] steps
+        // within each family.
         Depiction::GaugeFaint => (Color::DarkRed, Weight::Dim),
         Depiction::GaugeLow => (Color::DarkRed, Weight::Plain),
         Depiction::GaugeMiddle => (Color::DarkYellow, Weight::Plain),

@@ -1,16 +1,8 @@
 //! The manual in the Bevy shell: opening it, feeding it keys.
 //!
-//! [`ManualReader`] is the surface and knows nothing about Bevy. This is the
-//! wiring, and it is a separate file for the reason `menuing.rs` is.
-//!
-//! It opens *over* the menu — the one pair that coexists, since every other
-//! surface is exclusive. The menu stays up behind it, so `Focus` orders the
-//! manual first, and closing it hands the keyboard back to the menu.
-//!
-//! [`type_into_manual`] runs whenever a key arrives, declines inside, and is
-//! ordered *before* [`open_requested`]: a gated `MessageReader` keeps its
-//! cursor and would read the word that opened the surface straight back into
-//! it. `menuing.rs` carries the argument at length.
+//! The wiring for [`ManualReader`], which opens over the menu, the one pair
+//! that coexists; `Focus` orders it first. [`type_into_manual`] runs before
+//! [`open_requested`], as `menuing.rs` gives.
 
 use bevy::input::ButtonState;
 use bevy::input::keyboard::KeyboardInput;
@@ -124,14 +116,8 @@ pub(crate) fn reading_the_manual(reading: Res<Reading>) -> bool {
 
 /// Run condition: nothing is holding the keyboard *above* the transcript.
 ///
-/// `scroll_back`/`scroll_forward` are gated on `booted` alone, so with a
-/// chapter open one `PgUp` paged the chapter and the transcript underneath it
-/// at once.
-///
-/// The manual only, not every surface: the transcript scrolling from behind the
-/// editor and the weave is a feature
-/// (`the_transcript_scrolls_without_asking_for_permission`). What differs here
-/// is that the manual answers the same keys.
+/// The manual only, since it answers the same paging keys; scrolling behind
+/// the editor is a feature (`the_transcript_scrolls_without_asking_for_permission`).
 pub(crate) fn not_reading_the_manual(reading: Res<Reading>) -> bool {
     !reading.is_open()
 }
@@ -146,13 +132,7 @@ pub(crate) fn type_into_manual(
     quiet: Res<super::input::Quiet>,
     mut reading: ResMut<Reading>,
 ) {
-    let stale_chord = super::input::chord_is_stale(quiet.gap());
-    let chord = held.any_pressed([
-        KeyCode::ControlLeft,
-        KeyCode::ControlRight,
-        KeyCode::SuperLeft,
-        KeyCode::SuperRight,
-    ]);
+    let chord = super::input::Chord::read(&held, &quiet);
 
     let mut closed = false;
     let mut took = false;
@@ -165,7 +145,7 @@ pub(crate) fn type_into_manual(
             if event.state != ButtonState::Pressed {
                 continue;
             }
-            if chord && !stale_chord {
+            if chord.swallows() {
                 continue;
             }
             let Some(key) = super::input::pressed(event) else {

@@ -166,14 +166,9 @@ fn a_reader_that_abstains_leaves_the_game_exactly_as_it_was() {
 
 #[test]
 fn a_reader_cannot_change_a_reading_the_orb_was_sure_of() {
-    // The additive claim as a property: every synonym of every verb, submitted
-    // both ways with a reader standing by that would answer differently, reads
-    // identically wherever the orb read the line outright.
-    //
-    // Not every synonym qualifies, which is the router working. Bare `edit`
-    // reaches `verify` only at exactly `MIN_SIMILARITY`, and a 600 is a guess —
-    // what a reader is allowed to improve on. Nothing is lost: abstaining falls
-    // through to the same `verify` (§19).
+    // The additive claim: every synonym the orb reads outright reads the same
+    // with a contrary reader standing by. A guess at `MIN_SIMILARITY` is the
+    // reader's to improve (§19).
     let mut offered = 0;
     for verb in parser::Verb::ALL {
         for (_, phrase) in parser::synonyms_of(verb) {

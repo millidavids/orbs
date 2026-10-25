@@ -378,8 +378,8 @@ Write it as *what got worked on*, in a builder's voice — the bullets below it
 carry the detail. Two or three things, the most interesting first; a version that
 touched one area says so in one sentence.
 
-**This switches at 1.0**, with the version scheme (`0.<phase>.<step>` → ordinary
-semver, DESIGN.md §19). From then the Description is the release's public hook
+**This switches at 1.0**, with the version scheme (`0.<feature>.<iteration>` →
+ordinary semver, DESIGN.md §19). From then the Description is the release's public hook
 for people who can play it, written for someone who has never heard of the game,
 and the dev-log framing goes. That is the same one-way switch, and it should
 happen in the same commit.

@@ -79,20 +79,9 @@ pub(super) fn drive_panes(
 
 /// Notice what the pane is showing, and let a crossing run.
 ///
-/// The content half of [`drive_panes`] above: that one moves rectangles when the
-/// pane *count* changes, this one moves screens when the pane's *contents* do.
-/// Two clocks because they answer to different events — `F4` and the multiplex
-/// against `attend` and `wander`.
-///
-/// Ordered after `refresh_panel` explicitly, not merely into the same set.
-/// `plugin.rs` records why for `motion::advance`: a set orders both against
-/// `repaint` and not against each other, so the executor may run this first and
-/// observe the previous frame's panel — which starts a crossing a frame late,
-/// every time.
-///
-/// The motion switch is the tube's, read by `motion::advance` and handed on;
-/// this system has no `CrtSettings` of its own, so `None` here means *"nobody has
-/// told me"* rather than *"off"*.
+/// [`drive_panes`]' content half: that moves rectangles on a pane count, this
+/// screens on their contents. After `refresh_panel` explicitly, or a crossing
+/// starts a frame late. The switch is `motion::advance`'s; `None` is unset.
 pub(super) fn drive_passing(
     time: Res<Time>,
     panel: Res<Panel>,
@@ -113,20 +102,9 @@ pub(super) fn drive_passing(
 
 /// Panes the main window holds outside a siege.
 ///
-/// One, since the tower rail replaced the telemetry pane (§19). It was two, and
-/// the second held nine developer readings; the rail carries five of them in
-/// sixteen columns down the right and the session pane gets the rest — 102
-/// columns of body against the 58 it had.
-///
-/// `F4` is visibly inert at one pane, recorded rather than fixed: §9 makes the
-/// focus mode a setting and §19 fixes the switch on `F4`, so reassigning it to
-/// toggle the rail would re-litigate both. With one pane the two tilings are
-/// identical, and the key reclaims its job when multiplexing returns the second.
-///
-/// The decision the old constant encoded is not gone: `ORBS_DUMP` can still be
-/// handed a grid below the floor, and `dump.rs` still asks. §9 caps the count at
-/// four, and the siege multiplex is what raises it — which is why
-/// `PaneTransition` survives with nothing left to animate here.
+/// One, since the rail replaced the telemetry pane (§19). `F4` is inert at one
+/// pane, recorded rather than fixed (§9, §19); the siege multiplex raises the
+/// count, which is why `PaneTransition` survives.
 const PANES: u8 = 1;
 
 #[cfg(test)]

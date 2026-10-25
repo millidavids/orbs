@@ -1,21 +1,15 @@
 //! The game's own screen, as text, with no window and no GPU.
 //!
-//! `ORBS_CAPTURE=1` was how work got *looked at*, but it needs a composited
-//! window: from a detached shell, or with the display asleep, the screenshot is
-//! a valid PNG of a black rectangle — worse than no picture, because it looks
-//! like evidence.
-//!
-//! So this draws the same frame the game draws — [`super::paint`], the real
-//! [`Sim`], the real [`ScreenLayout`](orbs_render::ScreenLayout) — into a
-//! [`Frame`] nobody rasterises, and prints it. No `App`, no `DefaultPlugins`,
-//! no adapter. It cannot show what a frontend owns and the Frame does not:
-//! phosphor, the CRT curve, the blinking caret. Rule 2 is the promise that
-//! nothing *informational* is among them.
+//! A screenshot needs a composited window, and without one is a black PNG that
+//! looks like evidence. So this paints the game's own [`Frame`] — the real
+//! [`super::paint`], [`Sim`] and [`ScreenLayout`](orbs_render::ScreenLayout) —
+//! and prints it, with no `App`. What it cannot show, the CRT and the caret's
+//! blink, carries nothing (rule 2).
 //!
 //! ```text
 //! ORBS_DUMP=1 cargo run -p orbs
-//! ORBS_DUMP="attend laboratory; decoct clarity; meditate 25" cargo run -p orbs
-//! ORBS_DUMP=1 ORBS_GRID=120x33 cargo run -p orbs
+//! ORBS_DUMP="attend laboratory; grind sage; meditate 10" cargo run -p orbs
+//! ORBS_DUMP=1 ORBS_GRID=80x22 cargo run -p orbs
 //! ```
 
 use orbs_render::{Frame, GridSize};
@@ -38,23 +32,18 @@ const BOOT: &str = "ORBS_BOOT";
 
 /// Where every instrument's animation has reached, in seconds. See [`bench()`].
 ///
-/// A misnomer kept: it drives the mortar's stroke and everything after the fire
-/// too, but renaming a variable written down in CLAUDE.md and §15's See-it
-/// lines costs more.
+/// A misnomer kept, since the See-it lines name it.
 const FIRE_PHASE: &str = "ORBS_FIRE_PHASE";
 
 /// How far through the current **world tick** to draw, `0.0`..`1.0`.
 ///
-/// A dump builds no `App`, so with no `Time<Fixed>` every bar would sit on a
-/// tick boundary — the one jump the creep exists to remove, and so the one
-/// thing about it a dump could not show. See [`bench()`].
+/// Without it every bar sits on a tick boundary, the jump the creep removes.
+/// See [`bench()`].
 const TICK: &str = "ORBS_TICK";
 
 /// How far through the mortar's pour to draw, `0.0`..`1.0`. See [`bench()`].
 ///
-/// The load is an *edge* — the frame a reagent enters an empty bowl — and a dump
-/// runs no systems, so it never observes one. Without this the pour is the one
-/// animation with no See-it line at all.
+/// The pour is an edge, which a dump never observes.
 const LOAD: &str = "ORBS_LOAD";
 
 /// How far through the kindling flare to draw, `0.0`..`1.0`. See [`bench()`].
@@ -65,21 +54,15 @@ const FLARE: &str = "ORBS_FLARE";
 
 /// Whether screens cross at all — `0` or `off` to stop them.
 ///
-/// A separate switch from `ORBS_PASSAGE_AT`, on the fire's precedent: a phase
-/// of zero is an ordinary phase, and doubly so here, where a crossing at zero
-/// is an endpoint that draws the screen exactly.
-///
-/// For scripted runs rather than players: `scripts/tui.sh` passes it so the
-/// play suite cannot read a screen back mid-crossing. A player reaches `F3`.
+/// Apart from `ORBS_PASSAGE_AT`, since a phase of zero is an ordinary phase.
+/// For scripts: `scripts/tui.sh` passes it so no screen is read mid-crossing.
 pub const PASSAGE: &str = "ORBS_PASSAGE";
 
 /// How far through a crossing to draw — `0.42`, or `wipe:0.42`.
 ///
-/// A dump paints one frame, so on its own there is nothing to cross from. When
-/// this is set the final `;`-separated command is held back: the frame is
-/// painted and kept, the command runs, and it is painted again with the
-/// crossing posed over it — so the picture is a crossing between two screens
-/// the game can reach, which is [`bench()`]'s standard.
+/// The last `;`-separated command is held back: the frame before it is kept,
+/// and the one after drawn with the crossing posed over it — two screens the
+/// game can reach, [`bench()`]'s standard.
 ///
 /// ```text
 /// ORBS_BOOT=0 ORBS_PASSAGE_AT=0.30 \
@@ -89,10 +72,8 @@ const PASSAGE_AT: &str = "ORBS_PASSAGE_AT";
 
 /// How far through a number's roll to draw, `0.0`..`1.0`.
 ///
-/// A roll starts on a change, and a dump has none, so this holds back the last
-/// `;`-separated command as `ORBS_PASSAGE_AT` does: the numbers are noted, the
-/// command runs, and whatever it moved is drawn part way. The command that makes
-/// the change must be the last one in `ORBS_DUMP` — `ORBS_THEN` runs after.
+/// Holds back the last command as `ORBS_PASSAGE_AT` does, and draws what it
+/// moved part way. That command must be last in `ORBS_DUMP`, not `ORBS_THEN`.
 ///
 /// ```text
 /// ORBS_BOOT=0 ORBS_ROLL_AT=0.4 \
@@ -102,9 +83,8 @@ const ROLL_AT: &str = "ORBS_ROLL_AT";
 
 /// A line left **unsubmitted** in the prompt.
 ///
-/// `ORBS_DUMP` submits every `;`-separated segment, so the buffer is empty by
-/// the time the frame is painted — leaving the caret, a partly-typed word and
-/// the suggestion ghost ungated without this.
+/// `ORBS_DUMP` submits every segment, so this is the caret, a partial word and
+/// the ghost's only gate.
 ///
 /// ```text
 /// ORBS_DUMP="attend laboratory" ORBS_LINE="wield mo" cargo run -p orbs
@@ -113,9 +93,7 @@ const LINE: &str = "ORBS_LINE";
 
 /// How many records to hold back from the newest end.
 ///
-/// The transcript's scroll is a keypress and a dump presses no keys, so without
-/// this §15's *reach it from the running game* needs a person at a window. Same
-/// reason `ORBS_LINE` exists.
+/// The scroll is a keypress, which a dump never presses.
 const SCROLL: &str = "ORBS_SCROLL";
 
 /// What to type into the spell editor, once `scribe` has opened it.
@@ -129,19 +107,14 @@ const SCROLL: &str = "ORBS_SCROLL";
 ///   ORBS_EDIT="edit\ngrind sage\n<esc>\nquit" cargo run -p orbs
 /// ```
 ///
-/// `quit` is how a dump saves: the running game writes the buffer out a beat
-/// after typing stops, and that pause is measured off `Time`, which a dump
-/// never advances. `w` and `wq` also flush, without closing and with.
-///
-/// Without this the editor needs a person at a window. Same reason `ORBS_LINE`
-/// and `ORBS_SCROLL` exist.
+/// `quit` is how a dump saves, since the game's pause-then-save runs on `Time`.
+/// `w` and `wq` also flush.
 const EDIT: &str = "ORBS_EDIT";
 
 /// Commands to run **after** `ORBS_EDIT` has finished with the editor.
 ///
-/// A save queues its write for the next tick, like every other effect (see
-/// `session`'s two clocks), so a `peruse` in `ORBS_DUMP` runs before the spell
-/// is there. This is what makes the payoff visible:
+/// A save lands on the next tick, so a `peruse` in `ORBS_DUMP` would run too
+/// early:
 ///
 /// ```text
 /// ORBS_DUMP="scribe morning" ORBS_EDIT="edit\nbrew clarity\n<esc>\nquit" \
@@ -151,12 +124,8 @@ const THEN: &str = "ORBS_THEN";
 
 /// Keystrokes for the weave screen a `weave` in `ORBS_DUMP` opened.
 ///
-/// `\n`-separated, every segment a whole thing — a word, or an arrow token.
-/// There is no buffer, unlike `ORBS_EDIT`: a word runs when its segment ends,
-/// an arrow moves the cursor and runs nothing.
-///
-/// The arrows do nothing until a word has gone into a track, as in the game —
-/// `ley` or `mastery` hands them over, the way `edit` drops into the buffer.
+/// `\n`-separated, each a word (run at its end) or an arrow. The arrows do
+/// nothing until `ley` or `mastery` enters a track, as in the game.
 ///
 /// ```text
 /// ORBS_DUMP="weave" ORBS_WEAVE="mastery\n<right>\ntake" cargo run -p orbs
@@ -165,22 +134,10 @@ const WEAVE: &str = "ORBS_WEAVE";
 
 /// Words for the orb's menu a `menu` in `ORBS_DUMP` opened.
 ///
-/// `\n`-separated, one word per segment, Enter implied at the end of each —
-/// [`WEAVE`]'s shape minus the arrows, since the menu has nothing to walk.
-/// `<esc>` leaves it, as Escape does.
-///
-/// Without this the instrument is blind to the one surface `quit` reaches, and
-/// CLAUDE.md names that blindness: *"the blindness looks exactly like
-/// stability"* — Phase 8 shipped the bailey that way.
-///
-/// `quit` from the menu prints the menu: a dump hosts no process, so there is
-/// nothing for `MenuOutcome::PutDown` to end, and what it means here is *the
-/// screen the player was looking at when they left*. `run_script` never read
-/// `Quitting` either.
-///
-/// The threshold's menu needs no word, because nothing types one there:
-/// `ORBS_THRESHOLD=1` puts it up and this drives it, the only way a capture
-/// reaches the screen a player sees first.
+/// `\n`-separated words, Enter implied — [`WEAVE`]'s shape without arrows;
+/// `<esc>` leaves. `quit` prints the menu, since a dump hosts no process to
+/// end. `ORBS_THRESHOLD=1` puts the threshold's menu up with no word, the only
+/// way a capture reaches the screen a player sees first.
 ///
 /// ```text
 /// ORBS_DUMP="menu" ORBS_MENU="zorb" cargo run -p orbs
@@ -194,19 +151,11 @@ const MENU: &str = "ORBS_MENU";
 /// `<down>` and `<up>` step a row, `<esc>` steps back out — `ORBS_WEAVE`'s
 /// shape with a reader's keys.
 ///
-/// It needs `ORBS_MENU="manual"` in front of it, because that is how a player
-/// reaches the manual and opening it from nowhere would be an instrument
-/// reading a screen the game cannot produce.
+/// Behind `ORBS_MENU="manual"`, the way a player reaches it.
 ///
-/// ⚠ `<pgdn>` steps a *row* here, not a screen: a page is the pane's height
-/// minus one, and a dump takes its one measurement when it paints, after this
-/// script has run. The game measures the reader every frame.
-///
-/// Stated rather than worked around: the alternative is a dump guessing a pane
-/// height, and the picture — a chapter wrapping, saying there is more, stepping
-/// back on Escape — is what a capture is for. Paging by a real screenful is the
-/// play suite's:
-/// `routing::the_manual_pages_and_the_transcript_behind_it_does_not`.
+/// ⚠ `<pgdn>` steps a *row* here: a dump measures the pane only when it paints,
+/// after the script. Paging by a screenful is the play suite's
+/// (`routing::the_manual_pages_and_the_transcript_behind_it_does_not`).
 ///
 /// ```text
 /// ORBS_THRESHOLD=1 ORBS_DUMP=1 ORBS_MENU="manual" ORBS_MANUAL="keys" cargo run -p orbs
@@ -218,9 +167,8 @@ const MANUAL: &str = "ORBS_MANUAL";
 /// `\n`-separated, one of `<up>`, `<right>`, `<down>`, `<left>` per segment.
 /// Anything else ends the walk, the way Escape does.
 ///
-/// No tick per token, because there is none in the game: an arrow goes through
-/// `Sim::walk`, which moves the reading and advances no clock. Stepping between
-/// presses would show a world eight seconds older than a player's.
+/// No tick per token: an arrow goes through `Sim::walk`, which advances no
+/// clock.
 ///
 /// ```text
 /// ORBS_DUMP="attend archive; divine; wander" ORBS_WALK="<right>\n<down>" cargo run -p orbs
@@ -232,25 +180,14 @@ const SEPARATOR: char = ';';
 
 /// The grid a dump uses unless asked otherwise: **the one the game draws**.
 ///
-/// This was §4's 80×22 floor, so a layout bug showed where things are tightest.
-/// That held while the grid followed the window; the game is 120×45 always now,
-/// and a dump showing anything else reads a screen nobody has.
-/// `ORBS_GRID=80x22` is the floor check, which CLAUDE.md's See-it lines use for
-/// width.
+/// 120×45, the game's fixed grid; `ORBS_GRID=80x22` is §4's floor check.
 const DEFAULT_GRID: GridSize = orbs_render::GRID;
 
 /// Draw one frame as text if `ORBS_DUMP` asked for it.
 ///
-/// Returns whether it did, so a frontend can exit instead of opening a window.
-/// Called before the `App` is built, or before raw mode is entered: the point
-/// is to need none of it.
-///
-/// `engine` is the POST card's third line — the one fact only the caller knows.
-/// See the POST card's own module for why it cannot be a constant.
-///
-/// No seed parameter: a dump is an instrument and always draws
-/// `crate::seed()`'s world, so a frontend holding a new game's seed cannot hand
-/// it one by mistake.
+/// Returns whether it did, so a frontend can exit before building an `App` or
+/// entering raw mode. `engine` is the POST card's third line, which only the
+/// caller knows. No seed: a dump always draws `crate::seed()`'s world.
 #[must_use]
 pub fn run(wizard: Option<String>, engine: &str, settings: Vec<crate::settings::Row>) -> bool {
     let Some(request) = requested() else {
@@ -262,9 +199,8 @@ pub fn run(wizard: Option<String>, engine: &str, settings: Vec<crate::settings::
 
 /// What `ORBS_DUMP` asked for, if it asked for anything.
 ///
-/// Split out so a frontend can offer the same thing under its own flag —
-/// `orbs-tui --dump "attend laboratory"` — without setting an environment
-/// variable, which edition 2024 makes `unsafe` and the workspace denies.
+/// Split out for `orbs-tui --dump`, since setting a variable is `unsafe` in
+/// edition 2024.
 #[must_use]
 pub fn requested() -> Option<String> {
     std::env::var(DUMP).ok()
@@ -272,9 +208,8 @@ pub fn requested() -> Option<String> {
 
 /// Draw one frame as text, from a script the caller already has.
 ///
-/// The boundary proof: both binaries reach it, through the same painters, from
-/// the same `Sim` — so `orbs-tui --dump X` and `ORBS_DUMP=X orbs` print the
-/// same bytes or the shell has grown a frontend-shaped hole in it.
+/// The boundary proof: `orbs-tui --dump X` and `ORBS_DUMP=X orbs` print the
+/// same bytes.
 pub fn run_script(
     wizard: Option<String>,
     engine: &str,
@@ -286,20 +221,10 @@ pub fn run_script(
     // No clock either, unless `ORBS_DATE` names a day: `moon` at the menu
     // would otherwise make a capture depend on when it was taken.
     crate::sky::cover();
-    // A dump neither loads nor saves unless `ORBS_SAVE` names a path. Loading
-    // by default would make every See-it line depend on whether anyone had
-    // played there, and `dumps.sh` would stop being a baseline the first time
-    // one of its 56 screens wrote a save the next 55 then read.
-    //
-    // Sealed for the whole process, not just this line: the menu's play page
-    // calls `save::path()`, `save::saves()` and `save::abandon()` itself, so
-    // without the seal a capture listed the player's real towers and
-    // `ORBS_MENU=$'play\nabandon 1\nabandon 1'` renamed one. Both reproduced.
-    //
-    // `save::named`, not `var_os(..).is_some()`: an exported-but-empty
-    // `ORBS_SAVE=` is not a path a person asked for, and reading it as one
-    // skipped the seal while `save::chosen` resolved it to the real app-data
-    // directory — so the capture overwrote the player's tower.
+    // A dump neither loads nor saves unless `ORBS_SAVE` names a path, or no
+    // capture is a baseline. Sealed for the whole process, since the menu's
+    // play page reads saves itself. `save::named`, so a blank `ORBS_SAVE=` is
+    // no path — it once let a capture overwrite the player's tower.
     let asked = crate::save::named();
     if !asked {
         crate::save::seal();
@@ -347,11 +272,9 @@ pub fn run_script(
             fresh
         }
     };
-    // Authored content, if `ORBS_CONTENT` names a directory (rule 6). A dump
-    // has no watcher but must still read what is on disk, or the first tool
-    // CLAUDE.md names is the one that cannot show a writer their own edit. It
-    // installs no `tracing` subscriber either, so without these lines malformed
-    // TOML looks exactly like the built-in fallback.
+    // Authored content, if `ORBS_CONTENT` names a directory (rule 6), so a
+    // writer sees their edit — and a malformed file says so, since a dump has
+    // no `tracing` subscriber.
     for file in crate::prose::load(&mut sim) {
         eprintln!(
             "warn: {} is set but {file} did not load; drawing the built-in text",
@@ -360,16 +283,8 @@ pub fn run_script(
     }
 
     let grid = grid();
-    // Wide, which is what every running frontend opens in. Deriving the mode
-    // from the grid instead drew the *opposite* focus mode to the game: a dump
-    // printed `focus deep` and `F4 wide` where the terminal printed
-    // `focus wide` and `F4 deep`.
-    //
-    // Only the two labels today, since one pane makes both tilings identical
-    // and §19 records `F4` as inert until Phase 11a returns the second pane.
-    // When it does, every dump would show a layout the game never draws — and
-    // CLAUDE.md quotes this output: *"a See-it line that describes a different
-    // screen is worse than none."*
+    // Wide, which every running frontend opens in, not derived from the grid.
+    // Only the labels differ while there is one pane (§19).
     let screen = Screen::windowless(grid, None);
 
     // Settled unless `ORBS_PASSAGE_AT` asks otherwise: a dump is a still, and a
@@ -385,11 +300,8 @@ pub fn run_script(
     let mut climb = super::climb::Climb::default();
     if request != "1" {
         if posed.is_some() || rolled.is_some() {
-            // The last command is held back, the screen it was about to replace
-            // is painted and kept, then it runs. Without this `ORBS_PASSAGE_AT`
-            // has nothing to depart from and prints a settled screen while
-            // looking as though it worked — and `ORBS_ROLL_AT` has no number
-            // that moved.
+            // The last command held back, so a crossing has a screen to leave
+            // and a roll a number that moved.
             let (head, last) = split_last(request);
             drive(&mut sim, &mut installing, head);
             if posed.is_some() {
@@ -439,14 +351,8 @@ pub fn run_script(
     // a tool documented as drawing the same frame the game draws has to draw that
     // one too. `ORBS_GRID=40x10` is how anyone would ever look at it.
     if screen.is_hostable() {
-        // Settled: a dump is a still, and a still of a pane halfway in is a
-        // picture of a moment rather than of the screen.
-        //
-        // One pane at every grid, since the tower rail replaced the telemetry
-        // pane. Asking `grid.fits(DEEP_FOCUS_FLOOR)` settled at two, which
-        // after `PANES` became 1 drew a half-width session pane beside a second
-        // one nothing painted. Whether the *rail* fits is
-        // `ScreenLayout::compute`'s.
+        // Settled, since a dump is a still. One pane at every grid; whether
+        // the rail fits is `ScreenLayout::compute`'s.
         let panes = PaneTransition::settled(1);
         let typed = std::env::var(LINE).map_or_else(|_| Line::default(), |text| Line::typed(&text));
         // If a `scribe` in `ORBS_DUMP` asked for the editor, open it and let
@@ -471,25 +377,16 @@ pub fn run_script(
         if let Ok(after) = std::env::var(THEN) {
             sim.step();
             drive(&mut sim, &mut installing, &after);
-            // A `scribe` in `ORBS_THEN` opens the editor too, the only ordering
-            // that shows a spell edited while it runs: the invocation has to be
-            // cast before the editor opens on it.
-            //
-            // Opened, not typed into. `ORBS_EDIT` belongs to the `scribe` that
-            // started it, and replaying it here types the script a second time
-            // into a buffer that holds it — which it did, reporting a
-            // three-line spell as nine. A save says nothing now (§19), so the
-            // mistake would show up only as a doubled file under `peruse`.
+            // A `scribe` in `ORBS_THEN` opens the editor too — the only way to
+            // show a running spell edited — but untyped: `ORBS_EDIT` belongs
+            // to the first `scribe`.
             editing = editing.or_else(|| open(&mut sim));
             weaving = weaving.or_else(|| woven(&mut sim));
             walking |= walked(&mut sim);
             menuing = menuing.or_else(|| menued(&mut sim, &settings, &mut opened_manual));
         }
-        // A maze can close from under the walker, and `walked` only latches
-        // *on*. Both frontends give the keyboard back when the maze goes, so
-        // without this a dump whose spell solved the maze draws `wander` still
-        // owning the pane. Same divergence as the guide above, one surface
-        // over.
+        // A maze can close under the walker; both frontends then give the
+        // keyboard back.
         if walking && sim.stacks().is_none() {
             walking = false;
         }
@@ -500,34 +397,18 @@ pub fn run_script(
         // The world may have moved while the screen was up — `ORBS_THEN` steps.
         // In the game `weaving::refresh` runs every frame for exactly this.
         if let Some(screen) = weaving.as_mut() {
-            screen.refresh(
-                sim.experience(),
-                sim.renown(),
-                sim.scale(),
-                sim.ley_line(),
-                sim.mastery(),
-            );
+            screen.read_from(&sim);
         }
-        // The running-line marker, and how the orb reads the buffer. The game
-        // pushes both in through `editing::autosave`; a dump advances no
-        // `Time`, so they come from the same accessors here — the panel below's
-        // reason.
-        //
-        // The reading especially: without it `interpret` draws an empty page
-        // and the marks never appear, a See-it line that looks like it works.
-        //
-        // And the guide, one accessor along. `Editor::new` seeds an empty
-        // `Guide` for a frontend's first `refresh` to replace, and a dump does
-        // none, so every dumped editor drew an empty box still taking thirty
-        // columns off the buffer — a pane present, sized and blank is exactly
-        // the dump-versus-game divergence `opened` exists to prevent.
+        // The running-line marker, the reading and the guide, which the game
+        // pushes in on `Time`: from the same accessors here, or `interpret`
+        // draws empty and the guide is a blank box.
         if let Some(editor) = editing.as_mut() {
             editor.set_running_line(sim.running_line(editor.name()));
             // Through the scrivener, so a capture can show a read line. The
             // reading is what `interpret` draws, and a dump that never consulted
             // one would be blind to the whole surface — CLAUDE.md's *"the
             // blindness looks exactly like stability"*.
-            editor.set_reading(match super::scrivener() {
+            editor.set_reading(match super::environment::scrivener() {
                 Some(reader) => sim.read_spell_with(
                     editor.name(),
                     editor.domain(),
@@ -618,9 +499,7 @@ pub fn run_script(
 
 /// A wash's colour, as a writer would name it.
 ///
-/// Two names joined for the flask's mixing band, the one region that is two
-/// materials at once; printing only the first would hide what its picture is
-/// about.
+/// Two names joined for the flask's mixing band, which is two materials.
 fn label(wash: orbs_render::Wash) -> String {
     match wash.with {
         None => wash.tint.name().to_owned(),
@@ -640,12 +519,8 @@ fn print(frame: &Frame) {
         );
     }
 
-    // A tint is pure colour, so the frame above cannot show it — the glyphs are
-    // identical either way. Without this a material whose colour never reaches
-    // a cell draws in the base hue and looks exactly like one nobody has
-    // tinted.
-    //
-    // Printed only when there are some, so every other dump is unchanged.
+    // A tint is colour the glyphs above cannot show. Printed only when there
+    // are some.
     if !frame.tints().is_empty() {
         println!("-- tinted regions (DESIGN.md §19) --");
         for (area, wash) in frame.tints() {
@@ -660,14 +535,9 @@ fn print(frame: &Frame) {
         }
     }
 
-    // And the spell's parts of speech, for the tints' reason: a hue changes no
-    // glyph, so a classified lexeme whose colour never reaches a cell looks
-    // like a word nobody has coloured. `ink` sees this in the terminal build
-    // and nothing sees it in the Bevy one, so this is the only text gate there
-    // is.
-    //
-    // Runs in reading order rather than a tally: a word classified wrongly is
-    // visible only beside the words either side of it.
+    // And the spell's parts of speech, for the tints' reason — the only text
+    // gate the Bevy build has. In reading order, so a misclassified word
+    // shows beside its neighbours.
     if !frame.syntax().is_empty() {
         println!("-- lit runs (DESIGN.md §19) --");
         for (area, kind) in frame.syntax() {
@@ -705,11 +575,8 @@ const fn part(kind: orbs_render::Lexeme) -> &'static str {
 /// for something that animates. `ORBS_BOOT=0` skips it entirely and belongs to
 /// the running game.
 ///
-/// A trailing `:<fraction>` names how far through, so `ORBS_BOOT=post:1` is the
-/// finished card and bare `post` still means 0.5. The card's last line needed
-/// it: at 0.5 only the studio has landed, so the two version lines were
-/// unreachable from any switch — and the engine line is the one thing on that
-/// card that differs between the frontends.
+/// A trailing `:<fraction>` names how far, so `ORBS_BOOT=post:1` is the
+/// finished card with its version lines.
 fn requested_stage() -> Option<(Stage, f32)> {
     let request = std::env::var(BOOT).ok()?;
     let (name, asked) = match request.split_once(':') {
@@ -747,10 +614,7 @@ fn split_last(script: &str) -> (&str, &str) {
 
 /// Paint the screen a posed crossing departs from, and keep it.
 ///
-/// The plain session, deliberately: the screen being *left* is the one before
-/// the last command ran, and that command is what opens a surface, so a
-/// departing screen with an editor over it is the wrong moment. `ORBS_EDIT`,
-/// `ORBS_THEN` and the rest belong to the arriving screen.
+/// The plain session: the surfaces belong to the arriving screen.
 fn leaving(
     sim: &Sim,
     installing: Option<&crate::install::Install>,
@@ -797,16 +661,8 @@ fn leaving(
 
 /// The shape and fraction `ORBS_PASSAGE_AT` asks for, if it asks.
 ///
-/// Takes `requested_stage`'s shape — a bare fraction, or `name:fraction` — so a
-/// second one need not be learned. A bare fraction poses the shape the game
-/// would have chosen: `ORBS_PASSAGE_AT=0.3` is a `Wipe` on a room change and a
-/// `Gather` on a `wander`. Naming a shape overrides that, which is how one is
-/// looked at somewhere it does not normally run.
-///
-/// A malformed value poses nothing, for the reason a malformed grid falls back:
-/// the useful answer to a typo is the ordinary screen. An unknown *name* poses
-/// nothing either, since a dump that ignores half of what it was asked is worse
-/// than one that does nothing.
+/// `requested_stage`'s shape. A bare fraction poses the shape the game would
+/// choose; a name overrides it. Anything malformed poses nothing.
 fn requested_crossing() -> Option<Posed> {
     use orbs_render::Passage;
 
@@ -857,10 +713,7 @@ pub(crate) fn passage_permitted() -> bool {
 
 /// A finite `f32` from the environment, if the variable holds one.
 ///
-/// Four switches read the same shape and had four copies of the parse. The
-/// `is_finite` check is the part worth having in one place: a `NaN` survives
-/// `clamp`, and a `NaN` phase makes `pulse` draw a still picture that looks
-/// like a broken animation rather than a typo.
+/// One parse for four switches; `NaN` survives `clamp`, so `is_finite` matters.
 fn number(name: &str) -> Option<f32> {
     let value = std::env::var(name).ok()?;
     let parsed = value.trim().parse::<f32>().ok()?;
@@ -869,9 +722,7 @@ fn number(name: &str) -> Option<f32> {
 
 /// The athanor's fire, at whatever phase `ORBS_FIRE_PHASE` asks for.
 ///
-/// A dump advances no `Time`, so without this the fire draws at phase zero for
-/// ever and "see it" degrades to "it compiles". Stepping the value shows the
-/// plume move:
+/// A dump advances no `Time`, so stepping this is how the plume moves:
 ///
 /// ```text
 /// ORBS_DUMP="attend laboratory; kindle charcoal; meditate 300" \
@@ -929,12 +780,8 @@ fn scrolled(sim: &mut orbs_sim::Sim) -> super::scrollback::Scroll {
 
 /// Submit every `;`-separated command in `script`, stepping between them.
 ///
-/// One loop rather than two, so the commands before an editing session and
-/// after it are driven identically — a second copy would be a second answer to
-/// what a dump command *is*.
-///
-/// While `installing`, a line goes through the installation, which is the path
-/// both frontends give it.
+/// One loop for before and after an editing session. While `installing`, a
+/// line goes through the installation, as in both frontends.
 fn drive(sim: &mut Sim, installing: &mut Option<crate::install::Install>, script: &str) {
     // Read once, for the whole script. `ORBS_AUGURY` is off unless asked for,
     // so an older dump drives as it always did, and one with `stub` set reaches
@@ -949,19 +796,15 @@ fn drive(sim: &mut Sim, installing: &mut Option<crate::install::Install>, script
             crate::install::drive_dump(sim, installing, line, augury.as_deref());
             continue;
         }
-        match augury.as_deref() {
-            Some(augur) => sim.submit_reading(line, augur),
-            None => sim.submit(line),
-        }
+        sim.submit_with(line, augury.as_deref());
         sim.step();
     }
 }
 
 /// The editor a pending `scribe` asked for, with nothing typed into it.
 ///
-/// The same two lines `editing::open_requested` runs in the game. Separate from
-/// [`opened`] because `ORBS_EDIT` is one session belonging to one `scribe`, and
-/// a second `scribe` later in the dump must open a buffer rather than replay it.
+/// `editing::open_requested`'s two lines; apart from [`opened`], since a later
+/// `scribe` opens a buffer rather than replaying `ORBS_EDIT`.
 fn open(sim: &mut orbs_sim::Sim) -> Option<super::Editor> {
     let request = sim.opening()?;
     Some(super::Editor::open(
@@ -973,23 +816,9 @@ fn open(sim: &mut orbs_sim::Sim) -> Option<super::Editor> {
 
 /// The editor, if a `scribe` in this dump opened one, with `ORBS_EDIT` typed in.
 ///
-/// A dump presses no keys, so the keystrokes replay through the same
-/// [`Editor`](super::Editor) methods the shell's key handler calls — a second
-/// implementation would let dump and game disagree about what typing does.
-///
-/// The `:` goes through `insert` like any other character rather than into its
-/// innards, because that is where the editor's two states decide whether a
-/// keystroke is a word or a line — and it went wrong once: under the old `:`
-/// command line, opening it required the caret at column 0, so saving after
-/// typing a line put a colon in the spell, and reaching past that function hid
-/// it from both this and the unit tests.
-///
-/// No marker for a command, because the editor's state already says which a
-/// segment is: it opens in `Mode::Command`, `edit` switches to the buffer,
-/// `<esc>` switches back. The script is the keystrokes in order.
-///
-/// A `save` here writes for real — `Sim::write_spell` queues the write and the
-/// dump steps afterwards — so the picture is of a spell that has been saved.
+/// The keystrokes replay through the [`Editor`](super::Editor) methods the key
+/// handler calls, every character through `insert`, so dump and game agree.
+/// The editor's state says what a segment is. A save writes for real.
 fn opened(sim: &mut orbs_sim::Sim) -> Option<super::Editor> {
     let mut editor = open(sim)?;
 
@@ -1040,13 +869,8 @@ fn opened(sim: &mut orbs_sim::Sim) -> Option<super::Editor> {
 /// The arrow keys a `wander` in the dump asked for, with `ORBS_WALK` played
 /// into them.
 ///
-/// Through `Sim::walk`, the door a key press goes through, for [`opened`]'s
-/// reason: a second implementation would let dump and game disagree about how
-/// much of the world moved, since walking costs no tick and `submit`/`step`
-/// would cost one an arrow.
-///
-/// Returns whether the arrows ended up with the maze, which is what the status
-/// row draws from.
+/// Through `Sim::walk`, a key press's door, for [`opened`]'s reason. Returns
+/// whether the arrows still have the maze, for the status row.
 fn walked(sim: &mut orbs_sim::Sim) -> bool {
     if !sim.wandering() {
         return false;
@@ -1054,16 +878,10 @@ fn walked(sim: &mut orbs_sim::Sim) -> bool {
     let Ok(script) = std::env::var(WALK) else {
         return true;
     };
-    for segment in script.replace("\\n", "\n").split('\n') {
-        // The four tokens a keyboard has and a shell word does not.
-        let way = match segment.trim() {
-            "" => continue,
-            "<up>" => orbs_sim::tower::Way::North,
-            "<right>" => orbs_sim::tower::Way::East,
-            "<down>" => orbs_sim::tower::Way::South,
-            "<left>" => orbs_sim::tower::Way::West,
-            // Anything else ends the walk, which is what Escape does.
-            _ => return false,
+    for key in keystrokes(&script, ARROWS) {
+        // Anything but an arrow ends the walk, which is what Escape does.
+        let Some(way) = super::apply_to_maze(&key) else {
+            return false;
         };
         // `walk`, not `submit` and `step`: a tick per arrow meant eight presses
         // advanced the world eight seconds, so a brew could finish and a fire
@@ -1075,28 +893,11 @@ fn walked(sim: &mut orbs_sim::Sim) -> bool {
     true
 }
 
-/// Re-read the tracks from the world.
-///
-/// A function rather than a closure over `sim`, so [`woven`] can hand a taken
-/// node back: a closure capturing `&sim` holds an immutable borrow for its
-/// whole life and `Sim::take` needs a mutable one.
-fn refresh(screen: &mut super::Tapestry, sim: &orbs_sim::Sim) {
-    screen.refresh(
-        sim.experience(),
-        sim.renown(),
-        sim.scale(),
-        sim.ley_line(),
-        sim.mastery(),
-    );
-}
-
 /// Save the buffer, through whatever scrivener the environment named.
 ///
-/// One place, so the two save words cannot differ: `w` and `wq` both reach
-/// this, and a reader consulted by one and not the other would make the spell
-/// depend on how it was closed.
+/// One place for `w` and `wq`, so the spell never depends on how it closed.
 fn wrote(sim: &mut orbs_sim::Sim, editor: &super::Editor) {
-    match super::scrivener() {
+    match super::environment::scrivener() {
         Some(reader) => sim.write_spell_reading(editor.name(), editor.lines(), reader.as_ref()),
         None => sim.write_spell(editor.name(), editor.lines()),
     }
@@ -1104,19 +905,15 @@ fn wrote(sim: &mut orbs_sim::Sim, editor: &super::Editor) {
 
 /// The orb's menu, if a `quit` in the script opened it, with [`MENU`] typed in.
 ///
-/// `sim.menuing()` takes the handshake, as `woven` takes `weaving`, so this
-/// fires once per `menu` and a second `menu` in `ORBS_THEN` reopens a screen
-/// the first one's `resume` closed — the game's behaviour.
+/// `sim.menuing()` takes the handshake, so it fires once per `menu`, as in the
+/// game.
 fn menued(
     sim: &mut orbs_sim::Sim,
     settings: &[crate::settings::Row],
     opened: &mut bool,
 ) -> Option<super::Menu> {
-    // `ORBS_THRESHOLD=1` opens it without a word, because at the threshold
-    // there is no prompt to type one at, and a dump has no `Threshold` resource
-    // to read. The stance is what the capture is *of*: the threshold's top page
-    // does not offer `resume` and `<esc>` does not close it, so the wrong
-    // stance shows a screen no player sees.
+    // `ORBS_THRESHOLD=1` opens it with no word, in the threshold's stance — no
+    // `resume`, and `<esc>` does not close it.
     let stance = crate::Threshold::chosen(crate::Threshold::Playing);
     let stance = if stance.is_waiting() {
         crate::Stance::Threshold
@@ -1126,60 +923,32 @@ fn menued(
     if stance == crate::Stance::InTower && !sim.menuing() {
         return None;
     }
-    let mut menu = super::Menu::at(stance);
-    // The caller's, for the engine line's reason: a dump cannot ask a world
-    // what the tube is set to, and the frontends do not share settings. Each
-    // binary hands over what it would show on a first launch, which is also
-    // what makes the capture reproducible: `ORBS_SAVE=off` means there is no
-    // file to read.
-    menu.show_settings(settings.to_vec());
+    // The caller's settings, as the engine line is: each binary hands over its
+    // first launch's, which keeps the capture reproducible.
+    let mut menu = super::Menu::open_at(stance, super::Driver::default(), settings.to_vec());
 
     let Ok(script) = std::env::var(MENU) else {
         return Some(menu);
     };
-    for segment in script.replace("\\n", "\n").split('\n') {
-        match segment.trim() {
-            "" => continue,
-            "<esc>" => {
-                if menu.escape().is_some() {
-                    return None;
-                }
-            }
-            word => {
-                for character in word.chars() {
-                    menu.type_text(&character.to_string());
-                }
-                // Enter is implied at the end of a segment, as it is for the
-                // weave: there is no buffer here, so a segment can only mean
-                // "a word, now run it".
-                match menu.enter() {
-                    // `resume` really closes it, so `ORBS_MENU="resume"` draws
-                    // the tower — the half of the See-it line that proves the
-                    // menu is a place you can leave.
-                    Some(super::MenuOutcome::Close) => return None,
-                    // The manual really opens, unlike the outcomes below: it
-                    // needs only the book. `opened` is where the reader ends
-                    // up; `menued` returns the menu it is over.
-                    Some(super::MenuOutcome::OpenManual) => *opened = true,
-                    // Nothing to end and nothing to swap — see [`MENU`]. A dump
-                    // hosts no process, so putting the orb down, loading
-                    // another tower and beginning one all leave the menu on
-                    // screen as the last thing the player saw. The *pages* are
-                    // what a dump can show: `ORBS_MENU="saves"` is the
-                    // listing's See-it line. `Drive` included, and it already
-                    // happened — the menu writes the setting itself, and all
-                    // this carries is *tell the running frontend*, which a dump
-                    // is not.
-                    Some(
-                        super::MenuOutcome::Set { .. }
-                        | super::MenuOutcome::PutDown
-                        | super::MenuOutcome::Load(_)
-                        | super::MenuOutcome::Begin { .. }
-                        | super::MenuOutcome::Drive(_),
-                    )
-                    | None => {}
-                }
-            }
+    for key in keystrokes(&script, MENU_KEYS) {
+        match super::apply_to_menu(&key, &mut menu) {
+            // `resume` really closes it, so `ORBS_MENU="resume"` draws the
+            // tower — the half of the See-it line that proves the menu is a
+            // place you can leave.
+            Some(super::MenuOutcome::Close) => return None,
+            // The manual really opens, unlike the outcomes below: it needs only
+            // the book. `opened` is where the reader ends up; `menued` returns
+            // the menu it is over.
+            Some(super::MenuOutcome::OpenManual) => *opened = true,
+            // Nothing to end or swap — see [`MENU`] — so the menu stays on
+            // screen. `Drive` too: the menu already wrote the setting.
+            Some(
+                super::MenuOutcome::Set { .. }
+                | super::MenuOutcome::PutDown
+                | super::MenuOutcome::Raise(_)
+                | super::MenuOutcome::Drive(_),
+            )
+            | None => {}
         }
     }
     Some(menu)
@@ -1187,10 +956,8 @@ fn menued(
 
 /// The manual a `manual` in `ORBS_MENU` opened, driven by `ORBS_MANUAL`.
 ///
-/// The reader really runs, unlike the menu's other outcomes: it needs only the
-/// book, so a dump shows what a player sees. `<esc>` from the contents closes
-/// it and the menu behind is drawn — the half of the See-it line that proves it
-/// is a place you can leave.
+/// The reader really runs, since it needs only the book; `<esc>` from the
+/// contents draws the menu behind.
 fn read_manual(sim: &orbs_sim::Sim, opened: bool) -> Option<super::ManualReader> {
     if !opened {
         return None;
@@ -1199,21 +966,7 @@ fn read_manual(sim: &orbs_sim::Sim, opened: bool) -> Option<super::ManualReader>
     let Ok(script) = std::env::var(MANUAL) else {
         return Some(reader);
     };
-    for segment in script.replace("\\n", "\n").split('\n') {
-        let key = match segment.trim() {
-            "" => continue,
-            "<esc>" => super::Key::Escape,
-            "<pgdn>" => super::Key::PageDown,
-            "<pgup>" => super::Key::PageUp,
-            "<down>" => super::Key::Down,
-            "<up>" => super::Key::Up,
-            word => {
-                for glyph in word.chars() {
-                    reader.type_text(&glyph.to_string());
-                }
-                super::Key::Enter
-            }
-        };
+    for key in keystrokes(&script, MANUAL_KEYS) {
         if super::apply_to_manual(&key, &mut reader).is_some() {
             // Closed. The menu it sat over is what a capture then shows.
             return None;
@@ -1225,58 +978,88 @@ fn read_manual(sim: &orbs_sim::Sim, opened: bool) -> Option<super::ManualReader>
 /// The weave screen a `weave` in the dump asked for, with `ORBS_WEAVE` played
 /// into it.
 ///
-/// Through the same `Tapestry` methods the key handler calls, for [`opened`]'s
-/// reason. The reading is pushed in first and again at the end — the game's
-/// `weaving::refresh` does it every frame, and a dump builds no `App`, so the
-/// screen would otherwise draw a tapestry with no tracks for the words to point
-/// at.
+/// Through the key handler's `Tapestry` methods, for [`opened`]'s reason. The
+/// reading is pushed first and last, as `weaving::refresh` does each frame.
 fn woven(sim: &mut orbs_sim::Sim) -> Option<super::Tapestry> {
     if !sim.weaving() {
         return None;
     }
     let mut screen = super::Tapestry::default();
-    refresh(&mut screen, sim);
+    screen.read_from(sim);
 
     let Ok(script) = std::env::var(WEAVE) else {
         return Some(screen);
     };
-    for segment in script.replace("\\n", "\n").split('\n') {
-        match segment.trim() {
-            "" => continue,
-            // The five tokens a keyboard has and a shell word does not.
-            "<esc>" => screen.escape(),
-            "<up>" => screen.step(0, -1),
-            "<down>" => screen.step(0, 1),
-            "<left>" => screen.step(-1, 0),
-            "<right>" => screen.step(1, 0),
-            word => {
-                for character in word.chars() {
-                    screen.type_text(&character.to_string());
-                }
-                // Enter is implied at the end of a segment and nowhere else:
-                // there is no buffer here, so unlike the editor no state makes
-                // a segment anything but "a word, now run it".
-                match screen.enter() {
-                    Some(super::WeaveOutcome::Close) => return None,
-                    // The dump takes it too, or `ORBS_WEAVE="mastery\ntake"`
-                    // would draw a screen where nothing happened — the See-it
-                    // line for the whole progression tree. It queues, and
-                    // `ORBS_THEN` is where the granting tick comes from.
-                    Some(super::WeaveOutcome::Take(id)) => sim.take(&id),
-                    None => {}
-                }
-            }
+    for key in keystrokes(&script, WEAVE_KEYS) {
+        match super::apply_to_weave(&key, &mut screen) {
+            Some(super::WeaveOutcome::Close) => return None,
+            // The dump takes it too, or `ORBS_WEAVE="mastery\ntake"` would draw
+            // a screen where nothing happened — the See-it line for the whole
+            // progression tree. It queues, and `ORBS_THEN` is where the granting
+            // tick comes from.
+            Some(super::WeaveOutcome::Take(id)) => sim.take(&id),
+            None => {}
         }
     }
-    refresh(&mut screen, sim);
+    screen.read_from(sim);
     Some(screen)
+}
+
+/// The arrow tokens, which `ORBS_WALK` reads and nothing else.
+const ARROWS: &[&str] = &["<up>", "<down>", "<left>", "<right>"];
+
+/// The tokens `ORBS_MENU` reads as keys.
+const MENU_KEYS: &[&str] = &["<esc>"];
+
+/// The tokens `ORBS_MANUAL` reads as keys.
+const MANUAL_KEYS: &[&str] = &["<esc>", "<up>", "<down>", "<pgup>", "<pgdn>"];
+
+/// The tokens `ORBS_WEAVE` reads as keys.
+const WEAVE_KEYS: &[&str] = &["<esc>", "<up>", "<down>", "<left>", "<right>"];
+
+/// A dump's key script as keystrokes, for the same `apply_to_*` table the
+/// frontends drive: the tokens in `known` as the keys they name, and any other
+/// segment typed and then entered — there is no buffer outside the editor, so a
+/// segment can only mean *a word, now run it*.
+///
+/// `known` is per surface, since a token one surface never read is a word to
+/// another: `ORBS_MENU='<down>'` draws the menu's complaint about it.
+///
+/// `\n` as two characters, because a shell word carries it that way.
+fn keystrokes(script: &str, known: &[&str]) -> Vec<super::Key> {
+    let mut keys = Vec::new();
+    for segment in script.replace("\\n", "\n").split('\n') {
+        let segment = segment.trim();
+        let named = match segment {
+            "" => continue,
+            token if !known.contains(&token) => None,
+            "<esc>" => Some(super::Key::Escape),
+            "<up>" => Some(super::Key::Up),
+            "<down>" => Some(super::Key::Down),
+            "<left>" => Some(super::Key::Left),
+            "<right>" => Some(super::Key::Right),
+            "<pgup>" => Some(super::Key::PageUp),
+            "<pgdn>" => Some(super::Key::PageDown),
+            _ => None,
+        };
+        let Some(named) = named else {
+            keys.extend(
+                segment
+                    .chars()
+                    .map(|glyph| super::Key::Text(glyph.to_string())),
+            );
+            keys.push(super::Key::Enter);
+            continue;
+        };
+        keys.push(named);
+    }
+    keys
 }
 
 /// The grid to draw into, from `ORBS_GRID` or §4's floor.
 ///
-/// A malformed value falls back rather than panicking: this is a development
-/// switch, and the useful answer to a typo is the default screen plus the
-/// obvious mismatch, not a stack trace.
+/// A malformed value falls back: the useful answer to a typo is the default
+/// screen.
 fn grid() -> GridSize {
     let Ok(request) = std::env::var(GRID) else {
         return DEFAULT_GRID;
@@ -1287,5 +1070,39 @@ fn grid() -> GridSize {
     match (cols.trim().parse(), rows.trim().parse()) {
         (Ok(cols), Ok(rows)) => GridSize { cols, rows },
         _ => DEFAULT_GRID,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Key;
+
+    #[test]
+    fn a_token_is_a_key_only_on_a_surface_that_reads_it() {
+        let typed = vec![
+            Key::Text("<".into()),
+            Key::Text("d".into()),
+            Key::Text("o".into()),
+            Key::Text("w".into()),
+            Key::Text("n".into()),
+            Key::Text(">".into()),
+            Key::Enter,
+        ];
+        assert_eq!(keystrokes("<down>", MENU_KEYS), typed);
+        assert_eq!(keystrokes("<down>", MANUAL_KEYS), vec![Key::Down]);
+        assert_eq!(keystrokes("<left>", MANUAL_KEYS).len(), 7);
+        assert_eq!(keystrokes("<pgdn>", WEAVE_KEYS).len(), 7);
+        assert_eq!(
+            keystrokes("<esc>\\nback", MENU_KEYS),
+            vec![
+                Key::Escape,
+                Key::Text("b".into()),
+                Key::Text("a".into()),
+                Key::Text("c".into()),
+                Key::Text("k".into()),
+                Key::Enter,
+            ],
+        );
     }
 }

@@ -229,14 +229,8 @@ fn a_sabotage_tell_survives_on_the_surface_you_inspect() {
 
 #[test]
 fn a_script_line_speaks_as_itself_and_keeps_its_gutter() {
-    // §14, and the reason `ScriptLine` is a kind of its own rather than a log
-    // line by another name. A log row is fielded and speaks `label: value`; a
-    // script line is a sentence the *player* wrote, so a reader hearing "row,
-    // tick eleven, message follow north" is being read three lies about one
-    // line of their own file.
-    //
-    // The number stays, drawn and spoken both, because it is how they say which
-    // line they mean. It is the one non-message field prose keeps.
+    // A script line is the player's sentence, not a fielded row (§14); its
+    // number stays, the one field prose keeps.
     let mut records = Records::new();
     records
         .push(RecordKind::ScriptLine)
@@ -780,17 +774,9 @@ fn a_wrapped_line_is_measured_as_the_rows_it_draws() {
 
 #[test]
 fn a_listing_never_speaks_a_row_it_could_not_draw() {
-    // Rule 2 in the direction nobody checks. `Speech` is a per-frame description
-    // of the *screen*, so a record clipped off the bottom must not be announced
-    // — a reader would hear names a sighted player cannot see, which is exactly
-    // the asymmetry `shell::prompt` is written to avoid.
-    //
-    // The tiling path got this wrong by passing its sub-area the pane's full
-    // row count, so `bottom()` slid down the pane as the run started lower.
-    // `Painter` clips cells; it does not clip speech.
-    //
-    // The echo is load-bearing: it pushes the run off the pane's first row,
-    // which is the only way the slid `bottom()` differs from the real one.
+    // A record clipped off the screen must not be spoken; `Painter` clips
+    // cells, not speech. The echo pushes the run off the first row, where a
+    // slid `bottom()` shows.
     let mut records = Records::new();
     records
         .push(RecordKind::Echo)

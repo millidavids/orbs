@@ -31,7 +31,7 @@ impl Session {
         self.surfaces.settle(
             delta,
             &mut self.sim,
-            scribing(self.held.driver, self.scribe.as_deref()),
+            scribing(&self.readers, self.held.driver),
         );
         self.draw(out)
     }

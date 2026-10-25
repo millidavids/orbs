@@ -1,19 +1,8 @@
 //! The laboratory's instruments, as something a pane can draw.
 //!
-//! DESIGN.md §10.1 makes the instrument panel a *permanent fixture* of the
-//! laboratory's pane rather than part of the command stream: with four
-//! instruments running you watch and respond, and a transcript that scrolls the
-//! state away is not something you can watch.
-//!
-//! An accessor rather than records: rule 4 puts *command output* in records —
-//! one line, one event, scrolled away — and the panel is the opposite shape, the
-//! world's current state redrawn every frame. A record per instrument per tick
-//! would bury the scrollback under its own furniture; `Sim::working` took the
-//! same route and this generalises it.
-//!
-//! Rule 2 still holds: what is returned is *information*, and a frontend decides
-//! how a cell is drawn. Nothing here is available to one frontend and not
-//! another, so the terminal build draws the same bars.
+//! §10.1's permanent panel, not the command stream: a transcript scrolls state
+//! away. An accessor, not records, since the panel is current state redrawn
+//! every frame. Information only (rule 2), so both builds draw the same bars.
 
 use bevy_ecs::prelude::*;
 
@@ -36,16 +25,8 @@ pub struct Meter {
     pub total: u64,
     /// What the two numbers are counting.
     ///
-    /// A meter is not always a duration, and the rail said it was. Four of the
-    /// six things that raise one are ticks; the stacks count *cells explored*
-    /// and the prism *sigils aligned*. `brief.rs` suffixed all of them with `t`,
-    /// so the archive reported `st 350t` for 350 unwalked squares and the lens
-    /// `pr 4t` for four sigils still astray — counting *down* as the player won,
-    /// which reads on the rail as a job about to finish.
-    ///
-    /// The unit belongs here rather than in a frontend's `match` on the
-    /// instrument's name, for the reason [`Instrument::short`] does: rule 2 gives
-    /// a frontend *how* a cell is drawn, not what the thing in it is.
+    /// Not always ticks, or `st 350t` reads as a job about to finish. Here, not
+    /// in a frontend, for [`Instrument::short`]'s reason (rule 2).
     pub unit: Unit,
 }
 
@@ -67,28 +48,15 @@ pub enum Unit {
     Rows,
     /// How the tower's defences stand, out of [`STANDING`](super::STANDING).
     ///
-    /// The one unit that counts *up*. Every other meter measures work left to
-    /// do, so the rail prints what remains; this measures a thing it is good to
-    /// have more of, and `py 60` for a tower standing at 40 would be backwards.
-    /// `brief::detail_of` answers for that and prints a `%`, so the two can never
-    /// be read as one another.
-    ///
-    /// A `Wards` beside this was a defect: the pylon's meter used to be
-    /// wards-still-to-haul while a course stood, so the rail's remainder counted
-    /// down as a solver won and the barrier reading vanished. See `panel::read`'s
-    /// pylon arm.
+    /// The one unit that counts up, so `brief::detail_of` prints it with `%`
+    /// rather than as a remainder. See `panel::read`'s pylon arm.
     Standing,
 }
 
 /// What an instrument *does* — the action, not the noun.
 ///
-/// Named here rather than matched on in a frontend, for the reason
-/// [`Instrument::short`] is: a frontend comparing against the literal
-/// `"mortar_and_pestle"` would re-derive what lives here, and `orbs-tui` would
-/// derive it a second time and could silently disagree (rule 2).
-///
-/// A closed set, like [`State`]: a view falling through to a default for an
-/// unrecognised craft would draw a working instrument as an idle one.
+/// Here, not in a frontend, so two builds cannot disagree (rule 2). A closed
+/// set, like [`State`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Craft {
     /// Crushing one reagent into another. The mortar and pestle.
@@ -133,11 +101,8 @@ pub struct Instrument {
     pub craft: Craft,
     /// Two letters for a narrow column — `mortar_and_pestle` is `mp`.
     ///
-    /// Decided here, not by a frontend. Rule 2 gives a frontend *how* a cell is
-    /// drawn, not what word appears in it, and the Bevy build derived this from
-    /// English stopwords in its own source — so `orbs-tui` would have had to
-    /// reimplement the heuristic and the two could disagree about what `bm`
-    /// means.
+    /// Decided here, not by a frontend: rule 2 gives a frontend how a cell is
+    /// drawn, not what word is in it.
     pub short: String,
     /// One word for its condition — what a reader hears.
     pub state: State,
@@ -149,15 +114,9 @@ pub struct Instrument {
     /// [`Tint`](orbs_render::Tint). An entry is `None` when nobody has tinted
     /// that material, and the bar draws that part in the base hue.
     ///
-    /// Two, because `flask_and_rod` combines two (§10.1) and its picture is
-    /// *these two becoming one*; every other instrument fills only the first. A
-    /// fixed array rather than a `Vec` because this is rebuilt per instrument per
-    /// frame — the `holds` list that used to live here went for allocating that
-    /// way.
-    ///
-    /// Decided here rather than by a frontend, as [`Self::short`] and
-    /// [`Self::craft`] are: otherwise two frontends each read `materials.toml`
-    /// and map contents to a colour, a rule in two places that can disagree.
+    /// Two, for `flask_and_rod`'s two becoming one; others fill the first. An
+    /// array, since this is rebuilt every frame. Decided here, as
+    /// [`Self::short`] is.
     pub tints: [Option<Wash>; 2],
 }
 
@@ -182,17 +141,14 @@ pub enum State {
     Charged,
     /// Holding part of what a recipe wants, and waiting for the rest.
     ///
-    /// The lectern is why this exists: its only recipe is an exact match on four
-    /// distinct shards, so one, two or three fell through to
-    /// [`Fouled`](Self::Fouled) — the panel telling a player collecting a set
-    /// that their lectern *will not start*. [`Charged`](Self::Charged) is the
-    /// opposite lie: it means wield it and it runs, and three shards do not.
+    /// A lectern with three of its four shards is neither
+    /// [`Fouled`](Self::Fouled) nor [`Charged`](Self::Charged).
     Gathering,
     /// Running.
     Working,
     /// Being cleared — §9's triage slot.
     Scouring,
-    /// Finished, with a product waiting to be siphoned.
+    /// Finished, with a product waiting to be emptied out.
     Ready,
     /// Holding only what the last run fouled it with.
     Fouled,
@@ -207,24 +163,10 @@ pub enum State {
 impl State {
     /// Whether the instrument is in the middle of something.
     ///
-    /// A spell's `is idle` and `is working` are complements and must never both
-    /// answer yes, so there is one question and this is it.
-    ///
-    /// It was `busy()`, which reads [`Working`](super::Working) and
-    /// [`Triaging`](super::Triaging) — right for the four instruments that
-    /// consume Focus, but not the athanor: its fire is
-    /// [`Burning`](super::Burning), deliberately not `Working`, because nothing
-    /// counting the production pool may see it (§10.1). So `if athanor is idle`
-    /// answered *yes* while it burned charcoal and `if athanor is working`
-    /// answered no at the same moment — a fire in plain view on the panel,
-    /// invisible to the only two words that ask about it.
-    ///
-    /// Asking the panel's own state ties the spell language to the word on
-    /// screen, so a state added later cannot be busy for one and idle for the
-    /// other.
-    ///
-    /// `Banked` is not busy: a damped fire is fuel put by, not work in progress,
-    /// and a spell waiting for the athanor to be free should not wait for ever.
+    /// The one question behind a spell's `is idle` and `is working`, asked of
+    /// the panel's own word so the two agree with the screen. Not `busy()`,
+    /// which cannot see an athanor's [`Burning`](super::Burning) fire. `Banked`
+    /// is fuel put by, not work.
     #[must_use]
     pub const fn is_busy(self) -> bool {
         matches!(self, Self::Working | Self::Scouring | Self::Burning)
@@ -259,10 +201,7 @@ pub fn instruments(world: &World) -> Vec<Instrument> {
 
 /// Every instrument standing in one place, whether or not the player is there.
 ///
-/// Extracted from [`instruments`] rather than written beside it: the tower rail
-/// asks the same question about a room the player is not in, and two derivations
-/// of *what is in this room* can disagree — the defect [`State::is_busy`] records
-/// once. `instruments` is this with `Cwd` supplied.
+/// What the rail asks of a room nobody is in; [`instruments`] is this with `Cwd`.
 #[must_use]
 pub fn instruments_in(world: &World, place: Entity) -> Vec<Instrument> {
     let now = *world.resource::<Tick>();
@@ -309,13 +248,9 @@ pub fn instruments_in(world: &World, place: Entity) -> Vec<Instrument> {
 
 /// What one place is doing, in the panel's own words.
 ///
-/// The same derivation the pane draws, for anything needing the word without the
-/// row — [`spell::holds`](super::spell::holds) asking whether a place is idle.
-/// Sameness is the point: a second answer to "is this instrument busy" can
-/// disagree, and the last one did (see [`State::is_busy`]).
-///
-/// A place that is not an instrument answers from what it holds, which makes
-/// `if dispensary is empty` a sentence rather than a special case.
+/// The pane's derivation, for [`spell::holds`](super::spell::holds) and anything
+/// else wanting the word. A non-instrument answers from what it holds, so `if
+/// dispensary is empty` is a sentence.
 #[must_use]
 pub fn state_at(world: &World, node: Entity) -> State {
     let now = *world.resource::<Tick>();
@@ -349,14 +284,8 @@ fn abbreviate(name: &str) -> String {
 
 /// The colour families of what is in an instrument, in the order it is held.
 ///
-/// In world order, which is `survey`'s order: the flask's picture puts its two
-/// ingredients in bands, and a panel ordering them differently from the
-/// transcript would be two views of one vessel disagreeing about which reagent
-/// is which.
-///
-/// Untinted materials keep their slot as `None` rather than being skipped, so
-/// one uncoloured thing in a flask does not silently promote the other into its
-/// band.
+/// In `survey`'s order, so the flask's bands agree with the transcript. An
+/// untinted material keeps its slot as `None`.
 fn tints_of(world: &World, node: Entity) -> [Option<Wash>; 2] {
     let materials = world.resource::<crate::content::Materials>();
     let mut held = children_of(world, node)
@@ -368,18 +297,10 @@ fn tints_of(world: &World, node: Entity) -> [Option<Wash>; 2] {
 
 /// What an instrument does.
 ///
-/// Read from the entity, never matched on its name: an instrument carries
-/// [`Operation`](super::Operation), the verb that charges and starts it, and
-/// each craft-bearing verb has an arm below. An earlier version matched four
-/// hardcoded strings, the pattern `content/recipe.rs` records paying for once —
-/// a renamed instrument fell through to [`Craft::Idle`] and lost its picture
-/// with nothing failing.
-///
-/// Two crafts are not named by a verb and are answered either side of the match:
-/// [`Craft::Heating`] by the `HeatSource` component, and [`Craft::Assembling`]
-/// by the content, since the lectern has recipes and no operation. So the `_`
-/// arm is a real fallback rather than a formality, and a new verb added without
-/// an arm here reaches it silently — this is not a compiler-checked map.
+/// From the entity's [`Operation`](super::Operation), never its name, which lost
+/// a renamed instrument its picture. [`Craft::Heating`] comes from `HeatSource`
+/// and [`Craft::Assembling`] from having recipes, so the `_` arm is a real
+/// fallback — a new verb without an arm reaches it silently.
 fn craft_of(world: &World, node: Entity) -> Craft {
     // The heat source answers first, and by component: `heat::source` already
     // refuses to find it by name because a *reagent* called `athanor` lying on
@@ -396,14 +317,8 @@ fn craft_of(world: &World, node: Entity) -> Craft {
         Some(crate::parser::Verb::Probe) => Craft::Scrying,
         Some(crate::parser::Verb::Muster) => Craft::Warding,
         Some(crate::parser::Verb::Imbue) => Craft::Imbuing,
-        // `Kindle` is the heat source's and answered above. Anything else has no
-        // operation — the dispensary, the cabinet, and the lectern, whose verb
-        // went to the stacks when the maze did.
-        //
-        // So the fallback asks the content: an instrument with recipes runs
-        // whether or not a verb names it, and a fixture with neither is a shelf.
-        // Matching `"lectern"` here would be the hardcoded-name pattern this
-        // function's header records paying for twice.
+        // No operation: an instrument with recipes runs anyway, and a fixture
+        // with neither is a shelf.
         _ => {
             let named = world.get::<super::Name>(node);
             let has_recipes = named.is_some_and(|name| {
@@ -455,26 +370,10 @@ fn read(world: &World, node: Entity, name: &str, now: Tick) -> (State, Option<Me
         );
     }
 
-    // The pylon's meter is always the barrier, drawn course or no — the one
-    // fixture whose *idle* state still carries a meter, and whose meter is not a
-    // measure of its own run.
-    //
-    // It measured the course first, which was §19's recorded defect a third
-    // time: `brief::detail_of` prints a meter's *remainder*, so
-    // wards-still-to-haul counted down as a solver won, and the sanctum read
-    // `py 4` to a player who had last seen `py 100` — a barrier about to fail.
-    // Worse than the archive's `st 350t` and the lens's `pr 4t`, because the
-    // number vanished precisely while a bound solver was working, the one time
-    // the player is in another room and glancing. So the board says where the
-    // wards are and this says whether the tower is safe; the state word above it
-    // still says `working`.
-    //
-    // Below `Triaging`, and it shipped above it. A scoured pylon reported
-    // `Empty` here while `tower::busy` reported `Scouring`, so the rail read
-    // `idle`, `if the pylon is idle` answered yes mid-scour — `holding`'s own
-    // loop guard — and `would_block` disagreed with all of them. The `Maze` and
-    // `Ward` arms sit above `Triaging` too but are not reachable that way; this
-    // one is, because `purge pylon` is ordinary to type.
+    // The pylon's meter is always the barrier, course or no: a remainder of
+    // wards-to-haul read as a barrier about to fail while a solver won (§19).
+    // Below `Triaging`, or a scoured pylon read `idle` to the rail and to
+    // `holding`'s own loop guard.
     if world
         .get::<super::Operation>(node)
         .is_some_and(|operation| operation.0 == crate::parser::Verb::Muster)
@@ -577,17 +476,10 @@ fn read(world: &World, node: Entity, name: &str, now: Tick) -> (State, Option<Me
 /// How far through an open puzzle is — the meter [`read`] draws while it is
 /// open, or `None` for a puzzle whose fixture's meter is about something else.
 ///
-/// Each is `Working` because that is what a solver asks: `repeat until the prism
-/// is idle` is how a spell says *until the seal gives*. `is empty` cannot do that
-/// job — `spell::watch` answers it by asking whether the node has children, a
-/// puzzle's children are its published readings, and a ward has none until the
-/// first press lands, so a `breaking` bounded on `empty` ended on its first
-/// instruction. `Charged` is wrong the same way: it means *wield this and it
-/// runs*.
-///
-/// None of them may be a `Working` component, which `tower::busy` reads: a
-/// spell's `summon` would wait on the very beast it was calling, `would_block`
-/// answering *"the circle is working"* to the command that finishes the work.
+/// `Working`, because a solver asks `repeat until the prism is idle`; `is empty`
+/// reads published children, which a ward has none of before its first press.
+/// Never a `Working` component, or a spell's `summon` would wait on the beast
+/// it is calling.
 fn puzzle_meter(world: &World, node: Entity, open: super::puzzle::Open) -> Option<Meter> {
     use super::puzzle::Open;
     match open {
@@ -687,16 +579,8 @@ mod tests {
         sim.step();
         assert!(panel(&mut sim).is_empty(), "the tower root has instruments");
 
-        // The archive has two, and it had one: giving it a fixture retired three
-        // defects at once — a completion with no sentence, a run `stop` could not
-        // reach, and a domain that drew nothing — and the second arrived when the
-        // maze moved off the lectern onto the `stacks`. One row each, because *is
-        // a reading open* and *is a scroll coming together* were one row with two
-        // meanings.
-        //
-        // The `cabinet` is a `Store` and the panel leaves those out. The property
-        // this test encodes — that the panel belongs to *where you are* — is
-        // measured at the root, which has no instruments and never will.
+        // The lectern and the stacks, a row each; the cabinet is a `Store`. The
+        // root, with no instruments, measures that the panel is where you are.
         sim.submit("attend archive");
         sim.step();
         assert_eq!(

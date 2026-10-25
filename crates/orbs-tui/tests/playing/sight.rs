@@ -1,7 +1,7 @@
 //! What a terminal with no colour, or a player who wants none, still reads.
 
 use crate::launch::{Kept, Switch};
-use crate::play::{Game, available};
+use crate::play::Game;
 
 /// The panel band, with sage in the mortar — green when the hue is there.
 ///
@@ -20,23 +20,10 @@ fn hued(ink: &str) -> bool {
         .any(|hue| ink.contains(hue))
 }
 
-/// A short tower raised from the menu, at its first prompt.
-fn raise(game: &Game) {
-    game.type_raw("play");
-    game.expect_drawn("open a tower");
-    game.type_raw("new");
-    game.expect_drawn("how long a game?");
-    game.type_raw("short");
-    game.expect_drawn("wizard $");
-}
-
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn f8_takes_every_hue_out_and_puts_it_back() {
-    if !available() {
-        return;
-    }
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     let coloured = sage_in_the_mortar(&game);
     assert!(
         coloured.contains("green"),
@@ -60,10 +47,9 @@ fn f8_takes_every_hue_out_and_puts_it_back() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn orbs_sight_greyscale_opens_grey() {
-    if !available() {
+    let Some(game) = Game::launch().env("ORBS_SIGHT", "greyscale").settled() else {
         return;
-    }
-    let game = Game::launch().env("ORBS_SIGHT", "greyscale").settled();
+    };
     let grey = sage_in_the_mortar(&game);
     assert!(!hued(&grey), "ORBS_SIGHT=greyscale left a hue:\n{grey}");
 }
@@ -71,11 +57,8 @@ fn orbs_sight_greyscale_opens_grey() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn the_sight_row_follows_f8() {
-    if !available() {
-        return;
-    }
     // The key and the row are one setting seen twice.
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.press("F8");
     game.send("menu");
     game.expect_drawn("the tower waits");
@@ -88,14 +71,13 @@ fn the_sight_row_follows_f8() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn greyscale_carries_into_a_chosen_tower() {
-    if !available() {
-        return;
-    }
     // A new tower is a new session here, and a new rasteriser with it.
-    let game = Game::at_the_threshold();
+    let Some(game) = Game::at_the_threshold() else {
+        return;
+    };
     game.expect_drawn("no tower yet");
     game.press("F8");
-    raise(&game);
+    game.raise("short");
     let grey = sage_in_the_mortar(&game);
     assert!(
         !hued(&grey),
@@ -106,24 +88,26 @@ fn greyscale_carries_into_a_chosen_tower() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn greyscale_is_remembered() {
-    if !available() {
-        return;
-    }
     let kept = Kept::default();
     {
-        let game = Game::launch()
+        let Some(game) = Game::launch()
             .at_the_threshold()
             .kept_in(&kept)
             .motion(Switch::BySetting)
-            .spawn();
+            .spawn()
+        else {
+            return;
+        };
         game.expect_drawn("no tower yet");
         game.press("F8");
         // Written on the keystroke; the threshold runs no clock to wait on.
         std::thread::sleep(std::time::Duration::from_millis(300));
     }
-    let game = Game::launch().at_the_threshold().kept_in(&kept).spawn();
+    let Some(game) = Game::launch().at_the_threshold().kept_in(&kept).spawn() else {
+        return;
+    };
     game.expect_drawn("no tower yet");
-    raise(&game);
+    game.raise("short");
     let grey = sage_in_the_mortar(&game);
     assert!(
         !hued(&grey),
@@ -134,13 +118,12 @@ fn greyscale_is_remembered() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn no_color_keeps_the_weights() {
-    if !available() {
-        return;
-    }
     // `NO_COLOR` makes crossterm write every colour as `ESC[m`, SGR 0. The fire
     // is one ramp of two hues and four weights; with the hues gone the weights
     // are what is left, and they were what that reset used to erase.
-    let game = Game::launch().env("NO_COLOR", "1").settled();
+    let Some(game) = Game::launch().env("NO_COLOR", "1").settled() else {
+        return;
+    };
     game.does("attend laboratory", "/tower/laboratory")
         .does("kindle charcoal", "fuel for 600 ticks")
         .meditates(3);

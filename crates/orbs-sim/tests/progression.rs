@@ -4,42 +4,21 @@
 //! a player earns counts, and the two hooks (`work::produce::transmute`, the
 //! archive's branch of `land::finish`) are the likeliest to be miswired.
 
-use orbs_render::{FieldName, Value};
+mod common;
+
+use common::{attended, run_all, said};
 use orbs_sim::Sim;
 
 /// A laboratory, stood in.
 fn laboratory() -> Sim {
-    let mut sim = Sim::new(1);
-    run(&mut sim, &["attend laboratory"]);
-    sim
-}
-
-/// Submit each line and give the world a tick to do it.
-fn run(sim: &mut Sim, lines: &[&str]) {
-    for line in lines {
-        sim.submit(line);
-        sim.step();
-    }
-}
-
-/// Every message the orb has said.
-fn messages(sim: &Sim) -> Vec<String> {
-    sim.scrollback()
-        .records()
-        .iter()
-        .filter_map(|record| record.field(FieldName::Message))
-        .filter_map(|value| match value {
-            Value::Text(text) => Some(text.to_owned()),
-            _ => None,
-        })
-        .collect()
+    attended(1, "laboratory")
 }
 
 /// Grind one sage to completion, which is the cheapest complete run there is.
 fn grind(sim: &mut Sim) {
-    run(sim, &["grind sage"]);
+    run_all(sim, &["grind sage"]);
     sim.step_n(12);
-    run(sim, &["empty mortar_and_pestle"]);
+    run_all(sim, &["empty mortar_and_pestle"]);
 }
 
 #[test]
@@ -48,28 +27,28 @@ fn each_instrument_earns_what_the_curve_prices_it_at() {
     // numbers are content; what this pins is that the hook is wired to the
     // instrument that did the work rather than to whatever was nearest.
     let mut sim = laboratory();
-    run(&mut sim, &["kindle charcoal"]);
+    run_all(&mut sim, &["kindle charcoal"]);
 
     grind(&mut sim);
     assert_eq!(sim.experience(), 1, "a grind");
 
-    run(&mut sim, &["digest ground-sage"]);
+    run_all(&mut sim, &["digest ground-sage"]);
     sim.step_n(16);
-    run(&mut sim, &["empty balneum_mariae"]);
+    run_all(&mut sim, &["empty balneum_mariae"]);
     assert_eq!(sim.experience(), 3, "a digest is worth two");
 
     grind(&mut sim);
-    run(&mut sim, &["grind rock-salt"]);
+    run_all(&mut sim, &["grind rock-salt"]);
     sim.step_n(12);
-    run(&mut sim, &["empty mortar_and_pestle"]);
+    run_all(&mut sim, &["empty mortar_and_pestle"]);
     assert_eq!(sim.experience(), 5, "two more grinds");
 
-    run(&mut sim, &["mix sage-tincture with ground-salt"]);
+    run_all(&mut sim, &["mix sage-tincture with ground-salt"]);
     sim.step_n(14);
-    run(&mut sim, &["empty flask_and_rod"]);
+    run_all(&mut sim, &["empty flask_and_rod"]);
     assert_eq!(sim.experience(), 9, "a mix is worth four");
 
-    run(&mut sim, &["distil clarified-draught"]);
+    run_all(&mut sim, &["distil clarified-draught"]);
     sim.step_n(60);
     assert_eq!(sim.experience(), 17, "a distillation is worth eight");
 }
@@ -82,13 +61,13 @@ fn one_clarity_is_exactly_the_first_threshold() {
     let mut sim = laboratory();
     assert_eq!(sim.concentration(), 0, "the tower started with a slot");
 
-    run(&mut sim, &["kindle charcoal", "grind sage"]);
+    run_all(&mut sim, &["kindle charcoal", "grind sage"]);
     sim.step_n(12);
-    run(&mut sim, &["empty mortar_and_pestle", "digest ground-sage"]);
+    run_all(&mut sim, &["empty mortar_and_pestle", "digest ground-sage"]);
     sim.step_n(16);
-    run(&mut sim, &["empty balneum_mariae", "grind rock-salt"]);
+    run_all(&mut sim, &["empty balneum_mariae", "grind rock-salt"]);
     sim.step_n(12);
-    run(
+    run_all(
         &mut sim,
         &[
             "empty mortar_and_pestle",
@@ -96,17 +75,17 @@ fn one_clarity_is_exactly_the_first_threshold() {
         ],
     );
     sim.step_n(14);
-    run(&mut sim, &["empty flask_and_rod"]);
+    run_all(&mut sim, &["empty flask_and_rod"]);
     assert_eq!(sim.concentration(), 0, "it arrived before the potion did");
 
-    run(&mut sim, &["distil clarified-draught"]);
+    run_all(&mut sim, &["distil clarified-draught"]);
     sim.step_n(60);
 
     assert_eq!(
         sim.experience(),
         16,
         "one clarity is not 16: {:?}",
-        messages(&sim)
+        said(&sim)
     );
     assert_eq!(sim.concentration(), 1);
 }
@@ -120,20 +99,20 @@ fn the_archive_earns_too() {
     // the way out is what earns, so this walks one by the same Trémaux rule a
     // player writes as a spell.
     let mut sim = Sim::new(1);
-    run(&mut sim, &["attend archive", "research"]);
+    run_all(&mut sim, &["attend archive", "research"]);
 
     for _ in 0..4000 {
         if sim.experience() > 0 {
             break;
         }
         let Some(way) = choose(&sim) else { break };
-        run(&mut sim, &[&format!("follow {way}")]);
+        run_all(&mut sim, &[&format!("follow {way}")]);
     }
 
     assert!(
         sim.experience() > 0,
         "the archive earned nothing: {:?}",
-        messages(&sim).last(),
+        said(&sim).last(),
     );
 }
 
@@ -150,13 +129,8 @@ fn choose(sim: &Sim) -> Option<&'static str> {
             return Some(way);
         }
     }
-    // The middle tiers compare the count, where they used to name `walked` and
-    // `twice` by string. Those words are gone, so both rungs would have gone
-    // quietly dead and this test would still have passed on a degraded ladder.
-    //
-    // `marks` is absent rather than nought on an unwalked way, so `<= 1` means
-    // exactly one and needs no `wall` guard — unlike the same rung as a
-    // *spell*, where a comparison answers nought for absence.
+    // The middle tiers compare the count. `marks` is absent on an unwalked
+    // way, so `<= 1` needs no `wall` guard here, unlike a spell's.
     let least = ways
         .into_iter()
         .find(|way| !reads(sim, way, "back") && marks(sim, way).is_some_and(|walked| walked <= 1));
@@ -215,24 +189,24 @@ fn only_work_that_succeeded_earns() {
     let mut sim = laboratory();
 
     // A scour: `finish` runs for it, and it makes nothing.
-    run(&mut sim, &["purge mortar_and_pestle"]);
+    run_all(&mut sim, &["purge mortar_and_pestle"]);
     sim.step_n(8);
     assert_eq!(sim.experience(), 0, "a scour earned something");
 
     // A refusal: no run starts at all.
-    run(&mut sim, &["grind moonstone"]);
+    run_all(&mut sim, &["grind moonstone"]);
     sim.step_n(8);
     assert_eq!(sim.experience(), 0, "a refusal earned something");
 
     // A run whose contents match no recipe. `wield` charges nothing, so this is
     // the `wield_no_recipe` path — a run that ended without making anything.
-    run(&mut sim, &["move sage to alembic", "wield alembic"]);
+    run_all(&mut sim, &["move sage to alembic", "wield alembic"]);
     sim.step_n(60);
     assert_eq!(
         sim.experience(),
         0,
         "a run that made nothing earned something: {:?}",
-        messages(&sim),
+        said(&sim),
     );
 }
 
@@ -256,12 +230,12 @@ fn crossing_the_threshold_is_said_once_and_names_the_verb() {
     // §6 forbids a bare fact where a sentence would teach. It names `bind`,
     // because a capability nobody can find is a capability nobody has.
     let mut sim = laboratory();
-    run(&mut sim, &["kindle charcoal"]);
+    run_all(&mut sim, &["kindle charcoal"]);
     for _ in 0..20 {
         grind(&mut sim);
     }
 
-    let said: Vec<String> = messages(&sim)
+    let said: Vec<String> = said(&sim)
         .into_iter()
         .filter(|line| line.contains("can hold a spell"))
         .collect();
@@ -279,10 +253,10 @@ fn what_was_earned_is_on_the_line_that_earned_it() {
     // laboratory's traffic. The run already says what it made, so what it
     // earned goes in that sentence — after it, not before the work.
     let mut sim = laboratory();
-    run(&mut sim, &["kindle charcoal"]);
+    run_all(&mut sim, &["kindle charcoal"]);
     grind(&mut sim);
 
-    let yielded = messages(&sim)
+    let yielded = said(&sim)
         .into_iter()
         .find(|line| line.contains("yields ground-sage"))
         .expect("the grind never reported");
@@ -295,20 +269,11 @@ fn what_was_earned_is_on_the_line_that_earned_it() {
 #[test]
 fn the_same_work_earns_the_same_on_a_replay() {
     let mut live = laboratory();
-    run(&mut live, &["kindle charcoal"]);
+    run_all(&mut live, &["kindle charcoal"]);
     grind(&mut live);
     grind(&mut live);
 
-    let mut replayed = Sim::new(1);
-    for (tick, submission) in live.submissions().all().to_vec() {
-        while replayed.tick() < tick {
-            replayed.step();
-        }
-        replayed.replay(submission);
-    }
-    while replayed.tick() < live.tick() {
-        replayed.step();
-    }
+    let replayed = common::replayed(&live, Sim::new(1));
 
     assert_eq!(replayed.experience(), live.experience());
     assert!(live.experience() > 0, "the session earned nothing");
@@ -321,14 +286,14 @@ fn the_same_work_earns_the_same_on_a_replay() {
 #[cfg(debug_assertions)]
 fn at_the_first_tier() -> Sim {
     let mut sim = laboratory();
-    run(
+    run_all(
         &mut sim,
         &["kindle charcoal", "debug_spawn clarified-draught 4"],
     );
     for _ in 0..3 {
-        run(&mut sim, &["distil clarified-draught"]);
+        run_all(&mut sim, &["distil clarified-draught"]);
         sim.step_n(60);
-        run(&mut sim, &["empty alembic"]);
+        run_all(&mut sim, &["empty alembic"]);
     }
     assert!(sim.experience() >= 24, "the tier never opened");
     sim
@@ -414,16 +379,7 @@ fn taking_a_node_replays_to_the_same_world() {
     live.take("steps_1");
     live.step();
 
-    let mut replayed = Sim::new(1);
-    for (tick, submission) in live.submissions().all().to_vec() {
-        while replayed.tick() < tick {
-            replayed.step();
-        }
-        replayed.replay(submission);
-    }
-    while replayed.tick() < live.tick() {
-        replayed.step();
-    }
+    let replayed = common::replayed(&live, Sim::new(1));
 
     assert_eq!(replayed.taken(), live.taken());
     assert_eq!(

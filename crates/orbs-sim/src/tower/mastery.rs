@@ -1,27 +1,15 @@
 //! Mastery: seven straight lines, one per room (DESIGN.md §11.5, §19).
 //!
-//! Per domain, no choices. Each room has a line of stations and a station is a
-//! *deed* — brew a clarity, walk the stacks five times. A line is walked in
-//! order, a station is reached when the one before it is and its count in the
-//! [`Tally`] is met, and reaching it *is* the grant. Nothing here is ever
-//! `take`n.
-//!
-//! The choices live on the Ley Line (`tower::ley`), which is where the tree
-//! this module used to read has gone.
-//!
-//! Reaching is said once and what it opens is said once. [`advance`] runs after
-//! every completion, on the tick the work landed: a station reached is a record,
-//! and what it opened is a second one said only if the thing was shut — a tower
-//! restored open that re-reaches the station opening the archive has one.
-//!
-//! No stream and no `Submission`: a deed is done by work the submissions already
-//! record, and reaching is a function of the tally against the authored file.
-//! Nothing is drawn and nothing is chosen.
+//! Per domain, no choices — those are the Ley Line's. A station is a *deed*,
+//! reached when the one before it is and its count in the [`Tally`] is met;
+//! reaching is the grant. [`advance`] runs after every completion and says a
+//! station once, and what it opens only if that was shut. Nothing is drawn or
+//! chosen, so no stream and no `Submission`.
 
 use bevy_ecs::prelude::*;
 use orbs_render::{FieldName, RecordKind, Role};
 
-use crate::content::{Progression, Prose};
+use crate::content::{Milestone, Progression, Prose};
 use crate::session::Scrollback;
 
 use super::Tally;
@@ -29,10 +17,9 @@ use super::opened::{Opened, open, opening};
 
 /// Which mastery stations the tower has reached.
 ///
-/// A list of ids, as [`Taken`](super::Taken) is and for its reasons. Saved so a
-/// restore need not replay, and never regenerated from the tally — the tally
-/// says a deed is done, this says its station was reached *and said*, which a
-/// migrated save must not do twice.
+/// Ids, as [`Taken`](super::Taken) is. Saved, never regenerated from the tally:
+/// this says a station was reached *and said*, which a migrated save must not
+/// repeat.
 #[derive(Resource, Debug, Default, Clone, PartialEq, Eq)]
 pub struct Reached(Vec<String>);
 
@@ -240,74 +227,57 @@ impl Progress {
 
 /// Reach every station whose deed is done, in line order, and say so.
 ///
-/// Called by [`done`](super::done) after every completion. Cheap: seven lines
+/// Called by [`done`](super::done) after every completion. Cheap: six lines
 /// of a handful of stations, read against a map.
 pub fn advance(world: &mut World) {
-    let due: Vec<(String, String, Vec<String>)> = {
-        let curve = world.resource::<Progression>();
-        let tally = world.resource::<Tally>();
-        let reached = world.resource::<Reached>();
-        let mut due = Vec::new();
-        for domain in super::DOMAINS {
-            for milestone in curve.line(domain) {
-                if reached.has(&milestone.id) {
-                    continue;
-                }
-                if tally.count(&milestone.done.key()) < milestone.done.times() {
-                    break;
-                }
-                due.push((
-                    domain.to_owned(),
-                    milestone.id.clone(),
-                    milestone.opens.clone(),
-                ));
-            }
-        }
-        due
-    };
+    let due: Vec<(&str, String, Vec<String>)> = due(world)
+        .into_iter()
+        .map(|(domain, milestone)| (domain, milestone.id.clone(), milestone.opens.clone()))
+        .collect();
     for (domain, id, opens) in due {
-        reach(world, &domain, &id, &opens);
+        reach(world, domain, &id, &opens);
     }
+}
+
+/// Every station the tally meets and the tower has not reached, line by line,
+/// each line stopping at its first unmet station.
+fn due(world: &World) -> Vec<(&'static str, &Milestone)> {
+    let curve = world.resource::<Progression>();
+    let tally = world.resource::<Tally>();
+    let reached = world.resource::<Reached>();
+    let mut due = Vec::new();
+    for domain in super::DOMAINS {
+        for milestone in curve.line(domain) {
+            if reached.has(&milestone.id) {
+                continue;
+            }
+            if tally.count(&milestone.done.key()) < milestone.done.times() {
+                break;
+            }
+            due.push((domain, milestone));
+        }
+    }
+    due
 }
 
 /// Reach every station the tally already meets, and open what every reached
 /// station opens — without saying so.
 ///
-/// [`advance`] reaches a station once ever, skipping anything already in
-/// [`Reached`], so what a station opens is applied on exactly one tick in the
-/// life of a save. A document whose station gained an `opens` after it was
-/// written comes back with the thing shut and no deed able to open it, because
-/// the tally is long past what the station asks.
+/// For an older document: a station that gained an `opens`, or whose count came
+/// down, would otherwise wait for an unrelated completion. In line order,
+/// stopping at the first unmet station on each line.
 ///
-/// And a station whose count came down: `advance` runs after a completion and
-/// never on load, so a document written when a station asked more met it and
-/// would not reach it until some unrelated completion walked the lines. Reached
-/// here, in line order, stopping at the first unmet station on each line.
-///
-/// [`ley::caught_up`](super::ley::caught_up)'s twin, and silent about the
-/// *station* for its reason: a load does not congratulate anybody on yesterday's
-/// work. What a station reached only now opens *is* said, because that is news —
-/// the player was never told, and for the circle that sentence is the only thing
-/// in the game that says what a `~` wire is. A station the document had already
-/// reached opens silently. `opening` says only what changed, so a document that
-/// disagrees with nothing says nothing.
+/// [`ley::caught_up`](super::ley::caught_up)'s twin: silent about the station,
+/// but what a station reached only now opens is said — the player was never
+/// told, and for the circle it is the only sentence explaining a `~` wire.
 pub(crate) fn caught_up(world: &mut World) {
     let (due, told, news): (Vec<String>, Vec<String>, Vec<String>) = {
         let curve = world.resource::<Progression>();
-        let tally = world.resource::<Tally>();
         let reached = world.resource::<Reached>();
-        let mut due = Vec::new();
-        for domain in super::DOMAINS {
-            for milestone in curve.line(domain) {
-                if reached.has(&milestone.id) {
-                    continue;
-                }
-                if tally.count(&milestone.done.key()) < milestone.done.times() {
-                    break;
-                }
-                due.push(milestone.id.clone());
-            }
-        }
+        let due: Vec<String> = due(world)
+            .into_iter()
+            .map(|(_, milestone)| milestone.id.clone())
+            .collect();
         let opens = |pick: &dyn Fn(&str) -> bool| -> Vec<String> {
             super::DOMAINS
                 .into_iter()
@@ -371,19 +341,8 @@ pub(crate) fn reach(world: &mut World, domain: &str, id: &str, opens: &[String])
 mod tests {
     use super::*;
     use crate::Sim;
+    use crate::testing::said;
     use crate::tower::Work;
-
-    fn said(sim: &Sim) -> Vec<String> {
-        sim.scrollback()
-            .records()
-            .iter()
-            .filter_map(|record| record.field(FieldName::Message))
-            .filter_map(|value| match value {
-                orbs_render::Value::Text(text) => Some(text.to_owned()),
-                _ => None,
-            })
-            .collect()
-    }
 
     fn line(sim: &Sim, domain: &str) -> Line {
         mastery(sim.world())

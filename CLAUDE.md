@@ -12,95 +12,37 @@ enemy attacks the automation.
 Artless by design. No sprites, no characters, no illustrations. A single curved
 CRT glowing in the dark.
 
-**Status: Phases 0, 0.5, 1, 2, 4, 5, 8, 10, 11 and 11.5 closed; Phase 3 met on
-its exit with three boxes deliberately left. Phase 9 (Enchanting) is met on three
-of its five boxes — the shared-engine extraction, split into a refactor and a
-behaviour box, is what is left. Renown closed at `0.11.14` and the interlude at
-`0.11.10`. `0.16` — the threshold — closed at `0.16.13`: eleven boxes, and three
-more for the corrections two `/code-review max` passes found in them. `0.17` —
-the tower as one machine — is in hand, paused for `0.18` — *Supply* — which is
-built: no produced item has individual value. `0.19` — *the terminal kept true*
-— closed at `0.19.13`: every feature since `0.12` played in the terminal, which
-now animates on the `motion` row and has greyscale.** The
-determinism spine, the Frame boundary, the parser, the cell renderer, brewing,
-the archive, the lens, the sanctum, the menagerie, the bailey, the forge, the
-tower rail, the balance harness, the spell engine and its scripting language are
-built and the game plays.
+**Status: the game plays, and the premise is complete** — seven domains, the
+arsenal carrying their output, and a siege that rewrites the scripts behind you.
+`0.19` (*the terminal kept true*) is the last feature closed. `0.17` (*the tower
+as one machine*) is paused, and `0.20` (*the tower swept*, a simplification pass)
+is in hand. A few boxes in closed sections are left open on purpose, and Phase
+0's tester gate is deferred; [docs/ROADMAP.md](docs/ROADMAP.md)'s Open table has
+what remains.
 
-**The orb has a front door.** It wakes to its own menu rather than to a tower:
-`play` opens or raises one, `settings` is four remembered pages, `manual` is
-nineteen chapters reachable before there is a tower, and `quit` asks once. Saves
-and settings live in the platform's app-data directory, and the orb makes a
-sound — cues generated in code, every one chosen from what the transcript
-already draws. **A new tower is installed first** (`0.17.8`): a practice
-tower, thrown away, teaches the prompt and the way around in five steps, and
-`ORBS_INSTALL=0` is the harness's way past it, as `ORBS_THRESHOLD=0` is the
-menu's.
+**The orb wakes to its own menu.** `play` opens or raises a tower, `settings` is
+four remembered pages, `manual` is reachable before there is a tower, and `quit`
+asks once. A new tower is installed first, with a practice run. The harness's
+ways past: `ORBS_THRESHOLD=0` for the menu, `ORBS_INSTALL=0` for the
+installation.
 
-**§10's seven domains are all raised, and a fresh game opens them one at a
-time.** `Sim::new` is the open tower every test, dump and balance policy uses;
-`Sim::sealed` is what a player gets — a laboratory, and the rest earned along
-the mastery lines — so the rail's dark boxes are back for exactly the rooms
-§11.5's breadth track always promised. `ORBS_SEALED=1` shows a dump the sealed
-start.
+**`Sim::new` is the open tower** every test, dump and balance policy uses;
+`Sim::sealed` is what a player gets, a laboratory with the rest earned along the
+mastery lines. `ORBS_SEALED=1` dumps the sealed start.
 
-**The phases stopped being an order, and the version stopped naming them** (§19).
-ROADMAP.md is a **list of items**: an item is open, or it is done and carries the
-phase name it was done under. Nothing in it claims to come next.
+**ROADMAP.md is a list, not an order** (§19). An item is open, or done under the
+phase name it was done under; phase numbers are names, not positions.
 
 > **The minor names the large feature in hand. The patch is an iteration within
 > it. `1.0` is the release on Steam.**
 
-**Only the referent changed.** The numbers were already doing this — Renown was
-minor `11` and its steps were patches `0`–`14` — so no tag moved and no history
-was rewritten. What the minor stopped being is a *phase index*, which is the part
-that could not survive work taken out of turn: `0.<phase>.<step>` assumed phases
-were built in sequence, four times they were not, and each renumber cost a
-document-wide pass to keep a promise the numbers could not keep. **`0.12` is the
-orb's menu**, not "Phase 12".
-
-**Phase numbers survive as names**, not as positions. *"Waits on Breadth's
-offline catch-up"* says which body of work and nothing about what comes first.
-The historical renumber tables in §19 are never edited — a replace-all corrupted
-two of them once, and there is no fifth pass to run.
-
-**A renumber is done highest-first, always.** A mechanical pass that moved a
-lower number first collided two phases into one, and a replace-all once corrupted
-two *historical* renumber tables in §19 — those record what the numbers were at
-the time and must never be shifted.
-
-**The premise is complete.** *"Sieges then test everything you automated — because
-the enemy attacks the automation"* was the last unbuilt clause and closed at
-`0.8.7`: six domains produce, the arsenal carries their output across the tower,
-and a siege spends it while the enemy rewrites the scripts behind you.
-See [docs/ROADMAP.md](docs/ROADMAP.md) for what remains.
-
-**Phases 2–7 are §10's five remaining domains** — scrying, spellcraft, defense,
-summoning, enchanting — and the phase that makes them one machine. The siege
-moved from Phase 2 to **Phase 8**, because a series of puzzles has to exist
-before the thing that consumes them.
-
-**Phase 8 was built before 6 and 7, and nothing gated it** (§19). A domain stands
-alone; the arsenal, multiplexing and the weave are *enhancements* to that rather
-than prerequisites for it — four shipped domains take no production slot and
-`orbs-balance` measures them as **additive**. An earlier plan called the
-one-machine phase a hard dependency on the premise that a siege holds the slot;
-it does not. **Phase numbers in older notes are stale twice over** — six lower
-from Phase 2 down, and then moved again for Enchanting and everything above it;
-DESIGN.md §19 records both shifts.
-
-**Defense and Enchanting swapped** (§19), and then Enchanting moved again.
-Nothing in defense depended on either derived domain, and the version was
-`0.<phase>.<step>` and is drawn on the POST card — so building the later phase
-first would have made a tester's version number go backwards. It did anyway, when
-the siege shipped ahead of the forge, which is what the second renumber fixed.
-**That whole hazard is retired**: a minor that names a feature never has to move.
+**`0.12` is the orb's menu**, not "Phase 12". The historical renumber tables in
+§19 are never edited — a replace-all once corrupted two of them.
 
 **The design is authoritative and lives in [docs/DESIGN.md](docs/DESIGN.md)** —
-~2,000 lines, eight drafts, four independent staff-level reviews. Read it before
-making design decisions. Do not re-litigate settled decisions; §19 is a decisions
-log recording what was decided and why, including superseded choices marked as
-such.
+~19,000 lines, most of them §19's decisions log. Read it before making design
+decisions. Do not re-litigate settled decisions; §19 records what was decided
+and why, including superseded choices marked as such.
 
 | Document | Purpose |
 |---|---|
@@ -116,7 +58,8 @@ such.
 - **Bevy `=0.20.0`** — exact pin, upgraded deliberately (one window, in *Engine
   upgrade*)
 - `serde` + `toml` (readable saves), `rand` 0.10 (seeded), `thiserror`, `tracing`,
-  `clap` (harness), `bevy-steamworks`
+  `clap` (harness), `dirs`, `crossterm` (terminal), `burn` 0.21 (the augury);
+  `bevy-steamworks` arrives with *Ship*
 - **No `bevy_text` / `bevy_ui`.** Every screen is terminal content rendered by our
   own cell-grid renderer. This is a build-level fact, not just an aesthetic.
 
@@ -134,6 +77,7 @@ crates/
 │                   — orbs-sim + orbs-render + bevy_ecs; never `bevy`
 ├── orbs/           Bevy frontend: GPU cell renderer, CRT, audio, Steam
 ├── orbs-tui/       terminal frontend (second-class, cuttable)
+├── orbs-augury/    the trained readers; training behind the `train` feature
 └── orbs-balance/   CLI harness driving orbs-sim
 ```
 

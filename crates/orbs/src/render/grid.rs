@@ -1,29 +1,12 @@
 //! The cell grid, as one mesh.
 //!
-//! DESIGN.md §4 rules out the `bevy_text`/`bevy_ui` path outright — it "will not
-//! hold a full grid redrawing under a real-time siege" — and names the
-//! alternative: *"single mesh with glyph atlas and instanced quads, or a custom
-//! material driven by a cell-index texture."*
+//! §4's single mesh with a glyph atlas: one draw call whatever the grid. The
+//! buffers live only in the mesh, taken out and refilled, so a steady frame
+//! allocates nothing.
 //!
-//! This is the first of those. Every visible cell contributes four vertices to
-//! one mesh, so the whole screen is one draw call regardless of grid size.
-//!
-//! The buffers live in the mesh and nowhere else: each attribute's `Vec` is
-//! taken out, refilled and handed back, so a steady-state frame allocates
-//! nothing. An earlier version kept a parallel `GridBuffers` and cloned it into
-//! the mesh every frame — ~900 kB at the 120×45 grid, defeating the reuse it was
-//! written for, and invisible to the reuse test because that inspected only the
-//! staging copy.
-//!
-//! No custom shader: each vertex carries its own colour and Bevy's stock
-//! `ColorMaterial` multiplies the sampled texel by it. With the atlas storing
-//! white RGB and coverage in alpha ([`super::atlas`]), `(1,1,1,coverage) *
-//! (r,g,b,1)` is exactly "this glyph, in this cell's colour". The CRT port (§4)
-//! adds a post-process pass later, which is a separate stage.
-//!
-//! The grid is centred on the origin with cell `(0, 0)` at the top left, because
-//! `orbs-render` counts rows downward and Bevy's 2D camera has +Y up. Cell size
-//! is an integer number of pixels (§4), so glyphs land on whole pixels.
+//! No custom shader: the atlas stores white with coverage in alpha
+//! ([`super::atlas`]), so `ColorMaterial`'s multiply is the glyph in the cell's
+//! colour. Centred on the origin with rows downward, against Bevy's +Y up.
 
 use bevy::asset::RenderAssetUsages;
 use bevy::mesh::{Indices, PrimitiveTopology, VertexAttributeValues};
@@ -124,11 +107,8 @@ impl Geometry {
 ///
 /// `showing` is the caret's blink phase — see [`Blink`](super::blink::Blink).
 ///
-/// One world unit is one virtual pixel: a cell is always 8×16 units, whatever
-/// the window. Fitting that to real pixels is the camera's job —
-/// `ScalingMode::AutoMin`, set in `shell::screen`'s `spawn_camera` — so there is
-/// no scale factor here. This used to take one, when the grid was derived from
-/// the window and the cell had to grow to match.
+/// One world unit is one virtual pixel; the camera's `AutoMin` fits them to
+/// real ones.
 pub(crate) fn build(frame: &Frame, theme: &Phosphor, showing: bool, mesh: &mut Mesh) {
     let mut geometry = Geometry::reclaim(mesh);
 
@@ -217,14 +197,8 @@ pub(crate) fn build(frame: &Frame, theme: &Phosphor, showing: bool, mesh: &mut M
         }
     }
 
-    // The caret. `Frame` carries it, so a frontend that dropped it would show a
-    // different screen from one that did not — which is the disagreement
-    // architectural rule 2 exists to prevent.
-    //
-    // `showing` is the blink phase, and blinking is legitimate frontend
-    // enrichment: the caret's *position* is in the Frame, and a blink adds no
-    // information a static block does not already carry. `orbs-tui` gets the
-    // terminal's own cursor and is none the poorer.
+    // The caret is the Frame's (rule 2); its blink is enrichment adding
+    // nothing.
     if showing
         && let Some(caret) = frame.cursor()
         && let Some(index) = cp437::cp437_index(CARET)
@@ -256,16 +230,9 @@ pub(crate) fn build(frame: &Frame, theme: &Phosphor, showing: bool, mesh: &mut M
             atlas::uv(index, orbs_render::Presentation::Plain),
         );
 
-        // Reverse video. The caret used to sit one past the end of the line,
-        // always on a blank, so a solid block was fine. It can sit mid-line now,
-        // and a block over a character hides it — blinking it in and out, in the
-        // one place the player is looking.
-        //
-        // So the glyph underneath is redrawn on top of the block in the tube's
-        // own black, which is what a terminal does and what the `CARET` comment
-        // meant by *"we have no inverse video to fall back on"*. Entirely a
-        // frontend job: the caret is a quad rather than a cell, so no per-cell
-        // inverse flag is needed and §19's *"what a cell holds"* stands.
+        // Reverse video, so a mid-line caret does not hide its character: the
+        // glyph is redrawn on the block in the tube's black. A quad, so no cell
+        // flag (§19).
         if let Some(under) = frame.cell(caret)
             && !under.is_blank()
             && let Some(glyph) = cp437::cp437_index(under.glyph)
@@ -286,15 +253,8 @@ pub(crate) fn build(frame: &Frame, theme: &Phosphor, showing: bool, mesh: &mut M
 
 /// The mesh the grid starts with, before anything has been drawn.
 ///
-/// Not zero-vertex: Bevy 0.19's slab allocator answers a zero-length vertex
-/// buffer with `use-after-free: attempted to copy element data for an
-/// unallocated key`, and until the boot sequence existed nothing held an empty
-/// screen long enough for one to reach the GPU. It carries one degenerate
-/// triangle instead — three coincident transparent vertices at the origin, which
-/// rasterises to no pixels and keeps the buffer allocated.
-///
-/// See `render::plugin::rasterise` for the other half — a blank screen must not
-/// rebuild the mesh at all, or this happens sixty times a second.
+/// One degenerate triangle, not zero vertices, which Bevy's allocator answers
+/// with `use-after-free`. `render::plugin::rasterise` is the other half.
 pub(crate) fn empty_mesh() -> Mesh {
     let mut mesh = Mesh::new(
         PrimitiveTopology::TriangleList,
@@ -545,14 +505,8 @@ mod tests {
     /// `bevy_text` path could not hold. This is the number that says whether the
     /// single-mesh path can.
     ///
-    /// The bound is generous because tests run unoptimised; a release build is
-    /// roughly an order of magnitude faster. It is here to catch a regression in
-    /// kind — an allocation per cell, a per-glyph lookup — not to certify a
-    /// frame budget.
-    ///
-    /// The worst case is a constant now. It used to be whatever grid the largest
-    /// plausible window produced — 160×45 — and is [`orbs_render::GRID`] itself,
-    /// because no window makes it any bigger.
+    /// Generous, since tests run unoptimised: it catches a regression in kind,
+    /// not a frame budget. At [`orbs_render::GRID`], the worst case.
     #[test]
     fn rebuilding_the_worst_case_grid_is_not_a_frame_cost() {
         let grid = orbs_render::GRID;

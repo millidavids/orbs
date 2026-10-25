@@ -1,23 +1,12 @@
 //! The orb's voice, loaded from data rather than written in Rust.
 //!
-//! CLAUDE.md rule 6: prose lives in hot-reloadable data files, never as string
-//! literals. DESIGN.md §12 budgets ~88k words, and a sentence spelled out at the
-//! call site is a sentence no writer can find.
+//! Rule 6, for §12's ~88k words. Not a record formatter: a line goes into
+//! [`FieldName::Message`](orbs_render::FieldName::Message) beside the fields it
+//! was built from (rule 4).
 //!
-//! Not a record formatter: records stay structured (rule 4), and `sift`, pipes
-//! and §14's linearisation all read fields rather than sentences. A line from
-//! here goes into [`FieldName::Message`](orbs_render::FieldName::Message)
-//! *alongside* the fields it was built from.
-//!
-//! The sim parses content but never watches a file, because rule 8 forbids async
-//! here and rule 3 makes a frontend a caller rather than a host — and a watcher
-//! inside the sim would make every headless test touch the filesystem. So this
-//! crate parses a string and a frontend calls
-//! [`Sim::set_prose`](crate::Sim::set_prose) at a tick boundary.
-//!
-//! Swapping prose is replay-safe, because no line here reaches a decision — it
-//! is presentation over a record already built. Recipes are not, and will need
-//! content versioned into the submission log.
+//! The sim parses but never watches a file (rules 3 and 8); a frontend calls
+//! [`Sim::set_prose`](crate::Sim::set_prose) at a tick boundary. Replay-safe,
+//! since no line reaches a decision.
 
 use std::collections::BTreeMap;
 
@@ -75,10 +64,8 @@ impl Prose {
 
     /// The line for `key`, with `{placeholder}`s filled from `fields`.
     ///
-    /// A missing key yields the key itself, and an unmatched placeholder is left
-    /// as written. Both are deliberately *visible* rather than empty: §15's
-    /// practice is that work is done when it has been looked at, and a silently
-    /// blank line is the one failure looking cannot catch.
+    /// A missing key yields the key, an unmatched placeholder stays as written:
+    /// visible, since a blank line is the failure looking cannot catch.
     #[must_use]
     pub fn line(&self, key: &str, fields: &[(&str, &str)]) -> String {
         let Some(template) = self.lines.get(key) else {
@@ -95,14 +82,9 @@ impl Prose {
 
     /// A line whose wording depends on how many, with `{count}` filled in.
     ///
-    /// A mastery deed's sentence sits beside a live `3 of 5` counter, so it says
-    /// the number — but `"{count} charms laid"` reads "1 charms laid", and six
-    /// of the twenty-five deeds ask for exactly one. A key that reads wrong in
-    /// the singular is authored twice, `key` and `key_one`; every other key
-    /// falls straight through.
-    ///
-    /// Not a pluralisation rule: English inflects more than the noun (*"the
-    /// stacks walked"* against *"3 walks of the stacks"*).
+    /// A key that reads wrong in the singular is authored twice, `key` and
+    /// `key_one`. Not a pluralisation rule: English inflects more than the
+    /// noun.
     #[must_use]
     pub fn counted(&self, key: &str, count: u32) -> String {
         self.line(
@@ -115,12 +97,8 @@ impl Prose {
     /// single one and `{key}_none` for nought, each when it is authored, and
     /// `key` otherwise.
     ///
-    /// The singular rule, once: [`counted`](Self::counted) fills `{count}` and
-    /// nothing else, so a line naming the things themselves needs only the key.
-    /// The circle's painter chose it by hand, which was this rule's second copy.
-    ///
-    /// `_none` covers what `_one` cannot: *"the last call balked at rows "* with
-    /// nothing after it. Only a key that authors it changes.
+    /// The singular rule, once, for a line that names the things rather than
+    /// a `{count}`. `_none` covers a list with nothing in it.
     #[must_use]
     pub fn counted_key(&self, key: &str, count: u64) -> String {
         let form = match count {
@@ -137,14 +115,8 @@ impl Prose {
 
     /// Every subject the manual can answer on, from the `recall_` keys.
     ///
-    /// Derived rather than listed, so authoring a manual entry is all it takes
-    /// to make the subject nameable — otherwise a writer adds `recall_warding`
-    /// and the parser has never heard of it.
-    ///
-    /// The prefix is load-bearing and templates must not share it: every key
-    /// under it becomes a parser noun. `grimoire_route`, `grimoire_step` and
-    /// friends registered `route`, `step` and `heat` as subjects the manual
-    /// could not answer; they are `route_` now.
+    /// Derived, so an authored entry is nameable. Every key under the prefix
+    /// becomes a parser noun, so no template may share it.
     #[must_use]
     pub fn topics(&self) -> Vec<&str> {
         self.lines

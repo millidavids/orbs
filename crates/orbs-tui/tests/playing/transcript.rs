@@ -56,18 +56,14 @@ pub fn block(screen: &str) -> String {
 
 /// One long line, for matching a phrase the pane may have wrapped.
 ///
-/// `RecordView` wraps rather than clips, with a two-cell continuation indent, so
-/// a sentence longer than the pane splits mid-phrase. `research`'s answer at
-/// 120×45 lands as
+/// `RecordView` wraps, so a sentence splits mid-phrase:
 ///
 /// ```text
 /// √ the page opens into shelves that do not end. a way out
 ///     is in them
 /// ```
 ///
-/// and a needle as a person reads it matches neither row. Every wait flattens
-/// first, so an assertion is about *what the game said* rather than where this
-/// width broke the line.
+/// Every wait flattens first, so it asks what the game said.
 pub fn flatten(text: &str) -> String {
     // Leader runs collapse too: `status` draws `experience ..... 0`, and seven
     // scenarios asserting `experience 0` broke the day it did.
@@ -126,12 +122,8 @@ pub fn parse_tick(screen: &str) -> Option<u64> {
 
 /// A pane beside the transcript never becomes part of what the transcript says.
 ///
-/// Pure, and not `#[ignore]`d: every scenario reads the game through this
-/// helper, and a defect in it arrived as twelve unrelated-looking failures.
-///
-/// The rows are the ones `research` answered on when those twelve failed: the
-/// map's top edge beside an instrument row, its side beside the echo, and its
-/// bottom edge sharing the first row of a wrapped sentence.
+/// Not `#[ignore]`d, since every scenario reads through it; the rows are the
+/// map's edges beside real transcript rows.
 #[test]
 fn a_pane_beside_the_transcript_does_not_leak_into_it() {
     let screen = "\

@@ -1,33 +1,15 @@
 //! §8.1's **world state** surface — a reagent swapped, and how it is found.
 //!
-//! The log surface has shipped since Phase 0; this is the second of the four,
-//! and the one whose tell §8.1 states as *"substituted entities fail ID check →
-//! `Referent missing`"*.
-//!
-//! Both channels are asserted here, because §8.1 requires both and each on its
-//! own is a defect:
+//! Both channels, since §8.1 requires both:
 //!
 //! - a tell only `verify` could find makes looking pointless
 //! - a tell only looking could find is a puzzle a screen reader cannot play
 
+mod common;
+
+use common::{run, said};
 use orbs_render::{FieldName, Value};
 use orbs_sim::Sim;
-
-fn run(sim: &mut Sim, line: &str) {
-    sim.submit(line);
-    sim.step();
-}
-
-fn said(sim: &Sim) -> Vec<String> {
-    sim.scrollback()
-        .records()
-        .iter()
-        .filter_map(|record| match record.field(FieldName::Message) {
-            Some(Value::Text(text)) => Some(text.to_owned()),
-            _ => None,
-        })
-        .collect()
-}
 
 /// Every field of every record, for the assertions that read a `State`.
 fn fields(sim: &Sim, wanted: FieldName) -> Vec<String> {
@@ -43,19 +25,9 @@ fn fields(sim: &Sim, wanted: FieldName) -> Vec<String> {
 
 /// Step until the *ambient* swap fires, and answer with what it renamed.
 ///
-/// Not `debug_swap`, because that word is `cfg(debug_assertions)` — under
-/// `cargo test --release` it is an unresolvable line, so nothing is swapped and
-/// the assertions below fail against a tower where no sabotage happened. Three
-/// tests here were dead in that profile.
-///
-/// And because the shortcut is not the surface: three defects shipped with every
-/// See-it line green because only the shortcut had been exercised. Waiting for
-/// the real roll costs a few thousand ticks, under a second.
-///
-/// The two differ in what they take: `debug_swap` takes the alphabetically-first
-/// endless pile, which is the charcoal, and the ambient system **exempts fuel**
-/// — so a caller that needs to know which pile was hit has to ask rather than
-/// assume. That is what the return value is for.
+/// Not `debug_swap`, which is debug-only and not the surface; the real roll
+/// costs under a second. Returns the pile, since the ambient roll exempts
+/// fuel and the shortcut does not.
 fn wait_for_a_swap(sim: &mut Sim) -> String {
     for _ in 0..20_000 {
         sim.step();
@@ -137,14 +109,8 @@ fn a_substitution_stops_a_spell_that_named_the_reagent() {
     // missing`"*. The sabotage is felt as a spell that stopped working, and
     // finding out *why* is what scrying exists for.
     //
-    // The spell has to name the pile the swap really took, or it passes while
-    // proving nothing. `debug_swap` always takes the charcoal, which is the one
-    // pile the ambient system can never take because fuel is exempt — so the
-    // swap comes first and the spell is written after, naming what was hit.
-    // That reverses the shape of the test and is the honest way round: the orb
-    // learns a name is a lie by failing on it, and this checks that with
-    // whatever reagent the world chose rather than the one a door was known to
-    // pick.
+    // Swap first, then write the spell naming what was really hit, or it
+    // proves nothing.
     let mut sim = Sim::new(1);
     run(&mut sim, "attend laboratory");
 
@@ -196,17 +162,9 @@ fn the_swap_leaves_the_pile_where_it_was() {
 
 #[test]
 fn a_lie_nobody_catches_settles_back_to_the_truth() {
-    // The floor under an unattended tower, and a fact about the *spell language*
-    // rather than a kindness: a spell names things with literals, so it can
-    // never say "purge whatever the dispensary is lying about" — it would have
-    // to name `sage-`, a word nobody knew when the spell was written. So
-    // `verify` → `purge` is reachable only by a person reading the screen, and
-    // without an expiry an automated tower is terminal rather than harassed:
-    // `orbs-balance` measured the grind loop falling from 0.100/tick to 0.058
-    // and staying there.
-    //
-    // The *last* verdict, not any of them: the point is that the second `verify`
-    // disagrees with the first, so `any` would pass on either.
+    // A lie expires, since a spell cannot name `sage-` in advance, or an
+    // automated tower stays crippled (0.100 to 0.058). The last verdict, since
+    // the two must disagree.
     fn verdict(sim: &Sim) -> Option<String> {
         fields(sim, FieldName::State)
             .into_iter()
@@ -250,15 +208,8 @@ fn a_lie_nobody_catches_settles_back_to_the_truth() {
 
 #[test]
 fn the_ambient_swap_never_takes_the_fire() {
-    // Fuel is exempt, and `orbs-balance` found it. A swap is honest because it
-    // costs the spell that named the reagent and nothing half-made, and charcoal
-    // is named by no recipe — it is the tower's power supply, so swapping it
-    // stops every heated stage in every domain at once. It shipped taking the
-    // alphabetically-first endless pile, which *is* `charcoal`, so clarity's
-    // rate fell from 0.140 to 0.074 on every seed with the suite green.
-    //
-    // Four hours across four seeds. `SWAP_INTERVAL` is one an hour, so this is
-    // ~16 swaps' worth of rolls against a pool of two.
+    // Fuel is exempt: a swapped charcoal stops every heated stage at once
+    // (0.140 to 0.074). Four hours over four seeds, ~16 rolls.
     for seed in 0..4 {
         let mut sim = Sim::new(seed);
         for _ in 0..4 {

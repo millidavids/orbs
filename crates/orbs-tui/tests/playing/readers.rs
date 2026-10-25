@@ -5,15 +5,14 @@
 //! a build artefact. These pin one: `stub` answers a fixed table, and `grammar`
 //! reads `phrasings.toml` with no weights at all.
 
-use crate::play::{Game, available};
+use crate::play::Game;
 
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn the_augury_reads_a_line_and_reading_plain_stops_it() {
-    if !available() {
+    let Some(game) = Game::launch().env("ORBS_AUGURY", "stub").settled() else {
         return;
-    }
-    let game = Game::launch().env("ORBS_AUGURY", "stub").settled();
+    };
     game.does("attend laboratory", "/tower/laboratory")
         .does("turn the sage into powder", "≈ grind sage")
         .expect("sage: dispensary to mortar_and_pestle");
@@ -39,10 +38,9 @@ fn the_augury_reads_a_line_and_reading_plain_stops_it() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn a_spell_line_in_plain_english_is_read_and_marked() {
-    if !available() {
+    let Some(game) = Game::launch().env("ORBS_SCRIVENER", "stub").settled() else {
         return;
-    }
-    let game = Game::launch().env("ORBS_SCRIVENER", "stub").settled();
+    };
     game.does("attend laboratory", "/tower/laboratory")
         .opens("scribe waiting", "waiting.spell in ");
     game.type_raw("edit");
@@ -56,11 +54,10 @@ fn a_spell_line_in_plain_english_is_read_and_marked() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn a_guessed_summon_spends_no_call() {
-    if !available() {
-        return;
-    }
     // A call spends a beast, so the orb will not make one on a reader's guess.
-    let game = Game::launch().env("ORBS_AUGURY", "grammar").settled();
+    let Some(game) = Game::launch().env("ORBS_AUGURY", "grammar").settled() else {
+        return;
+    };
     game.does("attend menagerie", "/tower/menagerie")
         .does("summon", "gathers at the circle")
         .does(
@@ -72,10 +69,7 @@ fn a_guessed_summon_spends_no_call() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn winnowing_holds_a_beast() {
-    if !available() {
-        return;
-    }
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.does("attend menagerie", "/tower/menagerie")
         .does("debug_spell winnowing", "in a hand not yours")
         .does("invoke winnowing", "the orb takes up winnowing.spell");

@@ -1,12 +1,7 @@
 //! Colour vision deficiency, simulated — an instrument, not an effect.
 //!
-//! Nothing here draws. This exists so the palette's accessibility claim can be
-//! measured rather than asserted: push each accent through a deficiency and
-//! check the triad is still separable on the other side.
-//!
-//! It is not a correction filter. ROADMAP Phase 13 and §19 specify three
-//! daltonisation filters, and measuring them against this palette first showed
-//! they make the game worse:
+//! Nothing here draws: it measures the palette's claim. Not a correction —
+//! daltonisation measured worse against this palette:
 //!
 //! | channel | unfiltered | daltonised |
 //! |---|---|---|
@@ -14,16 +9,8 @@
 //! | material tints (hue) | 6–16 | 4–29 |
 //! | spell syntax (hue) | 43–53 | 37–44 |
 //!
-//! Worse in eleven of twelve theme × deficiency combinations, worst case violet
-//! under protanopia going 1.41 → 1.00 — danger and cost at identical brightness.
-//!
-//! The reason is structural. This game carries no meaning in hue: the accent
-//! triad is solved so danger, cost and success differ in *luminance*, and every
-//! screen duplicates colour with a glyph or a word (§14). Daltonisation
-//! redistributes hue, which moves luminance around, so it fights the property
-//! the design relies on to improve one §19 already permits to collapse.
-//!
-//! So the correction is not shipped and the simulation is pointed at the tests.
+//! Worse in eleven of twelve combinations: the triad differs in luminance and
+//! hue carries no meaning (§14), and daltonisation moves luminance (§19).
 //!
 //! The matrices are Machado, Oliveira and Fernandes (2009) at severity 1.0, as
 //! `court_wizard` uses them. They operate on linear RGB.

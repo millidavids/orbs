@@ -1,25 +1,11 @@
 //! The settings file: what the player has chosen about the orb itself.
 //!
-//! Not in the save. A save is a *tower* — its clock, its stores, what the wizard
-//! has learned; a setting is about the machine in front of you. Putting one in
-//! the other would carry a preference between slots, and loading somebody else's
-//! tower would change how your keyboard behaves. So it is a second file beside
-//! the saves, per-machine, and nothing in `orbs-sim` can see it.
+//! Not in the save, which is a tower: a setting is the machine's, per-machine.
 //!
-//! A `BTreeMap<String, String>` rather than a typed struct, because one of the
-//! things a player sets is a phosphor theme, whose names come from the
-//! frontend's palette — a list `orbs-shell` must not grow a second copy of.
-//! Three things fall out, all wanted: the words are the format, so nothing
-//! migrates and the file reads as what a player typed; a key this build does not
-//! know is kept rather than dropped on the next write; and a frontend may keep a
-//! setting the shell has never heard of, which the Bevy build's tube needs. The
-//! type safety a struct bought is bought here by the values being words a player
-//! typed, and by the readers below falling back rather than failing.
-//!
-//! Best-effort in both directions: a failed read is the defaults, a failed write
-//! is dropped. `ORBS_SAVE=off` sessions, read-only checkouts and the dump all
-//! run with nowhere to keep this, and refusing to change how a line is read
-//! because it cannot be remembered is worse than forgetting.
+//! Words in a `BTreeMap`, not a struct, since a theme's names are the
+//! frontend's: nothing migrates, an unknown key survives a write, and a
+//! frontend may keep its own. Best-effort both ways — forgetting beats
+//! refusing.
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -40,14 +26,8 @@ type Kept = BTreeMap<String, String>;
 
 /// Where the settings live, once a frontend has said.
 ///
-/// Nothing until [`keep`] is called. It was `save::path()` with the file name
-/// swapped, so every `cargo test` in the workspace read and wrote the
-/// developer's own `~/.local/share/orbs/orbs-settings.toml`.
-///
-/// `save::chosen` takes its directory as a parameter for the same reason, and
-/// `SimPlugin::persist` is an explicit flag: an environment variable is
-/// process-global and `cargo test` runs threads. An opt-in is the one shape a
-/// test that does not know it needs it cannot get wrong.
+/// Nothing until [`keep`] is called — an opt-in, so no test can reach a
+/// developer's real settings.
 static KEPT_AT: OnceLock<Option<PathBuf>> = OnceLock::new();
 
 /// Keep settings beside the saves from now on.
@@ -87,6 +67,19 @@ pub fn get(key: &str) -> Option<String> {
     load().get(key).cloned()
 }
 
+/// What a setting opens as: the switch `var`, then what the player chose for
+/// `key` — `save::path`'s chain, in the same order. The switch is the
+/// instrument and outranks a preference, or a See-it line stops being
+/// reproducible on a machine where somebody changed the setting.
+///
+/// An exported-but-empty `var` is not the switch being set: `var` answers
+/// `Some("")`, and a shell script forwarding an unset variable would otherwise
+/// discard the player's saved choice.
+#[must_use]
+pub fn seeded(var: &str, key: &str) -> Option<String> {
+    crate::environment::switched(var).or_else(|| get(key))
+}
+
 /// Remember `value` for `key`.
 ///
 /// Read, change, write — rather than writing the one key — so a setting this
@@ -122,13 +115,8 @@ pub fn set(key: &str, value: &str) {
         {
             std::fs::create_dir_all(parent).ok();
         }
-        // Scratch file, then rename, as `save::write_to` does: a bare truncate
-        // leaves the file half-written if the process dies, and `load` answers
-        // an unparseable file with the defaults — so the player silently loses
-        // every accessibility choice they have made.
-        //
-        // A failed write is dropped rather than said: the choice has already
-        // taken effect, and there is no screen here to say it on.
+        // Scratch then rename, as `save::write_to`, or a crash loses every
+        // choice. A failure is dropped: the choice already took effect.
         let scratch = path.with_extension("toml.writing");
         if std::fs::write(&scratch, text).is_ok() && std::fs::rename(&scratch, &path).is_err() {
             std::fs::remove_file(&scratch).ok();
@@ -191,12 +179,7 @@ mod tests {
 
     #[test]
     fn a_process_that_never_opted_in_keeps_nothing() {
-        // The property that stops a test writing a developer's settings, and it
-        // already happened: `path` was `save::path()` with the file name
-        // swapped, and the tests that press `F5` left values in a real
-        // `~/.local/share/orbs/orbs-settings.toml`. This binary never called
-        // `keep`, so the module is inert in it — which is what makes every other
-        // test hermetic without knowing it had to be.
+        // This binary never calls `keep`, so every test here is hermetic.
         assert_eq!(path(), None, "a test binary resolved a settings file");
         assert!(load().is_empty(), "a test binary read somebody's settings");
         assert_eq!(get("driver"), None);

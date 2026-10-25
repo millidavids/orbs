@@ -32,15 +32,8 @@ impl Plugin for SoundPlugin {
                     // alternative is a frame of latency on a keystroke, which is
                     // audible in a way a frame of latency on a glyph is not.
                     cues::ring_for_records.run_if(resource_exists::<crate::sim::Tower>),
-                    // CLAUDE.md: every `Update` system has a `run_if`. This one
-                    // reads `KeyboardInput` and had none — harmless, and the one
-                    // system in the module out of step with the rule.
-                    //
-                    // And `booted`, because the boot card takes no keys: nothing
-                    // reaches the prompt until the sequence is live, so a click
-                    // during it is the orb answering a keystroke it ignored,
-                    // which reads as the card being skippable when it
-                    // deliberately is not (§19).
+                    // `booted`, since a click on the card would suggest it can
+                    // be skipped (§19).
                     keys::ring_for_keys
                         .run_if(on_message::<KeyboardInput>)
                         .run_if(crate::boot::booted),

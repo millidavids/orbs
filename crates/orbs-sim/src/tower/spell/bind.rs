@@ -1,20 +1,10 @@
 //! `bind` — giving a spell to the orb to hold.
 //!
-//! §8 says what `bind` adds is running unattended. Gating the *cast* buys
-//! nothing — [`Running`] fixes the domain at cast and never reads the player's
-//! position again — so the difference is at the other end: an invocation ends
-//! when the player leaves the domain it runs in (`run::advance`), and a bound
-//! spell does not. A spell is still nameable and castable from anywhere; what
-//! needs your presence is the *running*.
-//!
-//! A bound spell stands: it is cast again when it runs off the end, because a
-//! slot held by a finished spell is a slot held by nothing. That makes *"walk
-//! away, come back to work done"* true without a `repeat`.
-//!
-//! Nothing here counts anything — how many may be held is
-//! [`tower::concentration`]. At 0 the orb cannot hold one at all, which is
-//! §11.5's *"the game's turn"* and the first gate in the game on progression
-//! rather than on where you stand.
+//! What `bind` adds is running unattended (§8): an invocation ends when the
+//! player leaves its domain (`run::advance`), and a bound spell does not. A bound
+//! spell also stands — cast again when it runs off the end, because a slot held
+//! by a finished spell is held by nothing — so *walk away and come back to work
+//! done* needs no `repeat`. How many may be held is [`tower::concentration`].
 
 use bevy_ecs::prelude::*;
 use orbs_render::{FieldName, RecordKind, Role};
@@ -28,33 +18,22 @@ use super::run::Running;
 
 /// A spell the orb is holding.
 ///
-/// Beside [`Running`] rather than instead of it — *"is it working right now"*
-/// and *"is the orb holding it"* are different questions. A spell that has run
-/// off the end is un-`Running` for the tick before this casts it again.
+/// Beside [`Running`], not instead of it: a held spell is un-`Running` for the
+/// tick between laps.
 #[derive(Component, Debug, Clone, Default)]
 pub struct Bound {
     /// Lines whose bad name has already been complained about, across laps.
     ///
-    /// The rationing has to outlive the run, because holding is what laps:
-    /// `Running::said` rations per casting and `finish` takes `Running` away
-    /// between laps, so one typo was reported every two ticks for as long as
-    /// the spell was held. Copied out at the end of a lap and back in at the
-    /// start of the next.
-    ///
-    /// Cleared where `Running::said` is cleared — when the *text* changes.
+    /// Here because `finish` takes `Running` away between laps, and one typo was
+    /// reported every two ticks. Cleared when the text changes.
     pub said: Vec<usize>,
 }
 
 /// Every spell the orb is currently holding, by name.
 ///
-/// Ordered by [`NodeId`](crate::NodeId) rather than by query order —
-/// `tower::node` records archetype order as a bug no test catches, and this
-/// feeds a refusal that names them.
-///
-/// `&World`, through `try_query`, so the frontend can read it while drawing a
-/// frame: §8 wants what is held in the sidebar, and a sidebar has no `&mut`.
-/// `None` is a world where nothing has ever been bound, which is the empty
-/// answer.
+/// By [`NodeId`](crate::NodeId), not query order, since a refusal names them.
+/// `&World` through `try_query`, so a sidebar can draw it; `None` is a world
+/// where nothing was ever bound.
 #[must_use]
 pub fn held(world: &World) -> Vec<String> {
     let Some(mut query) = world.try_query::<(&crate::NodeId, &Name, &Bound)>() else {
@@ -71,9 +50,8 @@ pub fn held(world: &World) -> Vec<String> {
 /// `bind <spell>` — ask the orb to hold a spell.
 pub fn bind(intent: &Intent, world: &mut World) {
     let Some(argument) = intent.arguments.first() else {
-        // Unreachable through the parser — `bind`'s only slot is required, so a
-        // bare `bind` becomes a numbered prompt. Answered rather than ignored,
-        // because §3 forbids a silent return.
+        // The parser prompts for the slot instead; answered, because §3 forbids
+        // a silent return.
         say(world, "spell_unknown", "", Role::Danger);
         return;
     };
@@ -88,9 +66,8 @@ pub fn bind(intent: &Intent, world: &mut World) {
         return;
     }
 
-    // The first gate in the game about what you have earned. §6 forbids a bare
-    // refusal, so the sentence teaches: a player at concentration 0 does not
-    // know holding a spell is a thing, and cannot find the word by looking.
+    // The game's first gate on what you have earned, so the refusal teaches: at
+    // concentration 0 a player cannot know holding a spell is a thing.
     let room = tower::concentration(world);
     if room == 0 {
         say(world, "bind_untrained", &wanted, Role::Danger);
@@ -98,9 +75,8 @@ pub fn bind(intent: &Intent, world: &mut World) {
     }
     let holding = held(world);
     if holding.len() >= room {
-        // Naming what is held is the whole refusal: at concentration 1 this is
-        // the sharpest decision in the game (§11.5), and a player who has to go
-        // and look up what they hold cannot make it.
+        // Naming what is held is the whole refusal: at concentration 1 it is the
+        // sharpest decision in the game (§11.5).
         let message = world.resource::<Prose>().line(
             "bind_full",
             &[
@@ -115,29 +91,24 @@ pub fn bind(intent: &Intent, world: &mut World) {
 
     world.entity_mut(node).insert(Bound::default());
 
-    // Already in flight, so it is taken up where it stands. `invoke x` then
-    // `bind x` is the sequence the design recommends, and casting again would
-    // throw away what the test had done and restart at line 1.
+    // Already in flight from `invoke x`, the recommended test, so it is taken up
+    // where it stands rather than restarted at line 1.
     if let Some(mut running) = world.get_mut::<Running>(node) {
         running.unattended = true;
         say(world, "bind_done", &wanted, Role::Success);
-        // A spell bound is what the grimoire's mastery line counts — after the
-        // sentence, on both doors.
+        // The grimoire's mastery line, after the sentence, on both doors.
         crate::tower::note(world, crate::tower::BOUND);
         return;
     }
 
-    // Cast now, through the one door — a bound spell that waited for something
-    // to start it would be a slot held by nothing.
     super::invoke::cast(world, node, &wanted, Role::Success, "bind_done", true);
     crate::tower::note(world, crate::tower::BOUND);
 }
 
 /// Let go of a spell the orb is holding. Returns whether it was holding one.
 ///
-/// `stop` does this as well as ending a run, because *"stop doing that"* is one
-/// idea. The consequence, named rather than solved: with a bound spell always
-/// running there is no way to pause one without giving up the slot.
+/// `stop` does this as well as ending a run, because *stop doing that* is one
+/// idea. So there is no way to pause a bound spell without giving up the slot.
 pub fn release(world: &mut World, node: Entity, named: &str) -> bool {
     if world.get::<Bound>(node).is_none() {
         return false;
@@ -149,9 +120,8 @@ pub fn release(world: &mut World, node: Entity, named: &str) -> bool {
 
 /// Cast every bound spell that has run off the end.
 ///
-/// A system, because standing is a property of the tick rather than of any
-/// command. `run::advance` removes `Running` and this puts it back on the next
-/// tick, so one place ends a spell and one starts it again.
+/// A system, because standing belongs to the tick: `run::advance` ends a spell
+/// and this starts it again next tick.
 pub fn stand(world: &mut World) {
     let idle: Vec<(Entity, String)> = world
         .query_filtered::<(Entity, &Name), (With<Bound>, Without<super::Running>)>()
@@ -159,16 +129,12 @@ pub fn stand(world: &mut World) {
         .map(|(node, name)| (node, name.0.clone()))
         .collect();
     for (node, named) in idle {
-        // Silent: `spell_begun` every lap is the noise §19 cut back from the
-        // editor's saves. The work it does still reports itself.
+        // Silent: a line every lap is noise; the work still reports itself.
         super::invoke::cast(world, node, &named, Role::Normal, "", true);
     }
 }
 
-/// The spell node called `wanted`, wherever it is kept.
-///
-/// One of three byte-identical copies of this walk, and now one call — see
-/// `tower::reach`.
+/// The spell node called `wanted`, wherever it is kept — `tower::reach`'s walk.
 fn find(world: &World, wanted: &str) -> Option<Entity> {
     tower::reach::look(world)
         .scope(tower::reach::Scope::Tower)

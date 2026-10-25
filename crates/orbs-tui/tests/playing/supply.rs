@@ -4,15 +4,12 @@
 //! and while it works it drains. The rules are `orbs-sim`'s and tested there;
 //! this is the word, the answer and the board's `drawing` row, typed.
 
-use crate::play::{Game, available};
+use crate::play::Game;
 
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn a_potion_flows_from_six_and_faster_when_asked_again() {
-    if !available() {
-        return;
-    }
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.does("attend bailey", "/tower/bailey")
         .does("defend", "come up the road")
         .does("debug_spawn warding 5", "all along")
@@ -32,10 +29,7 @@ fn a_potion_flows_from_six_and_faster_when_asked_again() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn spent_stock_is_refused_and_kept() {
-    if !available() {
-        return;
-    }
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.does("debug_spawn warding 6", "all along");
     game.meditates(3000);
     game.does("attend bailey", "/tower/bailey")
@@ -50,11 +44,8 @@ fn spent_stock_is_refused_and_kept() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn one_item_flows_in_one_place() {
-    if !available() {
-        return;
-    }
     // Open in the laboratory, then asked for on the wall: one supply an item.
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.does("attend laboratory", "/tower/laboratory")
         .does("debug_spawn quickening-scroll 8", "all along")
         .does("wield quickening-scroll", "unrolls, 1 every 300 ticks")
@@ -69,13 +60,10 @@ fn one_item_flows_in_one_place() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn a_spell_opens_a_supply_that_has_no_draw() {
-    if !available() {
-        return;
-    }
     // `besieging` guards each rung with `has no draw`, so it opens the warding
     // once the garrison is hurt and never twice. A spell's records are in the
     // log, never the transcript.
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.does("attend bailey", "/tower/bailey")
         .does("debug_spawn warding 15", "all along")
         .does("debug_spell besieging", "in a hand not yours")
@@ -87,12 +75,9 @@ fn a_spell_opens_a_supply_that_has_no_draw() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn a_batch_moves_in_one_word() {
-    if !available() {
-        return;
-    }
     // A distillation yields three, and `move` carries the whole batch; an
     // instrument still takes one.
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.does("attend laboratory", "/tower/laboratory")
         .does("kindle charcoal", "athanor")
         .does("debug_spawn clarified-draught", "all along")
@@ -109,10 +94,7 @@ fn a_batch_moves_in_one_word() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn the_lectern_copies_two_scrolls() {
-    if !available() {
-        return;
-    }
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.does("attend archive", "/tower/archive")
         .does("debug_spawn fragment 4 lectern", "all along")
         .does("wield lectern", "lectern")

@@ -95,52 +95,36 @@ pub fn finish(world: &mut World) {
         // reachable in the first ten minutes.
         world.entity_mut(place).remove::<Working>();
 
-        // `transmutes()`, not `== Wield`. §10.1's per-instrument verbs start
-        // a run exactly as `wield` does, so asking for the one verb by name left
-        // a finished `grind` releasing the slot, saying nothing useful, and
-        // leaving the sage sitting whole in the mortar. See `Verb::transmutes`.
-        if working.verb.transmutes() {
-            transmute(world, place);
-            world
-                .resource_mut::<Scrollback>()
-                .records_mut()
-                .attribute(None);
-            continue;
-        }
-
-        // A press is the third kind of completed work, beside a transmuting run
-        // and the generic one below. It makes no material, so `transmute` is
-        // wrong, and what it says depends on what the ward answered, so the
-        // generic sentence is too. It also credits on its own terms — the yield
-        // scales with how few presses it took — which `worth(verb)` cannot
-        // express.
-        if working.verb == crate::parser::Verb::Probe {
-            crate::execute::land_probe(world, place);
-            world
-                .resource_mut::<Scrollback>()
-                .records_mut()
-                .attribute(None);
-            continue;
-        }
-
-        // A fall is the fifth kind, on the press's argument exactly: it makes no
-        // material, so `transmute` is wrong, and what it says depends on whether
-        // every glyph came up lit, so the generic sentence is too. It credits
-        // nothing — what a charm is worth is the charm.
-        if working.verb == crate::parser::Verb::Anneal {
-            crate::execute::land_fall(world, place);
-            world
-                .resource_mut::<Scrollback>()
-                .records_mut()
-                .attribute(None);
-            continue;
-        }
-
-        // An audit is the fourth kind, on the press's argument exactly: it makes
-        // no material, so `transmute` is wrong, and what it says depends on what
-        // it found. §8.1's expensive `verify` — see `execute::audit`.
-        if working.verb == crate::parser::Verb::Verify {
-            crate::execute::land_sweep(world);
+        // Four kinds of work say their own sentence. A press, a fall and an
+        // audit make no material, so `transmute` is wrong for them, and what
+        // each says depends on what it found, so the generic sentence below is
+        // too. A press also credits on its own terms (the yield scales with how
+        // few presses it took); a fall credits nothing, since what a charm is
+        // worth is the charm.
+        let landed = match working.verb {
+            // `transmutes()`, not `== Wield`: §10.1's per-instrument verbs start
+            // a run exactly as `wield` does, so asking for the one verb by name
+            // left a finished `grind` leaving the sage whole in the mortar.
+            verb if verb.transmutes() => {
+                transmute(world, place);
+                true
+            }
+            crate::parser::Verb::Probe => {
+                crate::execute::land_probe(world, place);
+                true
+            }
+            crate::parser::Verb::Anneal => {
+                crate::execute::land_fall(world, place);
+                true
+            }
+            // §8.1's expensive `verify` — see `execute::audit`.
+            crate::parser::Verb::Verify => {
+                crate::execute::land_sweep(world);
+                true
+            }
+            _ => false,
+        };
+        if landed {
             world
                 .resource_mut::<Scrollback>()
                 .records_mut()

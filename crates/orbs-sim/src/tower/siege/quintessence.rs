@@ -1,34 +1,19 @@
 //! What a siege's dice cost (§11.5, §5.1).
 //!
-//! The pool lives at [`tower::quintessence`](crate::tower::quintessence) now, a
-//! return rather than a reversal: §11.5's table always read *"Mana — produced by
-//! passive regeneration, Ley Line steps"*, and what shipped at `0.8.15` was the
-//! siege narrowing it to a fixed pool granted on `defend`. Enchanting spends the
-//! same resource, so the pool came up to the tower (§19).
-//!
-//! What is left here is the part about dice: what a face count is worth.
-//!
-//! Nothing here draws — rule 3, stated where it would be easiest to break. This
-//! is arithmetic over a `const` table, with no `RngStream` on any path.
+//! The pool is the tower's, at
+//! [`tower::quintessence`](crate::tower::quintessence), since enchanting spends
+//! it too (§19). What is left here is what a face count is worth. Nothing here
+//! draws.
 
 use crate::tower::dice::Die;
 
 /// How many faces one point of quintessence buys.
 ///
-/// Derived from the die rather than authored per die, so the price is fair by
-/// construction at every die including the four not yet issued. Three
-/// hand-authored numbers could drift into an ordering where the `d20` is cheaper
-/// than the `d6`; this cannot, and it is one constant to sweep rather than three
-/// to keep consistent.
-///
-/// Rule 6 is about prose, and CLAUDE.md exempts parser tables by name:
-/// `Die::faces` is already a `const` table, and this is arithmetic over it.
+/// One constant over `Die::faces`, so no die can come to cost less than a
+/// smaller one.
 pub const FACES_PER_POINT: u32 = 4;
 
-/// What pledging `die` costs.
-///
-/// Never free: a die that cost nothing is one you always pledge, which switches
-/// the decision off for that row. So the floor is one point, even for a `d4`.
+/// What pledging `die` costs — never free, or that row stops being a decision.
 #[must_use]
 pub const fn cost_of(die: Die) -> u32 {
     let cost = die.faces() / FACES_PER_POINT;

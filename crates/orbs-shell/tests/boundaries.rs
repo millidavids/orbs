@@ -39,6 +39,21 @@ fn sources() -> Vec<PathBuf> {
     found
 }
 
+/// Fail if any source mentions one of `needles`, naming the rule it breaks.
+fn forbid(needles: &[&str], rule: &str) {
+    for path in sources() {
+        let source =
+            fs::read_to_string(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display()));
+        for name in needles {
+            assert!(
+                !source.contains(name),
+                "{}: mentions `{name}` — {rule}",
+                path.display(),
+            );
+        }
+    }
+}
+
 #[test]
 fn the_shell_never_depends_on_bevy_the_engine() {
     let manifest = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml"))
@@ -51,14 +66,7 @@ fn the_shell_never_depends_on_bevy_the_engine() {
         );
     }
 
-    for path in sources() {
-        let source = fs::read_to_string(&path).unwrap_or_else(|error| panic!("{path:?}: {error}"));
-        assert!(
-            !source.contains("use bevy::"),
-            "{}: imports from `bevy` the engine",
-            path.display(),
-        );
-    }
+    forbid(&["use bevy::"], "rule 1: an import from `bevy` the engine");
 }
 
 #[test]
@@ -66,16 +74,10 @@ fn the_shell_stays_synchronous() {
     // Rule 8, one crate further out. The sim is called from exactly one place
     // per frontend, synchronously; a shell that awaited anything between a
     // keystroke and a `Frame` would put a scheduler between them.
-    for path in sources() {
-        let source = fs::read_to_string(&path).unwrap_or_else(|error| panic!("{path:?}: {error}"));
-        for name in ["async fn", ".await", "tokio"] {
-            assert!(
-                !source.contains(name),
-                "{}: contains `{name}` — rule 8 forbids async here too",
-                path.display(),
-            );
-        }
-    }
+    forbid(
+        &["async fn", ".await", "tokio"],
+        "rule 8 forbids async here too",
+    );
 }
 
 #[test]
@@ -87,14 +89,8 @@ fn the_shell_never_resolves_a_colour() {
     //
     // `Tint` and `Wash` are fine and are not listed: they name a material's
     // colour *family*, which is what appears, not how it is drawn.
-    for path in sources() {
-        let source = fs::read_to_string(&path).unwrap_or_else(|error| panic!("{path:?}: {error}"));
-        for name in ["Srgba", "LinearRgba", "resolve_tinted", "Phosphor"] {
-            assert!(
-                !source.contains(name),
-                "{}: mentions `{name}` — resolving a colour belongs to a frontend",
-                path.display(),
-            );
-        }
-    }
+    forbid(
+        &["Srgba", "LinearRgba", "resolve_tinted", "Phosphor"],
+        "resolving a colour belongs to a frontend",
+    );
 }

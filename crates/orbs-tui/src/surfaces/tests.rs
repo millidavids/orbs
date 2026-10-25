@@ -3,14 +3,8 @@ use crossterm::event::KeyCode;
 use orbs_shell::{Editor, Menu, Scroll, Tapestry};
 use orbs_sim::Sim;
 
-/// Build the flags directly, so a state no verb can reach is still asked
-/// about. The point of the sweep below is the *ties*, and a tie is by
-/// definition a state the game is not supposed to be able to produce.
-///
-/// `menuing` is not a parameter, deliberately: the ordering is
-/// `orbs_shell::focus`'s and is tested there against every combination. What
-/// this file tests is the *dispatch* — that a key reaches the surface the
-/// owner names.
+/// Flags built directly, so the sweep reaches ties no verb can. The ordering
+/// is `orbs_shell::focus`'s; this tests the dispatch.
 fn surfaces(editing: bool, weaving: bool, walking: bool) -> Surfaces {
     Surfaces {
         editing: editing.then(|| Editor::open("t", "laboratory", &[])),

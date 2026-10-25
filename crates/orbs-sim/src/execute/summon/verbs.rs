@@ -1,21 +1,15 @@
 //! `summon` and `limn` — the menagerie's two words (DESIGN.md §10).
 //!
-//! The lens's shape, one room over: `summon` opens a beast and calls it in as
-//! `probe` opens and presses, and `limn` turns a glyph as `dial` turns a
-//! socket — named, or stepped round the six.
-//!
-//! Neither word takes the production slot and neither waits, so the menagerie's
-//! faucet is additive; `spell::block::begins_work` carries the exemption (§19).
-//! A hold refills the standing garrison and then the orb earns — `muster`'s
-//! order. A balk costs only time (§19).
+//! The lens's shape: `summon` as `probe`, `limn` as `dial`. Neither takes the
+//! production slot (`spell::block::begins_work`, §19). A hold refills the
+//! garrison and then the orb earns — `muster`'s order; a balk costs only time.
 
 use bevy_ecs::prelude::*;
-use orbs_render::{FieldName, RecordKind, Role};
+use orbs_render::Role;
 
 use super::publish::{publish, republish_glyph};
 use crate::content::Prose;
 use crate::parser::{Intent, Verb};
-use crate::session::Scrollback;
 use crate::tower::{
     self,
     circle::{Beast, Call, Glyph, Humour},
@@ -32,14 +26,9 @@ pub const TROOP: &str = "troop";
 /// `summon [<demon>]` — draw a beast up at the circle, or call the waiting one
 /// in.
 ///
-/// Two acts in one word, as `probe` is, and the draw is not a call. Bare, a
-/// hold refills the garrison; naming a demon binds the hold as that demon
-/// instead (§19, *Supply*). The name matters only on the call that holds.
-///
-/// A call is never spent on a guess: `divined` is the augury having read the
-/// line (§6), and a reader defeated by a sentence falls back to `summon`, so
-/// *"cycle the widdershins"* came back as a call against par with nothing
-/// limned.
+/// Two acts in one word; the draw is not a call. Bare, a hold refills the
+/// garrison; named, it binds that demon (§19, *Supply*). Never spent on a
+/// guess: a `divined` line falls back to `summon` when the reader is beaten.
 pub(crate) fn summon(intent: &Intent, world: &mut World, divined: bool) {
     let Some(circle) = fixture(world) else {
         say(world, Verb::Summon, "summon_nowhere", &[], Role::Cost);
@@ -70,12 +59,8 @@ pub(crate) fn summon(intent: &Intent, world: &mut World, divined: bool) {
 
 /// A beast arrives at the circle.
 fn arrive(world: &mut World, circle: Entity) {
-    // The domain's one draw, here rather than in a system: the circle has no
-    // tick system, so `RngStream::Menagerie` advances only when asked and a
-    // replay has nothing to reorder.
-    //
-    // A sealed tower draws lesser beasts until `menagerie_2` opens the whole
-    // circle.
+    // The domain's one draw, so `RngStream::Menagerie` advances only when
+    // asked. A sealed tower draws lesser beasts until `menagerie_2`.
     let whole = world.resource::<tower::Opened>().has(tower::opened::CIRCLE);
     let beast = {
         let mut rngs = world.resource_mut::<crate::rng::Rngs>();
@@ -109,10 +94,8 @@ fn call(world: &mut World, circle: Entity, demon: Option<&str>) {
     let calls = beast.calls();
     let troops = beast.troops();
     match answered {
-        // A balk is the puzzle, not a dead end — a cost, never a fault.
-        //
-        // Nothing is republished: nothing a spell can read has moved (§19), and
-        // republishing here re-raised every reading with new ids.
+        // A balk is a cost, never a fault. Nothing a spell reads moved, so
+        // nothing is republished (§19).
         Call::Balked { rows } => {
             let balking = world.resource::<Prose>().counted("summon_rows", rows);
             say(
@@ -175,12 +158,8 @@ fn hold(world: &mut World, circle: Entity, calls: u32, troops: u32, demon: Optio
 
 /// `limn <glyph> [<humour>]` — limn a glyph; bare, step it round the six.
 ///
-/// Free and instant, as `dial` is: limning is not the work, holding the beast
-/// is, and a player may change two glyphs and call once.
-///
-/// Bare is what makes a search writable. A spell has no variables, so it cannot
-/// name a humour it has not tried; `limn keystone` asks the circle for the next
-/// one, and three `repeat 6` loops around that are an odometer.
+/// Free and instant, as `dial`: holding the beast is the work. Bare makes a
+/// search writable — three `repeat 6` loops are an odometer.
 pub(crate) fn limn(intent: &Intent, world: &mut World) {
     let Some(circle) = fixture(world) else {
         say(world, Verb::Limn, "summon_nowhere", &[], Role::Cost);
@@ -201,10 +180,8 @@ pub(crate) fn limn(intent: &Intent, world: &mut World) {
         say(world, Verb::Limn, "limn_incomplete", &[], Role::Cost);
         return;
     };
-    // Either order, because no glyph shares a word with a humour. A humour
-    // first makes the second word the glyph whatever it is, so the refusal
-    // names the wrong word: `limn heed laboratory` is told `laboratory` is no
-    // glyph.
+    // Either order, since no glyph shares a word with a humour, so a refusal
+    // names the wrong word.
     let (word, humour) = match named.next() {
         Some(second)
             if Glyph::from_word(&first).is_none() && Humour::from_word(&first).is_some() =>
@@ -279,8 +256,7 @@ pub(crate) fn limn(intent: &Intent, world: &mut World) {
 
 /// Let the waiting beast go, for nothing — what `stop circle` does.
 ///
-/// Returns whether there was one. A beast inserts no `Working`, so without
-/// this arm `stop circle` denied what `if the circle is working` affirmed.
+/// Returns whether there was one; a beast inserts no `Working`.
 pub(crate) fn release(world: &mut World, circle: Entity) -> bool {
     if world.get::<Beast>(circle).is_none() {
         return false;
@@ -293,22 +269,13 @@ pub(crate) fn release(world: &mut World, circle: Entity) -> bool {
 
 /// The circle, where the player — or the spell — is standing.
 ///
-/// `Cwd` is right here: a spell's command runs inside `spell::run`'s room swap.
-/// The lens paid for a *tick system* reading `Cwd`; the circle has none.
-pub(crate) fn fixture(world: &World) -> Option<Entity> {
+/// `Cwd` is right here: a spell's command runs inside `spell::run`'s room swap,
+/// and the circle has no tick system.
+fn fixture(world: &World) -> Option<Entity> {
     super::super::readings::fixture(world, Verb::Summon)
 }
 
 /// One authored line about the menagerie.
 pub(super) fn say(world: &mut World, verb: Verb, key: &str, args: &[(&str, &str)], role: Role) {
-    let message = world.resource::<Prose>().line(key, args);
-    world
-        .resource_mut::<Scrollback>()
-        .records_mut()
-        .push(RecordKind::Completion)
-        .text(FieldName::Name, verb.canonical())
-        .text(FieldName::Message, &message)
-        .text(FieldName::Source, CIRCLE)
-        .role(role)
-        .finish();
+    super::super::readings::filed(world, CIRCLE, verb, key, args, role);
 }

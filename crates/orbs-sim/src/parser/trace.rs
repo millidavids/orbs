@@ -1,22 +1,12 @@
-//! Instrumentation — what the Phase 0 gate actually measures.
+//! Instrumentation — what §15's parser gate measures.
 //!
 //! §6: *"Every resolution reproducible — full input, resolution, and candidate
-//! scores logged and exportable."* §15 sets the bar this feeds:
+//! scores logged and exportable."* Every candidate is kept, not the winner
+//! alone, because §15 acts on the *clustering* of failures: an unknown verb and
+//! a missing argument need opposite fixes.
 //!
-//! > ≥ 85% of inputs resolve to the intended action on first attempt, and ≥ 95%
-//! > of initially-unresolved inputs reach the intended action within two further
-//! > attempts, with zero dead ends.
-//! >
-//! > Act on the per-input failure *clustering*, not the aggregate.
-//!
-//! Clustering is why every candidate is kept rather than the winner alone: a
-//! miss from an unknown verb and one from an argument that did not exist look
-//! identical in an aggregate and need opposite fixes.
-//!
-//! TSV because the consumer is a spreadsheet or a five-line script, run once per
-//! playtest: no dependency, survives `grep`, pastes into anything. Records carry
-//! no timing, since wall-clock in a sim record would make two runs of the same
-//! seed differ.
+//! TSV, for a spreadsheet or a five-line script. No timing, or two runs of one
+//! seed would differ.
 
 use core::fmt::Write as _;
 
@@ -67,10 +57,9 @@ pub struct ParseRecord {
     pub outcome: Outcome,
     /// Whether the augury worked this reading out rather than the orb reading it.
     ///
-    /// A column of its own, because [`outcome`](Self::outcome) cannot carry it:
-    /// `Divined` and `Forced` share the `≈` marker deliberately — one fact, one
-    /// glyph — but *which readings the model decided* is the question a session
-    /// gets sifted for, and would be invisible in the export otherwise.
+    /// A column of its own: [`outcome`](Self::outcome) draws `Divined` and
+    /// `Forced` alike, and which readings the model decided is what a session
+    /// gets sifted for.
     pub divined: bool,
     /// The canonical echo, if a command was chosen.
     pub echo: Option<String>,
@@ -85,10 +74,8 @@ pub struct ParseRecord {
 impl ParseRecord {
     /// Record a resolution, keeping every reading that was scored.
     ///
-    /// Takes an [`Analysis`] rather than a [`Resolution`] because §6 wants the
-    /// candidate scores for *successful* resolutions too — a command that won by
-    /// four points and one that won by four hundred are the same `Resolved` and
-    /// very different data.
+    /// An [`Analysis`], not a [`Resolution`]: a win by four points and one by
+    /// four hundred are the same `Resolved` and very different data.
     #[must_use]
     pub fn new(tick: u64, input: &str, mode: Mode, analysis: &Analysis) -> Self {
         let (outcome, echo, register, suggestions) = match &analysis.resolution {
@@ -129,11 +116,8 @@ impl ParseRecord {
                 echo.push_str(&format!(" <{missing:?}?>"));
                 (Outcome::Incomplete, Some(echo), Some(*register), Vec::new())
             }
-            // Traced as unresolved, because for §15's gate it *is* a line the
-            // player typed that ran nothing. The echo names the verb, so a
-            // cluster of these reads as "they tried to brew in the archive"
-            // rather than as a parser failure — which is a design signal about
-            // where the domains sit, not a phrasing one.
+            // Unresolved, since nothing ran; the echo names the verb, so a
+            // cluster reads as a signal about where the domains sit.
             Resolution::Elsewhere { verb } => (
                 Outcome::Unresolved,
                 Some(verb.canonical().to_owned()),
@@ -188,11 +172,8 @@ impl ParseRecord {
 
 /// Every resolution this session, in order.
 ///
-/// A `Resource` because it is world-adjacent bookkeeping the sim owns: §6 makes
-/// explaining itself part of the parser's contract, and the Phase 0 gate acts on
-/// the *clustering* of failures rather than on the aggregate, which means every
-/// scored reading has to be kept as it happens. Reconstructing it afterwards
-/// from the scrollback is not possible — the losing candidates are gone.
+/// A `Resource` the sim owns, kept as it happens: the losing candidates are
+/// gone from the scrollback.
 #[derive(Resource, Debug, Default, Clone)]
 pub struct ParseLog {
     records: Vec<ParseRecord>,
@@ -218,9 +199,8 @@ impl ParseLog {
 
     /// How many inputs resolved on the first attempt.
     ///
-    /// The numerator of the gate's headline number. Forced resolutions count —
-    /// they ran the intended command — but they are reported separately by
-    /// [`ParseLog::forced`] because a high forced rate means siege play is
+    /// The gate's headline numerator. Forced resolutions count, and
+    /// [`ParseLog::forced`] reports them apart: a high rate means siege play is
     /// guessing.
     #[must_use]
     pub fn resolved(&self) -> usize {
@@ -263,10 +243,8 @@ impl ParseLog {
 
     /// Every record as tab-separated rows, with a header.
     ///
-    /// One row per *candidate*, so a spreadsheet can pivot on why a reading lost
-    /// rather than only on whether it won. Inputs with no candidates still get a
-    /// row, or unresolved inputs — the ones the gate cares about most — would
-    /// vanish from the export.
+    /// One row per *candidate*, so a spreadsheet can pivot on why a reading
+    /// lost. An input with none still gets a row, or the unresolved vanish.
     #[must_use]
     pub fn to_tsv(&self) -> String {
         let mut out = String::from(
@@ -338,18 +316,8 @@ mod tests {
     use crate::parser::{NounKind, Scene, analyse};
 
     fn tower() -> Scene {
-        // Recipes are `Topic` nouns (§6.1). `purge` is the ambiguity fixture:
-        // it takes `NounKind::Any`, required, so a bare one enumerates every
-        // noun in the room.
-        //
-        // It was a bare `brew`, which is a `recall` synonym — and `recall`'s
-        // slot became optional so that `help` would list the vocabulary instead
-        // of asking a lost player to pick between four arbitrary subjects (§19,
-        // `TOPIC_OPTIONAL`). A bare `brew` now resolves at 1000, which is right
-        // and left these three testing nothing. What they are *about* — that the
-        // log tallies ambiguity apart from resolution, counts a forced siege
-        // reading separately, and keeps the losing candidates — is unchanged, so
-        // only the fixture moved.
+        // Recipes are `Topic` nouns (§6.1). A bare `purge` is the ambiguity
+        // fixture: its required `Any` slot enumerates every noun in the room.
         Scene::new()
             .with(NounKind::Topic, "clarity")
             .with(NounKind::Topic, "warding")
@@ -419,10 +387,7 @@ mod tests {
         let mut log = ParseLog::new();
         log.push(ParseRecord::new(0, input, Mode::Calm, &analysis));
 
-        // Every row has the header's shape, which is the property — not the
-        // number of rows. Counting them made this a test of how many candidates
-        // the parser happened to find, so it broke the day a verb stopped taking
-        // an argument and could complete on its own.
+        // Every row has the header's shape — the property, not the row count.
         let tsv = log.to_tsv();
         let mut lines = tsv.lines();
         let columns = lines.next().expect("no header").matches('\t').count();
@@ -435,11 +400,8 @@ mod tests {
         }
     }
 
-    /// A reading the augury worked out, built by hand.
-    ///
-    /// There is no augury yet to produce one, so the record is assembled from
-    /// the pieces — which is the point: the trace's contract is testable before
-    /// the model exists, and it is what the stub will be measured against.
+    /// A reading the augury worked out, built by hand so the trace's contract
+    /// is tested without a model.
     fn divined_record() -> ParseRecord {
         let analysis = analyse("recall clarity", &tower(), Mode::Calm);
         let Resolution::Resolved { intent, .. } = analysis.resolution else {

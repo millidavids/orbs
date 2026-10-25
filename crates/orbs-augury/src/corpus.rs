@@ -1,15 +1,8 @@
 //! What a register is trained on, and what it is measured against.
 //!
-//! Two registers, one of everything else. The prompt's reader and the spell's
-//! are the same architecture over the same vocabulary asking the same question
-//! — *which statement is this, and which words are its argument* — so only the
-//! answer space and the corpus differ, and that difference is gathered here
-//! rather than spread across two trainers that would drift (§19).
-//!
-//! A refusal is not a class. [`Sample::reject`] marks an example with
-//! [`crate::REJECT`], out of range for both heads on purpose, so the trainer
-//! never shows it to the class head. The binary head is the only one a refusal
-//! trains.
+//! The two registers differ only in answer space and corpus, gathered here so
+//! one trainer serves both (§19). A refusal is not a class:
+//! [`Sample::reject`]'s [`crate::REJECT`] trains the binary head alone.
 
 use orbs_sim::content::{CORPUS_CAP, Phrasings, corpus_scene};
 
@@ -62,13 +55,8 @@ impl Register {
 
     /// How much of the encoding to drop while training.
     ///
-    /// A training-time knob only: burn's `Dropout` is inert on a backend with no
-    /// autodiff, which is every backend a reader is loaded on.
-    ///
-    /// Higher for spells, because control flow has nothing to expand over —
-    /// five of the eleven shapes take no argument — so [`Corpus::spells`] lifts
-    /// them by repeating what they have, and a reader memorises that in a pass
-    /// or two.
+    /// Training only; inert without autodiff. Higher for spells, whose
+    /// repeated thin classes are memorised in a pass or two.
     #[must_use]
     pub const fn dropout(self) -> f64 {
         match self {
@@ -152,14 +140,9 @@ impl Corpus {
     /// The spell's: every phrasing of every control-flow shape, every phrasing
     /// of a *command*, and the lines that must come back untouched.
     ///
-    /// The command class is thinned to the size of a shape: `phrasings.toml` is
-    /// eleven thousand lines against `spellings.toml`'s few thousand, all of
-    /// them the single class *this is a command*. Left whole, the reader learns
-    /// that answering *command* is nearly always safe.
-    ///
-    /// Strided down to twice the mean size of a shape's class, computed from
-    /// what the two files hold rather than written down here. Twice, not once,
-    /// because *command* really is the commonest line in a spell.
+    /// The command class is strided to twice a shape's mean, computed, or
+    /// answering *command* is nearly always safe. Twice, since it is the
+    /// commonest line.
     #[must_use]
     pub fn spells(vocabulary: &Vocabulary) -> Self {
         let scene = corpus_scene();
@@ -191,10 +174,8 @@ impl Corpus {
         // `spellings.toml`'s contribute nothing — they are canonical
         // statements, which `unread` drops.
         //
-        // A refusal is not a class, so the balance argument above does not
-        // reach it. Thinning them to a shape's share cost twenty-five points:
-        // 566 negatives against four thousand commands left the refusal holdout
-        // at 40% where the prompt register, with all 2,756, reads 80%.
+        // Not a class, so not thinned; thinned, the holdout fell from 80% to
+        // 40%.
         let mut refusing = spellings.refused(&scene);
         refusing.extend(phrasings.refused(&scene));
         let refusals = rejected(&unread(refusing), vocabulary);
@@ -245,16 +226,9 @@ const SPELL_CAP: usize = CORPUS_CAP * 2;
 
 /// Bring the thin classes up towards the mean by repeating what they have.
 ///
-/// The imbalance is arithmetic, not authorship: a shape's size is the size of
-/// its expansion, and five of the eleven have nothing to expand over, so their
-/// twenty authored phrasings *are* their class. `if {place} is idle` has the
-/// same phrasings and twenty-five places to say them about, so it arrives forty
-/// times larger — a fact about the noun tables, not about the language.
-///
-/// Repeated rather than reweighted, and both rather than either: the trainer
-/// weights a class by rarity, clamped to 4× (§19), and forty-to-one is past
-/// what that can answer. Repetition spreads the correction across batches
-/// instead of concentrating it in one lurching row.
+/// The imbalance is the noun tables' — a slotless shape cannot expand — and
+/// forty-to-one is past the trainer's 4× rarity weight (§19), so repetition
+/// spreads the rest across batches.
 fn balance(samples: Vec<Sample>) -> Vec<Sample> {
     let mut count: std::collections::BTreeMap<u32, usize> = std::collections::BTreeMap::new();
     for sample in &samples {

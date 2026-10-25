@@ -76,14 +76,9 @@ pub(super) fn status(world: &mut World) {
         }
     }
 
-    // The full answer behind the rail's `+n`, which until now pointed at
-    // nothing. The rail is the glance and this is the answer.
-    //
-    // A section, not more `Status` rows — the reading column above is guarded
-    // by a *shape* test (two or more records, each a name and a numeric
-    // quantity), so a row carrying a spell's room would break its alignment.
-    // Absent when nothing runs, because a section that is usually a bare rule
-    // teaches the eye to skip it.
+    // The answer behind the rail's `+n`. A section, since the column above is
+    // guarded by a shape test; absent when nothing runs, or the eye learns to
+    // skip it.
     if casting.is_empty() {
         return;
     }
@@ -91,10 +86,8 @@ pub(super) fn status(world: &mut World) {
         .text(FieldName::Kind, CASTING)
         .finish();
     for one in casting {
-        // `Detail` is what makes this a described listing rather than a tiled
-        // one (`record/view.rs` decides on the field's presence): tiled, a run
-        // of names reads `tending  threading` with nothing saying where either
-        // is.
+        // `Detail` makes it a described listing, not a tiled one
+        // (`record/view.rs`), so each spell says where it runs.
         let where_it_is = if one.cursors > 1 {
             format!("{}, on {} cursors", one.domain, one.cursors)
         } else {
@@ -141,9 +134,7 @@ const LEDGER: &str = "ledger";
 
 /// The heading `status` puts over what is running.
 ///
-/// A table entry beside `Verb::canonical`, not authored prose — it is the same
-/// class of thing as a noun-kind label, which is what every other section
-/// heading in a listing is.
+/// A table entry, like every listing's section heading, not authored prose.
 const CASTING: &str = "casting";
 
 /// A count as a record value, saturating rather than wrapping.

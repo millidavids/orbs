@@ -7,16 +7,9 @@
 //! > | **How well the player executes** — speed, precision | The harness has no
 //! >   player, so it cannot sweep anything | ❌ |
 //!
-//! So every policy here is something a player could also write as a spell, and
-//! nothing here models a human's typing speed, reaction time or attention. A
-//! command is issued when the tower is free to take it, which is the only timing
-//! rule the game itself has.
-//!
-//! The loops are the ones §11.5 and §19 already name, not invented workloads:
-//! `clarity` is the flagship the 16-experience threshold is derived from,
-//! `haste` the chain §19 calls *"the fastest experience in the game"*, and
-//! `grind` the *"standing grind loop free, at 1 experience per ~10 ticks for
-//! ever"* it flags beside it. The harness puts numbers on those sentences.
+//! So every policy could be a spell, and none models human timing. The loops
+//! are the ones §11.5 and §19 name — `clarity`, `haste`, `grind` — given
+//! numbers.
 
 /// A synthetic player, run against a real [`Sim`](orbs_sim::Sim).
 #[derive(Debug, Clone, Copy)]
@@ -77,12 +70,8 @@ pub enum Body {
     /// The flagship cycle, with a quickening supply kept open on the
     /// laboratory (§19, *Supply*).
     ///
-    /// The instrument for whether a scroll is worth using: run against
-    /// `clarity`, the difference is what quickening buys, and
-    /// `agrees.rs` sets it against what the lectern spends making one.
-    /// Scrolls arrive by `debug_spawn` as they are wanted, standing for an
-    /// archive walked by a spell — walking takes no slot, so the lectern's run
-    /// is the archive's whole cost to the laboratory.
+    /// Against `clarity`, what quickening buys; `agrees.rs` weighs it against
+    /// the lectern's cost. Scrolls arrive by `debug_spawn`.
     Quickened(&'static [&'static str]),
     /// [`Body::Stacks`] with a gleaning supply opened for every maze.
     ///
@@ -92,16 +81,8 @@ pub enum Body {
     Gleaned,
     /// Bind charms at the forge, reading the residue the way the table does.
     ///
-    /// The sixth policy that must read the world, and it reads exactly what
-    /// `forging` reads — the three columns' `lit` — because the point is what
-    /// the *loop* is worth rather than what a lucky guess is.
-    ///
-    /// The only policy that spends the tower's one slot on something other than
-    /// making a thing, which is why the forge needed one: §10's scarcity for the
-    /// domain is *"the buff's own lifetime, and the slot"*, and an unmeasured
-    /// claim about competing for the slot is a claim. It is also the instrument
-    /// for every number the phase invented — `QUINTESSENCE_BASE`, `REGEN_TICKS`,
-    /// `EBBING_AT`, every `costs`/`lasts`/`takes` in `forge.toml`.
+    /// Reads what `forging` reads. The one policy spending the slot on no
+    /// product, measuring §10's scarcity and every number in `forge.toml`.
     Imbuing,
     /// Earn a slot by hand, bind a spell, and then do nothing at all.
     ///
@@ -172,19 +153,9 @@ impl Policy {
 
     /// The flagship: sage and salt to a potion of clarity, end to end.
     ///
-    /// 16 experience over 94 ticks, which is the number §11.5's first threshold
-    /// is derived from — grind 1, digest 2, grind 1, mix 4, distil 8. If this
-    /// rate stops matching a hand-played session, one of the two has drifted.
-    ///
-    /// `empty mortar_and_pestle` between grinds is not tidying: a charged
-    /// instrument refuses a second load, so a loop without it stalls on lap two.
-    ///
-    /// `kindle charcoal` is in the body, not the setup, and the first draft had
-    /// it the other way round: a charcoal burns 600 ticks against a lap of ~120,
-    /// so a fire lit once goes out five laps in and every heated stage refuses
-    /// silently. The sweep read 0.079 against the design's 0.170 and looked like
-    /// a balance finding. This is the careless player;
-    /// [`DAMPED`](Self::DAMPED) is the attentive one.
+    /// 16 experience over 94 ticks, §11.5's first threshold. `empty` between
+    /// grinds, or lap two stalls; `kindle` in the body, or the fire dies five
+    /// laps in. The careless player; [`DAMPED`](Self::DAMPED) is attentive.
     const CLARITY: Self = Self {
         name: "clarity",
         gloss: "the flagship brew, relit every lap and never damped",
@@ -213,12 +184,8 @@ impl Policy {
 
     /// The same brew, played the way §10.1 says is better.
     ///
-    /// Checks a design claim rather than adding a workload. §10.1 argues the
-    /// athanor's two heated stages are not adjacent — `flask_and_rod` sits
-    /// between them — so efficient play is light → digest → damp → combine →
-    /// relight → distil, and §19 wants that *"meaningfully ahead over a session
-    /// rather than trivially ahead over one brew"*. Fuel is `Holding::endless`,
-    /// so damping can only show up here, as ticks, or nowhere at all.
+    /// Checks §10.1's claim that damping between heated stages pays over a
+    /// session (§19); with endless fuel it shows only as ticks.
     const DAMPED: Self = Self {
         name: "damped",
         gloss: "the same brew, damping between heated stages — §10.1's claimed better play",
@@ -291,29 +258,11 @@ impl Policy {
 
     /// The lens, swept the way a spell sweeps it.
     ///
-    /// The number §19's pricing argument rests on, and it moved: the ward went
-    /// from 360 codes to 1296 and lost the ratchet, the settle-lock and the
-    /// per-socket tally, so the automated rate is a different quantity than the
-    /// one the design was priced against.
-    ///
-    /// It reads the deltas and nothing else — `dial <socket>` bare, `probe`, and
-    /// which way `aligned` moved — because that is all `breaking` can ask. It
-    /// does not deduce, so it is not a model of a player: a player averages 5.15
-    /// presses against this policy's ~12.
-    ///
-    /// A press takes no slot, so unlike every policy above it this one never
-    /// waits on the tower — which is the balance claim worth watching. A `cost`
-    /// column that starts filling here is a bound solver competing with brewing
-    /// rather than running beside it.
-    ///
-    /// Read `landed` as presses, not solves: a `probe` answers with
-    /// `{quantity} aligned`, so any press placing one sigil satisfies
-    /// [`drive`](crate::drive)'s structural test for finished work.
-    ///
-    /// It still issues its own commands, so it measures the *loop* and not the
-    /// runner — [`BOUND`](Self::BOUND) pays §8's per-step tick. A real bound
-    /// `breaking` reads ~0.18 against this policy's 0.268, and the gap is the
-    /// interpreter.
+    /// §19's pricing number, reading only what `breaking` can: no deduction,
+    /// ~12 presses against a player's 5.15. A press takes no slot, so a filling
+    /// `cost` column means competing with brewing. `landed` counts presses.
+    /// Its own commands, so the loop, not the interpreter: a bound `breaking`
+    /// reads ~0.18.
     const SCRYING: Self = Self {
         name: "scrying",
         gloss: "the lens, swept one socket at a time as a bound spell sweeps it",
@@ -323,15 +272,9 @@ impl Policy {
 
     /// The sanctum, solved by the cyclic rotation `holding` writes.
     ///
-    /// The one policy whose rate is not a constant: a course's height comes from
-    /// how far the walls have slipped and its cost is `2^n - 1`, so a tower this
-    /// is keeping up with musters short courses and one it is behind on musters
-    /// tall ones. The column measures *the loop against the drain*.
-    ///
-    /// It issues its own commands, like [`STACKS`](Self::STACKS) and
-    /// [`SCRYING`](Self::SCRYING) and unlike [`BOUND`](Self::BOUND), so it does
-    /// not pay §8's per-step tick. A real bound `holding` spends six or seven
-    /// steps a haul against this one's one, and the gap is the interpreter.
+    /// The loop against the drain: a course's height follows the walls'
+    /// slippage. Its own commands, as [`SCRYING`](Self::SCRYING), so no §8
+    /// per-step tick.
     const WARDING: Self = Self {
         name: "warding",
         gloss: "the sanctum, rotated as the cyclic solver rotates it",
@@ -349,15 +292,9 @@ impl Policy {
 
     /// The menagerie, searched the way `taming` searches it.
     ///
-    /// It does not deduce, so it is not a model of a player —
-    /// [`SCRYING`](Self::SCRYING)'s rule, and it matters more here: a person who
-    /// reads the temper holds a beast in one call, where this tries every circle
-    /// and averages 68. What it prints is what a bound search is worth, which is
-    /// what the economy sees (§19).
-    ///
-    /// It issues its own commands, so it does not pay §8's per-step tick for the
-    /// spell's guards and loop entries — this is the search's ceiling at one
-    /// command a tick, and a bound `taming` sits below it.
+    /// No deduction, as [`SCRYING`](Self::SCRYING): 68 calls where a reader of
+    /// the temper takes one — what the economy sees (§19). A ceiling over a
+    /// bound `taming`.
     const TAMING: Self = Self {
         name: "taming",
         gloss: "the menagerie, every circle tried in order until one holds",
@@ -367,15 +304,9 @@ impl Policy {
 
     /// The bailey, fought the way the shipped decision tree fights it.
     ///
-    /// The one policy whose rate is mostly not up to it: a siege converts time
-    /// into experience at a rate the *dice* control, so this column is a mean
-    /// over however many sieges fit in the run. Read it across seeds or conclude
-    /// nothing — `stacks` carries the same warning.
-    ///
-    /// Also the only policy that can lose. A fallen siege still pays escrow
-    /// (§11.5's floor), so a regression that made sieges unwinnable shows as a
-    /// rate that *halves* rather than vanishes — and halving is easy to mistake
-    /// for tuning.
+    /// The dice set the rate, so read it across seeds. The only one that can
+    /// lose, and escrow pays a fall (§11.5), so unwinnable sieges halve the
+    /// rate rather than zero it.
     const BESIEGING: Self = Self {
         name: "besieging",
         gloss: "the bailey, fought as the shipped decision tree fights it",
@@ -390,21 +321,9 @@ impl Policy {
 
     /// [`GRIND`](Self::GRIND)'s loop again, run by a spell instead of by hand.
     ///
-    /// The comparison is the measurement: the two policies issue the same two
-    /// commands for ever, so the gap between their rates is exactly what
-    /// automation costs — §8's per-step tick, plus the tick a bound spell spends
-    /// re-casting off the end. Pointed at any other loop it would be a mixture
-    /// of that and the loop's own shape.
-    ///
-    /// That gap is what the language overhaul moves, which is why this exists
-    /// before the overhaul. §19 records the decision that a step still costs a
-    /// tick with the weave tree as the escape valve; both halves are claims
-    /// about this number, and nothing in the harness could see it.
-    ///
-    /// `empty mortar_and_pestle` is in the spell, not beside it: a binding
-    /// re-casts a spell that ran off the end, so a lapping spell must clear its
-    /// own byproduct or every pass after the first complains about the same
-    /// husks — the trap CLAUDE.md records against `first_light`.
+    /// Same commands, so the gap is what automation costs: §8's per-step tick
+    /// and the re-cast (§19). `empty` in the spell, since a re-cast spell must
+    /// clear its own byproduct.
     const BOUND: Self = Self {
         name: "bound",
         gloss: "the grind loop again, bound as a spell — what automation costs",

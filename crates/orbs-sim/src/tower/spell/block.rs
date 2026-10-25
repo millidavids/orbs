@@ -1,18 +1,11 @@
 //! Whether an instruction can proceed, asked without refusing it.
 //!
-//! A player who types `grind sage` at a busy mortar should be told so — that is
-//! `tower::work::refuse_busy`. A script reaching the same instruction should
-//! *wait*: it is the next line of a recipe arriving before the previous one
-//! finished, and the refusal path would emit one record per tick for the whole
-//! run it is waiting on. So the predicate and the refusal are separated, and
-//! this is the predicate.
+//! A player at a busy mortar is told so (`tower::work::refuse_busy`); a script
+//! should wait, or the refusal would log once per tick for the whole run. So the
+//! predicate and the refusal are separate, and this is the predicate.
 //!
-//! Both tiers, because the second is the one that fires. `tower::work::begin`
-//! refuses on the instrument being busy and on the tower-wide production slot
-//! being taken (`CAPACITY` is 1); only the first had a separable predicate. At
-//! capacity 1 the second is what a script hits for every multi-instrument spell
-//! — every §10.1 brew — so checking only the instrument lets those through to
-//! `begin`, which logs at the player once per tick.
+//! Both tiers, the instrument and the tower's one production slot: at capacity
+//! 1 the slot is what every multi-instrument brew hits.
 
 use bevy_ecs::prelude::*;
 
@@ -29,10 +22,7 @@ pub enum Blocked {
         /// What it is doing, as `tower::Busy` words it.
         doing: String,
     },
-    /// The tower's production slot is taken by something else.
-    ///
-    /// §9's fourth invariant reserves it for an in-flight action's whole
-    /// duration, and §11.5 opens at capacity 1.
+    /// The tower's production slot is taken by something else (§9, §11.5).
     Slot {
         /// Where the work holding it is happening.
         name: String,
@@ -61,17 +51,13 @@ impl Blocked {
 
 /// Whether `intent` would have to wait, asked from where the script is standing.
 ///
-/// Only duration-actions can block. `attend`, `survey`, `peruse` and the rest
-/// neither start work nor need the slot, so asking about them would make a
-/// script that reads a log wait behind a brew for no reason.
+/// Only duration-actions block: a script reading a log must not wait behind a
+/// brew.
 #[must_use]
 pub fn would_block(world: &mut World, intent: &Intent) -> Option<Blocked> {
-    // Every instrument this instruction touches has to be free. The question is
-    // "would this be refused", not "does this start work" — the first version
-    // asked the narrower one and `siphon` fell through, so a spell that ground
-    // and then siphoned was told *"the mortar_and_pestle is still at work"* as
-    // though it had typed the line itself. `move`, `empty`, `purge` and `siphon`
-    // all refuse on a busy instrument without beginning anything.
+    // "Would this be refused", not "does this start work": `move`, `empty`,
+    // `purge` and `siphon` refuse on a busy instrument without beginning
+    // anything.
     for at in touches(world, intent) {
         if let Some(why) = tower::busy(world, at) {
             return Some(Blocked::Instrument {
@@ -81,9 +67,8 @@ pub fn would_block(world: &mut World, intent: &Intent) -> Option<Blocked> {
         }
     }
 
-    // The tower-wide slot, for the verbs that actually begin a run — the tier
-    // that fires for a multi-instrument spell. It has no separable predicate in
-    // `work::slot`; `begin` tests it inline and refuses at the same time.
+    // `begin` tests the slot inline as it refuses, so there is no separable
+    // predicate to call.
     if begins_work(intent)
         && tower::in_flight(world).len() >= tower::CAPACITY
         && let Some((doing, at)) = tower::occupied(world)
@@ -99,43 +84,17 @@ pub fn would_block(world: &mut World, intent: &Intent) -> Option<Blocked> {
 
 /// Whether this instruction takes the tower's production slot.
 ///
-/// The verbs that reach `work::begin`. `siphon`, `move` and `empty` are
-/// deliberately absent: they need an instrument to be *idle*, but they take no
-/// slot and finish within the tick — §9's triage band exists so short work still
-/// runs during a brew.
-///
-/// It reads the argument, and it has to. This was `const fn(Verb)`, which made
-/// `wield` one answer for two acts: charging an instrument is a run, spending a
-/// scroll is not. `pipeline::wield` returns before `work::begin` for a scroll,
-/// so a typed spend was never charged a slot — but a spell reaches this tier
-/// first, so `wield quickening-scroll` in a script waited out the very brew it
-/// was written to hurry. Quicken then brew is the obvious play.
-///
-/// Asks [`execute::spending`](crate::execute::spending), which `pipeline::wield`
-/// asks too, rather than testing the kind here — two expressions of one rule
-/// being how they came to disagree in the first place.
+/// The verbs that reach `work::begin`. It reads the argument: `wield` charging
+/// an instrument is a run and spending a scroll is not, and a scripted quicken
+/// once waited out the brew it was written to hurry. Through
+/// [`execute::spending`](crate::execute::spending), as `pipeline::wield` asks.
 fn begins_work(intent: &Intent) -> bool {
     if crate::execute::spending(intent).is_some() {
         return false;
     }
-    // `dial` is an operation that takes no slot, and the first verb for which
-    // those are different questions: `is_operation` asks "is this word scoped to
-    // one instrument", this asks "will it hold the tower's one production slot".
-    // Left alone, `dial first nitre` queued behind a brew and burned `PATIENCE`
-    // doing nothing.
-    //
-    // The sanctum's two are the same case. `muster` and `haul` went into
-    // `is_operation` to stay out of the tower-wide vocabulary and neither
-    // schedules anything — both act instantly and never insert `Working`. Left
-    // alone, a bound `holding` beside a brewing loop answered *"holding.spell
-    // waits: the alembic is distilling"*, never mustered, gave up at `PATIENCE`
-    // and latched a fault on the sanctum's rail box, contradicting
-    // `execute::muster`'s doc, ROADMAP and §19 alike.
-    //
-    // The menagerie's two join them, and here rather than later: a call and a
-    // limn are instant, so a bound search would wait on a slot it never takes —
-    // and the circle's search is hundreds of calls, so it would starve. §19
-    // records the exemption being forgotten for the sanctum and what it cost.
+    // Operations that schedule nothing: scoped to an instrument, but instant.
+    // Left in, a bound solver waits on a slot it never takes and gives up at
+    // `PATIENCE` — §19 records the sanctum's costing exactly that.
     if matches!(
         intent.verb,
         Verb::Dial | Verb::Muster | Verb::Haul | Verb::Summon | Verb::Limn
@@ -147,15 +106,9 @@ fn begins_work(intent: &Intent) -> bool {
 
 /// Every instrument `intent` needs to find idle, where the script is standing.
 ///
-/// §10.1's per-instrument verbs name the *material*, not the tool — the tool is
-/// what the verb means — so that instrument is found from its
-/// [`Operation`](crate::tower::Operation) component. The same derivation
-/// `execute::pipeline::operate` uses, extracted rather than copied: that one
-/// exists to end the name-string dispatch six sites were doing, and a second
-/// copy would restart it.
-///
-/// A `move` names two places and needs both free — §10.1's lock covers taking as
-/// much as putting, and `pipeline::carry` refuses on either.
+/// A §10.1 verb names the material, so its instrument is found by
+/// [`Operation`](crate::tower::Operation), as `execute::pipeline::operate` finds
+/// it. A `move` needs both its places free.
 fn touches(world: &World, intent: &Intent) -> Vec<Entity> {
     let cwd = world.resource::<Cwd>().0;
     let here = tower::children_of(world, cwd);
@@ -170,11 +123,8 @@ fn touches(world: &World, intent: &Intent) -> Vec<Entity> {
             })
             .collect();
     }
-    // `stop` is not here and must not be. The list is "verbs a busy instrument
-    // would refuse", and `stop` is the one verb whose purpose is the busy case.
-    // Listing it made a scripted `stop` wait out the run it was cancelling, burn
-    // PATIENCE, report `spell_gave_up`, then fire on an idle tool as a no-op —
-    // so a spell could not call anything off.
+    // Never `stop`, whose purpose is the busy case: listed, a spell could not
+    // call anything off.
     if !matches!(
         intent.verb,
         Verb::Wield | Verb::Empty | Verb::Purge | Verb::Move
@@ -182,8 +132,7 @@ fn touches(world: &World, intent: &Intent) -> Vec<Entity> {
         return Vec::new();
     }
 
-    // Whatever places it named, by leaf — a `Place` argument resolves to a full
-    // path while nodes carry only their last segment.
+    // By leaf: a `Place` argument is a full path, a node only its last segment.
     intent
         .arguments
         .iter()

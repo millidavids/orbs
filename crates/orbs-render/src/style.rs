@@ -61,14 +61,9 @@ pub enum Intensity {
 /// An enum, not flags: the two non-plain variants are mutually exclusive by
 /// design rule (§3).
 ///
-/// Its own channel rather than folded into [`Role`] because the Bevy frontend
-/// draws each variant from a different face of `assets/fonts/unscii/` —
-/// `unscii-16` for [`Plain`](Self::Plain), `unscii-8-fantasy` for
-/// [`Eldritch`](Self::Eldritch), `unscii-8-mcr` for
-/// [`Tampered`](Self::Tampered), the last two row-doubled from 8×8. All three
-/// share metrics and repertoire, so a face swap can never move a cell. The
-/// terminal frontend renders all three identically — accepted degradation
-/// (§8.1), since `verify` is the authoritative detector on every surface.
+/// Its own channel, since the Bevy build draws each from a different unscii
+/// face of shared metrics. The terminal draws all three alike, accepted since
+/// `verify` is authoritative (§8.1).
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Presentation {
     /// Rendered faithfully. Carries the prose budget, so it gets the face drawn
@@ -98,11 +93,8 @@ pub enum Presentation {
 /// How hot a flame or spark cell is — see [`Depiction::flame`] and
 /// [`Depiction::spark`].
 ///
-/// Four steps, not the three an earlier design had. That argument — CP437 gives
-/// flame two glyphs, so a longer ramp is colour with nothing under it — stopped
-/// holding once the bottom half of the fire became solid `█` by construction,
-/// carrying *all* of its motion in hue. The ramp works alone there, and a coarse
-/// one reads as a two-tone flicker rather than a glow.
+/// Four steps, since the fire's solid lower half carries all its motion in hue,
+/// and a coarse ramp flickers rather than glows.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Heat {
     /// Dull: the tip of the flame, and a spark about to go out.
@@ -118,18 +110,9 @@ pub enum Heat {
 
 /// How far along a gauge's fill a cell sits — see [`Depiction::gauge`].
 ///
-/// The one hue ramp in a game of brightness ramps: red through yellow to green,
-/// brightest in the middle, so it has no monotonic-brightness test and could not
-/// pass one. Fire, liquid and smoke depict a *substance getting more intense*;
-/// this depicts a *distance being closed*, which the eye reads as a journey
-/// rather than a temperature.
-///
-/// Colour is allowed (§14) because the fill length is the information and the
-/// hue only reinforces it: the bracket, the pipes and the reading beside it
-/// still say how full a gauge is, so in greyscale nothing is lost. Six steps —
-/// three would read as a traffic light changing rather than a bar warming, and
-/// six is as many as a sixteen-colour terminal can tell apart, so both frontends
-/// draw the whole ramp.
+/// The one hue ramp, red to green, a distance being closed rather than a
+/// substance intensifying. Allowed (§14), since the fill length is the
+/// information. Six steps, as many as sixteen colours tell apart.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Fill {
     /// Barely begun.
@@ -186,26 +169,10 @@ impl Fill {
 
 /// The colour family a material draws its instrument's bar in.
 ///
-/// A name, never a value: `Green` says *which family*, and what green is on a
-/// given tube is the frontend's answer, as it is for [`Role`]. `orbs-tui`
-/// resolving the same eight names to ANSI indices in `theme::hue` is fine
-/// because the set is closed — eight names, eight hues, no fallback, so a ninth
-/// tint breaks that build on purpose.
-///
-/// A tint hints at what is inside an instrument — sage grinds green, its husks
-/// are brown — *over* `survey` rather than instead of it. Three things keep it
-/// inside §14: `survey <instrument>` names the contents on every frontend; the
-/// panel names the instrument and its state, both of which reach the linear
-/// stream; and a tint never paints over an accent, so `Fouled` keeps its
-/// `Role::Danger` label, for the same reason [`Style::depicted`] drops a picture
-/// on an accented cell. DESIGN.md §19 records the widening and the Phase 13 item
-/// carrying the accessibility promise it moved.
-///
-/// Deliberately not `#[non_exhaustive]`, matching [`Role`] and [`Depiction`]: a
-/// frontend that gains a tint must be made to handle it rather than silently
-/// drawing a material in the base hue. Authored data selects one *by name* and
-/// an unknown name is a load error, not a silent fallback — the defect
-/// `Recipe::heat` and `craft_of` each already paid for.
+/// A name, never a value; each frontend resolves the closed set. A hint *over*
+/// `survey`, which still names the contents, and never over an accent (§14,
+/// §19). Not `#[non_exhaustive]`, and an unknown name in content is a load
+/// error.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Tint {
     /// Growing things: herbs, leaves, sage.
@@ -273,12 +240,8 @@ impl Tint {
 
 /// A region's colour, which is one family or two being combined.
 ///
-/// A payload is affordable here and would not be on a [`Cell`](crate::Cell):
-/// this lives in the `Frame`'s tint side-table, one entry per instrument bar, so
-/// it costs a handful of words a frame rather than a byte per grid position.
-/// That is why the tint went on the `Frame` rather than into [`Style`], and it
-/// is what lets the flask say what the other instruments cannot — two materials
-/// on their way to becoming one.
+/// In the `Frame`'s side-table, one entry a bar, where a payload costs nothing
+/// a [`Cell`](crate::Cell) would — so the flask can name two materials.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Wash {
     /// The family this region draws in.
@@ -357,13 +320,8 @@ pub enum Density {
 /// gains a depiction must be made to handle it rather than silently drawing it
 /// as ordinary text.
 ///
-/// Flat rather than the obvious `Flame(Heat)`/`Smoke(Density)`/`Spark(Heat)`,
-/// because that is a two-byte tagged enum: it pushes [`Style`] from 3 bytes to 5
-/// and, past `char`'s 4-byte alignment, [`Cell`](crate::Cell) from 8 to 12.
-/// `Frame::reset` memsets the whole grid every frame, so every screen pays
-/// +1.2 µs and +28 KiB at 160×44 for a picture occupying thirty cells of one
-/// panel. Spelled out, the discriminant is one byte. [`Depiction::flame`] and
-/// friends keep the nested shape where it reads better.
+/// Flat, so the discriminant is one byte and [`Cell`](crate::Cell) stays eight;
+/// [`Depiction::flame`] and friends keep the nested shape for reading.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Depiction {
     /// Not a picture of anything. Everything on screen but the instruments.
@@ -423,10 +381,8 @@ pub enum Depiction {
 impl Depiction {
     /// Every variant, for consumers that must handle the whole set.
     ///
-    /// `orbs`'s palette walks this to prove every depiction resolves to a
-    /// colour. That walk used to be a hand-written array in the consumer, which
-    /// falls behind the enum the moment a variant is added; the test below fails
-    /// to *compile* if this misses one.
+    /// `orbs`'s palette walks it; the test below fails to compile if this
+    /// misses one.
     pub const ALL: [Self; 21] = [
         Self::None,
         Self::GaugeFaint,
@@ -595,18 +551,8 @@ impl Depiction {
 
     /// Whether a material's tint must **not** be painted over this picture.
     ///
-    /// One rule, in the crate that owns the vocabulary. Both frontends encoded
-    /// it independently, each proving only that it agreed with itself, while a
-    /// tint declining in one and resolving in the other means the two builds
-    /// disagree about what a fouled instrument looks like.
-    ///
-    /// Fire is never tinted — it is its own light source, and a green flame is a
-    /// different substance rather than a hinted one. Sediment is waste, and
-    /// §10.1 gives waste one look so it reads as waste at a glance.
-    ///
-    /// A fact about a *picture* rather than a phosphor or an ANSI index, which
-    /// is why it belongs here and not in either resolver — the same rule
-    /// [`Style::depicted`] enforces for the other channel.
+    /// One rule for both frontends. Fire is its own light, and sediment is
+    /// waste, which has one look (§10.1).
     #[must_use]
     pub const fn declines_tint(self) -> bool {
         // A gauge is not a material either: it stands at the top of the pane, so
@@ -621,25 +567,10 @@ impl Depiction {
 
 /// What part of speech a cell belongs to, when it is a line of a spell.
 ///
-/// Enrichment, allowed by §14 because the file reads correctly with none of it:
-/// the words say what they say, `interpret` reports what the orb heard, and a
-/// screen reader hears one sentence per line. Take the colour away and only
-/// comfort is lost.
-///
-/// It declines on an accent, as a [`Wash`] and a [`Depiction`] do. A line
-/// `interpret` could not read is drawn in `Role::Danger` and is where the eye
-/// must go; syntax over the top would be decoration winning over meaning (§4).
-///
-/// Unlike those two it is not a field on [`Style`], for a measured reason:
-/// `Cell` is pinned at eight bytes because a `Frame` holds 7,040 of them and
-/// resets every frame, and a fifth byte on `Style` cost +28 KiB and ~1.2 µs a
-/// frame on *every* screen — `a_cell_stays_eight_bytes` said so by failing.
-///
-/// It reaches a frontend two other ways, neither costing a cell anything. The
-/// [`Intensity`] is resolved as the run is painted, so weight is already in the
-/// `Style`; the hue rides `Frame`'s syntax side-table, one `(Rect, Lexeme)` per
-/// run, the shape [`Wash`] uses for an instrument bar and for the same reason.
-/// See [`Frame::lit`](crate::Frame::lit).
+/// Enrichment (§14): without it only comfort is lost. It declines on an
+/// accent, as [`Wash`] does (§4). Not a field on [`Style`], or `Cell` passes
+/// eight bytes (`a_cell_stays_eight_bytes`): weight is resolved into the
+/// `Style`, and the hue rides [`Frame::lit`](crate::Frame::lit)'s side-table.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Lexeme {
     /// Not part of a spell, or a part with nothing to say about it.
@@ -685,18 +616,9 @@ pub enum Lexeme {
 impl Lexeme {
     /// How strongly this part of a spell is drawn.
     ///
-    /// Weight is the first axis and still carries the reading alone — a dump has
-    /// no colour, `ORBS_DUMP` is the project's primary instrument, and a
-    /// greyscale tube is a §14 accessibility case — so §19 records hue being
-    /// added beside it rather than instead of it. Bright is the scaffolding
-    /// (where a block opens, closes or calls), Normal the content, Dim the noise
-    /// the orb strips or never reads.
-    ///
-    /// [`Grammar`](Self::Grammar) sits at Normal, which is what it was added
-    /// for: drawn dim beside a `the` there was nothing to tell them apart by.
-    ///
-    /// One rule, not one per frontend — [`Depiction::declines_tint`]'s argument
-    /// again.
+    /// Weight carries the reading alone — a dump and a greyscale tube have no
+    /// colour (§19). Bright is scaffolding, Normal content
+    /// ([`Grammar`](Self::Grammar) included), Dim what the orb strips.
     #[must_use]
     pub const fn weight(self) -> Intensity {
         match self {
@@ -786,9 +708,7 @@ impl Style {
     /// means nothing, so the accent wins rather than a breach being drawn as
     /// decoration.
     ///
-    /// Enforced here rather than at each call site because there is one call
-    /// site *per frontend*, in different crates, and the Bevy build getting it
-    /// right would say nothing about `orbs-tui`.
+    /// Here, not per frontend.
     #[must_use]
     pub const fn depicted(self) -> Depiction {
         match self.role {

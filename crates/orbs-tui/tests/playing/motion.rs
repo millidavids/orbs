@@ -5,15 +5,14 @@
 //! session's unit tests drive the clocks with a delta of their own.
 
 use crate::launch::Switch;
-use crate::play::{Game, available};
+use crate::play::Game;
 
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn a_gain_rolls_and_says_how_much() {
-    if !available() {
+    let Some(game) = Game::launch().motion(Switch::Always).settled() else {
         return;
-    }
-    let game = Game::launch().motion(Switch::Always).settled();
+    };
     game.send("debug_renown 20");
     // Bright, then normal, then dim over a second — long enough to be seen.
     game.expect_drawn("+20");
@@ -29,10 +28,9 @@ const LAST: &str = "(flask_and_rod, 14t)";
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn text_types_itself_and_a_key_finishes_it() {
-    if !available() {
+    let Some(game) = Game::launch().motion(Switch::Always).settled() else {
         return;
-    }
-    let game = Game::launch().motion(Switch::Always).settled();
+    };
     game.send("menu");
     game.expect_drawn("the tower waits");
     game.type_raw("settings");
@@ -60,10 +58,7 @@ fn text_types_itself_and_a_key_finishes_it() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn still_text_lands_whole() {
-    if !available() {
-        return;
-    }
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.send("recall clarity");
     game.expect(FIRST);
     let screen = game.screen();
@@ -76,12 +71,9 @@ fn still_text_lands_whole() {
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn a_still_game_lands_every_number_settled() {
-    if !available() {
-        return;
-    }
     // The harness's own default, held to its word: still means no roll and no
     // `+N` on the frame the number lands.
-    let game = Game::start();
+    let Some(game) = Game::start() else { return };
     game.send("debug_renown 20");
     game.expect_drawn("] 20/25");
     let screen = game.screen();

@@ -3,18 +3,12 @@ resolver = "3"
 members = ["crates/*"]
 
 [workspace.package]
-# **`0.<phase>.<step>` until release**, tracking docs/ROADMAP.md rather than the
-# public API — there is no public API and no consumer outside this workspace, so
-# the semver contract has nothing to describe yet. What a reader wants from the
-# number before release is *where in the plan is this*, and that is what it says.
-#
-# It becomes ordinary semver at 1.0, and the switch is one-way: DESIGN.md §19
-# records it so the jump from `0.<phase>` to `1.<minor>` is not read as a phase.
-version = "0.19.13"
+# `0.<feature>.<iteration>` until release: the minor names the feature in hand,
+# the patch a ROADMAP box ticked within it. No public API, so no semver to keep
+# until 1.0, the Steam release (§19).
+version = "0.20.22"
 edition = "2024"
-# Bevy 0.20 requires 1.97.1, so the pinned 1.98. Declaring it makes the resolver
-# MSRV-aware and turns "too old toolchain" into a clear error instead of a
-# cryptic type failure.
+# Bevy 0.20 needs 1.97.1; declared, so an old toolchain is a clear error.
 rust-version = "1.98"
 license = "GPL-3.0-or-later"
 repository = "https://github.com/millidavids/orbs"
@@ -33,9 +27,7 @@ suspicious = { level = "warn", priority = -1 }
 complexity = { level = "warn", priority = -1 }
 perf = { level = "warn", priority = -1 }
 style = { level = "warn", priority = -1 }
-# Selective pedantic and nursery — the whole groups are too noisy, these earn
-# their keep. Each was added after a sweep that found real defects, not because
-# the lint sounded good.
+# Selective pedantic and nursery, each added after a sweep found real defects.
 cast_precision_loss = "warn"
 cast_possible_truncation = "warn"
 cast_sign_loss = "warn"
@@ -44,23 +36,19 @@ missing_panics_doc = "warn"
 doc_markdown = "warn"
 unwrap_used = "warn"
 
-# A read-only helper that demands `&mut World` cannot be called from anywhere
-# holding a shared borrow, for no reason its body can point at. Four in
-# `execute/` did.
+# A read-only helper taking `&mut World` locks out every shared borrower.
 needless_pass_by_ref_mut = "warn"
 
-# `get_or_insert` built an `Incomplete` — allocating a `Vec` — once per
-# vocabulary entry per keystroke, then threw it away because the slot was taken.
+# An eager default allocated per vocabulary entry per keystroke.
 or_fun_call = "warn"
 
-# `ends_with(".log")` is a byte comparison, so a `FEED.LOG` in the content file
-# would spawn without its sabotage marker and be silently immune.
+# A byte-wise `ends_with(".log")` once left a `FEED.LOG` immune to sabotage.
 case_sensitive_file_extension_comparisons = "warn"
 
 # `stdin.lock()` in a `match` scrutinee holds the lock across every arm.
 significant_drop_in_scrutinee = "warn"
 
-# Cheap and mechanical; ~40 accessors were missing it.
+# Cheap and mechanical.
 missing_const_for_fn = "warn"
 redundant_clone = "warn"
 implicit_clone = "warn"
@@ -68,8 +56,7 @@ redundant_closure_for_method_calls = "warn"
 match_like_matches_macro = "warn"
 unnecessary_debug_formatting = "warn"
 
-# Already clean across the workspace, so these cost nothing to hold and are the
-# ones a hurried change is most likely to break.
+# Already clean; the ones a hurried change breaks.
 uninlined_format_args = "warn"
 manual_let_else = "warn"
 redundant_else = "warn"
@@ -79,119 +66,55 @@ items_after_statements = "warn"
 needless_collect = "warn"
 map_unwrap_or = "warn"
 
-# NOT enabled, and deliberately. Each was looked at site by site rather than
-# waved away, and the count is what a sweep would report today:
+# Not enabled, each looked at site by site:
 #
-# - `redundant_pub_crate` (108) fights CLAUDE.md's visibility rule, which asks
-#   for `pub(crate)` on shared items regardless of the module's own visibility.
-# - `needless_pass_by_value` (47) — every one is an ECS system parameter, where
-#   taking `Res<T>`/`ResMut<T>` by value *is* the signature Bevy requires. The
-#   two in `orbs-sim` are `bevy_ecs` systems in tests, same thing.
-# - `suboptimal_flops` (14) suggests `mul_add`, which changes rounding in the
-#   render maths for no measured gain.
-# - `trivially_copy_pass_by_ref` (12) would make `&Screen` and `&PaneTransition`
-#   by-value while `&Sim`, `&Line` and `&Panel` beside them must stay by
-#   reference. One consistent paint signature is worth more than six bytes.
-# - `unreadable_literal` (8) would break `0xC0FFEE`, a hex *word* that reads
-#   worse with separators in it.
-# - `module_name_repetitions` (6) flags `record::RecordKind`, which is
-#   re-exported as `orbs_render::RecordKind` — the repetition does not exist on
-#   the public path anyone types.
-# - `option_if_let_else` (4) turns multi-line `match` arms into `map_or_else`
-#   with two closures. It is in nursery because it often reads worse; here it
-#   does.
-# - `similar_names` (4) is noise.
-# - `match_same_arms` (1) would merge `Verb::signature`'s three `PLACE` arms,
-#   each carrying its own §19 reasoning for why that verb takes a place. The
-#   comments are the valuable part.
-# - `too_many_lines` (1) is `render::grid::build` at 104. It walks the frame and
-#   emits quads — one operation, in the hot path, and splitting it would scatter
-#   the vertex emission. CLAUDE.md's 300-line rule is about files.
+# - `redundant_pub_crate` fights CLAUDE.md's visibility rule.
+# - `needless_pass_by_value`: every hit is a system's `Res<T>`.
+# - `suboptimal_flops`: `mul_add` changes render rounding for nothing.
+# - `trivially_copy_pass_by_ref` would split one paint signature.
+# - `unreadable_literal` would break `0xC0FFEE`, a hex word.
+# - `module_name_repetitions`: the re-exported path does not repeat.
+# - `option_if_let_else` reads worse here.
+# - `similar_names` is noise.
+# - `match_same_arms` would merge `Verb::signature`'s reasoned `PLACE` arms.
+# - `too_many_lines`: `render::grid::build` is one hot operation.
 
 [workspace.dependencies]
 # ECS — used standalone in orbs-sim. NEVER depend on `bevy` there. See CLAUDE.md.
 bevy_ecs = "0.20"
 
-# Determinism: ChaCha8 is reproducible across platforms and stable across
-# releases, which StdRng explicitly is not. Replay and offline/online parity
-# depend on this, and `rng::every_stream_draws_what_it_always_has` pins the
-# values: 0.10 draws what 0.9 did.
+# ChaCha8 is stable across platforms and releases, as StdRng is not;
+# `rng::every_stream_draws_what_it_always_has` pins the values.
 rand = { version = "0.10", default-features = false, features = ["std"] }
 rand_chacha = "0.10"
 
 thiserror = "2.0"
 tracing = "0.1"
 
-# Content files (DESIGN.md §12, CLAUDE.md rule 6): prose and recipes live in
-# TOML, never as string literals in Rust. `serde` is derive-only here — no
-# runtime, no async, nothing that reaches the filesystem from inside the sim.
+# Content files (rule 6). `serde` is derive-only: nothing reaches the
+# filesystem from the sim.
 serde = { version = "1.0", features = ["derive"] }
 toml = "1"
 
-# Where a player's towers and settings live (DESIGN.md §13, §19). One crate, one
-# function — `save::chosen` — and it does nothing but name the platform's own
-# application-data directory: `~/.local/share` on Linux, `Application Support` on
-# macOS, `AppData\Roaming` on Windows.
-#
-# **It arrives with the settings screen, which is what §13 and PRIVACY_POLICY.md
-# both promised.** Until then the save sat in the working directory, which for a
-# Steam install can be read-only — an install nobody can save in, discovered by a
-# player rather than by us.
-#
-# MIT OR Apache-2.0 itself — but auditing it is what **corrected** §19's
-# dependency-licence table rather than confirming it. `dirs` pulls `dirs-sys`,
-# which pulls `option-ext`, which is **MPL-2.0**; the table had claimed `r-efi`
-# was the only copyleft entry in the tree. It was already there and already
-# reachable (so is `colored`, via `burn`), and MPL-2.0 is GPL-compatible with no
-# "Incompatible With Secondary Licenses" notice on either — but the table was
-# wrong and now says so. DESIGN.md §19 has the sweep.
+# The platform's app-data directory, for towers and settings, via
+# `save::chosen` (§13). It pulls MPL-2.0 `option-ext`, GPL-compatible, which
+# §19's licence table records.
 dirs = "7"
 
-# The balance harness's CLI, and nowhere else (DESIGN.md §13). `derive` only —
-# it never reaches the sim, which takes its input as command lines exactly as a
-# player does.
+# The CLIs only; never the sim, which takes command lines as a player does.
 clap = { version = "4.5", features = ["derive"] }
 
-# **Our code unoptimised, our dependencies optimised.** It was `opt-level = 1`
-# for everything, which is the worst of both: Bevy's ~126 crates were built at a
-# level that does not make them fast, and *our* code — the only code that
-# changes — paid optimisation on every edit.
-#
-# This is Bevy's own recommendation, and it fits a text game especially well:
-# nothing here is a hot loop that needs our own code optimised to be playable at
-# 1 Hz.
-#
-# **The one thing that could have suffered got faster.** `orbs-balance` drives
-# hundreds of thousands of sim ticks and is the standing instrument CLAUDE.md
-# says to run after anything touching the world, so dropping `orbs-sim` to 0 was
-# the real risk here. Measured, `sweep --ticks 7200` went **22.24s → 17.74s** of
-# user CPU: the sim's hot path is `bevy_ecs` archetype iteration, and that crate
-# gaining two optimisation levels outweighs our own code losing one. Every rate
-# in the table was unchanged to four decimal places.
+# Our code unoptimised, dependencies optimised, as Bevy recommends (§19).
 [profile.dev]
 opt-level = 0
 debug = "line-tables-only"
 
-# Every dependency, including all of Bevy. Built once and then cached, so the
-# level costs nothing on an ordinary rebuild and buys a game that runs properly
-# while being developed.
+# Every dependency, built once and cached.
 [profile.dev.package."*"]
 opt-level = 3
 
-# **The simulation, optimised even in a debug build — because the gate's time was
-# the tests running it.** `cargo test --workspace` was 417s here and eighteen
-# minutes in CI, and 412s of the 417 was tests *running*, not building: eight
-# suites stepping the sim for thousands of ticks — the balance harness's seed
-# sweeps, `tampering`'s 20,000 ticks, `persistence`'s lockstep replays. Bevy's
-# generic ECS code is compiled in whichever crate instantiates it, so `"*"` above
-# never reached the queries `orbs-sim` runs.
-#
-# At 1, with dependencies still at 3: the tests **417s → 132s**, every slow suite
-# about three times faster, and `sweep --ticks 7200` **61.0s → 19.0s** with
-# byte-identical output. It costs **8.8s → 13.6s** to rebuild `orbs-sim` and
-# everything downstream cold, and nothing measurable incrementally. The note
-# above measured the other direction when a sweep took 17.74s; the sim is three
-# and a half times that now. DESIGN.md §19 has both.
+# The sim at 1 even in debug, since Bevy's generic ECS code compiles where it is
+# instantiated: the tests 417s to 132s, for a slower cold rebuild (§19).
 [profile.dev.package.orbs-sim]
 opt-level = 1
 

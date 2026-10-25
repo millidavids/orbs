@@ -15,22 +15,9 @@
 //!    ██  a          ██               ██                ██
 //! ```
 //!
-//! Glyphs never change — `█` throughout, exactly as the bath — and all three
-//! bands are told apart by colour alone. That sounds like it breaks §14 and does
-//! not: what the bar must carry without colour is its *value*, and the value is
-//! where the mixture ends. That boundary is also a glyph edge, because above it
-//! the vessel is `▓` and below it `█`.
-//!
-//! Neither ingredient is favoured. The unmixed remainder splits evenly, the
-//! lower band the first input and the upper the second, both shrinking at the
-//! same rate as the mixture climbs — the same conservation the mortar holds.
-//! Order comes from the world rather than the recipe: the bands are in the order
-//! the flask holds its contents, which is the order `survey` lists them.
-//!
-//! The mixture has texture. It carries the bath's roil ([`crate::Roil`]) at the
-//! same slow tempo, so the two liquid instruments read as the same kind of
-//! thing. The unmixed bands do not move: nothing is happening to them yet, and
-//! motion there would say the whole vessel was working.
+//! The bands differ by colour alone, and §14 holds: the value is where the
+//! mixture ends, a `▓`/`█` edge. The remainder splits evenly, in `survey`'s
+//! order. Only the mixture moves, with the bath's [`crate::Roil`].
 
 use crate::liquid;
 pub(crate) use crate::liquid::Motion;

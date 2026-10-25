@@ -1,12 +1,7 @@
 //! Turning runs into something a person or a spreadsheet can read.
 //!
-//! Two outputs. The table is for the eye — §15's "work is done when it has been
-//! looked at" applies to a sweep too, and a wall of CSV is not looking. The CSV
-//! is for the shape of a curve over hours.
-//!
-//! The reference rates are what a clean run measured, not what DESIGN.md argues
-//! in prose (see [`expected`]) — pinning to a reachable number is what stops it
-//! being a column nobody reads.
+//! A table for the eye (§15) and a CSV for curves. The references are
+//! measured, not argued ([`expected`]).
 
 use std::fmt::Write as _;
 
@@ -14,14 +9,8 @@ use crate::drive::Run;
 
 /// What each policy earns per tick, as measured, so drift shows up.
 ///
-/// Not DESIGN.md's numbers: the design argues from recipe ticks alone, while a
-/// real loop also pays a tick of queue latency per command, a `PURGE_TICKS`
-/// scour per byproduct, and a relight. Hand-played clarity reaches
-/// `experience 16` at tick 123, not 94, and the looped policy settles at 0.140
-/// once its first lap is amortised.
-///
-/// So this pins what the harness produced on a clean run (§19). A number moving
-/// here means the *game* changed, which is the alarm §16 wants.
+/// A clean run's measurement, not the design's recipe arithmetic, which omits
+/// queue latency, scours and relights (§19). A move means the game changed.
 const EXPECTED: [(&str, f64); 9] = [
     // 0.170 idealised (§19, "16, and why the anchor moved") against 0.140 looped.
     ("clarity", 0.140),
@@ -35,93 +24,31 @@ const EXPECTED: [(&str, f64); 9] = [
     // idealisation and the loop agree on exactly — two commands, no fire, no
     // byproduct, nothing to scour.
     ("grind", 0.100),
-    // The number the lens redesign moved most: 0.07 when the ward exchanged
-    // sigils (~23 presses at twelve ticks each) against the same 8 over ~12
-    // presses at two ticks apiece now.
-    //
-    // A press takes no production slot, so this is additive to whatever the
-    // laboratory is doing — what §8 wants automation to buy, and not something
-    // one column can show. A real bound `breaking` measures ~0.18, because §8's
-    // interpreter spends a tick on every `if`, `else` and `end`; a ceiling, as
-    // `stacks` is (§19's "the harness has no player").
+    // Additive, taking no slot (§8). A ceiling: a bound `breaking` reads ~0.18
+    // (§19).
     ("scrying", 0.268),
-    // The flattest column, by arithmetic rather than luck: a course of `n` wards
-    // costs `2^n` ticks and pays `n - 2`, so three and four both come out at an
-    // eighth, and a policy keeping the walls up musters only those two. All four
-    // seeds read 0.1249, where `stacks` swings 0.0067 to 0.0144.
-    //
-    // Additive like `scrying`, but this domain pays twice — a finished course
-    // puts integrity back as well as earning — which is why the rate sits under
-    // the flagship's 0.140 where scrying's sits over it.
+    // Flat by arithmetic: courses of three and four both pay an eighth.
+    // Additive, and it pays twice, restoring integrity too.
     ("warding", 0.125),
-    // Flatter still — 0.0060 to 0.0059 across four seeds — because output is
-    // bounded by a resource regenerating on a clock and the lattice's one draw
-    // does not reach the rate.
-    //
-    // The lowest rate, deliberately: enchanting's payoff is a mortar at half
-    // time, realised in whatever room the tool is in, and the token 1 a fall
-    // pays is for the slot it held. It earns something rather than nothing only
-    // because 0.0000 is indistinguishable from a broken domain.
-    //
-    // The one policy that competes rather than adds: `anneal` is an operation,
-    // so a tower binding charms is a tower not brewing — §10's scarcity for the
-    // domain, unmeasured until this column.
+    // Flat, bounded by a regenerating resource. Lowest on purpose: the payoff
+    // is the charm, and 0.0000 would look broken. It competes for the slot
+    // (§10).
     ("imbuing", 0.006),
-    // The search, not a player, and deliberately one of the table's lowest
-    // rates where the chant read 0.243 (§19): a reader of the temper holds a
-    // beast in one call, while the shipped `taming` tries circles in order and
-    // averages 68. This measures the second, which is what the economy sees.
-    //
-    // Its own band, thirty-five percent, measured rather than widened to taste:
-    // since `0.15.4`'s turned wires, seeds 0–7, 11 and 42 read 0.0319 to 0.0550,
-    // because a two-hour run holds only about forty beasts and one can take 1
-    // call or 174. At fifteen percent two seeds of ten flagged on luck alone. A
-    // halved menagerie is still flagged; `agrees.rs` holds the four-world mean,
-    // 0.0414, to that band over √4. See [`WIDER`] and [`tolerance_of_mean`].
-    //
-    // Additive as `scrying` is, and the floor of what knowledge buys: a spell
-    // pruning the keystone by `fervour` and sunwise by De Morgan averages 38
-    // calls. A bound `taming` holds 27 beasts in two hours over four worlds,
-    // about 80 bodies for the standing garrison (§19, *Supply*).
+    // The search, not a player, so low (§19). A 35% band, measured: about
+    // forty beasts a run, each 1 to 174 calls ([`WIDER`],
+    // [`tolerance_of_mean`]). Additive; the garrison it feeds is §19's
+    // *Supply*.
     ("taming", 0.042),
-    // Nearly left unpinned for the wrong reason: the first spread, 0.043–0.085,
-    // was not dice variance but `fight_one` keying "already spent this round"
-    // on a rendered line's byte length, so consecutive rounds collided. Keyed
-    // on `turns`, the spread was 0.1225–0.1313 over five seeds.
-    //
-    // Then pledging dice took it to 0.114 — allocating wins faster (6 rounds
-    // against about 10) and costs more commands, and at three dice a round the
-    // second effect is larger. The version that skipped the domain's central
-    // decision measured what a player gets for *ignoring* the mechanic.
-    //
-    // 0.123 since pledging cost quintessence: the driver stops asking for dice
-    // it cannot pay for, so refused commands now reach the arsenal ladder, and
-    // the spread narrowed from 23% of the mean to 17%. It is gated by
-    // `siege::CADENCE` more than by the loop's own speed, so this pin mostly
-    // watches that constant.
-    //
-    // A single-seed sweep still flags this sometimes and the flag is not a
-    // finding: over `agrees::SEEDS` it reads 0.1225, 0.1342, 0.1225, 0.1138, a
-    // mean of 0.1232, because `--ticks 7200` fits only about six sieges. Hence
-    // the pin is read by the mean of four worlds. Read `--why` before believing
-    // `<-- drifted`: healthy costs are cadence waits and sabotage notices.
+    // Mostly `siege::CADENCE`'s. About six sieges a run, so one seed may flag;
+    // the pin is the four-world mean, 0.1232. Read `--why` before
+    // `<-- drifted`.
     ("besieging", 0.123),
 ];
 
 /// How far a measurement may sit from its expectation before it is called out.
 ///
-/// A tenth, now that the references are measured rather than argued. It was a
-/// quarter while they came from prose, which would let clarity fall to 0.105 —
-/// below the standing grind loop — without a word.
-///
-/// `stacks` is absent from [`EXPECTED`] because a maze is generated per seed and
-/// one run is one sample, so pinning it would pin a seed. Sweep several
-/// `--seed`s instead.
-///
-/// `bound` is absent because its absolute rate moves with a world's luck at
-/// sabotage as `grind` does (0.0814 on seed 3 against 0.0910 on seed 0), while
-/// the quotient of the two is 0.910 on every seed — a property of the script
-/// engine rather than of the tower. `tests/agrees.rs` pins the quotient.
+/// A tenth, since the references are measured. Not `stacks`, one maze a seed,
+/// nor `bound`, whose quotient over `grind` `tests/agrees.rs` pins instead.
 const TOLERANCE: f64 = 0.10;
 
 /// The policies whose single-seed spread is measured wider than [`TOLERANCE`],

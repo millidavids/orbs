@@ -1,46 +1,20 @@
 //! A recipe you do not know yet — unmakeable, unnameable, unreadable.
 //!
-//! All three flipping on the same tick is the property this file exists for.
-//! The subtle half is the third: a secret potion's `recall_` page is a prose
-//! key, and `Topics` is snapshotted at construction so a prose reload cannot
-//! change what a phrase resolves to — so a naive gate leaves `recall <secret>`
-//! answering from tick 0 with every other test green.
+//! All three flip on one tick. The subtle one is `recall <secret>`, whose
+//! `Topics` are snapshotted at construction.
 
-use orbs_render::{FieldName, Value};
-use orbs_sim::Sim;
+mod common;
 
-fn run(sim: &mut Sim, line: &str) {
-    sim.submit(line);
-    sim.step();
-}
-
-/// Every message the orb has said, in order.
-///
-/// Gated with the tests that use it — the `debug_learn` ones. In a release
-/// build `debug_assertions` is off, those tests are gone, and this reads as dead
-/// code rather than as the deliberate thing it is.
 #[cfg(debug_assertions)]
-fn said(sim: &Sim) -> Vec<String> {
-    sim.scrollback()
-        .records()
-        .iter()
-        .filter_map(|record| match record.field(FieldName::Message) {
-            Some(Value::Text(text)) => Some(text.to_owned()),
-            _ => None,
-        })
-        .collect()
-}
+use common::said;
+use common::{run, words};
+use orbs_sim::Sim;
 
 /// The first secret the file reveals, which is what `debug_learn` bare takes.
 #[cfg(debug_assertions)]
 const FIRST: &str = "mending";
 
-/// Gated, unlike its neighbours in this file. `debug_learn` is
-/// `cfg(debug_assertions)` and there is deliberately no way to force a find, so
-/// the only honest alternative is solving wards until one spills a recipe. In a
-/// release build the door is an ordinary unresolvable line, so without this the
-/// test ran against a world where nothing had been learned and failed saying
-/// *"an unfound recipe read as ready to run"* — true, and naming nothing.
+/// Gated, since `debug_learn` is debug-only and nothing forces a find.
 #[cfg(debug_assertions)]
 #[test]
 fn a_secret_is_unmakeable_unnameable_and_unreadable_until_it_is_found() {
@@ -116,14 +90,8 @@ fn everything_that_shipped_before_still_works_on_a_tower_that_has_found_nothing(
 
 #[test]
 fn a_verdant_scroll_never_offers_a_secret_as_an_endless_herb() {
-    // The regression the design was written around. `execute::scroll` derives a
-    // base reagent as *"in the vocabulary and made by nothing"*, so if
-    // `Recipes::outputs` were filtered by what the player has learned, an
-    // undiscovered potion would drop out of "made" and become a candidate for an
-    // inexhaustible shelf — §19 records that shipping once, with byproducts.
-    //
-    // Cultivated until every herb has flowered and the supply rolls itself up
-    // (§19, *Supply*): a secret counted as a herb would flower last.
+    // A secret must stay "made" in `Recipes::outputs`, or it reads as a base
+    // reagent for an endless shelf (§19). Cultivated until every herb flowers.
     let mut sim = Sim::new(1);
     run(&mut sim, "attend laboratory");
     run(&mut sim, "debug_spawn verdant-scroll 40");
@@ -132,15 +100,7 @@ fn a_verdant_scroll_never_offers_a_secret_as_an_endless_herb() {
     run(&mut sim, "meditate 1800");
     run(&mut sim, "survey dispensary");
 
-    let listed = sim
-        .scrollback()
-        .records()
-        .iter()
-        .filter_map(|record| match record.field(FieldName::Name) {
-            Some(Value::Text(text)) => Some(text.to_owned()),
-            _ => None,
-        })
-        .collect::<Vec<_>>();
+    let listed = words(&sim);
     for secret in ["mending", "dreaming", "vigour"] {
         assert!(
             !listed.contains(&secret.to_owned()),
@@ -149,12 +109,7 @@ fn a_verdant_scroll_never_offers_a_secret_as_an_endless_herb() {
     }
 }
 
-/// Gated, unlike its neighbours in this file. `debug_learn` is
-/// `cfg(debug_assertions)` and there is deliberately no way to force a find, so
-/// the only honest alternative is solving wards until one spills a recipe. In a
-/// release build the door is an ordinary unresolvable line, so without this the
-/// test ran against a world where nothing had been learned and failed saying
-/// *"an unfound recipe read as ready to run"* — true, and naming nothing.
+/// Gated, since `debug_learn` is debug-only and nothing forces a find.
 #[cfg(debug_assertions)]
 #[test]
 fn the_panel_says_fouled_rather_than_charged_for_a_recipe_nobody_knows() {

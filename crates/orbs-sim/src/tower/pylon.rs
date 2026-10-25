@@ -211,7 +211,7 @@ impl Course {
 
     /// Assemble the whole course but the least ward, which waits at the spare.
     ///
-    /// One `haul conduit barrier` from finished — see `execute::debug::COURSE`.
+    /// One `haul conduit barrier` from finished — see `debug_course`.
     /// Hauls spent are kept, so the finish record quotes a real number.
     #[cfg(debug_assertions)]
     pub fn give_away(&mut self) {

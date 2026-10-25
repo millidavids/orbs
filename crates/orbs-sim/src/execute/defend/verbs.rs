@@ -24,10 +24,8 @@ use crate::tower::{
 /// `defend` — stand to the wall and let the enemy arrive.
 /// `petition` — spend standing so that fewer come up the road next time.
 ///
-/// The first thing renown buys. It lowers the ceiling rather than subtracting
-/// after the draw, which would let a player pay four times and draw the floor
-/// anyway. Self-limiting: paying drops your rank, and a lower rank draws a
-/// shorter tail.
+/// It lowers the ceiling rather than subtracting after the draw, which four
+/// payments could waste on the floor. Self-limiting: paying drops your rank.
 pub(in crate::execute) fn petition(world: &mut World) {
     let Some(rampart) = fixture(world) else {
         say(world, Verb::Petition, "defend_nowhere", &[], Role::Cost);
@@ -132,11 +130,9 @@ pub(in crate::execute) fn defend(world: &mut World) {
 
     // A siege grants nothing: the player brings the tower's pool (§19).
     //
-    // The draw is here rather than in a system, for `muster`'s reason:
-    // `RngStream::Siege` advances only when the player asks, so a future siege
-    // system can join the schedule without shifting a replay. Size is decided
-    // before it by what the tower is worth, and `petition`'s allowance is taken
-    // here so a refused `defend` cannot eat what was paid for.
+    // The draw is here, `muster`'s reason: `RngStream::Siege` advances only
+    // when the player asks. `petition`'s allowance is taken here, so a refused
+    // `defend` cannot eat it.
     let ranks = tower::renown::reached(world);
     let bought = world.resource_mut::<siege::Petitioned>().take();
     let most = siege::most_at(ranks, bought);
@@ -188,8 +184,8 @@ pub(in crate::execute) fn quaff(intent: &Intent, world: &mut World) {
 /// `wield <scroll>` on the wall — open it as a supply on the siege rather than
 /// the tower.
 ///
-/// Returns whether it took the command; `pipeline::wield` asks first. §19 keeps
-/// `wield` for scrolls rather than a fourth verb, and this is what that costs.
+/// Returns whether it took the command; `pipeline::wield` asks first — the
+/// cost of `wield` serving scrolls (§19).
 pub(in crate::execute) fn wielded(intent: &Intent, world: &mut World) -> bool {
     let Some(rampart) = fixture(world) else {
         return false;
@@ -353,13 +349,9 @@ pub(in crate::execute) fn hold(world: &mut World) {
         return;
     }
 
-    // Taken out, resolved, put back, because resolving needs `&mut Siege` and
-    // `&mut Rngs` at once. Cloning keeps `Siege::resolve` pure, so
-    // `tower::siege`'s tests need no `World`.
-    //
-    // A `whetted` rampart rolls a bigger die, staged every round while the charm
-    // holds rather than once when it is laid: `resolve` clears `staged`, so a
-    // modifier cannot outlive the window.
+    // Taken out, resolved, put back, since resolving needs `&mut Siege` and
+    // `&mut Rngs` at once and stays pure. A `whetted` rampart is staged every
+    // round, since `resolve` clears `staged`.
     if tower::charmed(world, rampart, tower::charm::Kind::Whetted)
         && let Some(mut siege) = world.get_mut::<Siege>(rampart)
     {
@@ -381,10 +373,8 @@ pub(in crate::execute) fn hold(world: &mut World) {
         .get_mut::<Siege>(rampart)
         .expect("the siege is still there") = siege;
 
-    // A resolved round pays and waiting inside one does not: the calm trickle is
-    // suspended while a siege runs. A lump per round rather than a rate, for
-    // §14 — the patient mode advances siege ticks on player input, so a rate
-    // would pay for typing.
+    // A lump per round, not a rate, which would pay for typing in the patient
+    // mode (§14).
     let ceiling = tower::ceiling(world);
     world
         .resource_mut::<tower::Quintessence>()
@@ -399,9 +389,8 @@ pub(in crate::execute) fn hold(world: &mut World) {
     // What the exchange was worth in standing (§11.5, §19). After `announce`, so
     // the round says what happened before what it cost.
     //
-    // All five numbers: `mended` is vigour put back, and netting it out bills a
-    // player twice for damage they repaired. The sortie's trade survives netting
-    // deliberately — `sortied` is `sortie / 2` against `spent`'s `sortie / 3`.
+    // All five numbers, or repaired damage bills twice. The sortie's trade
+    // survives netting by design.
     let up = u64::from(round.dealt) + u64::from(round.sortied);
     let down = u64::from(
         round

@@ -3,14 +3,9 @@
 //! Authored in `content/materials.toml`, not here (rule 6). This module knows
 //! the *shape* of the table and nothing about which materials exist.
 //!
-//! A tint is a hint. The instrument panel reads it and nothing else — no
-//! recipe, no verb — so it is safe to hot-reload and `(seed, submissions)`
-//! still replays identically.
-//!
-//! A name matching none of [`Tint`]'s eight families fails the *load* rather
-//! than drawing the base hue: an untinted material draws in the base hue too,
-//! so a fallback would make a typo indistinguishable from an omission.
-//! `Recipe::heat` and `craft_of` have each paid for that once.
+//! A tint is a hint only the panel reads, so it hot-reloads safely. A name
+//! matching none of [`Tint`]'s families fails the load, or a typo would look
+//! like an omission.
 
 use std::collections::BTreeMap;
 
@@ -31,10 +26,8 @@ struct Entry {
     tint: String,
     /// A second, for a material that **is** a mixture.
     ///
-    /// `clarified-draught` is authored as `green` + `bone` rather than some
-    /// third colour, so the flask's growing band and the product it leaves
-    /// behind resolve through the same [`Wash`] and match by construction. A
-    /// third colour would match only while two numbers happened to agree.
+    /// So the flask's band and its product resolve through the same [`Wash`]
+    /// and match by construction.
     #[serde(default)]
     with: Option<String>,
 }
@@ -48,11 +41,8 @@ impl Entry {
 
 /// Every tinted material, by name.
 ///
-/// `Default` is the built-in table, not an empty one — a derived `Default`
-/// gives an empty map that `Sim` installs with `init_resource`, and every
-/// material silently loses its colour. That happened; `shell::panel`'s
-/// cross-crate test caught it. `Fuels` next door is hand-written for the same
-/// reason.
+/// `Default` is the built-in table, as `Fuels`' is, or `init_resource` installs
+/// an empty one.
 #[derive(Debug, Clone, Deserialize, Resource)]
 #[serde(transparent)]
 pub struct Materials {
@@ -111,10 +101,8 @@ impl Materials {
 
     /// Every material that has been given a colour, alphabetically.
     ///
-    /// A `BTreeMap`, so a failure message reads the same every run — the same
-    /// reason `Recipes::instruments` exists, and used the same way:
-    /// `debug_spawn` checks a tester can hold one of each, so a material no
-    /// recipe names cannot have a colour and no way to reach it.
+    /// Sorted, so a failure reads the same every run; `debug_spawn` checks a
+    /// tester can hold one of each.
     #[must_use]
     pub fn names(&self) -> Vec<&str> {
         self.by_name.keys().map(String::as_str).collect()
@@ -174,16 +162,9 @@ mod tests {
 
     #[test]
     fn the_flasks_products_are_the_colour_of_what_makes_them() {
-        // Two files that nothing else makes agree: the painter averages the
-        // flask's two ingredients for the growing band, and the product takes
-        // its colour from *this* file. Disagreement is the band turning a
-        // different colour the instant it finishes.
-        //
-        // Only new substances. The recycling route — `dregs` + `sediment` back
-        // into `rock-salt` — must *not* follow the rule: salt reclaimed from
-        // waste looks like the salt you started with. The data draws the line:
-        // a material authored `with` a second colour claims to be a mixture,
-        // and that claim has to match the recipe.
+        // Two files nothing else makes agree, or the band changes colour as it
+        // finishes. Only a material authored `with` a second colour claims to
+        // be a mixture; reclaimed salt looks like salt.
         let materials = Materials::builtin();
         let recipes = super::super::Recipes::builtin();
         let mut checked = 0;

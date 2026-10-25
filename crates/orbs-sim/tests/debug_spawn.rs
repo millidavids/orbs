@@ -4,41 +4,22 @@
 //! `cfg(debug_assertions)`, but the last test is its complement and runs under
 //! `cargo test --release` to assert the door is shut.
 
+mod common;
+
 #[cfg(debug_assertions)]
-use orbs_render::{FieldName, Value};
+use common::{attended, said};
 use orbs_sim::Sim;
 
 /// A laboratory, stood in.
 #[cfg(debug_assertions)]
 fn laboratory() -> Sim {
-    let mut sim = Sim::new(1);
-    sim.submit("attend laboratory");
-    sim.step();
-    sim
-}
-
-/// Every message the orb has said.
-#[cfg(debug_assertions)]
-fn messages(sim: &Sim) -> Vec<String> {
-    sim.scrollback()
-        .records()
-        .iter()
-        .filter_map(|record| record.field(FieldName::Message))
-        .filter_map(|value| match value {
-            Value::Text(text) => Some(text.to_owned()),
-            _ => None,
-        })
-        .collect()
+    attended(1, "laboratory")
 }
 
 /// What the place called `place` actually holds, by name.
 ///
-/// Its children, not the scene: `Scene::nouns` includes a `Topic` for every
-/// reagent, so a scene sweep says the shelf holds `ground-sage` before any has
-/// ever been ground.
-///
-/// By name, because the archive grew a `cabinet` — finding "the `Store`"
-/// returned whichever store the walk reached first.
+/// Its children, not the scene, which names every reagent as a `Topic`; by
+/// name, since a room can hold two stores.
 #[cfg(debug_assertions)]
 fn held_in(sim: &Sim, place: &str) -> Vec<String> {
     let world = sim.world();
@@ -80,7 +61,7 @@ fn a_reagent_asked_for_is_a_reagent_on_the_shelf() {
     assert!(
         shelved(&sim).contains(&"ground-sage".to_owned()),
         "the spawn did not land: {:?}",
-        messages(&sim),
+        said(&sim),
     );
 }
 
@@ -102,11 +83,11 @@ fn what_is_spawned_is_the_same_thing_the_laboratory_makes() {
     spawned.step_n(30);
 
     assert!(
-        messages(&spawned)
+        said(&spawned)
             .iter()
             .any(|line| line.contains("flask_and_rod")),
         "the flask would not take what was spawned: {:?}",
-        messages(&spawned),
+        said(&spawned),
     );
 }
 
@@ -164,7 +145,7 @@ fn a_count_puts_that_many_on_the_shelf() {
     // merges, which is what keeps `survey` to one row per reagent.
     sim.submit("survey dispensary");
     sim.step();
-    let rows: Vec<String> = messages(&sim);
+    let rows: Vec<String> = said(&sim);
     assert!(
         shelved(&sim).contains(&"ground-sage".to_owned()),
         "{rows:?}",
@@ -175,11 +156,11 @@ fn a_count_puts_that_many_on_the_shelf() {
         sim.step_n(20);
     }
     assert!(
-        !messages(&sim)
+        !said(&sim)
             .iter()
             .any(|line| line.contains("nothing here answers")),
         "fewer than three arrived: {:?}",
-        messages(&sim),
+        said(&sim),
     );
 }
 
@@ -201,9 +182,9 @@ fn a_count_of_none_is_refused_rather_than_spawning_a_nought() {
     // Refused the way `lots` is refused: an ordinary unresolved line, because
     // `debug_spawn ash 0` is not a spawn order at all.
     assert!(
-        !messages(&sim).iter().any(|line| line.contains("all along")),
+        !said(&sim).iter().any(|line| line.contains("all along")),
         "it reported a spawn: {:?}",
-        messages(&sim),
+        said(&sim),
     );
 }
 
@@ -214,17 +195,17 @@ fn a_name_the_tower_does_not_have_is_refused_and_says_what_it_could_have_been() 
     sim.submit("debug_spawn moonstone");
     sim.step();
     assert!(
-        messages(&sim)
+        said(&sim)
             .iter()
             .any(|line| line.contains("nothing in the tower is called")),
         "{:?}",
-        messages(&sim),
+        said(&sim),
     );
 
     // ...and bare, it lists what there is, which is how a tester finds the name.
     sim.submit("debug_spawn");
     sim.step();
-    let listed = messages(&sim)
+    let listed = said(&sim)
         .into_iter()
         .find(|line| line.contains("could find"))
         .expect("nothing was listed");
@@ -247,9 +228,9 @@ fn it_reaches_the_dispensary_from_wherever_the_player_is_standing() {
     sim.submit("debug_spawn ground-sage");
     sim.step();
     assert!(
-        messages(&sim).iter().any(|line| line.contains("all along")),
+        said(&sim).iter().any(|line| line.contains("all along")),
         "it refused from another room: {:?}",
-        messages(&sim),
+        said(&sim),
     );
 
     // ...and it went to the shelf, which is where the laboratory finds it.
@@ -258,7 +239,7 @@ fn it_reaches_the_dispensary_from_wherever_the_player_is_standing() {
     assert!(
         shelved(&sim).contains(&"ground-sage".to_owned()),
         "it landed somewhere the laboratory cannot reach: {:?}",
-        messages(&sim),
+        said(&sim),
     );
 }
 
@@ -287,18 +268,9 @@ fn a_session_that_used_it_still_replays() {
     live.submit("grind ground-sage");
     live.step_n(20);
 
-    let mut replayed = Sim::new(1);
-    for (tick, submission) in live.submissions().all().to_vec() {
-        while replayed.tick() < tick {
-            replayed.step();
-        }
-        replayed.replay(submission);
-    }
-    while replayed.tick() < live.tick() {
-        replayed.step();
-    }
+    let replayed = common::replayed(&live, Sim::new(1));
 
-    assert_eq!(messages(&replayed), messages(&live), "the replay diverged");
+    assert_eq!(said(&replayed), said(&live), "the replay diverged");
 }
 
 #[cfg(debug_assertions)]
@@ -330,11 +302,9 @@ fn the_word_is_not_part_of_the_game() {
     sim.step();
     assert!(
         !shelved(&sim).contains(&"sage".to_owned())
-            || messages(&sim)
-                .iter()
-                .all(|line| !line.contains("all along")),
+            || said(&sim).iter().all(|line| !line.contains("all along")),
         "a typo spawned something: {:?}",
-        messages(&sim),
+        said(&sim),
     );
 }
 

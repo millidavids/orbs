@@ -1,12 +1,7 @@
 //! The editor's place in the shell: opening it, feeding it keys, saving it.
 //!
-//! [`Editor`] is the buffer and knows nothing about Bevy; this is the wiring.
-//! A separate file because the buffer's rules (Backspace at column zero) and
-//! the shell's rules (which keys are chords) change for different reasons.
-//!
-//! Exactly one of the prompt and the editor takes a keystroke. Both consuming
-//! one is invisible until a player types `:wq` and finds it in their command
-//! history, so the two run conditions are complements, not a convention.
+//! The wiring for [`Editor`]. Its run condition and the prompt's are
+//! complements, so one of them takes a keystroke.
 
 use bevy::input::ButtonState;
 use bevy::input::keyboard::{Key, KeyboardInput};
@@ -16,45 +11,7 @@ use super::{Editor, EditorOutcome};
 use crate::sim::Tower;
 
 /// The spell being edited, if any.
-///
-/// A resource rather than a component: there is one editor, it is modal, and an
-/// entity would invite a second.
-#[derive(Resource, Debug, Default)]
-pub(crate) struct Editing(Option<Editor>);
-
-impl Editing {
-    /// The open editor.
-    ///
-    /// Mutable even for painting: only the painter knows how many lines fit, so
-    /// it calls `Editor::scroll_to` during the draw.
-    pub(crate) const fn get_mut(&mut self) -> Option<&mut Editor> {
-        self.0.as_mut()
-    }
-
-    /// Whether the editor has the keyboard.
-    #[must_use]
-    pub(crate) const fn is_open(&self) -> bool {
-        self.0.is_some()
-    }
-
-    /// Put `editor` on screen, replacing whatever was there.
-    ///
-    /// The one way the modal is entered, so `plugin`'s tests use the same door
-    /// `open_requested` does rather than a second one that could drift.
-    pub(crate) fn open(&mut self, editor: Editor) {
-        self.0 = Some(editor);
-    }
-
-    /// Take the editor off screen.
-    pub(crate) fn close(&mut self) {
-        self.0 = None;
-    }
-}
-
-/// Whether the editor currently owns input.
-pub(crate) fn editing(editing: Res<Editing>) -> bool {
-    editing.is_open()
-}
+pub(crate) type Editing = super::modal::Modal<Editor>;
 
 /// Whether the transcript currently owns input.
 ///
@@ -87,20 +44,12 @@ pub(crate) fn open_requested(
     let Some(request) = tower.opening() else {
         return;
     };
-    let mut editor = Editor::open(&request.name, &request.domain, &request.lines);
-    // Read before the first keystroke, so a spell opened with a fault in it
-    // says so on the way in rather than after the first pause.
     let scrivener = readers.as_deref().and_then(crate::sim::Readers::scrivener);
-    editor.set_reading(tower.read_spell_with(
-        &request.name,
-        &request.domain,
-        &request.lines,
-        scrivener,
+    editing.open(Editor::opened(
+        &request,
+        tower.sim(),
+        scrivener.unwrap_or(&orbs_sim::Verbatim),
     ));
-    // And the guide, for the same reason: it opens on the vocabulary, and a
-    // pane that filled in only after the first keystroke would look broken.
-    editor.refresh(tower.sim());
-    editing.open(editor);
 }
 
 /// Write the buffer out once the player has stopped typing, and keep the
@@ -126,19 +75,12 @@ pub(crate) fn autosave(
 
     if editor.settle(time.delta_secs()) {
         let (name, lines) = (editor.name().to_owned(), editor.lines().to_vec());
-        let domain = editor.domain().to_owned();
         editor.saved();
         // On the save's beat, not every frame: reading parses the whole buffer,
         // and only a keystroke can change what it says.
-        //
-        // Write first, then read, so the editor's reading is the one the write
-        // queued rather than a second trip to the reader.
         let scrivener = readers.as_deref().and_then(crate::sim::Readers::scrivener);
         tower.write_spell_with(&name, &lines, scrivener);
-        let reading = tower.read_spell_with(&name, &domain, &lines, scrivener);
-        if let Some(editor) = editing.get_mut() {
-            editor.set_reading(reading);
-        }
+        editor.read_back(tower.sim(), scrivener.unwrap_or(&orbs_sim::Verbatim));
     }
 }
 
@@ -151,35 +93,21 @@ pub(crate) fn type_into_editor(
     quiet: Res<super::input::Quiet>,
     readers: Option<Res<crate::sim::Readers>>,
 ) {
-    // Set when a keystroke proves the held chord is a ghost — see
-    // `input::chord_is_stale`. The editor shares the prompt's guard, so it
-    // shared the freeze.
+    // Set when a keystroke proves the held chord is a ghost. The editor shares
+    // the prompt's guard, so it shared the freeze.
     let mut stale = false;
-    let stale_chord = super::input::chord_is_stale(quiet.gap());
+    let chord = super::input::Chord::read(&held, &quiet);
     let Some(editor) = editing.get_mut() else {
         return;
     };
-
-    // Same guard as the prompt's: a chord aimed at the operating system must
-    // not reach the text field on the way past. Alt stays out — AltGr is how
-    // European layouts type `@`, `#` and `\`, which a spell needs.
-    let chord = held.any_pressed([
-        KeyCode::ControlLeft,
-        KeyCode::ControlRight,
-        KeyCode::SuperLeft,
-        KeyCode::SuperRight,
-    ]);
-    let editing_chord = held.any_pressed([KeyCode::SuperLeft, KeyCode::SuperRight])
-        && !held.any_pressed([KeyCode::ControlLeft, KeyCode::ControlRight]);
 
     let mut outcome = None;
     for event in keys.read() {
         if event.state != ButtonState::Pressed {
             continue;
         }
-        if chord && !stale_chord {
-            // `Cmd+←/→` is Home/End on a keyboard with neither.
-            if editing_chord {
+        if chord.swallows() {
+            if chord.moves_to_an_end() {
                 match &event.logical_key {
                     Key::ArrowLeft => editor.home(),
                     Key::ArrowRight => editor.end(),
@@ -188,7 +116,7 @@ pub(crate) fn type_into_editor(
             }
             continue;
         }
-        stale |= chord && stale_chord;
+        stale |= chord.is_ghost();
         // The table is `orbs-shell`'s and both frontends call it. The editor
         // decides what a key means in its current mode; branching on the mode
         // out here would be a second copy of that state machine.
@@ -233,8 +161,7 @@ fn apply(
                 // Read again, as the autosave does: a `w` typed before the
                 // pause fired leaves the settle beat nothing to save, so the
                 // marks went stale.
-                let domain = editor.domain().to_owned();
-                editor.set_reading(tower.read_spell_with(&name, &domain, &lines, scrivener));
+                editor.read_back(tower.sim(), scrivener.unwrap_or(&orbs_sim::Verbatim));
             }
         }
     }
@@ -256,7 +183,10 @@ mod tests {
         app.insert_resource(Time::<()>::default())
             .insert_resource(Editing::default())
             .insert_resource(Tower::new(1))
-            .add_systems(Update, autosave.run_if(editing));
+            .add_systems(
+                Update,
+                autosave.run_if(super::super::modal::is_open::<Editor>),
+            );
         app
     }
 

@@ -1,20 +1,8 @@
 //! Linearisation — the screen-reader view of a frame.
 //!
-//! §14 makes this architectural: *"linearised representation for panes, tables,
-//! and progress bars; eldritch messages logged and carrying authored linear
-//! variants; echo tagged as metadata."* Built now because it cannot be
-//! retrofitted — reading the cell grid back row by row yields box-drawing
-//! characters and column-aligned fragments, and nothing later recovers structure
-//! that was never recorded.
-//!
-//! Captured every frame whether or not a screen reader is attached. Making it
-//! conditional would exercise the path only for the players least able to report
-//! that it broke; capturing always costs a few kilobytes of memcpy into a reused
-//! arena, and means every test sees it.
-//!
-//! Stored as one `String` arena plus a `Vec` of ranges, cleared and refilled
-//! each frame. A frame holds a few hundred utterances, so a `String` per node
-//! would be a few hundred allocations at 60 Hz.
+//! Architectural (§14), since a cell grid read back is box-drawing and no
+//! structure. Captured every frame, reader or not, so every test sees it. One
+//! arena of ranges, reused each frame.
 
 use crate::record::Outcome;
 use crate::style::Role;
@@ -45,25 +33,12 @@ pub enum UtteranceKind {
     Input,
     /// What the orb thinks they are about to type.
     ///
-    /// The inline suggestion after the caret, and the candidates Tab offers.
-    /// Spoken, not silent — the half-typed line is spoken, and §19's
-    /// Frame-boundary rule is that a visual constraint must not become an
-    /// informational one, which a suggestion a sighted player can see and a
-    /// reader cannot would be. Its own kind so verbosity can drop it:
-    /// re-offered every keystroke, it is the most repetitive thing on screen.
+    /// The suggestion after the caret and Tab's candidates. Spoken (§19), and
+    /// its own kind so verbosity can drop it.
     Hint,
     /// A reference the player asked to have open — the scribing guide.
     ///
-    /// Its own kind for `Hint`'s reason, one step further. A guide is content,
-    /// so §14 requires it to reach a reader — a definition a sighted player can
-    /// see and a listener cannot is the visual constraint becoming an
-    /// informational one. But it is a standing reference rather than an answer,
-    /// and the stream is rebuilt from nothing every frame, so there is no "say
-    /// it once" and without its own kind a reader hears the whole vocabulary
-    /// continuously.
-    ///
-    /// So it is spoken, tagged and droppable — `Hint`'s bargain, and the only
-    /// one the speech model offers.
+    /// `Hint`'s bargain: content, so spoken (§14), but standing, so droppable.
     Guide,
     /// A duration-action finishing.
     ///
@@ -85,13 +60,8 @@ pub struct Utterance<'a> {
     pub role: Role,
     /// How the command that produced this concluded, if it said.
     ///
-    /// Carried for the same reason as [`Utterance::role`], and it is not
-    /// optional decoration: at the prompt the difference between "this is what
-    /// will run", "I do not know that word", and "you could try this" is
-    /// otherwise a **marker glyph and a brightness** — two channels a listener
-    /// has neither of. Without this, `xyzzy` linearises as three identical
-    /// lines and a screen-reader player cannot tell an error from an offer, nor
-    /// a selectable candidate from a command about to execute.
+    /// As [`Utterance::role`]: on screen, what will run, an unknown word and an
+    /// offer differ by a marker and a brightness, which a listener lacks.
     pub outcome: Option<Outcome>,
     /// The text to speak.
     ///

@@ -1,21 +1,9 @@
 //! Phosphor themes — where a [`Style`] finally becomes a colour.
 //!
-//! Architectural rule 2 on the Bevy side: `orbs-render` decides *what* appears
-//! and never emits a hue, everything below decides *how* it is drawn, and
-//! nothing here can add information the Frame did not carry.
-//!
-//! DESIGN.md §4:
-//!
-//! - Curated themes, not a hue slider. Each is a hand-tuned harmony.
-//! - Amber by default — warm, classic, and the tube a scrying orb ought to be.
-//!   Muted violet was the original default and is still on the list.
-//! - The base hue carries all ordinary text through intensity alone.
-//! - A small accent set is reserved strictly for meaning, and every theme
-//!   defines its own triad so contrast holds against its own base.
-//!
-//! [`Presentation`](orbs_render::Presentation) has no entry here: it selects a
-//! *face* in the glyph atlas, not a colour. §14 forbids colour as the sole
-//! carrier of meaning, which a hue-only tonal register would be.
+//! Rule 2's Bevy side. Curated themes, amber by default; the base hue carries
+//! text by intensity, and each theme's accent triad is tuned to its base (§4).
+//! [`Presentation`](orbs_render::Presentation) selects a face, not a colour
+//! (§14).
 
 use bevy::prelude::*;
 use orbs_render::{Depiction, Intensity, Lexeme, Role, Style, Wash};
@@ -42,11 +30,8 @@ pub(crate) struct Phosphor {
     success: Srgba,
     /// The parts of speech a spell is drawn in, indexed by [`syntax_slot`].
     ///
-    /// `None` is a real answer, and `monochrome` gives it: a theme named for one
-    /// colour cannot sprout five, and §14 wants somewhere to go for anyone who
-    /// reads hue poorly. Weight carries the reading either way — `Lexeme::weight`
-    /// is applied to the `Style` before this is consulted, so a monochrome spell
-    /// reads as every spell did before hue existed.
+    /// `None` for `monochrome`, somewhere to go for anyone who reads hue poorly
+    /// (§14); `Lexeme::weight` carries the reading either way.
     syntax: Option<[Srgba; SYNTAX]>,
     /// Behind everything. Never fully black — a dead screen and an idle one
     /// should not look the same (see `main.rs`).
@@ -78,13 +63,8 @@ const fn syntax_slot(kind: Lexeme) -> Option<usize> {
 
 /// The syntax palette the three coloured themes share.
 ///
-/// One table rather than three, and that is an admission: the accents are tuned
-/// per theme because each sits against a different background, and these were
-/// authored without a window to judge them in. The field is per-theme so a pass
-/// with eyes on the tube can split them, which is §15's shape.
-///
-/// Chosen to sit *away* from all three phosphors: the point of a hue here is to
-/// be told apart from the base, and amber's base is already gold.
+/// One table, authored without a window; per-theme so a pass with eyes on the
+/// tube can split it. Away from all three phosphors.
 const SPELL: [Srgba; SYNTAX] = [
     // Control and call — arcane, the register §14 already reads as magical.
     rgb(0.78, 0.62, 1.00),
@@ -159,17 +139,9 @@ pub(crate) const GREEN: Phosphor = Phosphor {
 
 /// Light grey on black — the one theme that is not a phosphor.
 ///
-/// Every other theme is one hue at three weights, which is what a real tube did
-/// and what §4 asks for. This is a modern terminal instead: neutral text, the
-/// accents carrying all the colour there is. It earns its place on accessibility
-/// rather than taste — the highest contrast the game can offer, and the only
-/// theme where a colour vision deficiency loses nothing, because the base ramp
-/// has no hue to lose.
-///
-/// The values are solved, not picked. A light base leaves very little luminance
-/// headroom, and the first attempt put `success` 1.22:1 from body text — inside
-/// the greyscale-separation margin the tests below demand. Lowering the base to
-/// 0.74 bought the accents room to be accents.
+/// Here for accessibility: the highest contrast, and a base ramp with no hue to
+/// lose. Solved, not picked — a light base leaves little headroom, so it sits
+/// at 0.74.
 pub(crate) const MONOCHROME: Phosphor = Phosphor {
     name: "monochrome",
     base: [
@@ -178,20 +150,9 @@ pub(crate) const MONOCHROME: Phosphor = Phosphor {
         rgb(1.00, 1.00, 1.00),
     ],
     danger: rgb(0.95, 0.25, 0.24),
-    // Lifted in green, and only in green — `0.62` was `1.06:1` from `danger`
-    // under deuteranopia, the same brightness to the player this theme is most
-    // for. Only the one channel that could move was moved.
-    //
-    // Squeezed from both sides: `cost` is pinned between the ≥4.5:1 floor
-    // against the background and the ≥1.2:1 floor against body text, and the
-    // deficiency floor pushes *up* into the second. This clears deuteranopia at
-    // 1.27:1 and body text at 1.23:1, and another 0.06 of deficiency margin
-    // spends body text down to 1.20 exactly — the *"very little luminance
-    // headroom"* this theme's own doc comment warns about.
-    //
-    // Solve it, do not pick it — and solve it in floats, because a value chosen
-    // on a 0–255 grid lands a rounding step away and this margin is smaller
-    // than one step.
+    // Lifted in green only, to clear `danger` under deuteranopia (1.27:1)
+    // while keeping body text at 1.23:1. Solve it in floats: the margin is
+    // smaller than a 0–255 step (§19).
     cost: rgb(0.30, 0.70, 1.00),
     success: rgb(0.62, 1.00, 0.60),
     // The one theme that declines: a theme named for one colour cannot sprout
@@ -291,15 +252,8 @@ impl Phosphor {
 
     /// A part of speech's colour under this theme, or `None` if it declines.
     ///
-    /// An accent outranks a syntax colour, as it outranks a tint: *"an accent is
-    /// a signal; a tint is a hint. The signal wins."* A line `interpret` could
-    /// not read is drawn `Role::Danger`, and highlighting over it would be
-    /// decoration beating meaning, which §4 forbids. `orbs-shell` refuses a run
-    /// on an accented row and this refuses it again, because the same hole in
-    /// `orbs-tui` was real and its test caught it.
-    ///
-    /// A theme may also have no palette at all — `monochrome` does not, which is
-    /// what makes hue a setting rather than something imposed.
+    /// An accent outranks it (§4), refused here as well as in `orbs-shell`.
+    /// `monochrome` has no palette.
     fn lexed(&self, syntax: Option<Lexeme>, role: Role) -> Option<Srgba> {
         if role != Role::Normal {
             return None;
@@ -310,13 +264,8 @@ impl Phosphor {
 
     /// The colour a cell of this style is drawn in.
     fn untinted(&self, style: Style) -> Color {
-        // The common case first: this runs once per cell per frame — 7,040 times
-        // at the worst-case 160×44 — and a picture occupies about thirty cells.
-        //
-        // Reading the field directly is safe *only* to skip work. `depicted()`
-        // can turn a depiction into `None` but never `None` into one, so a cell
-        // failing this test would have resolved to no colour anyway. That is why
-        // the branch below still goes through the accessor.
+        // Per cell per frame, so skip the common case. The raw field is safe
+        // only to skip: `depicted()` never turns `None` into a depiction.
         if !matches!(style.depiction, Depiction::None) {
             // `depicted()`, never `style.depiction`: the accessor enforces §4's
             // "accents are never decorative" by yielding `None` on any accented
@@ -521,14 +470,9 @@ mod tests {
 
     /// §14's claim, measured instead of approximated.
     ///
-    /// [`the_accent_triad_is_separable_without_hue`] takes *all* the hue away; a
-    /// real deficiency takes one axis and can fail where greyscale passes, which
-    /// is why [`deficiency`](super::super::deficiency) exists.
-    ///
-    /// It failed on its first run at one pair: monochrome's danger and cost sat
-    /// 1.05:1 apart under deuteranopia. There was no scalar fix — that theme's
-    /// `cost` is pinned between the ≥4.5:1 background floor and the ≥1.2:1
-    /// body-text floor, and the margin never passes ~1.36 (§19).
+    /// A real deficiency takes one axis and can fail where greyscale passes
+    /// ([`deficiency`](super::super::deficiency)); monochrome's margin is
+    /// bounded near 1.36 (§19).
     #[test]
     fn the_accent_triad_survives_every_deficiency() {
         use super::super::deficiency::{Deficiency, simulated};

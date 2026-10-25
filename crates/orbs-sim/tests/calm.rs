@@ -5,31 +5,13 @@
 //! `debug_spawn` stocks the arsenal, so these are debug-only.
 #![cfg(debug_assertions)]
 
-use orbs_render::{FieldName, Value};
+mod common;
+
+use common::{ever_said, run, said};
 use orbs_sim::Sim;
 use orbs_sim::tower::{self, supply::Scope, supply::Supplies};
 
 const QUICK: &str = "quickening-scroll";
-
-fn run(sim: &mut Sim, line: &str) {
-    sim.submit(line);
-    sim.step();
-}
-
-fn said(sim: &Sim) -> Vec<String> {
-    sim.scrollback()
-        .records()
-        .iter()
-        .filter_map(|record| match record.field(FieldName::Message) {
-            Some(Value::Text(text)) => Some(text.to_owned()),
-            _ => None,
-        })
-        .collect()
-}
-
-fn ever_said(sim: &Sim, needle: &str) -> bool {
-    said(sim).iter().any(|line| line.contains(needle))
-}
 
 fn held(sim: &Sim) -> u32 {
     tower::supply::held_in_arsenal(sim.world(), QUICK)
