@@ -32,6 +32,9 @@ pub(super) struct Laid {
     drawn: String,
     /// The tower's title, if it has one; whether it fits is the draw's call.
     title: Option<String>,
+    /// How long until the next tier, if there is a pace to say it from. It
+    /// takes only blank space: never a cell of the bar, nor the room's column.
+    forecast: Option<String>,
     spoken: String,
     /// The span the shown value is out of.
     span: u64,
@@ -47,6 +50,7 @@ pub(super) fn lay(
     toward: Toward,
     rolled: Rolled,
     name: Option<&str>,
+    forecast: Option<&str>,
     prose: &Prose,
 ) -> Option<Laid> {
     // Relative both sides of the slash: `8/16`, not `8/10000`.
@@ -95,6 +99,7 @@ pub(super) fn lay(
         drawn: format!("{shown:>width$}"),
         reading,
         title: name.map(|name| prose.line(&format!("renown_{name}"), &[])),
+        forecast: forecast.map(ToOwned::to_owned),
         spoken,
         span,
     })
@@ -102,34 +107,58 @@ pub(super) fn lay(
 
 impl Laid {
     /// Cells the row needs to draw a bar of `bar` with its reading and title.
+    ///
+    /// Not the forecast, which outranks nothing: the room's column is never
+    /// dropped to make room for one.
     pub(super) fn needs(&self, bar: u16) -> u16 {
-        let tail = u16::try_from(cells(&self.with_title(&self.reading, true))).unwrap_or(u16::MAX);
+        let tail = u16::try_from(cells(&self.tail(&self.reading, false, true))).unwrap_or(u16::MAX);
         LABEL
             .saturating_add(bar)
             .saturating_add(1)
             .saturating_add(tail)
     }
 
-    fn with_title(&self, reading: &str, titled: bool) -> String {
-        match self.title.as_ref().filter(|_| titled) {
-            Some(title) => format!("{reading}  {title}"),
-            None => reading.to_owned(),
+    /// The reading, then the forecast and the title where each is wanted.
+    fn tail(&self, reading: &str, forecast: bool, titled: bool) -> String {
+        let mut out = reading.to_owned();
+        for part in [
+            self.forecast.as_ref().filter(|_| forecast),
+            self.title.as_ref().filter(|_| titled),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            out.push_str("  ");
+            out.push_str(part);
         }
+        out
     }
 
     /// Draw it into `at`.
     pub(super) fn draw(&self, painter: &mut Painter<'_>, at: Rect) {
         let start = at.col.saturating_add(LABEL);
         let room = at.right().saturating_sub(start);
-        let bar_after = |tail: &str| {
+        let bar_after = |tail: &str, after: u16| {
             let width = u16::try_from(cells(tail)).unwrap_or(u16::MAX);
-            room.saturating_sub(width.saturating_add(1)).min(WIDEST)
+            room.saturating_sub(width.saturating_add(after).saturating_add(1))
+                .min(WIDEST)
         };
+        let plus = self
+            .rolled
+            .plus
+            .map(|(gain, weight)| (format!("+{gain}"), weight));
+        let gained = plus.as_ref().map_or(0, |(plus, _)| {
+            PLUS_GAP.saturating_add(u16::try_from(cells(plus)).unwrap_or(u16::MAX))
+        });
 
         // The title yields before the bar does: a bar alone still says where the
-        // tower stands, and a title alone is a word in a gap.
-        let titled = bar_after(&self.with_title(&self.reading, true)) >= NARROWEST;
-        let bar = bar_after(&self.with_title(&self.reading, titled));
+        // tower stands, and a title alone is a word in a gap. The forecast
+        // yields before either, and before a gain's `+N`: drawn only where the
+        // bar keeps every cell and the `+N` still fits after it.
+        let titled = bar_after(&self.tail(&self.reading, false, true), 0) >= NARROWEST;
+        let bar = bar_after(&self.tail(&self.reading, false, titled), 0);
+        let forecast = self.forecast.is_some()
+            && bar_after(&self.tail(&self.reading, true, titled), gained) == bar;
 
         // Called even when it cannot draw, so §14's stream does not depend on
         // what fit. No accent: the warming ramp is a depiction, and an accent
@@ -155,8 +184,8 @@ impl Laid {
             Pos::new(at.col, at.row),
             &Span::new(&self.label).with_style(Style::DIM),
         );
-        let tail = self.with_title(&self.drawn, titled);
-        let truth = self.with_title(&self.reading, titled);
+        let tail = self.tail(&self.drawn, forecast, titled);
+        let truth = self.tail(&self.reading, forecast, titled);
         let mut said = Span::new(&tail).with_style(Style::DIM);
         if tail != truth {
             said = said.with_spoken(&truth);
@@ -167,8 +196,7 @@ impl Laid {
         // A gain's `+N`, in the blank after the reading and never measured into
         // it. Silent: renown's earning is silent, and a run's own sentence
         // already says what it paid.
-        if let Some((gain, weight)) = self.rolled.plus {
-            let plus = format!("+{gain}");
+        if let Some((plus, weight)) = plus {
             let col = after
                 .saturating_add(u16::try_from(cells(&tail)).unwrap_or(u16::MAX))
                 .saturating_add(PLUS_GAP);
@@ -195,7 +223,7 @@ pub(super) fn row(
     name: Option<&str>,
     prose: &Prose,
 ) {
-    if let Some(laid) = lay(label, toward, rolled, name, prose) {
+    if let Some(laid) = lay(label, toward, rolled, name, None, prose) {
         laid.draw(painter, at);
     }
 }

@@ -218,7 +218,7 @@ fn tint_background(theme: Res<Theme>, mut clear: ResMut<ClearColor>) {
 /// One `SystemParam`, since these are one dependency: what `shell::View` is
 /// built from.
 #[derive(bevy::ecs::system::SystemParam)]
-struct ShellState<'w> {
+pub(crate) struct ShellState<'w> {
     line: Res<'w, crate::shell::Line>,
     offered: Res<'w, crate::shell::Offered>,
     ghost: Res<'w, crate::shell::Ghost>,
@@ -257,7 +257,7 @@ struct ShellState<'w> {
 ///
 /// Split from [`rasterise`] at the Frame boundary: this decides what the screen
 /// says, that turns cells into triangles.
-fn repaint(
+pub(crate) fn repaint(
     screen: Res<Screen>,
     tower: Res<Tower>,
     mut shell: ShellState,

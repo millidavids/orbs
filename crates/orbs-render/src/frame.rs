@@ -10,6 +10,15 @@ use crate::paint::Painter;
 use crate::passage::{Crossing, Kept};
 use crate::style::{Lexeme, Wash};
 
+/// A write that did not fit: where it began, and all it asked to show.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Clip {
+    /// Where the write began, which may be outside the region it was given.
+    pub at: Pos,
+    /// The whole text, not only the part lost.
+    pub text: String,
+}
+
 /// One screen's worth of cells, plus its linearisation.
 ///
 /// Reuse a single `Frame` across ticks via [`Frame::reset`] rather than building
@@ -30,6 +39,8 @@ pub struct Frame {
     /// verb sharing a colour with a potion beside it would be one vocabulary
     /// meaning two things.
     syntax: Vec<(Rect, Lexeme)>,
+    /// Text a write lost at a region's edge. See [`Frame::clipped`].
+    clipped: Vec<Clip>,
     /// Somewhere to hold a region while a crossing reads it and writes over it.
     ///
     /// [`Passage::Gather`](crate::Passage) moves glyphs, and on the arriving
@@ -63,6 +74,7 @@ impl Frame {
         // regions every frame.
         self.tints.clear();
         self.syntax.clear();
+        self.clipped.clear();
     }
 
     /// The frame's dimensions.
@@ -211,6 +223,23 @@ impl Frame {
     #[must_use]
     pub const fn speech(&self) -> &Speech {
         &self.speech
+    }
+
+    /// Every write that ran out of room with something left to show.
+    ///
+    /// A clipped span still speaks whole, so this is what a reader hears and
+    /// the screen does not show. Empty on a frame that fits.
+    #[must_use]
+    pub fn clipped(&self) -> &[Clip] {
+        &self.clipped
+    }
+
+    /// Note that a write of `text` at `at` lost some of it.
+    pub(crate) fn clip(&mut self, at: Pos, text: &str) {
+        self.clipped.push(Clip {
+            at,
+            text: text.to_owned(),
+        });
     }
 
     /// A painter bounded to `area`.

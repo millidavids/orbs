@@ -941,10 +941,12 @@ fn a_spell_cannot_quaff_stillness() {
     run(&mut sim, "defend");
     run(&mut sim, "debug_spawn stillness 1");
     // Through a nested spell's caller, the marker a running line carries.
+    let player = sim.world().resource::<tower::Cwd>().0;
     sim.world_mut()
         .insert_resource(tower::spell::Caller(Some(tower::spell::Casting {
             depth: 0,
             unattended: true,
+            player,
         })));
     run(&mut sim, "quaff stillness");
     sim.world_mut().insert_resource(tower::spell::Caller(None));
@@ -1057,10 +1059,12 @@ fn stillness_hands_back_what_the_cancelled_round_was_given() {
 fn a_spell_with_no_stillness_is_told_there_is_none() {
     let mut sim = at_the_wall(11);
     run(&mut sim, "defend");
+    let player = sim.world().resource::<tower::Cwd>().0;
     sim.world_mut()
         .insert_resource(tower::spell::Caller(Some(tower::spell::Casting {
             depth: 0,
             unattended: true,
+            player,
         })));
     run(&mut sim, "quaff stillness");
     sim.world_mut().insert_resource(tower::spell::Caller(None));

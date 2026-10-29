@@ -129,6 +129,7 @@ pub(super) fn cast(
             ..Default::default()
         }],
         spent: false,
+        held: None,
     });
     if !announce.is_empty() {
         say(world, announce, wanted, role);

@@ -280,6 +280,32 @@ fn progress(world: &mut World, save: &Save) {
             }
         }
     }
+    // Absent is a document from before rates: watch from the tick it loads
+    // into, so the first readings say *too soon* rather than measuring across
+    // time this world never ran.
+    let now = world.resource::<crate::tick::Tick>().get();
+    match &progress.throughput {
+        Some(saved) => world.resource_mut::<tower::Throughput>().restore(
+            saved.since,
+            tower::Makings {
+                ticks: saved.made.clone(),
+                spilled: saved
+                    .spilled
+                    .iter()
+                    .map(|(key, minutes)| {
+                        let minutes = minutes.iter().map(|[at, count]| (*at, *count));
+                        (key.clone(), minutes.collect())
+                    })
+                    .collect(),
+            },
+            saved
+                .earned
+                .iter()
+                .map(|[at, total]| (*at, *total))
+                .collect(),
+        ),
+        None => world.resource_mut::<tower::Throughput>().begin(now),
+    }
     world
         .resource_mut::<tower::mastery::Reached>()
         .restore(progress.reached.clone());
@@ -352,6 +378,9 @@ fn stream(world: &mut World, save: &Save) {
         }
         if line.quiet {
             entry = entry.quiet();
+        }
+        if line.news {
+            entry = entry.news();
         }
         for (name, shape, value) in &line.fields {
             let Some(field) = naming::field_from(name) else {

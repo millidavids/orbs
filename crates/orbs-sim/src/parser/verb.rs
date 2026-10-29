@@ -79,7 +79,20 @@ pub enum NounKind {
     ///
     /// A slot kind, so `recall` reaches both without widening [`Any`](Self::Any).
     Subject,
+    /// What `status` can narrow to — [`REPORTS`]. `status rates`.
+    ///
+    /// Closed, so a word it does not know stays a leftover and the plain
+    /// register's `how are things going` still reads the report. Never
+    /// [`Any`](Self::Any), for [`Command`](Self::Command)'s reason.
+    Report,
 }
+
+/// Every word `status` narrows to. A table, not prose: the word is the section
+/// heading's token, which `sift` finds (`CASTING`'s rule).
+pub const REPORTS: [&str; 1] = [RATES];
+
+/// `status rates` — every room's rate and what it waits on.
+pub const RATES: &str = "rates";
 
 /// Which part of the manual a verb belongs under.
 ///
@@ -129,7 +142,7 @@ impl NounKind {
     /// Not the free-text kinds or the slot-only sets [`accepts`](Self::accepts)
     /// names. `Command` is here because `tower::scene_at` registers every verb
     /// word as one. One list, so `content::Phrasings` is not a second copy.
-    pub const NAMEABLE: [Self; 10] = [
+    pub const NAMEABLE: [Self; 11] = [
         Self::Place,
         Self::File,
         Self::Topic,
@@ -140,6 +153,7 @@ impl NounKind {
         Self::Script,
         Self::Sense,
         Self::Command,
+        Self::Report,
     ];
 
     /// The word for this category, as output names it.
@@ -171,6 +185,7 @@ impl NounKind {
             Self::Any => "name",
             Self::Command => "command",
             Self::Subject => "topic",
+            Self::Report => "report",
         }
     }
 
@@ -181,8 +196,9 @@ impl NounKind {
     #[must_use]
     pub const fn accepts(self, noun: Self) -> bool {
         match self {
-            // Everything except a command — see [`Command`](Self::Command).
-            Self::Any => !matches!(noun, Self::Command),
+            // Everything except a command or a report — see
+            // [`Command`](Self::Command).
+            Self::Any => !matches!(noun, Self::Command | Self::Report),
             Self::Readable => matches!(noun, Self::File | Self::Script),
             // An instrument, a spell, or a supply the arsenal is drawing (§19,
             // *Supply*).
@@ -247,6 +263,8 @@ const DEMON_OPTIONAL: &[Slot] = &[Slot::optional(NounKind::Essence)];
 const ANYTHING: &[Slot] = &[Slot::required(NounKind::Any)];
 /// `verify`'s: bare is the audit — see its `signature` arm.
 const ANYTHING_OPTIONAL: &[Slot] = &[Slot::optional(NounKind::Any)];
+/// `status [report]` — bare is the whole report, `rates` one part of it.
+const REPORT_OPTIONAL: &[Slot] = &[Slot::optional(NounKind::Report)];
 const COUNT: &[Slot] = &[Slot::required(NounKind::Count)];
 
 /// `move <reagent> [from <source>] to <destination>` — §10.1's pipeline.
@@ -784,6 +802,20 @@ impl Verb {
         }
     }
 
+    /// The closed words this verb's one slot narrows to — `status` and
+    /// [`REPORTS`] — or `None`.
+    ///
+    /// Such a verb refuses a word it does not know as one taking nothing does,
+    /// since bare is still the whole act: asking *which report* would be a
+    /// numbered prompt the player never meant.
+    #[must_use]
+    pub const fn narrows(self) -> Option<&'static [&'static str]> {
+        match self.signature() {
+            [slot] if matches!(slot.kind, NounKind::Report) => Some(&REPORTS),
+            _ => None,
+        }
+    }
+
     /// What this command takes, in order.
     #[must_use]
     pub const fn signature(self) -> &'static [Slot] {
@@ -792,11 +824,13 @@ impl Verb {
             Self::Survey => PLACE_OPTIONAL,
             Self::Peruse => READABLE,
             Self::Sift => PATTERN_AND_FILE,
+            // Bare is the whole report; a closed word narrows it (§19, *the
+            // tower speaks up*).
+            Self::Status => REPORT_OPTIONAL,
             // Surfaces take no argument, and a room's one prism, lattice,
             // circle, pylon or rampart would be naming the only thing there is.
             // `petition` is one foe a word, so a partial refusal never arises.
-            Self::Status
-            | Self::Undo
+            Self::Undo
             | Self::Unfurl
             | Self::Quit
             | Self::Menu
@@ -961,8 +995,20 @@ mod tests {
 
     #[test]
     fn commands_taking_no_arguments_have_empty_signatures() {
-        assert!(Verb::Status.signature().is_empty());
         assert!(Verb::Undo.signature().is_empty());
+        assert!(Verb::Weave.signature().is_empty());
+    }
+
+    #[test]
+    fn status_takes_one_optional_closed_report() {
+        let signature = Verb::Status.signature();
+        assert_eq!(signature.len(), 1);
+        assert_eq!(signature[0].kind, NounKind::Report);
+        assert!(!signature[0].required);
+        // Closed: nothing a verb taking `Any` names can fill it, and it fills
+        // no `Any` slot either.
+        assert!(!NounKind::Any.accepts(NounKind::Report));
+        assert!(!NounKind::Report.accepts(NounKind::Place));
     }
 
     #[test]

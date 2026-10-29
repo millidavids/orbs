@@ -33,6 +33,9 @@ pub(crate) fn effective(settings: CrtSettings, picture: Picture, still: bool) ->
     drawn.aberration = toward(settings.aberration, off.aberration, Effect::Split);
     drawn.vignette = toward(settings.vignette, off.vignette, Effect::Edge);
     drawn.vignette_radius = toward(settings.vignette_radius, off.vignette_radius, Effect::Edge);
+    // The glass's rim and its answer to the tower are one row: `edge off`
+    // means the glass never answers (§19, *the tower speaks up*).
+    drawn.desaturation = toward(settings.desaturation, off.desaturation, Effect::Edge);
     drawn
 }
 
@@ -51,7 +54,7 @@ mod tests {
             Effect::Flicker => vec![tube.flicker],
             Effect::Mask => vec![tube.mask],
             Effect::Split => vec![tube.aberration],
-            Effect::Edge => vec![tube.vignette, tube.vignette_radius],
+            Effect::Edge => vec![tube.vignette, tube.vignette_radius, tube.desaturation],
         }
     }
 

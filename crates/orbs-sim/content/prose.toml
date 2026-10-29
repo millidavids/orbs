@@ -47,6 +47,8 @@ verb_needs_fixture = "there is no {source} here to {name} with"
 #
 # With no slot to name, it names the verb and the words it could not use.
 verb_takes_nothing = "{name} takes nothing - '{words}' is not something it can use"
+# ...or takes only a closed few, which it names (`status rates`).
+verb_takes_only = "{name} takes only {detail} - '{words}' is not one of them"
 
 # The commonest refusal: a name resolved on submit and gone by the tick, or
 # out of reach.
@@ -193,6 +195,60 @@ ledger_secrets = "secrets found"
 ledger_by_spell = "{name} by your spells"
 ledger_share = "your spells' share"
 ledger_spells = "done by your spells"
+
+# ---------------------------------------------------------------------------
+# STATUS RATES (§19, the tower speaks up).
+#
+# One row per open room: its ledger row's rate, then what it waits on. No
+# commas: a spoken row splits on them. A spell's hold reuses `spell_waiting`
+# and `spell_watching`, the sentences its log already says.
+# ---------------------------------------------------------------------------
+rates_rate = "{name}: {count} an hour"
+rates_rate_none = "{name}: none this hour"
+rates_rate_unknown = "{name}: too soon to say"
+rates_row = "{detail} · {state}"
+rates_wait_working = "the {name} is working with {count}t left"
+rates_wait_busy = "the {name} is working"
+rates_wait_scouring = "the {name} is being scoured with {count}t left"
+rates_wait_scrubbing = "the {name} is being scoured"
+rates_wait_ready = "the {name} is ready. empty it"
+rates_wait_fouled = "the {name} is fouled and will not start"
+rates_wait_charged = "the {name} is charged. wield it"
+rates_wait_gathering = "the {name} wants {detail}"
+rates_wait_more = "the {name} wants more {detail}"
+rates_wait_cold = "the {name} is cold"
+rates_wait_burning = "the {name} burns with {count}t of fuel"
+rates_wait_alight = "the {name} burns"
+rates_wait_banked = "the {name} is banked"
+rates_wait_empty = "nothing is waiting"
+rates_hold_pulling = "{name} waits for the {source} to fill"
+rates_hold_biding = "{name} bides with {count}t left"
+rates_slot_held = "the {name} is {state} with {count}t left"
+rates_slot_free = "free. nothing holds it"
+
+# The rail's detail row, twelve cells at most: the same wait as `status rates`,
+# in shorthand. `{name}` is an instrument's two letters; a reader hears the
+# `rates_wait_*` sentence instead.
+brief_at = "at {name}"
+brief_wants = "{name} +{detail}"
+brief_after = "after {name}"
+brief_watching = "watching"
+brief_pulling = "pulling"
+brief_biding = "bides {count}t"
+# The forge, with nothing working: the charm nearest lapsing, by the word the
+# forge publishes for it.
+brief_charm = "{state} {count}t"
+brief_charm_said = "the {name} charm is {state} with {count}t left"
+
+# How long until the next station, at the pace the last makings set. Coarse,
+# as the resume line is: a few makings' average claims no more.
+eta_soon = "under a minute"
+eta_minutes = "~{count} min"
+eta_hours = "~{count} h"
+
+# A Ley fork becoming choosable. A fork opens nothing until it is taken, so
+# nothing else ever said it.
+ley_fork_opened = "the ley line forks ahead. weave, and choose a lane"
 
 # ---------------------------------------------------------------------------
 # THE TEN THINGS THE TOWER IS CALLED (§11.5).
@@ -359,7 +415,7 @@ menu_set_theme = "theme    the phosphor      "
 menu_set_scale = "scale    how the glass fits"
 menu_set_curve = "curve    the bulge         "
 menu_set_lines = "lines    the scan lines    "
-menu_set_glow = "glow     phosphor bloom    "
+menu_set_glow = "glow     bloom, afterglow  "
 menu_set_flicker = "flicker  the rolling band  "
 menu_set_mask = "mask     the grille        "
 menu_set_split = "split    colour fringes    "
@@ -774,6 +830,9 @@ spell_missing = "{name} line {count}: nothing here answers to '{detail}'"
 # `verb_takes_nothing` in a spell's voice. Saying "nothing here answers to it"
 # would name the one thing that is not wrong with the line.
 spell_takes_nothing = "{name} line {count}: that takes nothing - it cannot use '{detail}'"
+# `status`, the one verb taking only a closed word. A second report word
+# changes this line.
+spell_takes_only = "{name} line {count}: that takes only rates - it cannot use '{detail}'"
 spell_forbidden = "{name} line {count}: the orb will not do '{detail}' from a spell"
 
 # Waiting is normal - it is what a recipe does. Said **once**, when the wait
@@ -1572,11 +1631,14 @@ man_sift_4 = "so this is how you read what a bound spell did"
 man_sift_eg1 = "sift grind orb.log finds every turn of the pestle"
 man_sift_also = "peruse, unfurl, verify"
 
-man_status_use = "status"
+man_status_use = "status [rates]"
 man_status_gloss = "how the tower stands"
 man_status_1 = "the tick, what you have earned, and what is held"
 man_status_2 = "one glance rather than a walk through every room"
+man_status_3 = "and status rates says how fast each room makes its work,"
+man_status_4 = "what it waits on, and what holds the tower's one slot"
 man_status_eg1 = "status after a brew shows the experience it paid"
+man_status_eg2 = "status rates when a room has gone quiet"
 man_status_also = "survey, weave, verify"
 
 man_verify_use = "verify [name]"

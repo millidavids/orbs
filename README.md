@@ -15,31 +15,25 @@ Artless by design. No sprites, no characters, no illustrations. A single curved
 CRT glowing in the dark.
 
 ```
-O.R.B.S. v0.9.3  —  cold start
+ ██████╗    ██████╗    ██████╗    ███████╗
+██╔═══██╗   ██╔══██╗   ██╔══██╗   ██╔════╝
+██║   ██║   ██████╔╝   ██████╔╝   ███████╗
+██║   ██║   ██╔══██╗   ██╔══██╗   ╚════██║
+╚██████╔╝██╗██║  ██║██╗██████╔╝██╗███████║██╗
+ ╚═════╝ ╚═╝╚═╝  ╚═╝╚═╝╚═════╝ ╚═╝╚══════╝╚═╝
+     Operational Relic Bewitching System
 
-scrying lens ................ [ ok ]
-ley-line uplink ............. [ ok ]
-grimoire index .............. [ 2841 ]
-laboratory .................. [ ok ]
-sanctum ..................... [ DEGRADED ]
-  barrier integrity 34%
-menagerie ................... [ not found ]
-archive ..................... [ ok ]
-
-3 warnings. the orb warms to your touch.
-
-orbs:~$ _
+blackhearth games ........................ ok
 ```
 
 ---
 
-**Status: in production.** Phases 0, 0.5, 1, 2 and 4 are closed and Phase 3 is
-met on its exit criterion. The determinism spine, the parser, the cell renderer,
-brewing, the archive, the lens, the sanctum, the tower rail, the balance harness,
-the spell engine and its scripting language are built, and the game plays.
-Phase 5 (Summoning) is next.
+**Status: in production.** The game plays and its premise is complete: seven
+domains, the arsenal carrying their output, and a siege that rewrites the
+scripts behind you. The latest feature is `0.23`, *the tour*;
+[docs/ROADMAP.md](docs/ROADMAP.md) has what remains.
 
-Rust · Bevy 0.19 · Windows, macOS, Linux · GPL-3.0-or-later
+Rust · Bevy 0.20 · Windows, macOS, Linux · GPL-3.0-or-later
 
 ## For players
 
@@ -63,13 +57,15 @@ verb, a potion, or a word of the scripting language.
 | [docs/DESIGN.md](docs/DESIGN.md) | The design — authoritative for everything. §19 is a decisions log |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Phase status, derived from DESIGN.md §15 |
 | [docs/SETUP.md](docs/SETUP.md) | Toolchain, skills, build, test and release |
-| [CLAUDE.md](CLAUDE.md) | Conventions, architectural rules, and every See-it line |
+| [docs/SEEING-IT.md](docs/SEEING-IT.md) | How to reach every surface from the running game, and every `ORBS_*` switch |
+| [CLAUDE.md](CLAUDE.md) | Conventions, architectural rules, and the gate |
 
 ### Building
 
 ```bash
 cargo run -p orbs                    # the game
-ORBS_BOOT=0 cargo run -p orbs        # ...skipping the 13-second boot sequence
+ORBS_BOOT=0 cargo run -p orbs        # ...skipping the boot card
+ORBS_BOOT=0 ORBS_THRESHOLD=0 cargo run -p orbs   # ...and the orb's menu, straight into a tower
 cargo run -p orbs-tui                # the terminal build
 ```
 
@@ -79,7 +75,7 @@ Run after every step, not every phase:
 
 ```bash
 cargo fmt --all --check
-cargo clippy --workspace --all-targets -- -D warnings
+cargo clippy --workspace --all-targets --features orbs-augury/train -- -D warnings
 cargo test --workspace
 RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
 cargo build -p orbs                  # the binary must LINK, not just check
@@ -88,16 +84,56 @@ cargo build -p orbs                  # the binary must LINK, not just check
 ### Looking at it
 
 Work is not done when it compiles. It is done when it has been *looked at* —
-every roadmap item carries a "See it" line, and CLAUDE.md lists the `ORBS_*`
-environment switches that reach the parts a still photograph cannot show.
+every roadmap item carries a "See it" line, and docs/SEEING-IT.md lists the
+`ORBS_*` environment switches that reach the parts a still photograph cannot
+show.
 
 ```bash
 ORBS_DUMP="attend laboratory; grind sage" cargo run -p orbs   # a screen, as text
 cargo run -p orbs-render --example screens                    # every surface, no GPU
 cargo run -p orbs-balance -- sweep --ticks 7200               # the economy, measured
-scripts/play.sh                                               # 113 scenarios, played
-scripts/dumps.sh <dir>                                        # 65 screens, captured
+scripts/play.sh                                               # 210 scenarios, played
+scripts/dumps.sh <dir>                                        # 227 screens, captured
+scripts/tour.sh all                                           # every surface, moving — below
 ```
+
+### The visual showcase
+
+`scripts/tour.sh` plays the game in its real window, one scene at a time: every
+domain at work, every puzzle mid-move, every screen crossing to the next, the
+boot card, the menus, and every effect the glass has. A scene sets itself up at
+once, then types its own commands at the keyboard as a player would, and holds
+for about five seconds. 87 scenes, in a debug build.
+
+```bash
+scripts/tour.sh                          # list every scene: name, how long, what it shows
+scripts/tour.sh all                      # all of them, one after another, in one window
+scripts/tour.sh forge                    # a group: every forge.* scene
+scripts/tour.sh forge.lattice,lens       # names and groups, comma-separated
+scripts/tour.sh forge.lattice            # one scene; when its steps end, it is yours to play
+scripts/tour.sh shots <dir> [scenes]     # screenshots, each with its frame as text, then exit
+ORBS_TOUR=forge.lattice ORBS_DUMP=1 cargo run -p orbs    # a scene's first frame, as text
+```
+
+The groups are `boot`, `orb` (the menu, the manual, the installation),
+`laboratory`, `archive`, `lens`, `sanctum`, `menagerie`, `bailey`, `forge`,
+`passage` (screens crossing), `progress`, `spell`, `stores`, `sealed`, `ley`,
+`glass` (the tube, phosphors, greyscale, strain, afterglow) and `text`.
+
+In the window, **F11** is the next scene and **Shift+F11** the one before — the
+same one again at either end, so F11 replays a single scene. **Any other key**
+takes the scene over: its typing stops, it stops moving on, and the game is
+yours. The title bar names the scene. A tour keeps nothing — no save, no
+settings — and starts every scene from the default settings.
+
+`shots` writes `<NN>-<scene>-<seconds>s.png` for each screenshot with the frame
+beside it as `.txt`, an `index.txt` that marks a blank capture, and the run's
+`stderr.log`, whose errors and warnings it prints. The scenes live in
+[crates/orbs-shell/src/tour/scenes.toml](crates/orbs-shell/src/tour/scenes.toml);
+`ORBS_TOUR_FILE=<an edited copy> scripts/tour.sh …` plays one without a
+rebuild. `cargo test` plays every scene with no window and holds each to what
+it claims to show. [docs/SEEING-IT.md](docs/SEEING-IT.md), *The tour*, has the
+rest.
 
 ### Workspace
 
@@ -107,8 +143,9 @@ crates/
 │                   — ZERO Bevy engine dependency, headless, fully testable
 ├── orbs-render/    Frame / cell-buffer, layout, semantic styling
 ├── orbs-shell/     the shell both frontends share: painters, surfaces, the dump
-├── orbs/           Bevy frontend: GPU cell renderer, CRT
+├── orbs/           Bevy frontend: GPU cell renderer, CRT, sound
 ├── orbs-tui/       terminal frontend
+├── orbs-augury/    the trained readers; training behind the `train` feature
 └── orbs-balance/   CLI harness driving orbs-sim
 ```
 

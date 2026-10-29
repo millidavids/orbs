@@ -1,0 +1,821 @@
+# The tour (DESIGN.md §19, *the tour*): every surface of the game, posed and
+# then played, one scene at a time.
+#
+#     scripts/tour.sh                  # this list
+#     scripts/tour.sh forge.lattice    # one scene, yours when its steps end
+#     scripts/tour.sh forge,lens       # groups and names
+#     scripts/tour.sh all
+#
+# `setup` runs at once, through the dump's own driver, before the scene is
+# shown. `steps` are then typed at the keyboard as a player types them, each
+# waiting for the one before it to land. `expect` is checked after setup and
+# `ends` after the steps, by `cargo test`, so a scene cannot claim a state it
+# never reached. Setups are taken from `scripts/dumps.sh` lines that already
+# capture the state.
+
+# --- the boot card -----------------------------------------------------------
+
+[[scene]]
+name = "boot.card"
+about = "the orb waking: the dark, the card's letters, its close, the tower opening"
+boot = true
+hold = 13
+shots = [0.5, 2.0, 4.0, 7.0, 9.3, 10.2, 12.0]
+steps = [{ type = "status", when = "live", pause = 1.0, shots = [0.3] }]
+
+[[scene]]
+name = "boot.still"
+about = "the card with motion off: it arrives whole, holds, and leaves by a cut"
+boot = true
+settings = { motion = "off" }
+hold = 11
+shots = [1.0, 5.0, 10.0]
+
+# --- the orb's own screens -----------------------------------------------------
+
+[[scene]]
+name = "orb.threshold"
+about = "the orb before any tower: its menu, a settings page, the play page"
+tower = "threshold"
+expect = { surface = "threshold" }
+steps = [
+  { type = "settings", when = "menu", shots = [0.3] },
+  { type = "picture", shots = [0.3] },
+  { keys = "<esc>", pause = 1.5 },
+  { type = "play", shots = [0.3, 1.0] },
+]
+ends = { surface = "threshold" }
+
+[[scene]]
+name = "orb.menu"
+about = "the menu over a tower: a page, then resumed back to the room"
+setup = "attend laboratory; kindle charcoal; grind sage; menu"
+expect = { surface = "menu" }
+steps = [
+  { type = "settings", when = "menu", shots = [0.3] },
+  { type = "tube", shots = [0.3] },
+  { keys = "<esc>", pause = 1.5 },
+  { type = "resume", shots = [0.2, 0.6] },
+]
+ends = { room = "laboratory" }
+
+[[scene]]
+name = "orb.settings"
+about = "settings rows stepped from the picture page: the glass softens as you watch"
+setup = "attend laboratory; kindle charcoal; grind sage; menu"
+expect = { surface = "menu" }
+steps = [
+  { type = "settings", when = "menu" },
+  { type = "picture", shots = [0.3] },
+  { type = "glow soft", pause = 1.5, shots = [0.3] },
+  { type = "curve off", pause = 1.5, shots = [0.3] },
+  { type = "edge off", pause = 1.5, shots = [0.3, 1.0] },
+]
+ends = { surface = "menu" }
+
+[[scene]]
+name = "orb.manual"
+about = "the manual, from the threshold: a chapter paged through"
+tower = "threshold"
+steps = [
+  { type = "manual", when = "menu" },
+  { type = "keys", when = "manual", shots = [0.3] },
+  { keys = "<pgdn><pgdn>", shots = [0.3] },
+  { keys = "<esc>", pause = 1.5, shots = [0.3] },
+]
+ends = { surface = "manual" }
+
+[[scene]]
+name = "orb.install"
+about = "a new tower's practice run: the strip, help, a survey, a first step"
+tower = "install"
+expect = { surface = "install" }
+steps = [
+  { type = "help", shots = [0.5] },
+  { type = "survey", shots = [0.5] },
+  { type = "attend laboratory", shots = [0.3, 1.0] },
+]
+ends = { surface = "install" }
+
+[[scene]]
+name = "orb.wake"
+about = "the practice tower waking into the real one"
+tower = "install"
+setup = "help; survey; attend laboratory; go to the tower; status"
+expect = { surface = "install" }
+steps = [{ type = "wake", shots = [0.1, 0.5, 1.2] }]
+
+[[scene]]
+name = "orb.quit"
+about = "`quit` asks once before it goes"
+setup = "attend laboratory"
+steps = [{ type = "quit", shots = [0.3] }]
+ends = { said = "leave the orb?" }
+
+[[scene]]
+name = "orb.resumed"
+about = "a tower reopened after an hour away"
+setup = "attend laboratory; kindle charcoal; grind sage"
+resumed = 3600
+expect = { said = "it was dark for" }
+
+# --- the laboratory ---------------------------------------------------------
+
+[[scene]]
+name = "laboratory.kindle"
+about = "charcoal kindled: the flare, then the fire catching"
+setup = "attend laboratory"
+expect = { room = "laboratory" }
+steps = [{ type = "kindle charcoal", shots = [0.1, 0.4, 1.5] }]
+ends = { working = ["athanor"] }
+
+[[scene]]
+name = "laboratory.pour"
+about = "sage poured into the mortar, then the grind"
+setup = "attend laboratory; kindle charcoal"
+expect = { room = "laboratory", working = ["athanor"] }
+steps = [
+  { type = "move sage to mortar_and_pestle", shots = [0.1, 0.3, 0.6] },
+  { type = "grind sage", shots = [0.5] },
+]
+ends = { working = ["mortar_and_pestle"] }
+
+[[scene]]
+name = "laboratory.grind"
+about = "sage ground in the mortar over a lit athanor"
+setup = "attend laboratory; kindle charcoal; grind sage"
+expect = { room = "laboratory", working = ["mortar_and_pestle", "athanor"] }
+
+[[scene]]
+name = "laboratory.bath"
+about = "ground sage digesting in the balneum mariae"
+setup = "attend laboratory; kindle charcoal; grind sage; meditate 9; empty mortar_and_pestle; digest ground-sage"
+expect = { room = "laboratory", working = ["balneum_mariae", "athanor"] }
+
+[[scene]]
+name = "laboratory.flask"
+about = "tincture and salt mixing in the flask"
+setup = "attend laboratory; kindle charcoal; grind sage; meditate 9; empty mortar_and_pestle; digest ground-sage; meditate 14; empty balneum_mariae; grind rock-salt; meditate 9; empty mortar_and_pestle; mix sage-tincture with ground-salt"
+expect = { room = "laboratory", working = ["flask_and_rod", "athanor"] }
+
+[[scene]]
+name = "laboratory.alembic"
+about = "a draught distilling in the alembic"
+setup = "attend laboratory; kindle charcoal; debug_spawn clarified-draught; distil clarified-draught"
+expect = { room = "laboratory", working = ["alembic", "athanor"] }
+
+[[scene]]
+name = "laboratory.tint"
+about = "a charged bath washed in its material's colour"
+setup = "attend laboratory; kindle charcoal; grind sage; meditate 9; empty mortar_and_pestle; move ground-sage to balneum_mariae"
+expect = { room = "laboratory", working = ["athanor"] }
+
+[[scene]]
+name = "laboratory.cold"
+about = "a draught in the alembic and no fire: the rail waits on the hearth, then on you"
+setup = "attend laboratory; debug_spawn clarified-draught; move clarified-draught to alembic"
+expect = { room = "laboratory", states = { alembic = "charged", athanor = "cold" } }
+shots = [1.0]
+steps = [
+  { type = "kindle charcoal", shots = [0.3, 1.0] },
+  { type = "distil", shots = [0.5] },
+]
+ends = { working = ["alembic", "athanor"] }
+
+[[scene]]
+name = "laboratory.laid"
+about = "charcoal laid and not lit: the rail names the athanor, then it catches"
+setup = "attend laboratory; move charcoal to athanor"
+expect = { room = "laboratory", states = { athanor = "charged" } }
+shots = [1.0]
+steps = [{ type = "light athanor", shots = [0.3, 1.0] }]
+ends = { working = ["athanor"] }
+
+[[scene]]
+name = "laboratory.banked"
+about = "the athanor damped: its fuel kept, banked, then lit again"
+setup = "attend laboratory; kindle charcoal; meditate 5; stop athanor"
+expect = { room = "laboratory", states = { athanor = "banked" } }
+shots = [1.0]
+steps = [{ type = "light athanor", shots = [0.3, 1.0] }]
+ends = { working = ["athanor"] }
+
+[[scene]]
+name = "laboratory.purge"
+about = "husks left in the mortar: fouled, then scoured clean"
+setup = "attend laboratory; kindle charcoal; grind sage; meditate 9; digest ground-sage"
+expect = { room = "laboratory", states = { mortar_and_pestle = "fouled" } }
+shots = [1.0]
+steps = [{ type = "purge mortar_and_pestle", shots = [0.3, 1.5] }]
+ends = { states = { mortar_and_pestle = "scouring" } }
+
+# --- the archive ------------------------------------------------------------
+
+[[scene]]
+name = "archive.stacks"
+about = "the stacks threaded: the maze beside the transcript"
+setup = "attend archive; research"
+expect = { room = "archive", working = ["stacks"] }
+
+[[scene]]
+name = "archive.wander"
+about = "the arrows take the maze and walk it"
+setup = "attend archive; research"
+expect = { room = "archive" }
+steps = [
+  { type = "wander", shots = [0.3] },
+  { keys = "<right><right><down><down><left>", when = "maze", shots = [0.2, 0.8] },
+  { keys = "<esc>", pause = 1.5, shots = [0.3] },
+]
+ends = { room = "archive" }
+
+[[scene]]
+name = "archive.lectern"
+about = "four fragments assembling: the seams knit closed"
+setup = "debug_spawn fragment 4 lectern; attend archive; wield lectern"
+expect = { room = "archive", working = ["lectern"] }
+
+[[scene]]
+name = "archive.glean"
+about = "a gleaning scroll marking the maze"
+seed = 3
+setup = "attend archive; research; debug_spawn gleaning-scroll 4; wield gleaning-scroll"
+expect = { room = "archive", working = ["stacks"] }
+steps = [
+  { type = "wander", shots = [0.3] },
+  { keys = "<right><down><right>", when = "maze", shots = [0.5] },
+]
+
+# --- the lens ---------------------------------------------------------------
+
+[[scene]]
+name = "lens.prism"
+about = "a figure pressed at the prism: the focus climbs the open sockets"
+seed = 3
+setup = "attend lens; probe; dial second borax; probe"
+expect = { room = "lens", working = ["prism"] }
+
+[[scene]]
+name = "lens.ward"
+about = "the ward's readings: what a probe told, surveyed"
+seed = 3
+setup = "attend lens; probe; dial second borax; probe"
+expect = { room = "lens", working = ["prism"] }
+steps = [
+  { type = "survey prism", shots = [0.5] },
+  { type = "survey second", shots = [0.5] },
+]
+
+# --- the sanctum ------------------------------------------------------------
+
+[[scene]]
+name = "sanctum.pylon"
+about = "a course up on the pylon: its face shimmers"
+setup = "attend sanctum; muster; haul wellspring barrier"
+expect = { room = "sanctum", working = ["pylon"] }
+
+[[scene]]
+name = "sanctum.worn"
+about = "a wall an hour worn, and a course hauled up it"
+setup = "attend sanctum; meditate 3600; muster"
+expect = { room = "sanctum", working = ["pylon"] }
+steps = [{ type = "haul wellspring barrier", shots = [0.5, 1.5] }]
+
+# --- the menagerie ----------------------------------------------------------
+
+[[scene]]
+name = "menagerie.circle"
+about = "a call balked: the balking rows flicker"
+setup = "attend menagerie; summon; limn keystone heed; limn sunwise oppose; summon"
+expect = { room = "menagerie", working = ["circle"] }
+
+[[scene]]
+name = "menagerie.held"
+about = "a beast held, and the roster that keeps it"
+setup = "attend menagerie; summon; debug_circle; summon; survey roster"
+expect = { room = "menagerie" }
+
+[[scene]]
+name = "menagerie.lesser"
+about = "a sealed tower's lesser circle, a call balking"
+tower = "sealed"
+setup = "debug_reach lens_1; attend menagerie; summon; limn sunwise heed; limn keystone mirror; summon"
+expect = { room = "menagerie", working = ["circle"] }
+
+# --- the bailey -------------------------------------------------------------
+
+[[scene]]
+name = "bailey.siege"
+about = "a pledge and a round: the bands roll"
+setup = "attend bailey; defend"
+expect = { room = "bailey" }
+steps = [
+  { type = "pledge d20 buckler" },
+  { type = "hold", shots = [0.2, 0.8, 1.6] },
+]
+
+[[scene]]
+name = "bailey.rounds"
+about = "three rounds pledged and held"
+setup = "attend bailey; defend"
+expect = { room = "bailey" }
+steps = [
+  { type = "pledge d20 buckler" },
+  { type = "hold", shots = [0.5] },
+  { type = "pledge d8 line" },
+  { type = "hold", shots = [0.5] },
+  { type = "pledge d6 succour" },
+  { type = "hold", shots = [0.5] },
+]
+
+[[scene]]
+name = "bailey.over"
+about = "the last round: the enemy breaks and runs"
+setup = "attend bailey; defend; debug_siege"
+expect = { room = "bailey" }
+steps = [{ type = "hold", shots = [0.3, 1.0] }]
+ends = { said = "the enemy breaks and runs" }
+
+[[scene]]
+name = "bailey.breach"
+about = "a worn tower's wall, held without a pledge until it is carried"
+setup = "attend sanctum; meditate 3600; attend bailey; defend; hold; hold; hold; hold; hold; hold; hold; hold; hold; hold"
+expect = { room = "bailey" }
+steps = [
+  { type = "hold", shots = [0.5] },
+  { type = "hold", shots = [0.2, 0.8, 1.5] },
+]
+ends = { said = "the wall is carried" }
+
+[[scene]]
+name = "bailey.sabotage"
+about = "rounds held, and something gets past the wall into a spell"
+seed = 3
+setup = "attend bailey; defend"
+expect = { room = "bailey" }
+steps = [
+  { type = "hold" },
+  { type = "hold" },
+  { type = "hold" },
+  { type = "hold", shots = [0.5] },
+  { type = "verify", shots = [0.5] },
+]
+ends = { said = "something got past the wall" }
+
+[[scene]]
+name = "bailey.supply"
+about = "standing supplies opened, then a round drawing on them"
+setup = "attend bailey; defend; debug_spawn warding 5; quaff warding; debug_spawn warding 10; quaff warding; quaff warding"
+expect = { room = "bailey" }
+steps = [{ type = "hold", shots = [0.3, 1.0] }]
+
+# --- the forge --------------------------------------------------------------
+
+[[scene]]
+name = "forge.lattice"
+about = "columns burning as they snap"
+setup = "attend forge; imbue mortar_and_pestle hurried; snap apex"
+expect = { room = "forge", working = ["lattice"] }
+steps = [
+  { type = "snap belt", shots = [0.5] },
+  { type = "snap hem", shots = [0.5, 1.5] },
+]
+
+[[scene]]
+name = "forge.anneal"
+about = "a charm bound, and the lattice cooling as it anneals"
+setup = "attend forge; imbue mortar_and_pestle hurried; snap apex"
+expect = { room = "forge", working = ["lattice"] }
+steps = [{ type = "anneal", shots = [0.3, 1.5, 3.0] }]
+ends = { working = ["lattice"] }
+
+[[scene]]
+name = "forge.charm"
+about = "a charm laid, and the rail naming it from another room"
+setup = "attend forge; imbue mortar_and_pestle hurried; snap apex; anneal; meditate 20; attend laboratory"
+expect = { room = "laboratory" }
+
+# --- the passage ------------------------------------------------------------
+
+[[scene]]
+name = "passage.wipe"
+about = "the laboratory crossing to the forge and back"
+setup = "attend laboratory; kindle charcoal; grind sage"
+expect = { room = "laboratory", working = ["mortar_and_pestle"] }
+steps = [
+  { type = "attend forge", shots = [0.1, 0.25, 0.4] },
+  { type = "attend laboratory", pause = 1.5, shots = [0.1, 0.25, 0.4] },
+]
+ends = { room = "laboratory" }
+
+[[scene]]
+name = "passage.union"
+about = "a panel leaving for a room with none, and coming back"
+setup = "attend forge"
+expect = { room = "forge" }
+steps = [
+  { type = "attend laboratory", shots = [0.1, 0.25, 0.4] },
+  { type = "attend forge", pause = 1.5, shots = [0.1, 0.25, 0.4] },
+]
+ends = { room = "forge" }
+
+[[scene]]
+name = "passage.gather"
+about = "the maze taking the pane, and giving it back"
+setup = "attend archive; research"
+expect = { room = "archive" }
+steps = [
+  { type = "wander", shots = [0.1, 0.25, 0.4] },
+  { keys = "<esc>", when = "maze", pause = 1.5, shots = [0.1, 0.25, 0.4] },
+]
+ends = { room = "archive" }
+
+[[scene]]
+name = "passage.weave"
+about = "the weave screen gathering in, a track walked, and out"
+setup = "attend laboratory; kindle charcoal; grind sage"
+expect = { room = "laboratory" }
+steps = [
+  { type = "weave", shots = [0.1, 0.3, 0.6] },
+  { type = "ley", when = "weave", shots = [0.3] },
+  { keys = "<right><right><down>", shots = [0.3] },
+  { keys = "<esc>", pause = 1.5, shots = [0.1, 0.3, 0.6] },
+]
+ends = { room = "laboratory" }
+
+# --- progress ---------------------------------------------------------------
+
+[[scene]]
+name = "progress.renown"
+about = "renown rolling up to the truth, twice"
+setup = "debug_renown 0"
+steps = [
+  { type = "debug_renown 20", shots = [0.1, 0.4, 0.8] },
+  { type = "debug_renown 30", shots = [0.2, 0.6] },
+]
+
+[[scene]]
+name = "progress.column"
+about = "a spell assembling: the room's column climbing with its +N"
+hold = 10
+setup = "attend archive; debug_spawn fragment 8; debug_spell assembling"
+expect = { room = "archive" }
+steps = [{ type = "invoke assembling", shots = [0.5, 2.0, 4.0] }]
+
+[[scene]]
+name = "progress.road"
+about = "two brews make a pace: the road and the ley gauge forecast the next"
+setup = "attend laboratory; kindle charcoal; debug_spawn clarified-draught 3; distil clarified-draught; meditate 60; empty alembic; distil clarified-draught; meditate 60"
+expect = { room = "laboratory", working = ["athanor"] }
+steps = [
+  { type = "empty alembic", shots = [0.3] },
+  { type = "distil clarified-draught", shots = [0.5] },
+]
+ends = { working = ["alembic"] }
+
+[[scene]]
+name = "progress.news"
+about = "a brew landing while you stand elsewhere: the rail latches its news"
+hold = 12
+setup = "attend laboratory; kindle charcoal; debug_spawn clarified-draught 1; distil clarified-draught; attend archive; meditate 52"
+expect = { room = "archive" }
+shots = [2.0, 6.0, 9.0, 11.5]
+ends = { room = "archive", said = "the laboratory line advances" }
+
+[[scene]]
+name = "progress.fork"
+about = "a sealed tower's third brew opens the ley line's first fork"
+tower = "sealed"
+hold = 12
+setup = "attend laboratory; kindle charcoal; debug_spawn clarified-draught 3; distil clarified-draught; meditate 60; empty alembic; distil clarified-draught; meditate 60; empty alembic; distil clarified-draught; meditate 52"
+expect = { room = "laboratory", working = ["alembic"] }
+shots = [2.0, 6.0, 9.0, 11.5]
+ends = { said = "the ley line forks ahead" }
+
+[[scene]]
+name = "progress.rates"
+about = "`status rates`: each room's rate, what it waits on, and the slot"
+setup = "attend laboratory; kindle charcoal; debug_spawn clarified-draught 3; distil clarified-draught; meditate 60; empty alembic; distil clarified-draught; meditate 60"
+expect = { room = "laboratory", states = { alembic = "ready" } }
+steps = [{ type = "status rates", shots = [0.5] }]
+
+[[scene]]
+name = "progress.gathering"
+about = "a flask waiting on salt, two brews along the line: the rail keeps its word and its share"
+setup = "attend laboratory; kindle charcoal; debug_spawn clarified-draught 3; distil clarified-draught; meditate 60; empty alembic; distil clarified-draught; meditate 60; empty alembic; debug_spawn sage-tincture; move sage-tincture to flask_and_rod"
+expect = { room = "laboratory", states = { flask_and_rod = "gathering", alembic = "empty" } }
+
+[[scene]]
+name = "progress.gain"
+about = "a third brew lands at a pace: the ley gauge's +N beside its forecast, a station crossed"
+hold = 10
+setup = "attend laboratory; kindle charcoal; debug_spawn clarified-draught 3; distil clarified-draught; meditate 60; empty alembic; distil clarified-draught; meditate 60; empty alembic; distil clarified-draught; meditate 50"
+expect = { room = "laboratory", working = ["alembic"] }
+shots = [1.0, 5.2, 5.5, 5.9, 6.4, 9.0]
+ends = { said = "the ley line forks ahead" }
+
+[[scene]]
+name = "progress.station"
+about = "a station reached on the laboratory's road"
+setup = "attend laboratory"
+expect = { room = "laboratory" }
+steps = [{ type = "debug_reach laboratory_1", shots = [0.1, 0.5, 1.0] }]
+
+# --- spells -----------------------------------------------------------------
+
+[[scene]]
+name = "spell.write"
+about = "a spell scribed, typed with its highlighting, read as the orb hears it, saved and cast"
+hold = 12
+setup = "attend laboratory; kindle charcoal"
+expect = { room = "laboratory" }
+steps = [
+  { type = "scribe brewing" },
+  { keys = "edit<enter>repeat 2<enter>grind the sage<enter>empty mortar_and_pestle<enter>end", when = "editor", shots = [0.5] },
+  { keys = "<esc>interpret<enter>", shots = [0.5] },
+  # Out of the reading, then `quit` saves and closes.
+  { keys = "<esc>quit<enter>", pause = 2.0, shots = [0.2, 0.8] },
+  { type = "invoke brewing", shots = [0.5, 2.0] },
+]
+ends = { room = "laboratory", said = "the orb takes up brewing.spell" }
+
+[[scene]]
+name = "spell.running"
+about = "the shipped worked example invoked: the rail counting what it runs"
+hold = 10
+setup = "attend laboratory"
+expect = { room = "laboratory" }
+steps = [{ type = "invoke first_light", shots = [0.5, 2.0, 4.0] }]
+
+[[scene]]
+name = "spell.fault"
+about = "a broken spell: the rail's mark and the greying glass, cleared by walking in"
+setup = "attend laboratory; scribe broken"
+edit = "edit\nrepeat 5\nwield zzz\nend\n<esc>\nquit"
+then = "invoke broken; meditate 20; attend archive"
+expect = { room = "archive" }
+steps = [{ type = "attend laboratory", pause = 3.0, shots = [0.2, 0.6, 1.2] }]
+ends = { room = "laboratory" }
+
+[[scene]]
+name = "spell.cursors"
+about = "one spell with two cursors at once"
+hold = 10
+setup = "attend sanctum; debug_take satchel_1; debug_take cursors_1"
+expect = { room = "sanctum" }
+steps = [{ type = "invoke coursing", shots = [1.0, 3.0] }]
+
+# --- stores -----------------------------------------------------------------
+
+[[scene]]
+name = "stores.arsenal"
+about = "a brewed clarity carried to the arsenal"
+setup = "attend laboratory; kindle charcoal; debug_spawn clarified-draught; distil clarified-draught; meditate 60; empty alembic; move clarity to arsenal; attend archive; survey arsenal"
+expect = { room = "archive" }
+
+[[scene]]
+name = "stores.satchel"
+about = "notes queued in the satchel"
+setup = "attend menagerie; debug_take satchel_1; queue heed; queue yoke; queue heed; survey satchel"
+expect = { room = "menagerie" }
+
+[[scene]]
+name = "sealed.doors"
+about = "a sealed tower: the doors that are not open yet"
+tower = "sealed"
+setup = "attend archive; attend stacks; survey archive; survey /tower"
+
+[[scene]]
+name = "sealed.rail"
+about = "a sealed tower's rail: one room, the rest dotted"
+tower = "sealed"
+setup = "attend laboratory; attend archive"
+expect = { room = "laboratory" }
+
+[[scene]]
+name = "ley.line"
+about = "the weave's ley track, walked"
+setup = "weave"
+expect = { surface = "weave" }
+steps = [
+  { type = "ley", when = "weave", shots = [0.3] },
+  { keys = "<right><right><down>", shots = [0.3, 1.0] },
+]
+ends = { surface = "weave" }
+
+[[scene]]
+name = "ley.grant"
+about = "a grant taken: kindling with fuel to spare"
+setup = "debug_take fuel_1; attend laboratory"
+expect = { room = "laboratory" }
+steps = [{ type = "kindle charcoal", shots = [0.3] }]
+ends = { working = ["athanor"] }
+
+# --- the glass --------------------------------------------------------------
+
+[[scene]]
+name = "glass.tube"
+about = "F3 through every tube state, over a working laboratory"
+setup = "attend laboratory; kindle charcoal; grind sage"
+expect = { room = "laboratory" }
+steps = [
+  { keys = "<f3>", shots = [0.8] },
+  { keys = "<f3>", pause = 1.5, shots = [0.8] },
+  { keys = "<f3>", pause = 1.5, shots = [0.8] },
+]
+
+[[scene]]
+name = "glass.themes"
+about = "F2 through the phosphors"
+setup = "attend laboratory; kindle charcoal; grind sage"
+expect = { room = "laboratory" }
+steps = [
+  { keys = "<f2>", shots = [0.5] },
+  { keys = "<f2>", pause = 1.2, shots = [0.5] },
+  { keys = "<f2>", pause = 1.2, shots = [0.5] },
+  { keys = "<f2>", pause = 1.2, shots = [0.5] },
+]
+
+[[scene]]
+name = "glass.sight"
+about = "F8 through the sights, greyscale among them"
+setup = "attend laboratory; kindle charcoal; grind sage"
+expect = { room = "laboratory" }
+steps = [
+  { keys = "<f8>", shots = [0.5] },
+  { keys = "<f8>", pause = 1.5, shots = [0.5] },
+]
+
+[[scene]]
+name = "glass.register"
+about = "F7: the orb's tonal register turning"
+setup = "attend laboratory; kindle charcoal; grind sage; status"
+expect = { room = "laboratory" }
+steps = [
+  { keys = "<f7>", shots = [0.5] },
+  { type = "survey", shots = [0.5] },
+  { keys = "<f7>", pause = 1.5, shots = [0.5] },
+]
+
+[[scene]]
+name = "glass.still"
+about = "motion off over a busy laboratory: nothing moves that is not news"
+settings = { motion = "off" }
+setup = "attend laboratory; kindle charcoal; grind sage"
+expect = { room = "laboratory", working = ["mortar_and_pestle"] }
+
+[[scene]]
+name = "glass.strain"
+about = "a losing siege held at strain: the corners draw in, the colour drains"
+strain = [0.9, 1.0]
+setup = "attend bailey; defend"
+expect = { room = "bailey" }
+
+[[scene]]
+name = "glass.afterglow"
+about = "the phosphor keeping what just changed: a number rolling, a line typed"
+setup = "debug_renown 0"
+steps = [
+  { type = "debug_renown 25", shots = [0.05, 0.1, 0.2] },
+  { type = "status", shots = [0.05, 0.1] },
+]
+
+[[scene]]
+name = "glass.afterglow_off"
+about = "the same with glow off: no trail"
+settings = { glow = "off" }
+setup = "debug_renown 0"
+steps = [
+  { type = "debug_renown 25", shots = [0.05, 0.1, 0.2] },
+  { type = "status", shots = [0.05, 0.1] },
+]
+
+[[scene]]
+name = "glass.linear"
+about = "F5: the frame as the screen reader hears it, and back"
+setup = "attend laboratory; kindle charcoal; grind sage"
+expect = { room = "laboratory" }
+steps = [
+  { keys = "<f5>", shots = [0.8] },
+  { keys = "<f5>", pause = 2.0, shots = [0.8] },
+]
+
+[[scene]]
+name = "glass.contrast"
+about = "contrast high"
+settings = { contrast = "high" }
+setup = "attend laboratory; kindle charcoal; grind sage"
+expect = { room = "laboratory" }
+
+[[scene]]
+name = "glass.weight"
+about = "the heavy face"
+settings = { weight = "heavy" }
+setup = "attend laboratory; kindle charcoal; grind sage"
+expect = { room = "laboratory" }
+
+[[scene]]
+name = "glass.scale"
+about = "scale whole: the picture at a whole multiple"
+settings = { scale = "whole" }
+setup = "attend laboratory; kindle charcoal; grind sage"
+expect = { room = "laboratory" }
+
+# --- text -------------------------------------------------------------------
+
+[[scene]]
+name = "text.help"
+about = "help in the laboratory"
+setup = "attend laboratory; help"
+expect = { room = "laboratory" }
+
+[[scene]]
+name = "text.status"
+about = "status, its ledger rolling"
+setup = "attend laboratory; kindle charcoal; grind sage"
+expect = { room = "laboratory" }
+steps = [{ type = "status", shots = [0.2, 0.8] }]
+
+[[scene]]
+name = "text.recall"
+about = "recall apprentice: the worked example for the room you stand in"
+setup = "attend laboratory; recall apprentice"
+expect = { room = "laboratory" }
+
+[[scene]]
+name = "text.grimoire"
+about = "the grimoire, where spells are kept, and its help"
+setup = "attend grimoire; help"
+
+[[scene]]
+name = "text.scroll"
+about = "PgUp back through the transcript, and down again"
+setup = "attend laboratory; help; recall apprentice; status"
+expect = { room = "laboratory" }
+steps = [
+  { keys = "<pgup>", shots = [0.3] },
+  { keys = "<pgup>", pause = 1.2, shots = [0.3] },
+  { keys = "<pgdn><pgdn>", pause = 1.5, shots = [0.3] },
+]
+
+[[scene]]
+name = "text.unfurl"
+about = "unfurl: the transcript takes the keys"
+setup = "attend laboratory; help; recall apprentice"
+expect = { room = "laboratory" }
+steps = [
+  { type = "unfurl", shots = [0.3] },
+  { keys = "<up><up><up>", shots = [0.3] },
+  { keys = "<esc>", pause = 1.5, shots = [0.3] },
+]
+
+[[scene]]
+name = "text.tab"
+about = "Tab: what a half-typed word could be"
+setup = "attend laboratory"
+expect = { room = "laboratory" }
+steps = [{ keys = "at<tab>", shots = [0.3, 1.0] }]
+
+[[scene]]
+name = "text.choices"
+about = "a line that could mean several things: a numbered question, answered"
+seed = 11
+asks = true
+setup = "attend laboratory"
+expect = { room = "laboratory" }
+steps = [
+  { type = "purge s", shots = [0.3] },
+  { type = "1", pause = 1.5, shots = [0.3] },
+]
+
+[[scene]]
+name = "text.pace"
+about = "the reading pace at 1200 baud: output arriving a letter at a time"
+settings = { pace = "1200" }
+setup = "attend laboratory"
+expect = { room = "laboratory" }
+steps = [{ type = "recall apprentice", shots = [0.2, 0.6, 1.2] }]
+
+# --- a whole cycle ------------------------------------------------------------
+#
+# Every picture repeats every 24 seconds (`CYCLE_SECS`), and the clock starts
+# with the scene, so these hold past the wrap and shoot either side of it.
+
+[[scene]]
+name = "cycle.prism"
+about = "the prism through a whole cycle: the focus never jumps at the wrap"
+seed = 3
+hold = 26
+setup = "attend lens; probe; dial second borax; probe"
+expect = { room = "lens", working = ["prism"] }
+shots = [1.0, 12.0, 23.4, 23.8, 24.2, 24.6, 25.5]
+
+[[scene]]
+name = "cycle.lectern"
+about = "the lectern through the wrap: its seams knit one a beat, never two"
+hold = 26
+setup = "debug_spawn fragment 4 lectern; attend archive"
+expect = { room = "archive", states = { lectern = "charged" } }
+steps = [{ type = "wield lectern", pause = 6.0 }]
+shots = [1.0, 12.0, 23.4, 23.8, 24.2, 24.6, 25.5]
+ends = { working = ["lectern"] }

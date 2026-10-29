@@ -92,7 +92,17 @@ impl Geometry {
     }
 
     /// Hand the buffers back to the mesh. Moves, never copies.
-    fn commit(self, mesh: &mut Mesh) {
+    ///
+    /// A frame with nothing on it — the screen going back to blank, as a boot
+    /// card replayed after a drawn screen does — commits [`empty_mesh`]'s one
+    /// degenerate triangle, never zero vertices.
+    fn commit(mut self, mesh: &mut Mesh) {
+        if self.positions.is_empty() {
+            self.positions.extend_from_slice(&[[0.0, 0.0, 0.0]; 3]);
+            self.uvs.extend_from_slice(&[[0.0, 0.0]; 3]);
+            self.colours.extend_from_slice(&[[0.0, 0.0, 0.0, 0.0]; 3]);
+            self.indices.extend_from_slice(&[0, 1, 2]);
+        }
         mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, self.positions);
         mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, self.uvs);
         mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, self.colours);
@@ -465,6 +475,28 @@ mod tests {
     /// It kept a staging buffer, cloned it into the mesh every frame, and
     /// asserted only that the *staging* buffer kept its capacity — so ~900 kB of
     /// per-frame allocation passed a test named for reuse.
+    #[test]
+    fn a_screen_gone_blank_keeps_one_degenerate_triangle() {
+        // Zero vertices is what Bevy's allocator answers with `use-after-free`;
+        // the launch's blank grid starts on `empty_mesh`, a replayed boot card
+        // reaches blank from a drawn screen.
+        let mut mesh = empty_mesh();
+        build(
+            &frame_with("something", 20, 1),
+            &MUTED_VIOLET,
+            true,
+            &mut mesh,
+        );
+        assert!(quads(&mesh) > 0);
+        build(
+            &Frame::new(GridSize::new(20, 1)),
+            &MUTED_VIOLET,
+            false,
+            &mut mesh,
+        );
+        assert_eq!(positions(&mesh).len(), 3);
+    }
+
     #[test]
     fn rebuilding_allocates_nothing() {
         let mut mesh = empty_mesh();

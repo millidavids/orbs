@@ -15,6 +15,8 @@ use crate::content::Progression;
 pub struct Row {
     /// The row's id; `ledger_<id>` is its label.
     pub id: String,
+    /// The tally key it counts, which a rate is measured by too.
+    pub key: String,
     /// The room that shows it, if one does.
     pub domain: Option<String>,
     /// How many, in all.
@@ -54,5 +56,6 @@ fn counted(entry: &crate::content::LedgerEntry, tally: &Tally) -> Row {
         domain: entry.domain.clone(),
         count: tally.count(&key),
         by_spell: tally.count(&by_spell(&key)),
+        key,
     }
 }

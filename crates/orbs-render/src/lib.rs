@@ -68,6 +68,7 @@ mod bath;
 mod board;
 mod cell;
 mod circle;
+mod figure;
 mod fire;
 mod frame;
 mod geometry;
@@ -104,8 +105,9 @@ pub use bath::Steep;
 pub use board::{Attempt, Board, SIGILS, TINTS};
 pub use cell::Cell;
 pub use cp437::{REPLACEMENT, cp437_glyph, cp437_index, is_renderable};
+pub use figure::{Figure, Rite};
 pub use fire::Burn;
-pub use frame::Frame;
+pub use frame::{Clip, Frame};
 pub use geometry::{GridSize, Pos, Rect};
 pub use grind::{Grind, fallen_cells};
 pub use layout::{

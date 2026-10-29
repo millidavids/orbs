@@ -78,6 +78,9 @@ pub const fn split(body: Rect) -> Split {
 /// The column reserves its width first, so a gain's `+N` yields to it and never
 /// the reverse. It draws only if every row keeps a bar of [`BESIDE`] and its
 /// title; otherwise it drops whole and the gauges are exactly as they were.
+///
+/// `forecast` is the ley line's time to its next station (`crate::forecast`).
+/// Renown gets none: it falls, and a forecast of a falling number is a promise.
 pub fn paint(
     painter: &mut Painter<'_>,
     area: Rect,
@@ -85,6 +88,7 @@ pub fn paint(
     rankward: Toward,
     rank: Option<&str>,
     room: Option<&LedgerRow>,
+    forecast: Option<&str>,
     climb: &Climb,
     prose: &Prose,
 ) {
@@ -96,6 +100,7 @@ pub fn paint(
         station,
         climb.toward(Watch::Ley, station),
         None,
+        forecast,
         prose,
     );
     let renown = (area.rows >= 2)
@@ -105,6 +110,7 @@ pub fn paint(
                 rankward,
                 climb.toward(Watch::Renown, rankward),
                 rank,
+                None,
                 prose,
             )
         })

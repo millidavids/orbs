@@ -4,16 +4,30 @@ use bevy_ecs::prelude::*;
 use orbs_render::{FieldName, RecordKind};
 
 use crate::content::Prose;
+use crate::parser::{Intent, RATES};
 use crate::rng::Rngs;
 use crate::session::{Pending, Scrollback};
 use crate::tick::Tick;
 use crate::tower;
 
-/// Report what the world currently is.
+/// Report what the world currently is, or the part a word narrows it to.
+pub(super) fn status(intent: &Intent, world: &mut World) {
+    let narrowed = intent
+        .arguments
+        .first()
+        .map(|argument| argument.value.as_str());
+    if narrowed == Some(RATES) {
+        super::rates::rates(world);
+        return;
+    }
+    whole(world);
+}
+
+/// The whole report.
 ///
 /// Every value here belongs to a subsystem that otherwise has no way of being
 /// seen from the game — the tick and seed are the determinism spine.
-pub(super) fn status(world: &mut World) {
+fn whole(world: &mut World) {
     let tick = world.resource::<Tick>().get();
     let seed = world.resource::<Rngs>().master_seed();
     let logged = world.resource::<Scrollback>().records().len();

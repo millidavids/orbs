@@ -1,10 +1,4 @@
-//! A full-screen post-process pass: one uniform, the frame so far, and a
-//! fragment shader. The tube and §14's accommodation are both one.
-//!
-//! Plain systems in the `Core2d` schedule, not a port of `court_wizard`'s
-//! `ViewNode`: Bevy has had no render graph since 0.19, and §4 flagged the
-//! render-graph Rust as "Bevy's most volatile surface". The shaders ported
-//! almost unchanged; the surrounding Rust did not survive at all.
+//! The pass itself: its pipeline per format, its uniform, and the draw.
 
 use std::marker::PhantomData;
 
@@ -15,15 +9,17 @@ use bevy::prelude::*;
 use bevy::render::render_resource::binding_types::{sampler, texture_2d, uniform_buffer};
 use bevy::render::render_resource::encase::internal::WriteInto;
 use bevy::render::render_resource::{
-    BindGroupEntries, BindGroupLayoutDescriptor, BindGroupLayoutEntries, CachedRenderPipelineId,
-    ColorTargetState, ColorWrites, DynamicUniformBuffer, FragmentState, Operations, PipelineCache,
-    RenderPassColorAttachment, RenderPassDescriptor, RenderPipelineDescriptor, Sampler,
-    SamplerBindingType, SamplerDescriptor, ShaderStages, ShaderType, TextureFormat,
-    TextureSampleType,
+    BindGroupLayoutDescriptor, CachedRenderPipelineId, ColorTargetState, ColorWrites,
+    DynamicBindGroupEntries, DynamicBindGroupLayoutEntries, DynamicUniformBuffer, FragmentState,
+    Operations, PipelineCache, RenderPassColorAttachment, RenderPassDescriptor,
+    RenderPipelineDescriptor, Sampler, SamplerBindingType, SamplerDescriptor, ShaderStages,
+    ShaderType, TextureFormat, TextureSampleType,
 };
 use bevy::render::renderer::{RenderContext, RenderDevice, RenderQueue, ViewQuery};
 use bevy::render::view::ViewTarget;
 use bevy::shader::Shader;
+
+use super::History;
 
 /// The uniform a full-screen pass draws with, and what is particular to it.
 pub(crate) trait Fullscreen: ShaderType + WriteInto + Send + Sync + 'static {
@@ -41,6 +37,10 @@ pub(crate) trait Fullscreen: ShaderType + WriteInto + Send + Sync + 'static {
     fn wanted(&self) -> bool {
         true
     }
+
+    /// Whether the pass also reads the frame it drew last time, at binding 3 —
+    /// the afterglow's. See [`History`].
+    const HISTORY: bool = false;
 }
 
 /// Layout, sampler, and the pipelines built for each target format.
@@ -112,17 +112,20 @@ pub(crate) fn init_pipeline<U: Fullscreen>(
     fullscreen_shader: Res<FullscreenShader>,
     asset_server: Res<AssetServer>,
 ) {
-    let layout = BindGroupLayoutDescriptor::new(
-        format!("{}_layout", U::LABEL),
-        &BindGroupLayoutEntries::sequential(
-            ShaderStages::FRAGMENT,
-            (
-                texture_2d(TextureSampleType::Float { filterable: true }),
-                sampler(SamplerBindingType::Filtering),
-                uniform_buffer::<U>(true),
-            ),
+    // The frame, its sampler and the uniform; the kept frame after them.
+    let mut entries = DynamicBindGroupLayoutEntries::sequential(
+        ShaderStages::FRAGMENT,
+        (
+            texture_2d(TextureSampleType::Float { filterable: true }),
+            sampler(SamplerBindingType::Filtering),
+            uniform_buffer::<U>(true),
         ),
     );
+    if U::HISTORY {
+        entries =
+            entries.extend_sequential((texture_2d(TextureSampleType::Float { filterable: true }),));
+    }
+    let layout = BindGroupLayoutDescriptor::new(format!("{}_layout", U::LABEL), &entries);
 
     // The default sampler: this samples an already-rasterised image, and the
     // tube's barrel warp lands between texels by definition.
@@ -166,9 +169,17 @@ pub(crate) fn pass<U: Fullscreen>(
     pipeline_cache: Res<PipelineCache>,
     mut pipeline: ResMut<Pipeline<U>>,
     uniform: Res<UniformBuffer<U>>,
+    mut history: Option<ResMut<History>>,
     mut ctx: RenderContext,
 ) {
     if extracted.is_some_and(|extracted| !extracted.0.wanted()) {
+        // Still cuts and keeps nothing: a trail resumed from a frame left
+        // behind when motion stopped would be a picture of the past.
+        if U::HISTORY
+            && let Some(history) = history.as_deref_mut()
+        {
+            history.forget();
+        }
         return;
     }
     let view_target = view.into_inner();
@@ -181,32 +192,62 @@ pub(crate) fn pass<U: Fullscreen>(
     let Some(binding) = uniform.buffer.binding() else {
         return;
     };
+    // Every early return before the ping-pong below: after it, a pass that
+    // drew nothing leaves the next one reading an empty texture.
+    let kept = if U::HISTORY {
+        let Some(history) = history.as_deref_mut() else {
+            return;
+        };
+        Some(history.ensure(
+            ctx.render_device(),
+            view_target.main_texture().size(),
+            view_target.main_texture_format(),
+        ))
+    } else {
+        None
+    };
 
     // Ping-pong: read the frame drawn so far, write this pass's.
     let post_process = view_target.post_process_write();
 
     let label = format!("{}_bind_group", U::LABEL);
-    let bind_group = ctx.render_device().create_bind_group(
-        Some(label.as_str()),
-        &pipeline_cache.get_bind_group_layout(&pipeline.layout),
-        &BindGroupEntries::sequential((post_process.source, &pipeline.sampler, binding)),
-    );
+    let layout = pipeline_cache.get_bind_group_layout(&pipeline.layout);
+    let mut entries =
+        DynamicBindGroupEntries::sequential((post_process.source, &pipeline.sampler, binding));
+    if let Some((_, previous)) = &kept {
+        entries = entries.extend_sequential((previous,));
+    }
+    let bind_group = ctx
+        .render_device()
+        .create_bind_group(Some(label.as_str()), &layout, &entries);
 
-    let mut pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
-        label: Some(U::LABEL),
-        color_attachments: &[Some(RenderPassColorAttachment {
-            view: post_process.destination,
-            depth_slice: None,
-            resolve_target: None,
-            ops: Operations::default(),
-        })],
-        depth_stencil_attachment: None,
-        timestamp_writes: None,
-        occlusion_query_set: None,
-        multiview_mask: None,
-    });
+    {
+        let mut pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
+            label: Some(U::LABEL),
+            color_attachments: &[Some(RenderPassColorAttachment {
+                view: post_process.destination,
+                depth_slice: None,
+                resolve_target: None,
+                ops: Operations::default(),
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
 
-    pass.set_render_pipeline(render_pipeline);
-    pass.set_bind_group(0, &bind_group, &[uniform.offset]);
-    pass.draw(0..3, 0..1);
+        pass.set_render_pipeline(render_pipeline);
+        pass.set_bind_group(0, &bind_group, &[uniform.offset]);
+        pass.draw(0..3, 0..1);
+    }
+
+    // What this pass drew becomes the next frame's history. Same encoder, so
+    // after the draw; same size and format, which `ensure` made sure of.
+    if let Some((texture, _)) = &kept {
+        ctx.command_encoder().copy_texture_to_texture(
+            post_process.destination_texture.as_image_copy(),
+            texture.as_image_copy(),
+            post_process.destination_texture.size(),
+        );
+    }
 }

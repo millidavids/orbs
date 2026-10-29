@@ -82,6 +82,11 @@ pub enum Craft {
     Warding,
     /// Binding a charm on a lattice of glyphs (§10, `tower::lattice`).
     Imbuing,
+    /// Calling a beast into the menagerie's circle (§10, `tower::circle`).
+    ///
+    /// Its own craft rather than [`Idle`](Self::Idle), so the circle gets a
+    /// picture of its own (§19, *every instrument has a tempo*).
+    Summoning,
     /// Fragments into a scroll. The archive's lectern.
     ///
     /// The one craft not named by an [`Operation`](super::Operation): the lectern
@@ -118,6 +123,11 @@ pub struct Instrument {
     /// array, since this is rebuilt every frame. Decided here, as
     /// [`Self::short`] is.
     pub tints: [Option<Wash>; 2],
+    /// What it still lacks, while it is [`State::Gathering`].
+    pub wants: Option<crate::content::Lack>,
+    /// [`State::Charged`] for a run that wants heat, in a room whose hearth is
+    /// out: it waits on the fire, and a `wield` would be refused.
+    pub wants_fire: bool,
 }
 
 impl Instrument {
@@ -125,6 +135,17 @@ impl Instrument {
     #[must_use]
     pub const fn tint(&self) -> Option<Wash> {
         self.tints[0]
+    }
+
+    /// What its meter has still to go. A fire's drains, so that is what it
+    /// shows; anything else's fills, so it is what is not yet done.
+    #[must_use]
+    pub const fn remaining(&self) -> Option<u64> {
+        match (self.meter, self.state) {
+            (None, _) => None,
+            (Some(meter), State::Burning | State::Banked) => Some(meter.done),
+            (Some(meter), _) => Some(meter.total.saturating_sub(meter.done)),
+        }
     }
 }
 
@@ -226,6 +247,7 @@ pub fn instruments_in(world: &World, place: Entity) -> Vec<Instrument> {
         .collect();
 
     let mut panel = Vec::with_capacity(fixtures.len());
+    let mut heated = Vec::with_capacity(fixtures.len());
     for node in fixtures {
         let name = world
             .get::<Name>(node)
@@ -233,15 +255,26 @@ pub fn instruments_in(world: &World, place: Entity) -> Vec<Instrument> {
         // No `holds` list: a `String` per held reagent per instrument per frame
         // at 60 Hz, read by nothing in either frontend. What it reached for is
         // now `State::Fouled`.
-        let (state, meter) = read(world, node, &name, now);
+        let found = read(world, node, &name, now);
+        heated.push(found.heat);
         panel.push(Instrument {
             short: abbreviate(&name),
             craft: craft_of(world, node),
             tints: tints_of(world, node),
             name,
-            state,
-            meter,
+            state: found.state,
+            meter: found.meter,
+            wants: found.wants,
+            wants_fire: false,
         });
+    }
+    // A run that wants heat in a room whose hearth is out waits on the hearth,
+    // not on `wield`, which would refuse it.
+    let alight = panel.iter().any(|instrument| {
+        instrument.state == State::Burning && instrument.meter.is_some_and(|fuel| fuel.done > 0)
+    });
+    for (instrument, heat) in panel.iter_mut().zip(heated) {
+        instrument.wants_fire = heat && !alight;
     }
     panel
 }
@@ -257,7 +290,7 @@ pub fn state_at(world: &World, node: Entity) -> State {
     let name = world
         .get::<Name>(node)
         .map_or_else(String::new, |name| name.0.clone());
-    read(world, node, &name, now).0
+    read(world, node, &name, now).state
 }
 
 /// A two-letter form of an instrument's name, for a narrow column.
@@ -266,7 +299,7 @@ pub fn state_at(world: &World, node: Entity) -> State {
 /// `flask_and_rod` is `fr` — and the first two letters when there is only one
 /// part, which is what keeps `alembic` and `athanor` apart as `al` and `at`.
 /// Both rules are needed: initials alone would make them both `a`.
-fn abbreviate(name: &str) -> String {
+pub(crate) fn abbreviate(name: &str) -> String {
     let parts: Vec<&str> = name
         .split('_')
         .filter(|part| !matches!(*part, "and" | "of" | "the"))
@@ -280,6 +313,14 @@ fn abbreviate(name: &str) -> String {
             .collect();
     }
     name.chars().take(2).collect()
+}
+
+/// A material in one word for a narrow column: the last part of its name, so
+/// `ground-salt` is `salt` and `sage-tincture` is `tincture`. The full name is
+/// what `survey` and a reader say.
+#[must_use]
+pub fn short_material(name: &str) -> &str {
+    name.rsplit('-').next().unwrap_or(name)
 }
 
 /// The colour families of what is in an instrument, in the order it is held.
@@ -317,6 +358,7 @@ fn craft_of(world: &World, node: Entity) -> Craft {
         Some(crate::parser::Verb::Probe) => Craft::Scrying,
         Some(crate::parser::Verb::Muster) => Craft::Warding,
         Some(crate::parser::Verb::Imbue) => Craft::Imbuing,
+        Some(crate::parser::Verb::Summon) => Craft::Summoning,
         // No operation: an instrument with recipes runs anyway, and a fixture
         // with neither is a shelf.
         _ => {
@@ -337,10 +379,10 @@ fn craft_of(world: &World, node: Entity) -> Craft {
 }
 
 /// What one instrument is doing, and how far through.
-fn read(world: &World, node: Entity, name: &str, now: Tick) -> (State, Option<Meter>) {
+fn read(world: &World, node: Entity, name: &str, now: Tick) -> Found {
     if let Some(work) = world.get::<super::Working>(node) {
         let (done, total) = work.progress(now);
-        return (
+        return found(
             State::Working,
             Some(Meter {
                 done,
@@ -355,12 +397,12 @@ fn read(world: &World, node: Entity, name: &str, now: Tick) -> (State, Option<Me
     if let Some(open) = super::puzzle::Open::on(world, node)
         && let Some(meter) = puzzle_meter(world, node, open)
     {
-        return (State::Working, Some(meter));
+        return found(State::Working, Some(meter));
     }
     if let Some(triage) = world.get::<super::Triaging>(node) {
         let total = triage.ends.get().saturating_sub(triage.started.get());
         let done = now.get().saturating_sub(triage.started.get()).min(total);
-        return (
+        return found(
             State::Scouring,
             Some(Meter {
                 done,
@@ -386,7 +428,7 @@ fn read(world: &World, node: Entity, name: &str, now: Tick) -> (State, Option<Me
         } else {
             State::Empty
         };
-        return (
+        return found(
             state,
             Some(Meter {
                 done: u64::from(world.resource::<super::Integrity>().get()),
@@ -401,7 +443,7 @@ fn read(world: &World, node: Entity, name: &str, now: Tick) -> (State, Option<Me
     if world.get::<super::HeatSource>(node).is_some() {
         if let Some(fire) = super::burning(world, node) {
             let (done, total) = fire.fuel(now);
-            return (
+            return found(
                 State::Burning,
                 Some(Meter {
                     done,
@@ -412,7 +454,7 @@ fn read(world: &World, node: Entity, name: &str, now: Tick) -> (State, Option<Me
         }
         let banked = super::banked(world, node);
         if banked > 0 {
-            return (
+            return found(
                 State::Banked,
                 Some(Meter {
                     done: banked,
@@ -430,7 +472,7 @@ fn read(world: &World, node: Entity, name: &str, now: Tick) -> (State, Option<Me
                 .get::<Name>(held)
                 .is_some_and(|name| fuels.get(&name.0).is_some())
         });
-        return (
+        return found(
             if holds_fuel {
                 State::Charged
             } else {
@@ -442,14 +484,14 @@ fn read(world: &World, node: Entity, name: &str, now: Tick) -> (State, Option<Me
 
     let held = children_of(world, node);
     if held.is_empty() {
-        return (State::Empty, None);
+        return found(State::Empty, None);
     }
     // A product waiting is `ready`.
     if held
         .iter()
         .any(|held| world.get::<super::Product>(*held).is_some())
     {
-        return (State::Ready, None);
+        return found(State::Ready, None);
     }
     // Otherwise: does what is in there start anything? This fell through to
     // `Charged`, so an instrument holding only the last run's husks drew the same
@@ -461,16 +503,42 @@ fn read(world: &World, node: Entity, name: &str, now: Tick) -> (State, Option<Me
     // they know they are holding two things that make nothing, and `charged` for
     // a run that will never start is the lie this column exists to remove.
     let known = super::known(world);
-    if recipes.matching(name, &holding, &known).is_some() {
-        return (State::Charged, None);
+    if let Some(recipe) = recipes.matching(name, &holding, &known) {
+        return Found {
+            heat: recipe.heat,
+            ..found(State::Charged, None)
+        };
     }
     // Part of a recipe is not leavings. The lectern wants four distinct shards,
     // so one, two or three fell through to `Fouled` — the panel telling a player
     // *collecting a set* that their instrument will not start.
-    if recipes.gathering(name, &holding, &known) {
-        return (State::Gathering, None);
+    if let Some(lack) = recipes.missing(name, &holding, &known) {
+        return Found {
+            wants: Some(lack),
+            ..found(State::Gathering, None)
+        };
     }
-    (State::Fouled, None)
+    found(State::Fouled, None)
+}
+
+/// What [`read`] found: the word and the meter, and what the contents add —
+/// what a gathering tool still lacks, and whether a charged one's run wants
+/// heat. One walk of what it holds gives all of it.
+struct Found {
+    state: State,
+    meter: Option<Meter>,
+    wants: Option<crate::content::Lack>,
+    heat: bool,
+}
+
+/// `state` and `meter`, with nothing more to say.
+const fn found(state: State, meter: Option<Meter>) -> Found {
+    Found {
+        state,
+        meter,
+        wants: None,
+        heat: false,
+    }
 }
 
 /// How far through an open puzzle is — the meter [`read`] draws while it is

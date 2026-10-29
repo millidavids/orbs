@@ -105,10 +105,17 @@ pub struct Brief {
     pub name: &'static str,
     /// Whether the room is open; a sealed one draws as §11.5's dark box.
     pub built: bool,
-    /// What the busiest instrument in it is doing.
+    /// What the instrument the room is reported as is doing — see
+    /// [`reported`](super::reported).
     pub state: State,
-    /// That instrument's name and how long it has left, when it is working.
+    /// What the room is waiting on, the answer `status rates` gives.
+    pub wait: super::Wait,
+    /// Twelve cells on what is working or waiting: `al 22t`, `at al`, `fr
+    /// +salt`, `after mp`, or the forge's charm.
     pub detail: Option<String>,
+    /// What a reader hears for [`detail`](Self::detail) when the cells are a
+    /// shorthand: the whole sentence `status rates` says.
+    pub detail_spoken: Option<String>,
     /// A spell running here, if one is.
     pub spell: Option<String>,
     /// How many cursors of automation are running here, in total.
@@ -131,6 +138,7 @@ pub fn briefs(world: &World) -> Vec<Brief> {
     let rooms = rooms_of(world);
     let marks = world.resource::<Marks>();
     let running = running_by_domain(world);
+    let casts = running_spells(world);
     let lines = super::mastery(world);
 
     DOMAINS
@@ -141,7 +149,9 @@ pub fn briefs(world: &World) -> Vec<Brief> {
                     name,
                     built: false,
                     state: State::Empty,
+                    wait: super::Wait::Nothing,
                     detail: None,
+                    detail_spoken: None,
                     spell: None,
                     running: 0,
                     mark: None,
@@ -150,7 +160,9 @@ pub fn briefs(world: &World) -> Vec<Brief> {
             };
             let open = world.resource::<super::Opened>().is_open(name);
             let instruments = super::panel::instruments_in(world, node);
-            let busiest = busiest(&instruments);
+            let reported = super::reported(&instruments);
+            let wait = super::wait_in(&instruments, name, &casts);
+            let (detail, detail_spoken) = detail(world, name, reported, &wait);
             Brief {
                 name,
                 built: open,
@@ -162,8 +174,10 @@ pub fn briefs(world: &World) -> Vec<Brief> {
                 } else {
                     None
                 },
-                state: busiest.map_or(State::Empty, |instrument| instrument.state),
-                detail: busiest.and_then(detail_of),
+                state: reported.map_or(State::Empty, |instrument| instrument.state),
+                wait,
+                detail,
+                detail_spoken,
                 spell: running
                     .iter()
                     .find(|(had, _, _)| had == name)
@@ -178,13 +192,45 @@ pub fn briefs(world: &World) -> Vec<Brief> {
         .collect()
 }
 
-/// The instrument whose state the whole room is reported as: the first busy
-/// one, by `State::is_busy`, the panel's and the spell language's test.
-fn busiest(instruments: &[Instrument]) -> Option<&Instrument> {
-    instruments
-        .iter()
-        .find(|instrument| instrument.state.is_busy())
-        .or_else(|| instruments.first())
+/// The detail row, and what a reader hears for it when it is shorthand.
+///
+/// The wait decides: a held spell says what holds it; an instrument says its
+/// meter (`al 22t`) or else its wait (`at al`). The forge, with nothing else to
+/// say, names the charm nearest lapsing, by the word the forge publishes.
+fn detail(
+    world: &World,
+    room: &str,
+    reported: Option<&Instrument>,
+    wait: &super::Wait,
+) -> (Option<String>, Option<String>) {
+    let prose = world.resource::<crate::content::Prose>();
+    let metered = match wait {
+        super::Wait::At { .. } => reported.and_then(detail_of),
+        super::Wait::Held { .. } | super::Wait::Nothing => None,
+    };
+    if let Some(drawn) = metered {
+        return (Some(drawn), None);
+    }
+    if let Some(drawn) = super::wait::short(prose, wait) {
+        return (Some(drawn), Some(super::wait_sentence(prose, wait)));
+    }
+    if room == super::charm::FORGE
+        && let Some((kind, left)) = super::charm::soonest(world)
+    {
+        let state = if left <= super::charm::EBBING_AT {
+            super::charm::EBBING
+        } else {
+            super::charm::GRACED
+        };
+        let count = left.to_string();
+        let drawn = prose.line("brief_charm", &[("state", state), ("count", &count)]);
+        let spoken = prose.line(
+            "brief_charm_said",
+            &[("name", kind.word()), ("state", state), ("count", &count)],
+        );
+        return (Some(drawn), Some(spoken));
+    }
+    (None, None)
 }
 
 /// `al 22t` — what is working and how much of it is left.
@@ -193,7 +239,8 @@ fn busiest(instruments: &[Instrument]) -> Option<&Instrument> {
 /// number is the half a glance wants.
 fn detail_of(instrument: &Instrument) -> Option<String> {
     let meter = instrument.meter?;
-    let left = meter.total.saturating_sub(meter.done);
+    // What a fire has left, not what it has burnt: one rule, `status rates`'s.
+    let left = instrument.remaining()?;
     // Integrity counts up, so it prints what is done, with `%` so it does not
     // read as a remainder.
     if meter.unit == super::panel::Unit::Standing {
@@ -209,7 +256,7 @@ fn detail_of(instrument: &Instrument) -> Option<String> {
 
 /// Every room a domain could be, by name: `/tower`'s children and the
 /// filesystem root's, filtered by [`DOMAINS`] rather than by position.
-fn rooms_of(world: &World) -> Vec<(String, Entity)> {
+pub(super) fn rooms_of(world: &World) -> Vec<(String, Entity)> {
     let named = |node: Entity| world.get::<Name>(node).map(|name| (name.0.clone(), node));
 
     let outside = children_of(world, root(world));
@@ -254,6 +301,8 @@ pub struct Cast {
     pub domain: String,
     /// How many cursors it is running on. One unless it has forked.
     pub cursors: usize,
+    /// What it yielded on last turn, if it yielded.
+    pub held: Option<super::spell::Hold>,
 }
 
 /// Every spell running anywhere, with where and on how many cursors.
@@ -278,6 +327,7 @@ pub fn running_spells(world: &World) -> Vec<Cast> {
             spell: crate::content::without_extension(&spell).to_owned(),
             domain,
             cursors: state.strands.len().max(1),
+            held: state.held.clone(),
         });
     }
     found.sort_by(|left, right| left.spell.cmp(&right.spell));
@@ -400,5 +450,29 @@ mod tests {
 
     fn world_mark(sim: &Sim, domain: &str) -> Option<Mark> {
         sim.world().resource::<Marks>().get(domain)
+    }
+
+    #[test]
+    fn a_fire_on_the_rail_counts_its_fuel_left() {
+        // The rail and `status rates` read one rule; the rail once said `at 12t`
+        // of a fire with 588 ticks to burn.
+        let mut sim = Sim::new(1);
+        sim.submit("attend laboratory");
+        sim.step();
+        sim.submit("kindle charcoal");
+        sim.step();
+        for _ in 0..10 {
+            sim.step();
+        }
+        let laboratory = briefs(sim.world())
+            .into_iter()
+            .find(|brief| brief.name == "laboratory")
+            .and_then(|brief| brief.detail);
+        let left: Option<u64> = laboratory
+            .as_deref()
+            .and_then(|detail| detail.strip_prefix("at "))
+            .and_then(|count| count.strip_suffix('t'))
+            .and_then(|count| count.parse().ok());
+        assert!(left.is_some_and(|left| left > 500), "{laboratory:?}");
     }
 }

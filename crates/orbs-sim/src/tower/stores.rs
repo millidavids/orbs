@@ -71,23 +71,21 @@ impl Freshness {
 
 /// When the tower last made each thing, lately.
 ///
-/// One short, bounded list per name. `BTreeMap` for `Tally`'s reason: a save is
-/// read by people, and key order is what makes a diff legible.
+/// One short [`Ring`](super::ring::Ring) per name, the same shape a room's rate
+/// is read from. `BTreeMap` for `Tally`'s reason: a save is read by people, and
+/// key order is what makes a diff legible.
 #[derive(Resource, Debug, Default, Clone, PartialEq, Eq)]
-pub struct Stores(BTreeMap<String, Vec<u64>>);
+pub struct Stores(BTreeMap<String, super::ring::Ring>);
 
 impl Stores {
     /// Record that one `named` was made at `now`.
+    ///
+    /// Nothing past `FRESH_AT` changes an answer, so that is all it keeps.
     pub fn made(&mut self, named: &str, now: u64) {
-        let makings = self.0.entry(named.to_owned()).or_default();
-        makings.push(now);
-        prune(makings, now);
-        // Keep the newest, drop the oldest: the rate is about *lately*, and
-        // nothing past `FRESH_AT` changes an answer.
-        if makings.len() > REMEMBERED {
-            let excess = makings.len() - REMEMBERED;
-            makings.drain(..excess);
-        }
+        self.0
+            .entry(named.to_owned())
+            .or_default()
+            .push(now, WINDOW, REMEMBERED);
     }
 
     /// How many `named` were made inside [`WINDOW`] of `now`.
@@ -95,7 +93,7 @@ impl Stores {
     pub fn rate(&self, named: &str, now: u64) -> usize {
         self.0
             .get(named)
-            .map(|makings| makings.iter().filter(|at| inside(**at, now)).count())
+            .map(|makings| makings.within(now, WINDOW))
             .unwrap_or_default()
     }
 
@@ -113,12 +111,15 @@ impl Stores {
     pub fn entries(&self) -> impl Iterator<Item = (&str, &[u64])> {
         self.0
             .iter()
-            .map(|(name, makings)| (name.as_str(), makings.as_slice()))
+            .map(|(name, makings)| (name.as_str(), makings.ticks()))
     }
 
     /// Put stores back, for a save.
     pub(crate) fn restore(&mut self, entries: impl IntoIterator<Item = (String, Vec<u64>)>) {
-        self.0 = entries.into_iter().collect();
+        self.0 = entries
+            .into_iter()
+            .map(|(name, ticks)| (name, super::ring::Ring::from_ticks(ticks)))
+            .collect();
     }
 
     /// Whether anything has ever been recorded.
@@ -129,16 +130,6 @@ impl Stores {
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
-}
-
-/// Whether a making at `at` still counts at `now`.
-const fn inside(at: u64, now: u64) -> bool {
-    now.saturating_sub(at) < WINDOW
-}
-
-/// Drop makings that have fallen out of the window.
-fn prune(makings: &mut Vec<u64>, now: u64) {
-    makings.retain(|at| inside(*at, now));
 }
 
 /// Record that one `named` was made, now.

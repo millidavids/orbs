@@ -24,14 +24,107 @@ Nothing was reworded in the move. Every line below is what CLAUDE.md said.
 | a duration, a rate, or anything the economy touches | *`orbs-balance`* — and **run a sweep**, which is the instrument that has caught what tests did not |
 | a painter, a record, or the way something reads | *The output style*, *The terminal build* |
 | a number that rolls — the gauges, the room's count, the road, the siege board — or `status`'s ledger | *A number rolls to the truth* |
+| a rate, a wait, what holds the slot, or `status rates` | *`status rates`* |
 | accessibility, colour, or the tube | *Greyscale* |
 | the manual, `recall`, or a room's primer | *`recall apprentice`* |
 | a refactor whose claim is that nothing changed, or a comment pass | *Proving nothing changed* |
+| how something looks, moving — any domain, crossing, effect or screen | *The tour* |
 
-**Three instruments recur and are worth knowing before you need them.**
+**Four instruments recur and are worth knowing before you need them.**
 `scripts/dumps.sh` captures every surface as text and is the gate for a refactor
-whose claim is that nothing changed; `scripts/play.sh` plays the game at a real
-keyboard; `ink` is the only thing that can see a colour in the terminal build.
+whose claim is that nothing changed; `scripts/tour.sh` plays any surface in the
+window, moving, and screenshots it with its frame as text; `scripts/play.sh`
+plays the game at a real keyboard; `ink` is the only thing that can see a colour
+in the terminal build.
+
+---
+
+### `status rates` — a rate, a wait, and the slot (`0.21.0`)
+
+**Every open room's rate over the last hour of ticks, what it waits on, and
+what holds the tower's one slot.** The rate is the room's first ledger row, so
+the laboratory counts brews finished and a grind loop honestly reads *none*.
+
+```bash
+ORBS_BOOT=0 ORBS_DUMP="attend laboratory; kindle charcoal; \
+  debug_spawn clarified-draught 3; distil clarified-draught; meditate 60; \
+  empty alembic; distil clarified-draught; meditate 60; status rates" cargo run -p orbs
+```
+
+```text
+│rates ────────────────────────────
+│  laboratory  brews finished: 55 an hour · the alembic is ready. empty it
+│  archive     scrolls copied: too soon to say · nothing is waiting
+│  ...
+│  slot        free. nothing holds it
+```
+
+`…; grind sage; status rates` names the grind holding the slot with its ticks
+left. `…; grind sage; meditate 9; status rates` reads *the mortar_and_pestle is
+ready*. Under five minutes watched and fewer than two makings is *too soon to
+say*; a room that made nothing in a watched hour is *none this hour*.
+
+**A word it does not know is refused the way a verb taking nothing is**, and
+says the word it takes: `status zorb` reads *status takes only rates - 'zorb' is
+not one of them*. `how are things going` still reads the whole report — the
+plain register runs past its command.
+
+**A spell's hold** — a busy tool, `wait for`, an empty `pull`, `bide` — is the
+sentence the room says when nothing in it is running. The log says the same
+sentence once when the wait begins.
+
+```bash
+cargo test -p orbs-sim --test rates           # rates, waits, holds, the save, the phrasing
+cargo run -p orbs-balance -- sweep --ticks 7200 --why   # each policy's rooms, same function
+scripts/tui.sh start && scripts/tui.sh type 'attend laboratory' 'grind sage' 'status rates'
+```
+
+`scripts/dumps.sh` captures `status_rates`, `status_rates_stalled` and
+`status_rates_slot`. Every command listing reads `status <report>`.
+
+---
+
+### The tower's news reaches you, whoever did the work (`0.21.3`)
+
+**A spell's yields stay in the log; its news does not.** A station reached, a
+room opened, a rank crossed, a level gained and a fork becoming choosable are
+drawn and chimed even when a spell earned them, and keep the spell's name for
+`sift`.
+
+```bash
+ORBS_BOOT=0 ORBS_DUMP="attend laboratory; kindle charcoal; \
+  debug_spawn clarified-draught 1; scribe brewing" \
+  ORBS_EDIT=$'edit\ndistil clarified-draught\n<esc>\nquit' \
+  ORBS_THEN="invoke brewing; meditate 70" cargo run -p orbs
+```
+
+```text
+│√ meditate 70
+│√ the laboratory line advances: a clarity brewed     ← no `alembic yields` above it
+```
+
+**A station reached while you stand elsewhere latches `!`** on its room's box,
+and walking in clears it:
+
+```bash
+ORBS_BOOT=0 ORBS_DUMP="attend laboratory; kindle charcoal; \
+  debug_spawn clarified-draught 1; distil clarified-draught; attend archive; \
+  meditate 60" cargo run -p orbs                       # laboratory   !
+```
+
+**A fork says so once.** A sealed tower's third brew crosses 24:
+
+```bash
+ORBS_BOOT=0 ORBS_SEALED=1 ORBS_DUMP="attend laboratory; kindle charcoal; \
+  debug_spawn clarified-draught 3; distil clarified-draught; meditate 60; \
+  empty alembic; distil clarified-draught; meditate 60; empty alembic; \
+  distil clarified-draught; meditate 60" cargo run -p orbs
+# → the ley line forks ahead. weave, and choose a lane
+```
+
+`ORBS_SOUND=1 cargo run -p orbs` names `good` on news, never `done`.
+`cargo test -p orbs-sim --test news`. `scripts/dumps.sh` captures
+`news_by_spell`, `news_away` and `fork_opened`.
 
 ---
 
@@ -1769,6 +1862,38 @@ both tilings are identical, so the key changes nothing until multiplexing return
 the second pane in Phase 12a. §9 fixes the focus mode on `F4` and §19 fixes the
 switch there, so reassigning it to toggle the rail would re-litigate both.
 
+**The rail is loudest when a room is stalled** (`0.21.1`). The state row is the
+instrument `status rates` reports, and the detail row is its wait in twelve
+cells, heard as the whole sentence:
+
+```bash
+ORBS_BOOT=0 ORBS_DUMP="attend laboratory; grind sage; meditate 9; attend archive" cargo run -p orbs
+```
+
+```text
+│laboratory    │
+│  ready     0%│      ← was `idle`
+│  at mp       │      ← heard: the mortar_and_pestle is ready. empty it
+```
+
+`move sage to mortar_and_pestle` instead reads `charged` / `at mp`; a flask
+holding salt reads `gathering` / `fr +tincture`; a bound spell waiting reads
+`after mp`, `watching`, `pulling` or `bides 12t` above its `►spell` row. A
+resting laboratory still reads `idle` — a cold hearth is a wait only when
+something wants heat.
+
+**The forge names its charm** when nothing else is going on, by the word the
+forge itself publishes:
+
+```bash
+ORBS_BOOT=0 ORBS_DUMP="attend forge; imbue mortar_and_pestle hurried; snap apex; \
+  anneal; meditate 20; attend laboratory" cargo run -p orbs    # forge: graced 598t
+```
+
+It reads `ebbing` from sixty ticks left, where `survey hurried` does.
+`cargo test -p orbs-sim --test rates` holds the rail and `status rates` to one
+function. `scripts/dumps.sh` captures `rail_stalled` and `rail_charm`.
+
 ### `orbs-balance` — the economy, looked at rather than argued
 
 **Every duration in the game is a placeholder and this is what sweeps them.** It
@@ -2636,6 +2761,31 @@ line with nothing to say draws none. The rail's percentage sits on the state
 row's right edge because `MIN_RAIL_BOX` has no spare row, and it is silent glyphs
 — §14's rule for progress is completion only, and the station reaching is what
 gets said.
+
+**The road and the ley gauge forecast** (`0.21.2`) — from the pace between the
+last makings, so a forecast changes only when something is made:
+
+```bash
+ORBS_BOOT=0 ORBS_DUMP="attend laboratory; kindle charcoal; \
+  debug_spawn clarified-draught 3; distil clarified-draught; meditate 60; \
+  empty alembic; distil clarified-draught; meditate 60" cargo run -p orbs
+```
+
+```text
+│ley line [                                      ] 0/8  ~2 min
+│laboratory [•]─[○]─[·]─…──── 5 brews finished · 2 of 5 · ~4 min
+```
+
+One brew makes no pace, so none of it shows until the second. The forecast is
+the first thing the road drops and takes only blank space on the gauge:
+`ORBS_GRID=80x22` keeps the road's and drops the ley's, which has none beside
+the room's column. Renown never forecasts — it falls. `meditate 600` after
+the line above leaves both exactly as they were.
+
+```bash
+cargo test -p orbs-shell forecast               # the words, and both placements
+cargo test -p orbs-sim --test rates the_pace    # nothing moves while nothing is made
+```
 
 ## The Ley Line to the soft ending, and what its forks grant
 
@@ -5106,6 +5256,172 @@ python3 -c "from PIL import Image, ImageFilter; \
 If the rules are the strongest shapes, there are too many. **~50 of the 65
 captured dumps move when a heading changes** — headings are in nearly every
 screen with a listing — so byte-identity is a gate for a pure extraction only.
+
+### The tour — every surface, moving (`0.23`)
+
+**A catalogue of 87 scenes, each a tower posed and then played**, in
+`crates/orbs-shell/src/tour/scenes.toml`. The README's *The visual showcase*
+is the short version. A scene's `setup` runs at once
+through the dump's own driver; its `steps` are then typed at the keyboard; its
+`expect` and `ends` are checked against the world by `cargo test`, so a scene
+cannot claim a state it never reached. Debug builds only: the setups use the
+debug words.
+
+```bash
+scripts/tour.sh                              # every scene: name, hold, what it shows
+scripts/tour.sh forge.lattice                # one scene in the window; yours when its steps end
+scripts/tour.sh laboratory,forge             # a playlist, one window, one scene after another
+scripts/tour.sh all
+scripts/tour.sh shots <dir> forge            # screenshots, each with its frame as text, then exit
+ORBS_TOUR=forge.lattice ORBS_DUMP=1 cargo run -p orbs     # a scene's opening frame, as text
+ORBS_TOUR=forge.lattice ORBS_DUMP="snap belt" cargo run -p orbs   # ...and a command after it
+cargo test -p orbs-shell tour                # every setup reaches what it claims
+cargo test -p orbs tour                      # every scene played through the real keyboard path
+```
+
+A term is a scene's name, a group (`forge` is every `forge.*`), a list of
+either separated by commas, or `all`. A name that is none of them is refused,
+naming the scenes nearest it (`lattic` finds `forge.lattice`, through the
+parser's own fuzzy match), or the groups when none is near.
+
+**In the window:** `F11` is the next scene and `Shift+F11` the one before (the
+same scene again at either end, so `F11` replays a single one). Any other key
+takes the scene: its steps stop, it stops moving on, and the game is yours to
+play. The title says which scene is up. A tour keeps nothing — no save, no
+settings file — and every scene starts from the default settings, so an `F3` in
+one does not carry into the next.
+
+**Shots** (`ORBS_TOUR_SHOTS=<dir>`, or `scripts/tour.sh shots`): each is
+`<NN>-<scene>-<seconds>s.png` with the frame as the dump prints it beside it as
+`.txt`; `index.txt` lists them and marks a flat-coloured capture `BLANK`;
+`stderr.log` is the run's log, and the script prints its error and warning
+lines. A scene's `shots` are seconds from its start, a step's are seconds after
+its line landed, so `{ type = "attend forge", shots = [0.1, 0.25, 0.4] }`
+catches the crossing. Wall-clock frames are for looking, not diffing.
+
+**Tuning a scene without a rebuild:** copy `scenes.toml`, edit it, and run with
+`ORBS_TOUR_FILE=<copy>`. `scripts/tour.sh` clears the switches that would
+outrank a scene (`ORBS_PASSAGE`, `ORBS_CRT`, `ORBS_MOTION` and the rest) and
+turns both readers off, as `dumps.sh` does, so the window reads lines as the
+tests do; `ORBS_AUGURY=model scripts/tour.sh …` to watch with the trained
+reader. Run the binary directly and the tour names any switch it finds set.
+
+**Adding a scene:** take the setup from the `dumps.sh` line that already
+captures the state, name what it reaches in `expect`, and run the test.
+`working` claims an instrument at work; `states = { alembic = "charged" }`
+claims any state by its word. `cargo test -p orbs-shell tour` holds every setup
+to its `expect` and the catalogue to its coverage: every room, craft, surface,
+glass key, and every state an instrument can be in. `cargo test -p orbs tour`
+plays every scene's steps through the real keyboard path and holds them to
+their `ends`.
+
+**Every frame shows all it says.** A painter cuts text at its region's edge
+and still speaks it whole, so the frame keeps each cut (`Frame::clipped`). A
+dump prints them under `-- clipped --`, as does every shot's `.txt`, and the
+in-App test paints every frame of the catalogue at the window's 120×45 and at
+the 80×22 floor, failing with the scene and the line. Run the tour at 120×45
+only and a row cut at 80 passes: undo the described-row wrap and only the
+80×22 run fails. Text only. A `+N` or a share that layout drops for want of
+room is no cut, and is judged in the shots.
+
+**The `cycle` group** holds two pictures for 26 seconds, past the 24-second
+wrap every animation repeats on (`CYCLE_SECS`), with shots either side of it.
+The clock starts with the scene. `cargo test -p orbs-render figure` holds the
+wrap to one beat; these are for looking at it.
+
+**What it does not show**, and where to look instead: the window losing focus
+(click away — *the glass clouds*), sound (`ORBS_SOUND=1`), resizing and the fit
+(drag the window), `F4` (labels only at the game's grid), the terminal build
+(`scripts/tui.sh`), the augury's readings (text, and the dump's), and anything
+slower than half a minute: an hour's rates are `orbs-balance sweep`'s. Nothing
+compares pixels; a picture's look is judged in the shots.
+
+### Every instrument has a tempo (`0.22`)
+
+**The five puzzle instruments draw their contents while they work**, as the
+laboratory's four do: the prism's focus searching, the lattice burning, the
+pylon's top course settling, the lectern's seams knitting, the circle's balking
+rows pulling. A dump is a still, so each is posed with `ORBS_FIRE_PHASE`; step
+it and the picture moves.
+
+```bash
+ORBS_SEED=3 ORBS_BOOT=0 ORBS_FIRE_PHASE=9 ORBS_DUMP="attend lens; probe; dial second borax; probe" cargo run -p orbs
+ORBS_BOOT=0 ORBS_FIRE_PHASE=2 ORBS_DUMP="attend sanctum; muster; haul wellspring barrier" cargo run -p orbs
+ORBS_BOOT=0 ORBS_FIRE_PHASE=2 ORBS_DUMP="debug_spawn fragment 4 lectern; attend archive; wield lectern; meditate 6" cargo run -p orbs
+ORBS_BOOT=0 ORBS_FIRE_PHASE=2 ORBS_DUMP="attend menagerie; summon; limn keystone heed; limn sunwise oppose; summon" cargo run -p orbs
+cargo run -p orbs-render --example screens    # "The puzzle instruments": all five, a beat a column
+```
+
+**The lattice moves in hue only**, like the athanor's body, so its dump is a
+solid column and the `screens` strip, printed as ramp digits, is its See-it.
+
+**What to check by eye:** at rest a figure is still. A prism between puzzles
+draws the plain gauge. A ready lectern stands whole in the scroll's colour, where
+it used to draw nothing. Motion off stills all five and keeps every picture.
+
+```bash
+cargo test -p orbs-render figure    # the join, the stillness, the measured flash rate, all five at once
+cargo test -p orbs-shell panel      # which craft draws which figure, and when
+```
+
+### The glass answers the tower (`0.21.4`, window only)
+
+**The corners draw in as a siege turns against the garrison, and the colour
+drains a little while a spell is broken.** Two levels, eased over 0.6 s; never
+a flash. `ORBS_STRAIN=<pressure>,<fault>` poses them, since a capture presses no
+keys and fights no siege:
+
+```bash
+cd <scratch> && ORBS_STRAIN=0.9,1 ORBS_SAVE=off ORBS_BOOT=0 ORBS_THRESHOLD=0 \
+  ORBS_CAPTURE=1 timeout 25 <repo>/target/debug/orbs
+# ...beside the same line without ORBS_STRAIN. Mean saturation 8.7 → 7.3.
+```
+
+Live, in a window: `attend bailey; defend; hold; hold` — nothing at the even
+start, then the corners tighten as the enemy band outgrows the garrison. The
+`fault_latched` line (*The tower rail*) greys the glass; `attend laboratory`
+clears it over half a second. `settings` → `picture` → `edge off` and neither
+happens. `F3` still cycles default, peak and off, because the strain is applied
+to the extracted copy and never the component.
+
+```bash
+cargo test -p orbs crt::strain
+cargo run -p orbs 2>&1 | grep -iE "error|panic|warn"    # the uniform shrank; read the log
+```
+
+### Afterglow (`0.21.5`, window only)
+
+**A lit phosphor fades rather than vanishing** — under half after one frame,
+gone in about a tenth of a second. Anything that changes leaves that soft
+trace: the digits of a roll, a bar's end, a line typing in, a wipe. It only ever
+fades, and sits before the tube, so a trail is curved and scan-lined like the
+glyphs it came from. If it reads as a ghost, it is too long: the first draft
+did, at twice this, and was cut on looking.
+
+```bash
+cargo run -p orbs
+# debug_renown 20        — the digits trail as they roll
+# wander, then Esc       — the gather trails into the middle and out
+# settings → picture → glow off       — no trail, and no bloom: one row
+# settings → access → motion off, F3 to OFF — no trail
+```
+
+A frame-30 capture rarely catches motion, so the still comparison is what it
+proves — the pass runs and breaks nothing:
+
+```bash
+cd <scratch> && ORBS_SAVE=off ORBS_BOOT=0 ORBS_THRESHOLD=0 ORBS_CAPTURE=1 \
+  timeout 15 <repo>/target/debug/orbs 2>&1 | grep -iE "error|panic|validation"
+# ...and again with ORBS_AFTERGLOW=0, ORBS_CRT=off, ORBS_MOTION=0, ORBS_BOOT=post
+```
+
+**Drag the window while it runs and read the log.** The history is recreated on
+any change of size or format; a copy between unequal textures would be a wgpu
+validation error on stderr, not a failed build.
+
+```bash
+cargo test -p orbs afterglow
+```
 
 ### Greyscale — §14's accommodation, and the switch nothing else can flip
 

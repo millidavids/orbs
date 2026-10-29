@@ -21,6 +21,7 @@ mod ledger;
 pub mod ley;
 pub mod mastery;
 pub mod maze;
+mod news;
 mod node;
 pub mod opened;
 mod panel;
@@ -29,6 +30,7 @@ pub mod pylon;
 pub mod quintessence;
 pub mod reach;
 pub mod renown;
+mod ring;
 mod sabotage;
 pub mod satchel;
 mod scene;
@@ -38,8 +40,11 @@ mod stores;
 pub mod supply;
 mod sync;
 mod tally;
+mod throughput;
+mod wait;
 pub mod ward;
 mod work;
+mod yields;
 
 pub use assault::{Reached, Retimed, Rewritten};
 pub use audit::{Cooling, Surface};
@@ -90,6 +95,7 @@ pub use quintessence::{
     ceiling_for, regenerate,
 };
 pub use renown::{Ahead, Renown, Toward};
+pub use ring::{Pace, Ring};
 pub use sabotage::{
     Log, Poisoned, Substituted, claimed, emit_lines, poison, poisoned, restore, settling,
     substitute, substitution, verify, vigilant_interval,
@@ -106,7 +112,10 @@ pub use sync::sync_readings;
 pub use tally::{
     BOUND, EVENTS, FIGURE, SECRET, SIEGE, SIEGE_WON, SPELL, Tally, Work, by_spell, done, note,
 };
+pub use throughput::{HOUR, Hourly, Makings, SETTLE, Throughput, ThroughputParts};
+pub use wait::{Slot, Wait, reported, sentence as wait_sentence, slot, wait_in, wait_of};
 pub use ward::{SIGILS, SOCKETS, Shift, Ward};
+pub use yields::{Yield, yields};
 pub mod spell;
 pub use work::{
     Bidden, Busy, CAPACITY, DIVINE_TICKS, PURGE_TICKS, Product, QUICKENED_BY, Quickened, Triaging,

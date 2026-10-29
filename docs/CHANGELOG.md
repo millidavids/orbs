@@ -15,6 +15,39 @@
   at 1.0 (DESIGN.md §19).
 -->
 
+## [v0.23.4] - 2026-10-29
+
+### Description
+In development — a dev log, not patch notes. The tower now says how fast each
+room works, what a stalled one waits on, and when the next station comes. The
+five puzzle instruments got moving pictures, and the glass closes in as a siege
+turns.
+
+### Added
+- **`status rates`.** Each open room's pace over the last hour, what it waits
+  on, and what holds the tower's one slot.
+- **The rail says what a stalled room waits on.** It reads `fouled` or `ready`
+  rather than `idle`, with the instrument named beneath it, and a screen reader
+  hears the whole sentence. The forge's box names the charm nearest lapsing and
+  how long it has left.
+- **Forecasts.** The road shows about how long until a room's next station, and
+  the ley gauge until the next ley station. Both follow the pace of your last
+  few makings, so they move only when something is made.
+- **News reaches you, whoever did the work.** A station, a room opening, a
+  rank, a level or a fork in the ley line shows on screen even when a spell
+  earned it. A room that reaches one while you are elsewhere shows `!` on the
+  rail.
+- **The puzzle instruments move.** The prism, lattice, pylon, lectern and circle
+  each draw what they hold, at a pace of their own: a focus climbing the prism,
+  snapped columns burning, the pylon's top course pulsing, a scroll's seams
+  knitting, the circle's balking rows pulling.
+- **The glass answers the tower.** In the window, the corners draw in as a siege
+  turns against the garrison, and colour drains while a spell's fault stands.
+  The `edge` setting governs both.
+- **Afterglow.** What just changed on screen fades out over a tenth of a second,
+  as phosphor does. It rides the `glow` setting, and goes with motion or the
+  tube off.
+
 ## [v0.20.22] - 2026-10-25
 
 ### Description

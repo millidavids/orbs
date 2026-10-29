@@ -573,6 +573,7 @@ mod tests {
             walk,
             done: 0,
             needed: 1,
+            key: format!("made:{id}"),
             opens: Vec::new(),
         }
     }

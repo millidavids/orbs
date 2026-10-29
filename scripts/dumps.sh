@@ -35,8 +35,10 @@ run() {
   # The installation off for the same reason: a capture poses it only by
   # asking, so an `ORBS_INSTALL` exported in this shell cannot move a baseline.
   # `ORBS_MOTION` blank, so an exported one cannot move the settings rows. Not
-  # `ORBS_SIGHT`: a dump's sight row is `plain` whatever is exported.
-  env ORBS_AUGURY=off ORBS_SCRIVENER=off ORBS_INSTALL=0 ORBS_MOTION= "$@" "$orbs" > "$out/$name.txt" 2>"$out/$name.err" || true
+  # `ORBS_SIGHT`: a dump's sight row is `plain` whatever is exported. No tour,
+  # whose scene would replace every capture's world.
+  env -u ORBS_TOUR -u ORBS_TOUR_FILE ORBS_AUGURY=off ORBS_SCRIVENER=off ORBS_INSTALL=0 ORBS_MOTION= \
+    "$@" "$orbs" > "$out/$name.txt" 2>"$out/$name.err" || true
   # A dump prints nothing to stderr in the ordinary case; keep the file only if
   # it has content, so `diff -r` is not full of empty noise.
   [ -s "$out/$name.err" ] || rm -f "$out/$name.err"
@@ -417,6 +419,15 @@ run forge_refuse   ORBS_BOOT=0 ORBS_DUMP="attend forge; snap apex; anneal; imbue
 run forge_readings ORBS_BOOT=0 ORBS_DUMP="attend forge; imbue mortar_and_pestle hurried; survey apex; survey belt; survey hem; survey hurried"
 run recall_script_forge ORBS_BOOT=0 ORBS_GRID=100x40 ORBS_DUMP="attend forge; recall scripting"
 
+# Every instrument has a tempo (0.22): each puzzle instrument's panel column,
+# posed at a phase where its picture is mid-move. The lattice moves in hue
+# only, so its capture holds the glyphs; the `screens` example has its motion.
+run tempo_prism   ORBS_SEED=3 ORBS_BOOT=0 ORBS_FIRE_PHASE=9 ORBS_DUMP="attend lens; probe; dial second borax; probe"
+run tempo_lattice ORBS_BOOT=0 ORBS_FIRE_PHASE=9 ORBS_DUMP="attend forge; imbue mortar_and_pestle hurried; snap apex; snap belt; snap hem"
+run tempo_pylon   ORBS_BOOT=0 ORBS_FIRE_PHASE=2 ORBS_DUMP="attend sanctum; muster; haul wellspring barrier"
+run tempo_lectern ORBS_BOOT=0 ORBS_FIRE_PHASE=2 ORBS_DUMP="debug_spawn fragment 4 lectern; attend archive; wield lectern; meditate 6"
+run tempo_circle  ORBS_BOOT=0 ORBS_FIRE_PHASE=2 ORBS_DUMP="attend menagerie; summon; limn keystone heed; limn sunwise oppose; summon"
+
 # The apprentice's guide, one per room: the worked example is built from where
 # you are standing, and the grimoire borrows the laboratory's and says so.
 for room in laboratory archive lens sanctum menagerie grimoire forge; do
@@ -512,5 +523,38 @@ run ledger       ORBS_BOOT=0 ORBS_DUMP="attend archive; debug_spawn fragment 8; 
   ORBS_THEN="invoke assembling; meditate 120; status"
 # The siege board's stocks on their way: both bands after a round resolves.
 run roll_siege   ORBS_BOOT=0 ORBS_ROLL_AT=0.4 ORBS_DUMP="attend bailey; defend; pledge d20 to sortie; hold"
+
+# --- the tower speaks up ---------------------------------------------------
+# `status rates`: two brews make a rate, a ready alembic is the wait; a ready
+# mortar with nothing measured yet; and a grind holding the tower's one slot.
+run status_rates         ORBS_BOOT=0 ORBS_DUMP="attend laboratory; kindle charcoal; \
+  debug_spawn clarified-draught 3; distil clarified-draught; meditate 60; empty alembic; \
+  distil clarified-draught; meditate 60; status rates"
+run status_rates_stalled ORBS_BOOT=0 ORBS_DUMP="attend laboratory; grind sage; meditate 9; status rates"
+run status_rates_slot    ORBS_BOOT=0 ORBS_DUMP="attend laboratory; grind sage; status rates"
+# The rail says the same wait: a ready mortar seen from the archive, and the
+# forge naming the charm nearest lapsing.
+run rail_stalled ORBS_BOOT=0 ORBS_DUMP="attend laboratory; grind sage; meditate 9; attend archive"
+run rail_charm   ORBS_BOOT=0 ORBS_DUMP="attend forge; imbue mortar_and_pestle hurried; snap apex; \
+  anneal; meditate 20; attend laboratory"
+# Two brews make a pace: the ley gauge and the road forecast the next station,
+# and at the floor the ley's yields to the room's column.
+run forecast       ORBS_BOOT=0 ORBS_DUMP="attend laboratory; kindle charcoal; \
+  debug_spawn clarified-draught 3; distil clarified-draught; meditate 60; empty alembic; \
+  distil clarified-draught; meditate 60"
+run forecast_floor ORBS_BOOT=0 ORBS_GRID=80x22 ORBS_DUMP="attend laboratory; kindle charcoal; \
+  debug_spawn clarified-draught 3; distil clarified-draught; meditate 60; empty alembic; \
+  distil clarified-draught; meditate 60"
+# The tower's news: a station a spell's brew reached, drawn with no yields
+# around it; a run landing while the player stands elsewhere, which latches `!`;
+# and a sealed tower's third brew crossing the first fork.
+run news_by_spell ORBS_BOOT=0 ORBS_DUMP="attend laboratory; kindle charcoal; \
+  debug_spawn clarified-draught 1; scribe brewing" \
+  ORBS_EDIT=$'edit\ndistil clarified-draught\n<esc>\nquit' ORBS_THEN="invoke brewing; meditate 70"
+run news_away     ORBS_BOOT=0 ORBS_DUMP="attend laboratory; kindle charcoal; \
+  debug_spawn clarified-draught 1; distil clarified-draught; attend archive; meditate 60"
+run fork_opened   ORBS_BOOT=0 ORBS_SEALED=1 ORBS_DUMP="attend laboratory; kindle charcoal; \
+  debug_spawn clarified-draught 3; distil clarified-draught; meditate 60; empty alembic; \
+  distil clarified-draught; meditate 60; empty alembic; distil clarified-draught; meditate 60"
 
 echo "captured $(ls -1 "$out"/*.txt | wc -l) screens into $out"

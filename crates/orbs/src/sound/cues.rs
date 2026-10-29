@@ -176,6 +176,17 @@ const fn voice_of(kind: RecordKind, role: Role, outcome: Option<Outcome>) -> Opt
     }
 }
 
+/// The cue for the tower's news — a station, a room, a rank, a level.
+///
+/// The success chime, not `Done`: every yield rings `Done`, and news has to be
+/// told apart by ear from across the room. A rank lost is a warning.
+const fn news_voice(role: Role) -> Option<Voice> {
+    match role {
+        Role::Danger => Some(Voice::Ill),
+        Role::Success | Role::Normal | Role::Cost => Some(Voice::Good),
+    }
+}
+
 /// Where the record stream had got to last time this looked.
 ///
 /// `None` until the first look, which is not a formality: a restored save opens
@@ -204,7 +215,13 @@ pub(super) fn ring_for_records(
     }
     let mut asked: Vec<Voice> = records
         .since(last)
-        .filter_map(|record| voice_of(record.kind(), record.role(), record.outcome()))
+        .filter_map(|record| {
+            if record.is_news() {
+                news_voice(record.role())
+            } else {
+                voice_of(record.kind(), record.role(), record.outcome())
+            }
+        })
         .collect();
 
     // A cap for any discontinuity, and a fistful of cues is noise. Keeps the
@@ -260,6 +277,18 @@ mod tests {
             few.drain(..few.len() - BURST);
         }
         assert_eq!(few.len(), BURST - 1);
+    }
+
+    #[test]
+    fn news_rings_the_success_chime_not_a_yields() {
+        // A station a spell reached is drawn now; by ear it must not be one
+        // more yield.
+        assert_eq!(news_voice(Role::Success), Some(Voice::Good));
+        assert_ne!(
+            news_voice(Role::Success),
+            voice_of(RecordKind::Completion, Role::Success, None)
+        );
+        assert_eq!(news_voice(Role::Danger), Some(Voice::Ill));
     }
 
     #[test]

@@ -6677,7 +6677,7 @@ dependencies = [
 
 [[package]]
 name = "orbs"
-version = "0.20.22"
+version = "0.23.4"
 dependencies = [
  "bevy",
  "notify",
@@ -6688,7 +6688,7 @@ dependencies = [
 
 [[package]]
 name = "orbs-augury"
-version = "0.20.22"
+version = "0.23.4"
 dependencies = [
  "burn",
  "orbs-sim",
@@ -6698,7 +6698,7 @@ dependencies = [
 
 [[package]]
 name = "orbs-balance"
-version = "0.20.22"
+version = "0.23.4"
 dependencies = [
  "clap",
  "orbs-render",
@@ -6707,24 +6707,25 @@ dependencies = [
 
 [[package]]
 name = "orbs-render"
-version = "0.20.22"
+version = "0.23.4"
 
 [[package]]
 name = "orbs-shell"
-version = "0.20.22"
+version = "0.23.4"
 dependencies = [
  "bevy_ecs",
  "dirs 7.0.0",
  "orbs-augury",
  "orbs-render",
  "orbs-sim",
+ "serde",
  "toml",
  "tracing",
 ]
 
 [[package]]
 name = "orbs-sim"
-version = "0.20.22"
+version = "0.23.4"
 dependencies = [
  "bevy_ecs",
  "orbs-render",
@@ -6737,7 +6738,7 @@ dependencies = [
 
 [[package]]
 name = "orbs-tui"
-version = "0.20.22"
+version = "0.23.4"
 dependencies = [
  "crossterm",
  "orbs-render",

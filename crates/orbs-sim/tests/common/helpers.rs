@@ -144,6 +144,55 @@ pub fn replayed(played: &Sim, mut fresh: Sim) -> Sim {
     fresh
 }
 
+/// Walk into the laboratory, light the athanor, and distil `count` clarities
+/// from spawned draught, emptying the alembic after each — the cheap way to a
+/// brew. Debug builds only, since it spawns.
+pub fn distil_spawned(sim: &mut Sim, count: usize) {
+    run_all(
+        sim,
+        &[
+            "attend laboratory",
+            "kindle charcoal",
+            &format!("debug_spawn clarified-draught {count}"),
+        ],
+    );
+    for _ in 0..count {
+        run(sim, "distil clarified-draught");
+        sim.step_n(60);
+        run(sim, "empty alembic");
+    }
+}
+
+/// §10.1's five stages, once, from endless stock, ending in a `clarity` left
+/// in the alembic. Assumes the laboratory with the athanor lit; runs in release.
+///
+/// Scoured before use, never after fouling — `orbs-balance`'s rule: `mix` and
+/// `distil` leave their instruments charged, and a charged one refuses a second
+/// load in silence.
+pub fn brew_one(sim: &mut Sim) {
+    run_all(
+        sim,
+        &[
+            "empty mortar_and_pestle",
+            "empty balneum_mariae",
+            "empty flask_and_rod",
+            "empty alembic",
+            "grind sage",
+            "meditate 9",
+            "empty mortar_and_pestle",
+            "digest ground-sage",
+            "meditate 14",
+            "grind rock-salt",
+            "meditate 9",
+            "empty mortar_and_pestle",
+            "mix sage-tincture with ground-salt",
+            "meditate 12",
+            "distil clarified-draught",
+        ],
+    );
+    sim.step_n(60);
+}
+
 /// A save written out and read back, as a player's file is.
 pub fn reloaded(save: &Save) -> Sim {
     let text = save.to_toml().expect("a save renders");

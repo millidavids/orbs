@@ -196,6 +196,11 @@ fn count(world: &mut World, work: &Work, earned: u64, itself: bool) {
         .resource_mut::<Tally>()
         .bump_work(work, by_spells, itself);
     super::credit(world, earned);
+    // The completion itself only: a note riding on one is not a second making,
+    // and would double a rate the way it would double `SPELL`.
+    if itself {
+        super::throughput::record(world, work.keys(), earned);
+    }
     if work.sold() {
         // A store's standing is a rate, so this door has to see every making.
         // Surplus sells: a making of a name already at full strength is stock

@@ -256,6 +256,7 @@ impl Sim {
         world.init_resource::<tower::siege::Garrison>();
         world.init_resource::<tower::supply::Supplies>();
         world.init_resource::<tower::Stores>();
+        world.init_resource::<tower::Throughput>();
         // Everything open, the tower every test, dump and policy uses. A fresh
         // *game* starts sealed — see `Sim::sealed`.
         let opened = tower::Opened::all(
@@ -1089,6 +1090,12 @@ impl Sim {
         tower::spell::held(&self.world)
     }
 
+    /// Every spell running, with where, on how many cursors, and what holds it.
+    #[must_use]
+    pub fn running_spells(&self) -> Vec<tower::Cast> {
+        tower::running_spells(&self.world)
+    }
+
     /// Which domain `name` was written for, if the tower has it.
     ///
     /// A component, not the text, so only this can say whether a save from
@@ -1403,6 +1410,31 @@ impl Sim {
     #[must_use]
     pub fn ledger_of(&self, room: &str) -> Option<tower::LedgerRow> {
         tower::ledger_of(&self.world, room)
+    }
+
+    /// Every open room's rate and what it waits on — `status rates`, and what
+    /// the balance sweep reports.
+    #[must_use]
+    pub fn yields(&self) -> Vec<tower::Yield> {
+        tower::yields(&self.world)
+    }
+
+    /// What holds the tower's one production slot.
+    #[must_use]
+    pub fn slot(&self) -> Option<tower::Slot> {
+        tower::slot(&self.world)
+    }
+
+    /// How fast `key` has been made, from its gaps. A forecast reads this.
+    #[must_use]
+    pub fn pace_of(&self, key: &str) -> Option<tower::Pace> {
+        self.world.resource::<tower::Throughput>().pace(key)
+    }
+
+    /// How fast experience has been earned, lately.
+    #[must_use]
+    pub fn earning(&self) -> Option<tower::Pace> {
+        self.world.resource::<tower::Throughput>().earning()
     }
 
     /// Queue a tester's `debug_spell`.

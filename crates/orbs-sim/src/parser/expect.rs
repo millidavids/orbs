@@ -448,12 +448,18 @@ fn readings(scene: &Scene) -> Vec<Expected> {
 /// Everything the tower *has* that a spell can name.
 ///
 /// Not a `Command` — every verb synonym is one, and none is a thing — nor a
-/// `Sense`, which [`readings`] offers after these.
+/// `Report`, which only `status` takes, nor a `Sense`, which [`readings`]
+/// offers after these.
 fn things(scene: &Scene) -> Vec<Expected> {
     scene
         .nouns()
         .iter()
-        .filter(|noun| !matches!(noun.kind, NounKind::Sense | NounKind::Command))
+        .filter(|noun| {
+            !matches!(
+                noun.kind,
+                NounKind::Sense | NounKind::Command | NounKind::Report
+            )
+        })
         .map(|noun| Expected::plain(super::intent::leaf(&noun.name), Reason::Thing))
         .collect()
 }
@@ -882,7 +888,8 @@ mod tests {
         let scene = Scene::new()
             .with(NounKind::Reagent, "sage")
             .with(NounKind::Command, "grind")
-            .with(NounKind::Command, "walk");
+            .with(NounKind::Command, "walk")
+            .with(NounKind::Report, "rates");
         let sets: [String; 0] = [];
         let asked = |line: &str| {
             expect(

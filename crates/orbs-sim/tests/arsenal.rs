@@ -6,7 +6,7 @@
 
 mod common;
 
-use common::said;
+use common::{brew_one, run, run_all, said};
 use orbs_render::{FieldName, Value};
 use orbs_sim::Sim;
 
@@ -19,13 +19,9 @@ fn with_a_potion() -> Sim {
     let mut sim = Sim::new(1);
     // §10.1's chain from endless stock, with no debug door, so the file runs
     // in release: the arsenal is a shipped room.
-    sim.submit("attend laboratory");
-    sim.step();
-    sim.submit("kindle charcoal");
-    sim.step();
-    brew_one(&mut sim);
-    sim.submit("move clarity to arsenal");
-    sim.step();
+    run_all(&mut sim, &["attend laboratory", "kindle charcoal"]);
+    brew_to_the_shelf(&mut sim);
+    run(&mut sim, "move clarity to arsenal");
 
     assert!(
         !kept(&sim).is_empty(),
@@ -35,42 +31,9 @@ fn with_a_potion() -> Sim {
 }
 
 /// §10.1's five stages, once, leaving a `clarity` on the laboratory's shelf.
-///
-/// Assumes the athanor is already lit and the player is standing in the
-/// laboratory — two of the five stages want heat.
-fn brew_one(sim: &mut Sim) {
-    // Scoured before use, never after fouling — `orbs-balance`'s rule: `mix`
-    // leaves the flask charged, so the next run's `mix` has nowhere to land. A
-    // clean instrument refuses these harmlessly.
-    for line in [
-        "empty mortar_and_pestle",
-        "empty balneum_mariae",
-        "empty flask_and_rod",
-        "empty alembic",
-    ] {
-        sim.submit(line);
-        sim.step();
-    }
-
-    for line in [
-        "grind sage",
-        "meditate 9",
-        "empty mortar_and_pestle",
-        "digest ground-sage",
-        "meditate 14",
-        "grind rock-salt",
-        "meditate 9",
-        "empty mortar_and_pestle",
-        "mix sage-tincture with ground-salt",
-        "meditate 12",
-        "distil clarified-draught",
-    ] {
-        sim.submit(line);
-        sim.step();
-    }
-    sim.step_n(60);
-    sim.submit("empty alembic");
-    sim.step();
+fn brew_to_the_shelf(sim: &mut Sim) {
+    brew_one(sim);
+    run(sim, "empty alembic");
 }
 
 /// Whether the orb's last answer was *"there is no ... within reach"*.
@@ -225,11 +188,10 @@ fn the_arsenal_is_not_a_second_dispensary() {
     // carried and adding it cannot change what an existing command picks up.
     // Checked with the same name in both places.
     let mut sim = with_a_potion();
-    sim.submit("attend laboratory");
-    sim.step();
+    run(&mut sim, "attend laboratory");
     // A second clarity, on the shelf this time — brewed, not spawned, so this
     // test runs in a release build where `debug_spawn` does not exist.
-    brew_one(&mut sim);
+    brew_to_the_shelf(&mut sim);
 
     sim.submit("move clarity to flask_and_rod");
     sim.step();

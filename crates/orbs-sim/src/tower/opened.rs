@@ -302,7 +302,13 @@ pub(crate) fn opening(world: &mut World, keys: &[String]) {
             .text(FieldName::Kind, parsed.kind())
             .text(FieldName::Message, &message)
             .role(Role::Success)
+            .news()
             .finish();
+        // A room opening is news on its own box: the rail's dark slot lit, and
+        // a mark saying go and look.
+        if key.starts_with("domain:") {
+            super::news::latch(world, parsed.name());
+        }
     }
 }
 

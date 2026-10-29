@@ -2470,6 +2470,297 @@ they are re-pointed at the phases that now need them rather than quietly dropped
 
 ## 19. Decisions log
 
+### The tour checks what it shows
+
+**Rule: every frame of every scene shows all it says, at the window's 120×45
+and at the 80×22 floor, and the catalogue reaches every state an instrument can
+be in.** Asked whether the tour covered every visual: it did not. It reached
+every surface once and checked the world, never the screen, and the review's
+rail and gauge defects were in states no scene set up. A correction inside
+`0.23.4`, so no version moves.
+
+| Question | Decision |
+|---|---|
+| What *shows all it says* means | A painter cuts text at its region's edge and speaks it whole (`Painter::span`), so a cut is exactly what a reader hears and the screen drops. The frame keeps each one, `Frame::clipped`: a span past the edge, a row outside the region, a paragraph out of rows, a border's title. Spaces are no loss |
+| Where it is read | The dump prints `-- clipped --`, so `dumps.sh` and every shot's `.txt` show a cut. The in-App test paints every frame of the catalogue with the window's own `repaint`, which needs no GPU, and fails naming the scene and the line |
+| Which grids | Both, as two tests. *Supersedes "the two grids (the window has one)"* under *Left out* below. At 120×45 alone, a row cut at 80 passes: with the described-row wrap undone, only the 80×22 run fails, naming the guide's rows in `text.unfurl`, `text.tab` and `text.pace` |
+| What it cannot see | Layout that leaves something out for want of room — a `+N`, a share, a title — draws less without cutting. The shots judge that |
+| What it costs | *Supersedes "a fraction of a second"* under *In-App test* below: painting every frame takes the catalogue to about twenty seconds a grid, the two in parallel |
+| Coverage | *Adds to Coverage* below: every instrument state, by its word in a claim (`states = { alembic = "charged" }`) or as the moving state a `working` claim is staged in. Six scenes for states none reached: `laboratory.cold` (a run wanting heat over a cold hearth), `.laid`, `.banked`, `.purge`, `progress.gathering` (the row that lost its share), `progress.gain` (a `+N` beside the forecast) |
+| Slower than a scene | The `cycle` group holds the prism and the lectern 26 seconds, past the 24-second wrap, with shots either side; the clock starts with the scene. An hour's rates are `orbs-balance sweep`'s |
+| Pixels | Not compared. A reference image breaks on every deliberate change to the look; worth having once the look settles |
+
+### What the review of `0.21`–`0.23` found
+
+A `/code-review max` of the uncommitted `0.21`–`0.23` work, each finding
+checked against the code by a second agent. Corrections inside finished
+items, so no version moves. Where one changes a rule above, it says so.
+
+| Finding | Decision |
+|---|---|
+| A rate jumped tenfold at the 64th making | *Supersedes the full-ring arm* of *`status rates`*. A full ring was read as what it held over the time since its oldest, while a ring short of full counted the watched hour, so the making that filled the ring moved the rate from 201 an hour to 1,828 at one pace. Now one measure: the ring keeps its 64 newest for the pace, and what its cap lets go while still inside the hour is kept as a count a minute (`[progress.throughput].spilled`). The hour is counted whole to the minute, and a stopped room falls to `none` an hour after its last making |
+| The athanor's fuel read as burnt | A fire's meter drains (`Burning::fuel`), so the ticks left are what it shows, not what is left to fill: `Instrument::remaining`, read by `status rates` and by the rail's own meter detail, which had the same inversion (`at 12t` of a fire with 588 to burn, and nothing at all for one just lit). Five captures move by it. A scour on its last tick has its own sentence instead of *with t left* |
+| *Charged. wield it* over a cold hearth | *Supersedes "`Charged` above `Cold`: one keystroke from running"* where the run wants heat and the room's fire is out. The panel marks such an instrument `wants_fire`, read in the same walk that finds its recipe; it ranks as cold and the hearth takes the charged rank, so the room waits on the fire. The same walk now gives a gathering tool its lack, once |
+| `at at` | The athanor's two letters are the detail's preposition. Where the short name would read as one word twice, the detail names the instrument whole: `at athanor` |
+| A `gathering` row lost its `%` | Kept on the row, as *The `%`* says: a long state word gives up its indent before the percentage gives up its place. Every state word fits beside `100%` |
+| The forecast pushed out a gain's `+N` | The forecast takes only blank space, and a showing `+N` is not blank: the forecast is drawn only if the `+N` still fits after it |
+| `status rates` rows were cut short | A described listing wraps its descriptions under their own column, as a stacked record wraps, and the tiling plan counts the rows the draw takes. Every described listing, not only this one |
+| The editor offered `rates` as a thing | `things` leaves out `Report` as it leaves out `Command` |
+| A bide hid the cursor that was blocked | One hold a spell, whichever says most: something in the way, then a wait on the world, then a `bide`; the first cursor's on a tie |
+| Two figures hitched at the cycle's wrap | A motion counted `beat % n` tears unless the cycle's beats are a whole number of `n`. The lectern knits every 18 ticks, not 16 — eight beats, two whole passes. The prism's focus climbs over a whole share of the cycle (`pulse::whole_share`) and rests at the top for what is over |
+| A toured dump could write a save | A tour keeps nothing, so with `ORBS_TOUR` set the dump seals the saves whatever `ORBS_SAVE` names. It also opens on what the window opens on: the threshold for a threshold scene, the finished card for a boot one |
+| The first tick still came early | The virtual clock was paused and started again in one frame, before any time update saw it. It now starts after the next frame's update, and the test stages a three-second frame |
+| Screenshots | One a frame: Bevy keeps one screenshot of a window per frame, and a second would never come back. Names are unique within a run, and a scene waits for its shots before the next begins |
+| A catalogue the window cannot play | Refused as it is read, for `ORBS_TOUR_FILE` too: a step with nothing to press, a strain that is no number, a time that is none. A step with nothing to type lands at once rather than hold the scene |
+| The scripts | `tour.sh shots` removes only the files a tour writes; `dumps.sh` clears `ORBS_TOUR` and `ORBS_TOUR_FILE`, so a leftover export cannot replace every capture's world |
+
+### The tour (`0.23`)
+
+**Rule: every surface the game draws can be reached, moving, without playing
+to it — in the window for a person, as screenshots and text for Claude, and
+headless in `cargo test` — from one catalogue of scenes that is checked against
+the world it reaches.** The owner asked to judge the look quickly: a few seconds
+of each domain in each state, then the next, any one alone. `dumps.sh` cannot
+show motion, colour or the tube, and `ORBS_CAPTURE` shows one frame of a launch.
+
+| Question | Decision |
+|---|---|
+| Beside `dumps.sh`, or instead | Beside. `dumps.sh` is the still that diffs byte for byte across a refactor; the tour is wall-clock motion, for looking. Different jobs, so two lists — the tour's coverage tests keep its own whole |
+| A scene is | Data in `orbs-shell/src/tour/scenes.toml`, embedded, `ORBS_TOUR_FILE` to tune one without relinking. A harness's catalogue, not prose, so not under `content/` |
+| Setup | The dump's own driver: `drive` and the editor replay moved from `dump.rs` to `script.rs` and both call it. No reader, so a setup is exact. Towers built with `Sim::new`/`sealed`/`begun` directly, never `environment::fresh`, so no switch outranks a scene |
+| A claim must hold | A world that turns a command down says so in prose with no mark to read, so a setup can parse and do nothing. Each scene's `expect` (after setup) and `ends` (after its steps) name a room, instruments working, a surface, words said, and the tests check them against the world |
+| Steps | Typed at the real keyboard, as `KeyboardInput`, so every surface takes them through its own handler. A step waits on the one before it landing — the tick after an Enter — and on a surface being up, not on a timestamp, which the 1 Hz tick would race |
+| A person's key | Told by `WindowEvent::KeyboardInput`, which only winit writes. Any press takes the scene; `F11` next and `Shift+F11` back. `F9` stays dead (*`F9` is left unbound rather than reassigned*) |
+| Kept | Nothing: no save, no settings file, every scene from the defaults |
+| Release builds | Refuse it. The setups use `debug_spawn`, `debug_take` and `debug_renown`. The catalogue is in every build, a few kilobytes; only a debug one stages or plays it |
+| `ORBS_TOUR=<scene> ORBS_DUMP=1` | The dump starts from the scene's world, so a scene's opening frame is a text check before a window is involved |
+| Between scenes | `menuing::swap`'s order without its write: queued swaps, settings, lines and manual openings dropped, held keys released, every shell resource reset, the tower and an empty `Kept` together, every setting back to its default and then the scene's |
+| A scene's first tick | One second after it appears, whatever staging cost: the fixed overstep is discarded and the virtual clock paused for the frame that pays for the staging, so a `meditate 3600` setup does not arrive as a catch-up. Held by `a_scenes_first_tick_comes_a_second_after_it_appears` |
+| The tour's own clock | Real seconds, capped at a tenth a frame, and one keystroke a frame at most: a window uncovered after a minute does not type a burst |
+| Shots | A PNG of the window and, beside it, the frame as the dump prints it (`orbs_shell::describe`). The text is what Claude checks exactly; the picture is what it judges. `index.txt` marks a flat-coloured capture `BLANK`. A step's shots are timed from the tick its line landed on, so a half-second crossing is caught. Shots mode ignores takeover keys, since the window takes the focus as it opens |
+| In-App test | The whole catalogue played through the real keyboard path with no window, each scene ending as soon as its steps have landed, every `ends` checked: a fraction of a second in `cargo test`. *Superseded in its cost* by *The tour checks what it shows*: every frame is painted now |
+| An Enter that is not the prompt's | Lands as it is pressed. Only a line the prompt sends waits for a tick; at the threshold none comes, and a menu, editor or weave word is not the world's |
+| A line that swaps the tower | Lands when the tick *moves*, not when it grows: the installation's `wake` raises a tower counting from nought. Found by the tour's own screenshots, the step landing seven seconds late |
+| The boot card replayed | `Boot::new().held_still(..)` from the scene's settings, applied first, since stillness is decided when the card is built. It goes from a drawn screen to blank, which the game never did: a frame with no glyphs now commits one degenerate triangle, as `empty_mesh` does, never zero vertices (`use-after-free` in Bevy's allocator) |
+| The threshold reopened | Its *put back up* latch moved from a `Local` into a resource on `shell_resources!`, so a new tower starts unopened. A `Local` complained of a defect on every threshold scene after the first |
+| Coverage | Counted from claims the tests verify, never from what a scene says it is about: every domain and the bailey stood in, every craft at work after a setup, every surface claimed up or waited on by a step (which never starts if it never comes), `F2 F3 F5 F7 F8` pressed, the boot card moving and still, the glass strained. The room list is the sim's `DOMAINS` |
+| A numbered question | `asks = true` on the scene that means one (`purge s` at seed 11, the sim's own fixture); anywhere else an ambiguous line is a setup gone wrong |
+| What the checks found | A `dumps.sh` setup carrying a line the parser cannot read (`siphon balneum_mariae`; the flask reached its state past it), a scene's first draft naming a dev spell that does not exist (`debug_spell brewing`), the wake landing seven seconds late, and the editor scene typing `quit` into the reading view, which ignores it — seen in a screenshot, then held by an `ends` that the spell is cast |
+| The plan's harness prototype | Not built. It was to settle three Bevy questions before box 1 in `.claude/skills/bevy-idioms/verify/`; the game's own tests settle them more strongly: an injected `F5` reaches `ButtonInput` and the linear stream the same frame, a scene's first tick comes a second after it appears and fails without the overstep discarded, and every shots run counts its captures and exits |
+| Held by tests too | Settings back to their defaults between scenes, a scene's own and one a key changed; the first tick a second after a scene appears, whatever the last scene left owing |
+| Readers | Off in `scripts/tour.sh`, as `dumps.sh` has them: the weights are a gitignored build artefact and the in-App test runs without them. With the trained reader on, `purge s` answered a suggestion where its scene shows a numbered question |
+
+#### Where `dumps.sh` is in the tour
+
+| `dumps.sh` section | Scenes |
+|---|---|
+| boot | `boot.card`, `boot.still` |
+| the laboratory, and every instrument animation | `laboratory.*` |
+| the scrivener, the editor | `spell.write` |
+| the fault latch | `spell.fault` |
+| the lens | `lens.*` |
+| the archive, scrolls | `archive.*` |
+| the weave screen, the ley line's grants | `passage.weave`, `ley.line`, `ley.grant` |
+| the orb's menu | `orb.menu`, `orb.settings`, `orb.quit` |
+| the threshold, the manual | `orb.threshold`, `orb.manual` |
+| the installation | `orb.install`, `orb.wake` |
+| a sealed tower | `sealed.*`, `menagerie.lesser`, `progress.fork` |
+| the manual, in every room | `text.help`, `text.recall`, `text.grimoire` |
+| the arsenal, the satchel, bindings | `stores.*`, `spell.cursors`, `spell.running` |
+| the sanctum, the menagerie, the forge | `sanctum.*`, `menagerie.*`, `forge.*` |
+| the bailey | `bailey.*` — a siege won, carried (a worn tower falls on the twelfth unpledged round) and sabotaged — and `glass.strain` |
+| the passage | `passage.*`, and the wake in `boot.card` |
+| number go up | `progress.renown`, `progress.column`, `bailey.siege` |
+| the tower speaks up | `progress.road`, `progress.news`, `progress.fork`, `progress.rates`, `forge.charm` |
+| every instrument state, and a whole cycle | `laboratory.cold`, `.laid`, `.banked`, `.purge`, `progress.gathering`, `progress.gain`, `cycle.*` (*The tour checks what it shows*) |
+| *Left out* | the two grids (the window has one; *superseded*: the test paints 80×22 too), the tester's tools and the augury (text, the dump's), absence (the window losing focus), sound, resizing, `F4` (labels only at the game's grid), the terminal build (`scripts/tui.sh`) |
+
+### Every instrument has a tempo (`0.22`)
+
+**Rule: every puzzle instrument draws a picture of its contents while it works,
+at a tempo of its own, from one module whose safety rules are tested once over
+all five.** The laboratory's four pictures are a module each; these five are
+`orbs_render::figure`, a file per picture and one `tests.rs`. The carried table
+below (*Carried: every instrument has a tempo*) is what they were built from,
+and where the built one differs it is superseded.
+
+| Instrument | Contents | Working | Tempo |
+|---|---|---|---|
+| prism | aligned sigils `█` in the gauge's hue, open sockets `░` | a `▒` focus climbing the open part, shared clock | 4 |
+| lattice | snapped columns `█` at flame body, unsnapped `░` | one cell in eight lifts to blaze, staggered | 6 |
+| lattice, annealing | the settle's ticks `█` at ember | one in eight lifts to body, staggered | 8 |
+| pylon | the wall `█` in the gauge's hue, at rest too | the top course `█`↔`▓` while a course is up | 9 |
+| lectern | the scroll so far `█`; a ready one whole | three seams `▓` knitting from the base, shared clock | 16 |
+| circle | agreeing rows `█` in the gauge's hue | a quarter of the balking rows `░`↔`▒`, in place | 6 |
+
+| Question | Decision |
+|---|---|
+| One module or five | One. The five share every rule that makes a picture safe, so the tests are one sweep: filled is `█`/`▓` and empty `░`/`▒` at every phase and fill; a resting figure never moves; a working one does; no cell's measured flash rate nears three a second; no moment turns half the bar. The measured rate replaces the laboratory's constant-only check for these five |
+| The circle's craft | `Craft::Summoning`, from its `summon` operation, where it was `Idle`. A craft names what a room does |
+| When a figure draws | Only while its puzzle is open (`Working`), plain otherwise: which sigils, glyphs or rows are right is the board's. Two exceptions, both standing things — the pylon's wall at rest, and a ready lectern's whole scroll, which the sim reports no meter for and so drew nothing before |
+| The lattice's anneal | The one picture a meter's unit decides: a lattice counting ticks is annealing, one counting columns is binding. Read in the shell's `bar_for`, one place |
+| The hue | Set by the painter from the length it draws (`Fill::of`), never by the caller, so a figure's colour cannot disagree with its value |
+| Prism focus `▒`, not `▓` | *Superseded from the carried table.* A `▓` in the open sockets reads as filled in greyscale, which is the one thing the join forbids |
+| Prism shimmer | *Dropped.* The focus is the motion; a second ramp shimmer on the aligned part would move the half of the bar that is settled |
+| Pylon motion | *Superseded:* while a course is up, not while it erodes, and no descending gap. Erosion has no edge the panel sees in one frame, and a course is the player's own work, which is what the at-rest rule says moves |
+| Lectern held count | *Superseded:* the knit is drawn over the assembly's ticks. A gathering lectern's held count is not on the panel's `Instrument`, and adding it is a sim change for a picture |
+| Lattice in a dump | It moves in hue only, like the athanor's body, so a text dump shows a solid column; the `screens` example prints its ramp |
+
+### The tower speaks up (`0.21`)
+
+**Rule: every progress fact has one source, and the screen reads it.** The owner
+asked for a stronger look and, above all, progress a player of an incremental
+game can stay engaged by. Two window captures and a dozen dumps showed the gap:
+every surface said *where* the tower stood, none said *how fast*, *what a
+stalled room waits on* or *when*, and what a spell earned never reached the
+screen. Kittens Game's loop (above, *the web's job is bottlenecks*) is *find the
+bottleneck, fix it*; the bottleneck was invisible.
+
+| Question | Decision |
+|---|---|
+| The spine | Instrumentation first — a rate, a wait, a forecast, the tower's news — and the look rides on it: the glass answers the tower's state, and the phosphor keeps what just changed |
+| A minor of its own | Yes, one patch per box, `0.21.0`–`0.21.5`. `0.17`'s *the player can see a bottleneck* ticks under `0.21.1`, *0.17 resumes under whatever minor is in hand* |
+| One source | `tower::throughput`, `tower::wait` and `Sim::pace_of` are read by the rail, `status rates`, the road, the ley gauge and `orbs-balance`. No second expression of a rate or a wait |
+| The curve | Untouched. §11.5's *not a numbers-go-up game* is about exponentials; the sweep's table must not move |
+| The look's boundary | The tube boxes read the shell's per-tick `Panel` and go through `crt::effective`, so they carry nothing the Frame lacks (rule 2). Nothing flashes, nothing is periodic, nothing changes while nothing happens |
+| Carried, not built | *Every instrument has a tempo*, to `0.22`. Five pictures describe contents (*an instrument's bar describes its contents*), not progress; each is the laboratory's ~600 lines again. Its table is below |
+
+Planned with the context-free review this log's practice asks for. It caught
+four things that would have broken box 1: a count-short arm in `gathering`, three
+blocking paths that never reach `would_block`, a plain-register phrase an `Any`
+slot would swallow, and a `tower::Reading` already taken. Each is answered below.
+
+#### `status rates` (`0.21.0`)
+
+| Question | Decision |
+|---|---|
+| What it says | One row per open room — its first ledger row's rate over the last hour of ticks, then what it waits on — and a `slot` row naming what holds the tower's one production slot. `Name` and `Detail`, `casting`'s described listing; the sentence carries the numbers, so the screen and the reader say the same |
+| The ring | `tower::Ring`, extracted from `Stores`: bounded ticks with `push`, `within` and `pace`. `Stores` keeps its window of 1,800 and cap of 3 on top of it, byte-identical; `Throughput` keeps an hour and 64. One ring rule, two owners |
+| What feeds it | `tally::count`, the door every completion passes, and only for the completion itself: a `note` riding on one (a secret, a siege held) would double a rate as it would double `SPELL` |
+| Experience | A second shape, not a second copy: the total at each credit, since a pace of experience is an amount and a ring of ticks cannot carry one |
+| `Hourly` | `Unknown` while fewer than two makings and under five minutes watched; `None`; `PerHour`. Not `Rate` — `content::Rate` is a supply's |
+| The pace | From the gaps between remembered makings, never from now, so a forecast drawn from it changes only when something is made (§14: progress is not announced) |
+| Saved | Yes, `[progress.throughput]`, no `FORMAT` bump: absent is a document from before rates, which watches from the tick it loads into. The window is in ticks and none run while the orb is closed (§5), so a saved ring is the honest reading across a quit. Offline accrual, when it lands, has to feed it |
+| The wait | `wait::reported` ranks a room's instruments — a run in hand, then ready, fouled, charged, gathering, cold, burning, banked, empty — exhaustively over `State`. A run outranks a held spell; a held spell outranks an idle instrument, since when automation is stuck *why* is the answer. `Charged` above `Gathering` and `Cold`: one keystroke from running |
+| What a gathering one lacks | `Recipes::missing`, a `Lack::{Kind, More}`; `gathering` is now `missing.is_some()`, one rule. Both of `gathering`'s arms: a kind not held, or too few of one |
+| A spell's hold | `spell::Hold`, set on all four paths that yield — a busy tool (`Blocked`, kept), `wait for`, an empty `pull`, `bide` — through one `hold` helper, and cleared at the top of each turn. Derived, never saved |
+| `status`'s argument | One optional closed word, `NounKind::Report` and `REPORTS`. Supersedes *`status` takes none* (`0.17.4`). Not `Any`: the plain register's *how are things going* runs past its command, and an open slot would swallow `going` and refuse. `Any` does not accept a report, for `Command`'s reason |
+| A word it does not know | Refused as a verb taking nothing is (`Verb::narrows`), naming the word it does take: *status takes only rates - 'zorb' is not one of them*. A spell line says `spell_takes_only`. Asking *which report* would be a numbered prompt nobody meant |
+| The listing | Every command list reads `status <report>` — 118 captures, one cause. It is how a player finds the word |
+| The sweep | `Run.yields` from `Sim::yields`; `--why` prints each room that made something or is held. The table is byte-identical |
+
+#### The rail says what a room waits on (`0.21.1`)
+
+| Question | Decision |
+|---|---|
+| What the state row says | The instrument `wait::reported` ranks first, not the first busy one. `brief::busiest` is gone; the rail and `status rates` read `wait_in` over the same instruments, and `the_rail_and_status_rates_read_one_function` holds it |
+| A cold hearth | Ranked last, below empty. Ranked above it, a resting laboratory read `cold` for ever: a cold athanor is a wait only when something wants heat, and then the thing wanting it is what is reported |
+| The `%` | Kept on the state row. `wants salt` there would have evicted it (`rail.rs`'s fit), so the specific wait went to the detail row, which is empty exactly when a room is stalled |
+| The detail row | A running meter keeps its own (`al 22t`). Otherwise the wait in twelve cells, as `brief_*` prose: `at mp` for ready, fouled or charged, `fr +tincture` for a lack (the material's last word, `short_material`), `after mp`, `watching`, `pulling`, `bides 12t` for a held spell. A held spell outranks a meter, since it is the room's answer |
+| What a reader hears | The shorthand's sentence — `wait::sentence`, the one `status rates` prints — through `Span::with_spoken`. A running meter is heard as drawn, unchanged |
+| The forge | With nothing else to say, the charm nearest lapsing: `graced 598t`, `ebbing 40t`. The word is the forge's own, from `charm::longest_of_each`, which `publish` now reads too, so the rail cannot say `ebbing` while the node says `graced`. `publish`'s *the exact figure is on the panel* was stale; nothing on the panel read a charm |
+| Fit | `every_input_a_gathering_tool_could_lack_fits_the_rail` walks every recipe input at its instrument; the first draft walked every material and failed on `fr +stillness`, which no recipe takes. `every_hold_fits_the_rail` takes the longest bide |
+| The dumps | Nine captures move, each a room that read `idle` or `burning` while waiting on something; the boot cards move by the version |
+
+#### The road and the ley gauge forecast (`0.21.2`)
+
+| Question | Decision |
+|---|---|
+| What is forecast | The room's next station, at its deed's pace (`Stop.key`, the tally key the deed counts), and the next Ley station, at the pace experience was earned (`Throughput::earning`). Renown is not: it falls, and a forecast of a falling number is a promise |
+| From what | The gaps between the makings remembered, never now. A forecast drawn from the clock would count down a second at a time on a screen where nothing happened — the exposure §14's *progress is completion only* exists to prevent. `a_forecast_does_not_change_while_nothing_is_made` holds both paces still over six hundred idle ticks |
+| The words | `forecast.rs`, one place for the road and the gauge: *under a minute*, *~3 min* rounded up, *~5 h* past a hundred minutes. Coarse, as the resume line is: a few makings' average claims no more |
+| Where it goes on the road | A fourth candidate label, tried first: `sentence · count · eta`, then the three that were there. The forecast is the first thing to go |
+| Where it goes on the gauge | After the reading, before a title. It takes only blank space: drawn only if the bar keeps every cell it would have had, and `needs` leaves it out, so the room's column is never dropped for one. `the_ley_forecast_takes_only_blank_space` sweeps forty to a hundred and twenty columns with and without the column |
+| Spoken | As drawn: it is part of the tail's text, and a forecast with no room is neither drawn nor said |
+| Honest, not clever | The ley's pace averages every credit, so a quick grind and a long brew count alike. After a hand-made clarity, *0/8 under a minute* is the measurement, and the next brew corrects it. Weighting by recipe would be a model of the player; this is a reading of what happened |
+| `examples/screens` | Not the instrument here: the road and the gauges are the shell's painters, which `orbs-render` cannot reach. `scripts/dumps.sh`'s `forecast` and `forecast_floor` are |
+
+#### The tower's news reaches you (`0.21.3`)
+
+**Supersedes half of *a spell's output goes to the log, not the pane*.** That
+rule was written for a loop's move, wait, yield and empty every few ticks, and
+it is still right for them. It also hid the one-in-fifteen-minutes events an
+idle tower is played for — a station, a room, a rank, a level — at exactly the
+time the player was idling.
+
+| Question | Decision |
+|---|---|
+| The mechanism | A record flag, `RecordBuilder::news`, the twin of `quiet`, which `Records::drawn` honours. *Superseded in the build:* the plan was a `RecordKind::Milestone`. A kind reaches every exhaustive match over `RecordKind` in five crates — views, cues, naming, the sweep's `landed` — to say one thing a flag says in one place, and it would have moved the sweep's `landed` |
+| Not a hole in attribution | The record keeps `FieldName::Spell`, so `sift` still names the culprit and `everything_a_spell_does_is_credited_to_it` is untouched. Clearing attribution around the emitters was rejected for blinding `sift` |
+| What is news | `mastery::reach`, `opened::opening`, `renown::crossed` (both ways: the title is the tower's), `experience::say_gained`, and a fork becoming choosable. Nothing else a spell does |
+| The fork | `ley::cross` finds the forks in `(before, after]` and says *the ley line forks ahead* once. A fork opens nothing until taken, so `opening` never said it and the choice waited at the loom until someone typed `weave`. `caught_up` stays silent |
+| The rail | `news::latch` raises `Mark::News` on a room whose station was reached, or that was opened, while the player stands elsewhere. A fault still outranks it; walking in still clears it. `debug_reach` latches too, so captures that pose stations from elsewhere gain `!` — the mark agrees with the record that was said |
+| The chime | `news_voice`: the success cue, not `Done`, which every yield rings; a rank lost is the warning. By ear from across the room, news is not one more yield |
+| Saved | `news` on a record, no `FORMAT` bump: absent is what every record was before |
+| The dumps | `bind_holding` gains the sanctum's station a bound spell reached; `siege_over` the fork a siege crossed; three `debug_reach` captures gain marks |
+
+#### The glass answers the tower (`0.21.4`)
+
+**Supersedes** the `picture` page's *no threat modulation claimed* and the CRT
+port's *not yet wired: vignette pulse on threat, flash on breach, desaturation
+on failure*. Two of the three are wired, as levels; the flash is deleted.
+
+| Question | Decision |
+|---|---|
+| What answers | `crt::Strain`: *pressure*, the enemy's margin over the garrison while the rampart is drawn, and *fault*, a latched `‼` anywhere on the rail. Each eases toward its target over 0.6 s, `away`'s ramp |
+| Margin, not share | `enemy / (enemy + garrison)` put every siege at a half from `defend`. `max(0, (enemy − garrison) / total)`: an even fight is nothing |
+| What it moves | The vignette toward `PEAK_THREAT`'s 0.85, by pressure. Desaturation to 0.15, by fault — under peak's 0.25, because a fault clears only by walking in and a room never visited would grey the tube for a session. `vignette_radius` is the same in both presets, so it is left alone |
+| Where it is applied | To the extracted copy, before `effective`. On the component, `F3`'s cycle would find a strained tube equal to no preset |
+| The `picture` page | `edge` governs both: the glass's rim and its answer to the tower. `edge off` means it never answers, and peak threat's own grey goes with it |
+| Rule 2 | It reads the `Panel`, what the painters draw from: the rampart's bands and the rail's `‼` already carry both facts. Enrichment, window-only, as the band and the bloom are |
+| Motion off | Applied anyway. A level that eases at round cadence is not motion; `Absence` is the precedent. A level that *stepped* would be the hazard, and `strain_ramps_and_never_steps` holds it |
+| Greyscale | The fault channel does nothing visible there, and that is acceptable: the `‼` carries it in both builds |
+| `flash` | Deleted from `CrtSettings`, the uniform and `crt.wgsl`. §19 says nothing in this game flashes; a field reserved for a flash that will never fire was a lie in the struct |
+| A swap | `Strain` is on `shell_resources!`, so one tower's siege does not strain the next |
+| Seeing it | `ORBS_STRAIN=<pressure>,<fault>` poses it for a capture. Measured at `0.9,1`: mean saturation 8.7 to 7.3, corners darker. Subtle on purpose — the tube is read through, and this is a nudge |
+
+#### Afterglow (`0.21.5`)
+
+**One general mechanism rather than a sixth clock.** Any cell that changes — a
+rolling digit, a bar's end, a line arriving, the caret, a wipe — leaves a soft
+fade of about a tenth of a second, so motion added later is visible without
+animation code of its own.
+
+| Question | Decision |
+|---|---|
+| The shape | `max(now, before × decay)`. It only ever fades: nothing appears that was not on screen a moment ago, so it carries no information the Frame lacks (rule 2) |
+| How long | `decay = exp(−dt / τ)`, τ 0.02 s at `full` and half that at `soft`: under half after one frame at 60 Hz, below one step in 255 inside 0.12 s. `dt` capped at 0.05 s, so a hitch neither wipes nor freezes the trail. *Superseded on the owner's look:* τ was 0.04 s — two thirds after a frame and 0.22 s in all — and read as ghosting (*"not a huge fan of the ghosting effect"*). Of removing it, an off-by-default row of its own, or shortening it, the owner chose shortening: a soft fade, not a ghost. The time constant is on the clock, so the fade is the same at any refresh rate |
+| Where | Before the tube (`.before(CrtPass)`), so a trail is the phosphor's, under the glass: curved, scan-lined, masked. After the barrel it would smear the warp and glow in the dark room |
+| The history | `fullscreen::History`, behind `Fullscreen::HISTORY` — the shared pass, not a second copy of it. One owned texture, not `TextureCache`'s, which hands back any free texture of the descriptor. Made fresh, which wgpu zeroes, on any change of size or format, checked before the ping-pong: a return after `post_process_write` would hand the tube an empty frame. The frame drawn is copied into it on the same encoder after the draw |
+| `COPY_SRC` | On the view's main textures through `CameraMainTextureUsages::default()`. The game never overrides it; `the_camera_still_allows_copying_its_main_texture` fails on a Bevy bump that drops it, rather than at draw |
+| Off | Skipped, and the history forgotten, whenever motion is still, the tube is off, `glow` is off or `ORBS_AFTERGLOW=0`: still cuts and keeps nothing, and a resumed trail never shows the past |
+| The row | `glow`, now *bloom, afterglow*. The `picture` page is full: an eighth row fails `no_settings_page_is_taller_than_the_menu_can_draw` and moving `TALLEST` shifts every menu capture. Bloom is the phosphor in space and this the phosphor in time; a player who turns bloom off loses the trail too, and that is the trade. A separate row is the later answer if one is wanted |
+| Seeing it | The render world needs a GPU, so its two paths — recreate on resize, forget on stop — are held by running the window, not by a unit test: `ORBS_CAPTURE` with and without, through boot, tube off and motion off, and stderr read each time. The trail is only visible mid-motion, which a frame-30 capture does not catch, so it needs eyes |
+
+#### What the review of the whole found
+
+A context-free review of the finished diff, read-only. Each fix is folded into
+its box, so no version moves.
+
+| Found | Fix |
+|---|---|
+| The `!` latch read `Cwd`, which a spell's line sets to the spell's room, so a ward, course, charm or beast a bound solver finished never latched. Only a brew landing on the tick did — the one path the tests covered | `Casting` carries the player's own position; `news::latch` reads it under a caller. `a_station_a_bound_spell_reaches_inline_latches_where_the_player_is_not` fails on the old read |
+| A retimed spell's hold was cleared every tick but set only on the ticks sabotage let it run, so the rail flickered between the hold and the tool | Cleared only on a turn the spell takes. `a_retimed_spells_hold_does_not_flicker` fails on the old reset |
+| A full ring pinned the hourly rate at 64: every sweep read *64 an hour* for the lens and the sanctum | A full ring of recent makings is a rate over the time since its oldest, which still falls when making stops. `a_fast_room_is_not_pinned_at_what_the_ring_holds` |
+| Two tests could not fail: one asked a pace of a note it never fired, the other compared *too soon* with *too soon* | A real `bind` note, asked of the saved ring; a measured rate past `SETTLE`, and the saved ring compared across the reload |
+| The trained reader kept `status <any word>` as a reading, which could only be refused, ahead of a better one | A verb with a closed slot is dropped unless the tagged word is one it takes |
+| *Not acted on:* an 8-bit sRGB target stops fading a trail at a code or two above black | Every theme's background sits above it, so it never shows |
+
+#### Carried: every instrument has a tempo (`0.22`)
+
+*Built at `0.22` and superseded where it differs* — see *Every instrument has
+a tempo* above. Tempos divide `TICKS_PER_CYCLE = 144`; today grind 2, bath 3,
+stir 5, drift 9.
+The stacks keep their gauge, since their picture is the map.
+
+| Instrument | Contents | Working tempo | Modelled on |
+|---|---|---|---|
+| prism | dialled sockets `█`, empty `░` | a `▓` focus climbing one cell per 4 ticks; two gauge-ramp steps staggered at 9 | `liquid.rs` drift, `fire.rs` rising |
+| lattice | lit columns at `FlameBody`, unsnapped `░` | lit cells breathe body to blaze staggered at 6; on `anneal` they cool from the tip one per 8 | `fire.rs` ramp and sparks, `grind.rs` falling |
+| pylon | a wall in the `Fill` ramp of its standing | the top course `▓▒` staggered at 9 only while eroding; a course up drops a one-cell gap per 12 | `mix.rs` boundary |
+| lectern | four segments, held `▓` | boundaries knit from the base one per 16 | `mix.rs` bands to one |
+| circle | agreeing rows `█`, disagreeing `░` | disagreeing cells `░▒` staggered at 6, in place; no rising, which means heat | `liquid.rs` shimmer |
+
 ### The tower swept (`0.20`)
 
 **Rule: one copy of each rule, and a comment says why in a line or two.** Twenty
@@ -4249,7 +4540,7 @@ all — the one number pillar 3 is about.
 | In `status` | A `ledger` section after the readings and before `casting`, which returns early. Its rows are readings — name, dots, count — under a heading of their own, so they take a column of their own. A row's spell share follows it, **named in full** — *scrolls copied by your spells* — so each record stands alone for `sift` and a pipe (rule 4); *your spells' share*, said of the row above, was the first draft and needed adjacency to mean anything. *done by your spells* is the tower-wide total. Nought rows are left out, and the section with them |
 | What `done by your spells` counts | Each completion once. A `note` riding on one — a secret a ward gave up, a siege held, a spell bound — counts its own key and that key's share, and is not another thing a spell did; counting it doubled a spell's ward break that found a secret |
 | The heading | `ledger` is a table entry beside `casting`, not prose: a section heading is the record's `Kind`, a token `sift` finds, which is the rule `CASTING` records. A review asked for it in prose and this is the answer |
-| No argument | `status` still takes none. A narrowing form waits for `status rates`, which decides the verb's argument shape |
+| No argument | `status` still takes none. A narrowing form waits for `status rates`, which decides the verb's argument shape. *Superseded at `0.21.0`: one optional closed word — see* the tower speaks up |
 | No comma in a label | A reader hears a row as `name: …, qty: …`, and a comma in the name splits it |
 | The dumps | Moved first, byte-identical, in a stage of its own. Then exactly two captures changed — `lab_clarity` and `pylon_done`, the two that run `status` after making something. The third the plan named, `satchel_rail`, counts nothing in its six ticks |
 | The economy | A sweep reads clarity at 996 experience and 1,103 renown, the figures this log recorded at `0.11.14`. The tally gains keys; nothing earns differently |

@@ -28,6 +28,21 @@ pub(crate) fn waiting(boot: Option<Res<Boot>>, threshold: Option<Res<Threshold>>
         && threshold.is_some_and(|threshold| threshold.is_waiting())
 }
 
+/// Whether this tower's threshold menu has been put up already.
+///
+/// A resource on `shell_resources!`, not a `Local`, so a new tower starts
+/// unopened: the tour puts the threshold up again in a later scene.
+#[derive(Resource, Debug, Default)]
+pub(crate) struct Opened(bool);
+
+#[cfg(test)]
+impl Opened {
+    /// Whether the menu has been put up for this tower.
+    pub(crate) const fn is_set(&self) -> bool {
+        self.0
+    }
+}
+
 /// Put the menu up once the boot card has gone.
 ///
 /// Every frame while [`waiting`], so there is no edge to catch. Nothing closes
@@ -37,18 +52,18 @@ pub(crate) fn waiting(boot: Option<Res<Boot>>, threshold: Option<Res<Threshold>>
 pub(crate) fn open_at_the_threshold(
     mut standing: ResMut<Standing>,
     settable: super::setting::Settable,
-    mut opened_before: Local<bool>,
+    mut opened: ResMut<Opened>,
 ) {
     if standing.is_open() {
         return;
     }
-    if *opened_before {
+    if opened.0 {
         bevy::log::error!(
             "the threshold's menu was closed and had to be put back up; \
              something reached `MenuOutcome::Close` at `Stance::Threshold`",
         );
     }
-    *opened_before = true;
+    opened.0 = true;
     // The same rows the `menu` verb's opener hands over: one `Settable` asked
     // twice, because a second list would be a settings page that differed
     // depending on which door the player came through.

@@ -14,10 +14,12 @@ CRT glowing in the dark.
 
 **Status: the game plays, and the premise is complete** — seven domains, the
 arsenal carrying their output, and a siege that rewrites the scripts behind you.
-`0.19` (*the terminal kept true*) is the last feature closed. `0.17` (*the tower
-as one machine*) is paused, and `0.20` (*the tower swept*, a simplification pass)
-is in hand. A few boxes in closed sections are left open on purpose, and Phase
-0's tester gate is deferred; [docs/ROADMAP.md](docs/ROADMAP.md)'s Open table has
+`0.23` (*the tour* — every surface, moving, one scene at a time, for a person
+to watch and for Claude to screenshot) is the last feature closed, after `0.22`
+(*every instrument has a tempo*) and `0.21` (*the tower speaks up* — a rate, a
+wait, a forecast, the tower's news, and a glass that answers). `0.17` (*the tower as one machine*) is paused, its bottleneck box done
+under `0.21`. A few boxes in closed sections are left open
+on purpose, and Phase 0's tester gate is deferred; [docs/ROADMAP.md](docs/ROADMAP.md)'s Open table has
 what remains.
 
 **The orb wakes to its own menu.** `play` opens or raises a tower, `settings` is
@@ -328,6 +330,8 @@ DESIGN.md §15 and §19 record the correction and what it cost.
 cargo run -p orbs                        # the game — window, sim, cell renderer
 ORBS_DUMP=1 cargo run -p orbs            # ...its screen as text, no window, no GPU
 ORBS_CAPTURE=1 cargo run -p orbs         # ...or as a screenshot
+scripts/tour.sh forge.lattice            # a scene of the game, moving, in the window
+scripts/tour.sh shots <dir> forge        # ...as screenshots, each with its frame as text
 cargo run -p orbs-render --example screens   # real Frames dumped as text
 cargo run -p orbs-balance -- sweep --hours 1 --why   # the economy, measured
 ```
@@ -362,6 +366,7 @@ has exactly the standing it had here: it is the gate, not supplementary reading.
 | the manual, `recall`, or a room's primer | *`recall apprentice`* |
 | the installation, or what a new game opens on | *The installation* |
 | a settings row, or a word the menu answers | *The orb made yours* |
+| how anything looks, moving — a domain, a crossing, an effect, a screen | *The tour* — and add a scene for what you built |
 
 **Four things from it are worth carrying without looking**, because they are the
 ones a session gets wrong before it thinks to check:
@@ -370,12 +375,16 @@ ones a session gets wrong before it thinks to check:
   duration. `cargo run -p orbs-balance -- sweep --ticks 7200` — an hour is short
   enough that one badly-timed sabotage flags the seed rather than the game, and a
   swept rate is the only instrument that sees an ambient nuisance at all.
-- **A spell's records are in the log, never the transcript.** The pane draws what
-  the *player* did, so a dump that casts a spell and looks for its output on
-  screen finds nothing and looks broken. `peruse` or `sift` the log.
+- **A spell's records are in the log, not the transcript** — all but the tower's
+  news (a station, a room, a rank, a level, a fork), which is drawn whoever
+  earned it. The pane draws what the *player* did, so a dump that casts a spell
+  and looks for its yields on screen finds nothing and looks broken. `peruse` or
+  `sift` the log.
 - **`ORBS_DUMP` is a still photograph.** It builds no `App`, advances no clock and
   presses no key, so anything animated, anything on an *edge*, and every
-  interactive surface needs a switch of its own or has no gate at all.
+  interactive surface needs a switch of its own or has no gate at all. **The
+  tour is the film**: `scripts/tour.sh shots <dir> <scene>` plays it in the
+  window and keeps PNGs, each with the frame as text to check exactly.
 - **`scripts/dumps.sh <dir>` captures every surface as text** and is the
   instrument for a refactor whose claim is that nothing changed. **A domain built
   without a block in it is one this instrument is blind to, and the blindness

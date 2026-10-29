@@ -29,7 +29,7 @@ use crate::tower::{Mark, Way};
 ///
 /// Exhaustive by construction: `every_noun_kind_has_a_word` matches on one and
 /// fails to compile if a variant is added without a word here.
-const KINDS: [(NounKind, &str); 19] = [
+const KINDS: [(NounKind, &str); 20] = [
     (NounKind::Place, "place"),
     (NounKind::File, "file"),
     (NounKind::Pattern, "pattern"),
@@ -49,6 +49,7 @@ const KINDS: [(NounKind, &str); 19] = [
     (NounKind::Command, "command"),
     (NounKind::Any, "any"),
     (NounKind::Subject, "subject"),
+    (NounKind::Report, "report"),
 ];
 
 /// The word for a noun kind.
@@ -245,7 +246,8 @@ mod tests {
                 | NounKind::Stoppable
                 | NounKind::Command
                 | NounKind::Any
-                | NounKind::Subject => kind_word(kind),
+                | NounKind::Subject
+                | NounKind::Report => kind_word(kind),
             };
             assert_eq!(kind_from(word), Some(kind), "{kind:?} did not read back");
         }

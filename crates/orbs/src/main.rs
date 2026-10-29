@@ -11,6 +11,7 @@
 //!
 //! F10 leaves the orb.
 
+mod afterglow;
 mod boot;
 mod crt;
 mod fullscreen;
@@ -19,6 +20,7 @@ mod shell;
 mod sight;
 mod sim;
 mod sound;
+mod tour;
 
 use bevy::prelude::*;
 use bevy::window::WindowResolution;
@@ -44,67 +46,88 @@ fn main() -> AppExit {
     if orbs_shell::dump(wizard(), boot::engine(), shell::default_settings()) {
         return AppExit::Success;
     }
+    // The tour, decided before a save is touched: it keeps nothing.
+    let touring = match tour::before_the_app() {
+        tour::Ask::Exit(exit) => return exit,
+        tour::Ask::Play(plugin) => Some(plugin),
+        tour::Ask::Nothing => None,
+    };
 
-    // Before anything reads a save, and once. A player whose towers were beside
-    // the binary finds them where the orb now keeps them; the originals are
-    // copied rather than moved, so an older build still finds its own. It does
-    // nothing when `ORBS_SAVE` names a path or says `off`, or when it has
-    // already run, so no instrument in the project reaches it.
-    //
-    // After the dump, deliberately: a capture keeps nothing and should not be
-    // what migrates a player's games.
-    orbs_shell::migrate_saves();
-    // Settings are kept only once a frontend says so, and this is where this one
-    // says it. A process that never calls it gets the defaults — every test
-    // binary in the workspace, so a `cargo test` never reads or writes the
-    // developer's own settings file. See `settings::store::KEPT_AT`.
-    orbs_shell::settings::keep();
+    if touring.is_some() {
+        // The menu's play page reads saves itself, so they are closed for the
+        // whole process; no tower is read, listed or written.
+        orbs_shell::seal_saves();
+    } else {
+        // Before anything reads a save, and once. A player whose towers were
+        // beside the binary finds them where the orb now keeps them; the
+        // originals are copied rather than moved, so an older build still finds
+        // its own. It does nothing when `ORBS_SAVE` names a path or says `off`,
+        // or when it has already run, so no instrument in the project reaches
+        // it.
+        //
+        // After the dump, deliberately: a capture keeps nothing and should not
+        // be what migrates a player's games.
+        orbs_shell::migrate_saves();
+        // Settings are kept only once a frontend says so, and this is where this
+        // one says it. A process that never calls it gets the defaults — every
+        // test binary in the workspace, and the tour, so neither reads or
+        // writes the developer's own settings file. See `settings::store::KEPT_AT`.
+        orbs_shell::settings::keep();
+    }
+    let playing = touring.is_none();
 
-    App::new()
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                title: "O.R.B.S.".to_owned(),
-                resolution: WindowResolution::new(INITIAL_WINDOW.0, INITIAL_WINDOW.1),
-                ..default()
-            }),
+    let mut app = App::new();
+    app.add_plugins(DefaultPlugins.set(WindowPlugin {
+        primary_window: Some(Window {
+            title: "O.R.B.S.".to_owned(),
+            resolution: WindowResolution::new(INITIAL_WINDOW.0, INITIAL_WINDOW.1),
             ..default()
-        }))
-        // Muted violet, the default phosphor (§4). A placeholder — the real
-        // themes belong to the cell renderer. Lifted off true black, because an
-        // empty screen at exactly #000000 looks like a crashed one.
-        .insert_resource(ClearColor(Color::srgb(0.10, 0.06, 0.15)))
-        .add_plugins((
-            sim::SimPlugin {
-                // A game gets a seed of its own unless `ORBS_SEED` names one or
-                // `ORBS_CAPTURE` is taking a screenshot — see
-                // `orbs_shell::new_game_seed`. A save on disk outranks it.
-                seed: orbs_shell::new_game_seed(),
-                wizard: wizard(),
-                // The real game keeps its tower between sessions. Only this
-                // crate's own tests do not — see `SimPlugin::persist`.
-                persist: true,
-                // The game waits at its menu; `ORBS_THRESHOLD=0` does not. The
-                // switch is the harnesses': `scripts/play.sh` and
-                // `scripts/tui.sh` are written to reach a *tower*, and a
-                // laboratory scenario that typed past a menu first would be
-                // testing the door.
-                threshold: orbs_shell::Threshold::chosen(orbs_shell::Threshold::Waiting)
-                    .is_waiting(),
-            },
-            render::RenderPlugin,
-            crt::CrtPlugin,
-            // After the tube in this list only for readability — what actually
-            // orders the two passes is the explicit edge in `SightPlugin`.
-            sight::SightPlugin,
-            shell::ShellPlugin,
-            boot::BootPlugin,
-            // Last, and it reads rather than writes: every cue is chosen from a
-            // record the transcript has already drawn, so the sound is a view
-            // over the frame (rule 2) and nothing above it can come to depend
-            // on the orb having a voice.
-            sound::SoundPlugin,
-        ))
-        .run()
+        }),
+        ..default()
+    }))
+    // Muted violet, the default phosphor (§4). A placeholder — the real
+    // themes belong to the cell renderer. Lifted off true black, because an
+    // empty screen at exactly #000000 looks like a crashed one.
+    .insert_resource(ClearColor(Color::srgb(0.10, 0.06, 0.15)))
+    .add_plugins((
+        sim::SimPlugin {
+            // A game gets a seed of its own unless `ORBS_SEED` names one or
+            // `ORBS_CAPTURE` is taking a screenshot — see
+            // `orbs_shell::new_game_seed`. A save on disk outranks it.
+            seed: orbs_shell::new_game_seed(),
+            wizard: wizard(),
+            // The real game keeps its tower between sessions. This crate's
+            // own tests do not — see `SimPlugin::persist` — and nor does a
+            // tour, whose every scene raises its own.
+            persist: playing,
+            // The game waits at its menu; `ORBS_THRESHOLD=0` does not. The
+            // switch is the harnesses': `scripts/play.sh` and
+            // `scripts/tui.sh` are written to reach a *tower*, and a
+            // laboratory scenario that typed past a menu first would be
+            // testing the door. A tour's threshold is a scene's.
+            threshold: playing
+                && orbs_shell::Threshold::chosen(orbs_shell::Threshold::Waiting).is_waiting(),
+        },
+        render::RenderPlugin,
+        // Before the tube in this list only for readability — the edge to
+        // `CrtPass` in `AfterglowPlugin` is what orders the two passes.
+        afterglow::AfterglowPlugin,
+        crt::CrtPlugin,
+        // After the tube in this list only for readability — what actually
+        // orders the two passes is the explicit edge in `SightPlugin`.
+        sight::SightPlugin,
+        shell::ShellPlugin,
+        boot::BootPlugin,
+        // Last, and it reads rather than writes: every cue is chosen from a
+        // record the transcript has already drawn, so the sound is a view
+        // over the frame (rule 2) and nothing above it can come to depend
+        // on the orb having a voice.
+        sound::SoundPlugin,
+    ));
+    if let Some(tour) = touring {
+        app.add_plugins(tour);
+    }
+    app.run()
 }
 
 // Who is at the orb, and which seed the world grows from, are

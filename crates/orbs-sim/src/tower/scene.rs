@@ -129,6 +129,11 @@ pub fn scene_at(world: &World, at: Entity) -> Scene {
     for (word, _) in crate::parser::single_words() {
         scene = scene.with(NounKind::Command, word);
     }
+    // What `status` narrows to, anywhere. After the commands, so no earlier
+    // tie moves.
+    for word in crate::parser::REPORTS {
+        scene = scene.with(NounKind::Report, word);
+    }
 
     // Every spell, wherever the player stands: the book you carry, not a
     // domain, so §19's rule still holds — and a `Script` slot with nothing in

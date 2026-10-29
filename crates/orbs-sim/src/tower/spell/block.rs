@@ -49,6 +49,40 @@ impl Blocked {
     }
 }
 
+/// What a spell is held on this tick, for the rail and `status rates`.
+///
+/// Every path that yields sets one, not only [`Blocked`]'s: the loop idiom
+/// `wait for the alembic` never reaches [`would_block`]. Derived each tick and
+/// never saved, so a loaded spell says nothing until its first turn.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Hold {
+    /// An instrument or the tower's slot is busy — [`Blocked`], kept.
+    Busy(Blocked),
+    /// `wait for`, and what it watches for.
+    Watching(String),
+    /// `pull`, from a satchel that is bare.
+    Pulling(String),
+    /// `bide`, and the ticks it has left.
+    Biding(u64),
+}
+
+impl Hold {
+    /// Whether this says more about a spell than `other` does, when two of
+    /// its cursors are held at once: something else in the way first, then a
+    /// wait on the world, and a `bide` last, since a spell chose that one.
+    #[must_use]
+    pub const fn outranks(&self, other: &Self) -> bool {
+        const fn weight(hold: &Hold) -> u8 {
+            match hold {
+                Hold::Busy(_) => 0,
+                Hold::Watching(_) | Hold::Pulling(_) => 1,
+                Hold::Biding(_) => 2,
+            }
+        }
+        weight(self) < weight(other)
+    }
+}
+
 /// Whether `intent` would have to wait, asked from where the script is standing.
 ///
 /// Only duration-actions block: a script reading a log must not wait behind a
@@ -152,4 +186,22 @@ fn name_of(world: &World, at: Entity) -> String {
     world
         .get::<tower::Name>(at)
         .map_or_else(String::new, |name| name.0.clone())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn what_blocks_one_cursor_outranks_a_bide_beside_it() {
+        let busy = Hold::Busy(Blocked::Slot {
+            name: "archive".to_owned(),
+            doing: "reading".to_owned(),
+        });
+        assert!(busy.outranks(&Hold::Biding(3)));
+        assert!(!Hold::Biding(3).outranks(&busy));
+        assert!(Hold::Watching("alembic".to_owned()).outranks(&Hold::Biding(3)));
+        // A tie keeps the first cursor's.
+        assert!(!Hold::Biding(2).outranks(&Hold::Biding(3)));
+    }
 }

@@ -80,6 +80,10 @@ pub struct Casting {
     pub depth: u8,
     /// Whether the caller runs without the player standing there.
     pub unattended: bool,
+    /// Where the player is standing while the line runs: `Cwd` is the spell's
+    /// room for its length. What the rail's news latch asks (§19, *the tower
+    /// speaks up*).
+    pub player: Entity,
 }
 
 /// A spell the orb is working through.
@@ -150,6 +154,9 @@ pub struct Running {
     /// A flag, because running out ends a cursor and only the last one ends the
     /// spell: a producer that returns must not take its consumer down.
     pub spent: bool,
+    /// What a cursor yielded on this turn, if one did. Cleared at the top of
+    /// each turn, so it is never stale — see [`Hold`](super::Hold).
+    pub held: Option<super::Hold>,
 }
 
 /// One cursor: where a spell is, and everything private to being there.
@@ -313,6 +320,13 @@ fn set_attribution(world: &mut World, spell: Option<&str>) {
 /// `two_cursors_interleave_the_same_way_at_two_steps_a_tick`. A cursor that
 /// runs off the end is removed; one that blocks yields only itself.
 fn step_one(world: &mut World, entity: Entity) {
+    // Only on a turn the spell takes: a retimed one skips ticks, and clearing
+    // its hold on those flickered the rail between the hold and the tool.
+    if dragged(world, entity, budget(world)) > 0
+        && let Some(mut running) = world.get_mut::<Running>(entity)
+    {
+        running.held = None;
+    }
     let mut index = 0;
     loop {
         // Re-read every lap: a spent strand is removed and `alongside` appends.
@@ -602,6 +616,7 @@ fn step_strand(world: &mut World, entity: Entity) {
         world.insert_resource(Caller(Some(Casting {
             depth: state.depth,
             unattended: state.unattended,
+            player,
         })));
 
         let outcome = run_line(world, entity, &state, &line);
@@ -748,6 +763,31 @@ fn wait_for(world: &mut World, entity: Entity, state: &Running, wanted: &str) ->
         advance_pc(world, entity);
         return Progress::Done;
     }
+    hold(world, entity, super::Hold::Watching(wanted.to_owned()))
+}
+
+/// The fault a spell line says when its verb is handed words it cannot use:
+/// one for a verb taking nothing, one for a verb taking only a closed few.
+/// Read at cast and at run, so the two say the same.
+pub(super) const fn takes_nothing_key(verb: crate::parser::Verb) -> &'static str {
+    if verb.narrows().is_some() {
+        "spell_takes_only"
+    } else {
+        "spell_takes_nothing"
+    }
+}
+
+/// Yield, saying what on. The one way a turn ends blocked.
+///
+/// One hold a spell, however many cursors are held: the one that says most,
+/// the first cursor's on a tie, so a `bide` beside a blocked cursor does not
+/// hide what blocks it.
+fn hold(world: &mut World, entity: Entity, why: super::Hold) -> Progress {
+    if let Some(mut running) = world.get_mut::<Running>(entity)
+        && running.held.as_ref().is_none_or(|held| why.outranks(held))
+    {
+        running.held = Some(why);
+    }
     Progress::Blocked
 }
 
@@ -781,8 +821,8 @@ fn run_line(world: &mut World, entity: Entity, state: &Running, line: &str) -> P
     let intent = match analyse(line, &scene, Mode::Calm).resolution {
         Resolution::Resolved { intent, .. } => intent,
         // A verb handed words it cannot use — see `compile::reading`.
-        Resolution::TakesNothing { extra, .. } => {
-            say_failure(world, state, "spell_takes_nothing", &extra, Role::Danger);
+        Resolution::TakesNothing { verb, extra, .. } => {
+            say_failure(world, state, takes_nothing_key(verb), &extra, Role::Danger);
             advance_pc(world, entity);
             return Progress::Done;
         }
@@ -836,7 +876,9 @@ fn bide(world: &mut World, entity: Entity, state: &Running, delay: u32) -> Progr
     };
     // `ticks - 1` because completing spends a tick of its own: `bide n` means the
     // next line runs n ticks from here.
-    if now.get().saturating_sub(since.get()) >= u64::from(ticks.saturating_sub(1)) {
+    let spent = now.get().saturating_sub(since.get());
+    let wanted = u64::from(ticks.saturating_sub(1));
+    if spent >= wanted {
         if let Some(mut running) = world.get_mut::<Running>(entity) {
             running.waiting_since = None;
             running.biding = None;
@@ -844,7 +886,7 @@ fn bide(world: &mut World, entity: Entity, state: &Running, delay: u32) -> Progr
         advance_pc(world, entity);
         return Progress::Done;
     }
-    Progress::Blocked
+    hold(world, entity, super::Hold::Biding(wanted - spent))
 }
 
 /// Hold the spell where it is, saying so once.
@@ -870,7 +912,7 @@ fn wait(world: &mut World, entity: Entity, state: &Running, blocked: &Blocked) -
         advance_pc(world, entity);
         return Progress::Done;
     }
-    Progress::Blocked
+    hold(world, entity, super::Hold::Busy(blocked.clone()))
 }
 
 /// Whether a script may issue this verb at all.
@@ -1188,7 +1230,7 @@ fn pull(world: &mut World, entity: Entity, state: &Running, name: &str, from: &s
         return Progress::Done;
     };
     let Some(taken) = satchel.take() else {
-        return Progress::Blocked;
+        return hold(world, entity, super::Hold::Pulling(from.to_owned()));
     };
 
     if let Some(mut running) = world.get_mut::<Running>(entity) {

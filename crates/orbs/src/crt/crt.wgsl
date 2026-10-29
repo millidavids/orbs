@@ -33,10 +33,6 @@ struct CrtUniform {
     flicker: f32,
     corner_radius: f32,
     desaturation: f32,
-    flash_r: f32,
-    flash_g: f32,
-    flash_b: f32,
-    flash: f32,
     time: f32,
     // Physical pixels per cell. Everything periodic derives from these.
     cell_width: f32,
@@ -209,11 +205,8 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let vignette = smoothstep(crt.vignette_radius, crt.vignette_radius - 0.45, radial);
     colour *= mix(1.0, vignette, crt.vignette);
 
-    // Wired to world state later: flash on breach, desaturate as things fail.
-    if crt.flash > 0.0 {
-        colour += vec3<f32>(crt.flash_r, crt.flash_g, crt.flash_b) * crt.flash * inside;
-    }
-
+    // Peak threat's grey, and a broken spell's through `Strain`. Nothing here
+    // flashes (§19).
     if crt.desaturation > 0.0 {
         let luma = dot(colour, vec3<f32>(0.299, 0.587, 0.114));
         colour = mix(colour, vec3<f32>(luma), crt.desaturation);

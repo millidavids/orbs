@@ -104,6 +104,14 @@ impl<B: Backend> Trained<B> {
                 if verb.signature().len() < filled.len() {
                     return None;
                 }
+                // A closed slot is the same sink by another door: `status`
+                // takes one word, so `status alembic` held whatever the tagger
+                // found and could only ever be refused (`Verb::narrows`).
+                if let Some(only) = verb.narrows()
+                    && filled.iter().any(|word| !only.contains(&word.as_str()))
+                {
+                    return None;
+                }
                 let mut command = String::from(verb.canonical());
                 for slot in filled.iter().take(verb.signature().len()) {
                     command.push(' ');

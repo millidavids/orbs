@@ -390,7 +390,14 @@ fn collect(
                             incomplete.push(held);
                         }
                     };
-                    match synonym.verb.signature().first() {
+                    // A closed slot refuses as an empty one does — see
+                    // `Verb::narrows`.
+                    let asks = if synonym.verb.narrows().is_some() {
+                        None
+                    } else {
+                        synonym.verb.signature().first()
+                    };
+                    match asks {
                         Some(slot) if !(synonym.verb.is_operation() && names_a_place) => {
                             remember(
                                 &mut incomplete,

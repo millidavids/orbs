@@ -57,7 +57,7 @@ pub(crate) enum Effect {
     Curve,
     /// The dark line between scan rows.
     Lines,
-    /// Phosphor bloom.
+    /// Phosphor bloom, and the afterglow: the phosphor in space and in time.
     Glow,
     /// The slow hum band — the one effect that moves.
     Flicker,

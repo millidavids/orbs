@@ -10,9 +10,9 @@
 
 use orbs_render::cp437::box_drawing;
 use orbs_render::{
-    CELL_HEIGHT, CELL_WIDTH, Motion, Painter, Pos, Rect, Style, UtteranceKind, Wash,
+    CELL_HEIGHT, CELL_WIDTH, Figure, Motion, Painter, Pos, Rect, Style, UtteranceKind, Wash,
 };
-use orbs_sim::tower::{Craft, Instrument, Meter, State};
+use orbs_sim::tower::{Craft, Instrument, Meter, State, Unit};
 
 use super::bench::Bench;
 
@@ -181,6 +181,15 @@ enum Bar {
         /// Whether a run has settled dregs in its bottom, under the mixture.
         leavings: bool,
     },
+    /// One of the five puzzle instruments, by its own picture.
+    Figure {
+        /// Which.
+        figure: Figure,
+        /// Whether it is at work.
+        working: bool,
+        /// Whether the work is the lattice's anneal.
+        settling: bool,
+    },
 }
 
 impl Bar {
@@ -193,9 +202,36 @@ impl Bar {
     const fn meterless(&self) -> bool {
         matches!(
             self,
-            Self::Cold | Self::Read | Self::Grind { .. } | Self::Bath { .. } | Self::Mix { .. }
+            Self::Cold
+                | Self::Read
+                | Self::Grind { .. }
+                | Self::Bath { .. }
+                | Self::Mix { .. }
+                | Self::Figure { .. }
         )
     }
+}
+
+/// A puzzle instrument's picture while it works, and the plain gauge in every
+/// other state — the board beside the transcript explains the rest.
+const fn while_working(figure: Figure, state: State, settling: bool) -> Bar {
+    match state {
+        State::Working => Bar::Figure {
+            figure,
+            working: true,
+            settling,
+        },
+        _ => Bar::Plain,
+    }
+}
+
+/// Which bar this instrument gets: [`bar_of`], with the one fact it needs from
+/// the meter — a lattice's counts ticks only while it anneals.
+fn bar_for(instrument: &Instrument, heat: bool) -> Bar {
+    let settling = instrument
+        .meter
+        .is_some_and(|meter| meter.unit == Unit::Ticks);
+    bar_of(instrument.craft, instrument.state, settling, heat)
 }
 
 /// Which bar an instrument gets.
@@ -204,7 +240,7 @@ impl Bar {
 /// the plain gauge, whose kept fuel is the panel's most valuable number.
 /// Motion is not consulted: `Bench` stops the pictures moving rather than
 /// blanking them (§14).
-const fn bar_of(craft: Craft, state: State, heat: bool) -> Bar {
+const fn bar_of(craft: Craft, state: State, settling: bool, heat: bool) -> Bar {
     // One arm per craft, no wildcard. `Craft` is closed for exactly this, and
     // here a fall-through is worse than an idle-looking instrument: `Bar::Plain`
     // is not `meterless()`, so it would draw *nothing* for its at-rest states.
@@ -214,20 +250,31 @@ const fn bar_of(craft: Craft, state: State, heat: bool) -> Bar {
         // Every state, one bar. A maze has no stages — it is open or it is not,
         // and the gauge says how much of it has been seen either way.
         Craft::Reading => Bar::Read,
-        // The prism: a press has a known duration, so a plain meter; the ward
-        // itself is the board's. Between presses it is `Empty`, which the board
-        // explains.
-        Craft::Scrying => Bar::Plain,
-        // The lattice: the prism's case exactly. Which glyphs are lit and what
-        // the residue says are the board, beside the transcript like the sheet;
-        // the panel row is a gauge over the settle in flight and nothing more.
-        Craft::Imbuing => Bar::Plain,
-        // The pylon: a gauge, never blank — idle, it reports the standing
-        // barrier (`tower::panel::read`). The wards are the board's.
-        Craft::Warding => Bar::Plain,
-        // The lectern: a known duration, so a plain gauge. No picture of its
-        // own yet.
-        Craft::Assembling => Bar::Plain,
+        // The prism, the lattice and the circle move only while their puzzle
+        // is open; which sigils, glyphs or rows are right is the board's.
+        Craft::Scrying => while_working(Figure::Prism, state, false),
+        Craft::Imbuing => while_working(Figure::Lattice, state, settling),
+        Craft::Summoning => while_working(Figure::Circle, state, false),
+        // The pylon is never blank: idle, it reports the standing barrier
+        // (`tower::panel::read`), so its wall stands at rest too.
+        Craft::Warding => match state {
+            State::Working | State::Empty => Bar::Figure {
+                figure: Figure::Pylon,
+                working: matches!(state, State::Working),
+                settling: false,
+            },
+            _ => Bar::Plain,
+        },
+        // The lectern: a scroll knitting, and a finished one standing whole,
+        // which the sim reports no meter for.
+        Craft::Assembling => match state {
+            State::Working | State::Ready => Bar::Figure {
+                figure: Figure::Lectern,
+                working: matches!(state, State::Working),
+                settling: false,
+            },
+            _ => Bar::Plain,
+        },
         Craft::Heating => match state {
             State::Burning => Bar::Fire,
             State::Cold => Bar::Cold,
@@ -363,8 +410,8 @@ const fn bar_of(craft: Craft, state: State, heat: bool) -> Bar {
             },
             _ => Bar::Plain,
         },
-        // No picture yet — §10.1 promises one each. Listed rather than swept
-        // into a wildcard so that writing one is a change *here*.
+        // A shelf: nothing it does has a picture. Listed rather than swept into
+        // a wildcard so that a new craft is a change *here*.
         Craft::Idle => Bar::Plain,
     }
 }
@@ -382,12 +429,12 @@ const fn stand_in(state: State) -> Meter {
         State::Ready => Meter {
             done: 1,
             total: 1,
-            unit: orbs_sim::tower::Unit::Ticks,
+            unit: Unit::Ticks,
         },
         _ => Meter {
             done: 0,
             total: 1,
-            unit: orbs_sim::tower::Unit::Ticks,
+            unit: Unit::Ticks,
         },
     }
 }
@@ -510,6 +557,22 @@ fn draw(
                 tints,
             );
         }
+        (
+            Bar::Figure {
+                figure,
+                working,
+                settling,
+            },
+            true,
+        ) => painter.figure_meter_upward(at, done, total, bench.rite(*figure, *working, *settling)),
+        (
+            Bar::Figure {
+                figure,
+                working,
+                settling,
+            },
+            false,
+        ) => painter.figure_meter(at, done, total, bench.rite(*figure, *working, *settling)),
     }
 }
 
@@ -537,7 +600,7 @@ fn side(painter: &mut Painter<'_>, area: Rect, instruments: &[Instrument], bench
         // Bars grow up from the bottom, which is what a level reads as, and are
         // as wide as the label above them — a one-cell bar under a two-cell
         // abbreviation reads as a stray column rather than as that tool's meter.
-        let kind = bar_of(instrument.craft, instrument.state, heat);
+        let kind = bar_for(instrument, heat);
         let Some(reading) = reading(instrument, &kind) else {
             continue;
         };
@@ -577,7 +640,7 @@ fn top(painter: &mut Painter<'_>, area: Rect, instruments: &[Instrument], bench:
         );
 
         let used = NAME.saturating_add(STATE);
-        let kind = bar_of(instrument.craft, instrument.state, heat);
+        let kind = bar_for(instrument, heat);
         if let Some(reading) = reading(instrument, &kind)
             && area.cols > used
         {
@@ -675,6 +738,8 @@ mod tests {
                 state: State::Empty,
                 meter: None,
                 tints: [None; 2],
+                wants: None,
+                wants_fire: false,
             })
             .collect()
     }
@@ -687,20 +752,60 @@ mod tests {
         "athanor",
     ];
 
+    /// The bar a craft gets in a state, with the athanor alight.
+    fn bar(craft: Craft, state: State) -> Bar {
+        bar_of(craft, state, false, true)
+    }
+
+    #[test]
+    fn each_puzzle_instrument_draws_its_figure_while_it_works() {
+        for (craft, figure) in [
+            (Craft::Scrying, Figure::Prism),
+            (Craft::Imbuing, Figure::Lattice),
+            (Craft::Warding, Figure::Pylon),
+            (Craft::Assembling, Figure::Lectern),
+            (Craft::Summoning, Figure::Circle),
+        ] {
+            assert!(
+                matches!(
+                    bar(craft, State::Working),
+                    Bar::Figure { figure: drawn, working: true, .. } if drawn == figure
+                ),
+                "a working {craft:?} did not draw a {figure:?}",
+            );
+            // Scouring is the triage slot being cleared, not the puzzle.
+            assert!(matches!(bar(craft, State::Scouring), Bar::Plain));
+        }
+        // At rest, only the two whose picture is a standing thing: the wall,
+        // and the finished scroll — which the sim gives no meter, so it must
+        // be meterless or it draws nothing.
+        assert!(matches!(
+            bar(Craft::Warding, State::Empty),
+            Bar::Figure { working: false, .. }
+        ));
+        assert!(bar(Craft::Assembling, State::Ready).meterless());
+        assert!(matches!(bar(Craft::Scrying, State::Empty), Bar::Plain));
+        // The lattice's anneal is the one picture a meter's unit decides.
+        assert!(matches!(
+            bar_of(Craft::Imbuing, State::Working, true, true),
+            Bar::Figure { settling: true, .. }
+        ));
+    }
+
     #[test]
     fn only_a_burning_athanor_burns_and_only_a_cold_one_smokes() {
         // The panel exists because laboratory state was twice reported as a bug
         // for being invisible (see this module's header), so the one thing it
         // must never do is *misreport*. Flames on a banked hearth would claim it
         // was alight; flames on a cold one would claim it had fuel.
-        let hearth = |state| bar_of(Craft::Heating, state, true);
+        let hearth = |state| bar(Craft::Heating, state);
         assert!(matches!(hearth(State::Burning), Bar::Fire));
         assert!(matches!(hearth(State::Cold), Bar::Cold));
 
         // The mortar draws through its whole lifecycle, including the three
         // states the sim reports no meter for — otherwise a loaded or finished
         // tool looks like a row the panel forgot.
-        let mortar = |state| bar_of(Craft::Grinding, state, true);
+        let mortar = |state| bar(Craft::Grinding, state);
         assert!(matches!(
             mortar(State::Working),
             Bar::Grind {
@@ -733,19 +838,14 @@ mod tests {
         ));
         // Scouring is the triage slot being cleared, not the mortar working.
         assert!(matches!(mortar(State::Scouring), Bar::Plain));
-        // ...and a craft with no picture of its own still gets a gauge. All
-        // five of §10.1's instruments now have one, so `Idle` is what is left —
-        // the dispensary and anything else with no recipe.
-        assert!(matches!(
-            bar_of(Craft::Idle, State::Working, true),
-            Bar::Plain
-        ));
+        // ...and a shelf still gets a gauge.
+        assert!(matches!(bar(Craft::Idle, State::Working), Bar::Plain));
 
         // The alembic draws, and until it did it drew nothing: it fell to
         // `Bar::Plain`, which is not `meterless()`, so a *charged* or *ready*
         // alembic showed no bar at the instrument the pipeline ends at. Third
         // time this defect has shipped.
-        let still = |state| bar_of(Craft::Distilling, state, true);
+        let still = |state| bar(Craft::Distilling, state);
         for state in [State::Charged, State::Working, State::Ready, State::Fouled] {
             assert!(
                 still(state).meterless(),
@@ -760,7 +860,7 @@ mod tests {
             Bar::Bath { breaking: true, .. }
         ));
         assert!(matches!(
-            bar_of(Craft::Digesting, State::Working, true),
+            bar(Craft::Digesting, State::Working),
             Bar::Bath {
                 breaking: false,
                 ..
@@ -799,7 +899,7 @@ mod tests {
             (Craft::Grinding, State::Fouled),
         ] {
             assert!(
-                bar_of(craft, state, true).meterless(),
+                bar(craft, state).meterless(),
                 "{craft:?} {} lost its picture",
                 state.label(),
             );
@@ -807,6 +907,10 @@ mod tests {
         assert_eq!(doused.grind(true, false).phase, 0.0, "it still moves");
         assert!(!doused.grind(true, false).working, "the block still breaks");
         assert_eq!(doused.burn(true).flare, 0.0, "it still flares");
+        assert!(
+            !doused.rite(Figure::Prism, true, false).working,
+            "it still searches"
+        );
     }
 
     // The sim-to-colour test that used to sit here is in
@@ -965,6 +1069,8 @@ mod tests {
                 state: *state,
                 meter: None,
                 tints: [None; 2],
+                wants: None,
+                wants_fire: false,
             })
             .collect();
 

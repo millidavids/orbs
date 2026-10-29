@@ -86,6 +86,8 @@ pub struct Stop {
     pub done: u32,
     /// What its deed asks.
     pub needed: u32,
+    /// The tally key its deed counts — what a forecast's pace is read under.
+    pub key: String,
     /// What reaching it opens.
     pub opens: Vec<String>,
 }
@@ -149,7 +151,8 @@ pub fn mastery(world: &World) -> Vec<Line> {
                 .line(domain)
                 .map(|milestone| {
                     let needed = milestone.done.times();
-                    let done = tally.count(&milestone.done.key()).min(needed);
+                    let key = milestone.done.key();
+                    let done = tally.count(&key).min(needed);
                     let walk = if reached.has(&milestone.id) {
                         Walk::Reached
                     } else if seen_next {
@@ -163,6 +166,7 @@ pub fn mastery(world: &World) -> Vec<Line> {
                         walk,
                         done,
                         needed,
+                        key,
                         opens: milestone.opens.clone(),
                     }
                 })
@@ -332,7 +336,9 @@ pub(crate) fn reach(world: &mut World, domain: &str, id: &str, opens: &[String])
         .text(FieldName::Source, domain)
         .text(FieldName::Message, &message)
         .role(Role::Success)
+        .news()
         .finish();
+    super::news::latch(world, domain);
 
     opening(world, opens);
 }

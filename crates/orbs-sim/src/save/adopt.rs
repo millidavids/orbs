@@ -360,6 +360,8 @@ fn spell(world: &mut World, entity: Entity, node: &NodeSave) {
                 run.strands.iter().map(strand).collect()
             },
             spent: false,
+            // Derived on the spell's first turn, never saved.
+            held: None,
         });
     }
 }

@@ -74,7 +74,7 @@ fn execute(intent: &Intent, world: &mut World, divined: bool) {
         Verb::Attend => navigate::attend(intent, world),
         Verb::Survey => navigate::survey(intent, world),
         Verb::Meditate => meditate(intent, world),
-        Verb::Status => super::status::status(world),
+        Verb::Status => super::status::status(intent, world),
         Verb::Unfurl => super::unfurl::unfurl(world),
         Verb::Quit => super::quit::quit(world),
         Verb::Menu => super::quit::menu(world),

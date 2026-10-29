@@ -91,6 +91,43 @@ pub fn charmed(world: &World, place: Entity, kind: Kind) -> bool {
     })
 }
 
+/// The most ticks any tool in the tower has left, of every kind at once.
+///
+/// The longest, so `ebbing` fires when the last runs out rather than relaying a
+/// charm with life left. One pass for all five, since this runs on a tick. What
+/// the forge publishes and the rail's forge box reads (§19, *the tower speaks
+/// up*), so the two cannot disagree.
+#[must_use]
+pub fn longest_of_each(world: &World) -> [u64; Kind::ALL.len()] {
+    let now = *world.resource::<Tick>();
+    let mut out = [0u64; Kind::ALL.len()];
+    let Some(mut held) = world.try_query::<&Charmed>() else {
+        return out;
+    };
+    for charmed in held.iter(world) {
+        for kind in Kind::ALL {
+            let left = charmed.left(kind, now);
+            let slot = &mut out[kind as usize];
+            if left > *slot {
+                *slot = left;
+            }
+        }
+    }
+    out
+}
+
+/// The charm nearest lapsing, of the kinds the tower holds, by
+/// [`longest_of_each`]: so its word is the one the forge publishes for it.
+#[must_use]
+pub fn soonest(world: &World) -> Option<(Kind, u64)> {
+    let longest = longest_of_each(world);
+    Kind::ALL
+        .into_iter()
+        .map(|kind| (kind, longest[kind as usize]))
+        .filter(|(_, left)| *left > 0)
+        .min_by_key(|(_, left)| *left)
+}
+
 /// Ticks left of `kind` on `place` or its domain — the larger of the two.
 ///
 /// What the panel's decay row and the `graced` reading are drawn from. The

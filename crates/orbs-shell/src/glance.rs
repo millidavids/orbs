@@ -63,6 +63,11 @@ pub struct Panel {
     ///
     /// The most expensive answer here: `Sim::briefs` walks every room.
     pub briefs: Vec<orbs_sim::tower::Brief>,
+    /// The pace of the road's next deed, for its forecast. From the gaps
+    /// between makings, so it moves only when something is made.
+    pub pace: Option<orbs_sim::tower::Pace>,
+    /// The pace experience has been earned at, for the ley gauge's forecast.
+    pub earning: Option<orbs_sim::tower::Pace>,
 }
 
 impl Panel {
@@ -96,5 +101,11 @@ impl Panel {
         self.renown = sim.renown();
         // The room's count, as the road takes the room — none above `/tower`.
         self.ledger = domain.as_deref().and_then(|room| sim.ledger_of(room));
+        self.pace = self
+            .line
+            .as_ref()
+            .and_then(orbs_sim::Line::next)
+            .and_then(|next| sim.pace_of(&next.key));
+        self.earning = sim.earning();
     }
 }

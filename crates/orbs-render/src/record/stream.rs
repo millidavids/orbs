@@ -39,6 +39,9 @@ struct StoredRecord {
     spoken: Option<(usize, usize)>,
     /// Logged, but not drawn in the transcript. See [`RecordBuilder::quiet`].
     quiet: bool,
+    /// The tower's news, drawn whoever's hand caused it. See
+    /// [`RecordBuilder::news`].
+    news: bool,
 }
 
 /// A sequence of records, in emit order.
@@ -119,14 +122,16 @@ impl Records {
         self.pushed
     }
 
-    /// Every record a transcript should draw: the ones nobody's spell caused.
+    /// Every record a transcript should draw: the ones nobody's spell caused,
+    /// and the tower's [`news`](RecordBuilder::news) whoever caused it.
     ///
     /// One definition for everything measuring what the player sees. Skipped:
-    /// a spell's ([`FieldName::Spell`]), the [`quiet`](RecordBuilder::quiet),
-    /// and with [`set_terse_echo`](Self::set_terse_echo) a bare echo (§14).
+    /// a spell's ([`FieldName::Spell`]) unless it is news, the
+    /// [`quiet`](RecordBuilder::quiet), and with
+    /// [`set_terse_echo`](Self::set_terse_echo) a bare echo (§14).
     pub fn drawn(&self) -> impl Iterator<Item = Record<'_>> + Clone {
         self.iter().filter(|record| {
-            record.field(FieldName::Spell).is_none()
+            (record.field(FieldName::Spell).is_none() || record.is_news())
                 && !record.is_quiet()
                 && !(self.terse_echo && self.repeats_input(*record))
         })
@@ -250,6 +255,7 @@ impl Records {
             faithful: true,
             spoken: None,
             quiet: false,
+            news: false,
         }
     }
 
@@ -283,6 +289,12 @@ impl<'a> Record<'a> {
     #[must_use]
     pub fn is_quiet(&self) -> bool {
         self.stored().quiet
+    }
+
+    /// Whether this is the tower's news — see [`RecordBuilder::news`].
+    #[must_use]
+    pub fn is_news(&self) -> bool {
+        self.stored().news
     }
 
     /// What it means (§14: never carried by colour alone).
@@ -546,6 +558,7 @@ pub struct RecordBuilder<'a> {
     faithful: bool,
     spoken: Option<(usize, usize)>,
     quiet: bool,
+    news: bool,
 }
 
 impl RecordBuilder<'_> {
@@ -555,6 +568,16 @@ impl RecordBuilder<'_> {
     /// stored, sifted and spoken (§3). A refusal is never quiet.
     pub const fn quiet(mut self) -> Self {
         self.quiet = true;
+        self
+    }
+
+    /// The tower's news: draw this even when a spell's hand caused it.
+    ///
+    /// A station reached, a room opened, a rank or a level — rare, and the
+    /// moments an idle tower is played for (§19, *the tower speaks up*). It
+    /// keeps its [`FieldName::Spell`], so `sift` still names the culprit.
+    pub const fn news(mut self) -> Self {
+        self.news = true;
         self
     }
 
@@ -657,6 +680,7 @@ impl RecordBuilder<'_> {
             len: self.stream.fields.len() - first,
             spoken: self.spoken,
             quiet: self.quiet,
+            news: self.news,
         });
     }
 }

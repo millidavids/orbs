@@ -218,10 +218,34 @@ fn standing_of(node: &str, unlocked: bool, spent: bool, taken: &Taken) -> Standi
 /// a station at `before` is not announced twice.
 pub(crate) fn cross(world: &mut World, before: u64, after: u64) {
     let opens = opens_between(world, before, after);
-    if opens.is_empty() {
-        return;
+    if !opens.is_empty() {
+        super::opened::opening(world, &opens);
     }
-    super::opened::opening(world, &opens);
+    // A fork opens nothing until it is taken, so `opening` never said it: the
+    // choice sat at the loom until a player happened to type `weave`.
+    let forks = world
+        .resource::<Progression>()
+        .ley_line()
+        .iter()
+        .filter(|station| station.at > before && station.at <= after && station.is_fork())
+        .count();
+    if forks > 0 {
+        let message = world
+            .resource::<crate::content::Prose>()
+            .line("ley_fork_opened", &[]);
+        world
+            .resource_mut::<crate::session::Scrollback>()
+            .records_mut()
+            .push(orbs_render::RecordKind::Completion)
+            .text(
+                orbs_render::FieldName::Name,
+                crate::parser::Verb::Weave.canonical(),
+            )
+            .text(orbs_render::FieldName::Message, &message)
+            .role(orbs_render::Role::Success)
+            .news()
+            .finish();
+    }
 }
 
 /// Open everything the line has already passed, without saying so.

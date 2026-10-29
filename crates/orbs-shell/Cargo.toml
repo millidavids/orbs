@@ -17,6 +17,8 @@ tracing.workspace = true
 
 # The settings file, already in the tree via `orbs-sim`.
 toml.workspace = true
+# The tour's catalogue, read into types.
+serde.workspace = true
 
 # Where towers and settings live (the workspace manifest).
 dirs.workspace = true

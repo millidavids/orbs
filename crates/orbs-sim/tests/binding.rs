@@ -6,7 +6,7 @@
 
 mod common;
 
-use common::{ever_said, run_all, said};
+use common::{brew_one, ever_said, run_all, said};
 use orbs_render::FieldName;
 use orbs_sim::Sim;
 
@@ -36,35 +36,6 @@ fn ready() -> Sim {
     );
     sim.step();
     sim
-}
-
-/// §10.1's five stages, once, ending in a distilled `clarity`.
-///
-/// Scoured before use, never after fouling — `orbs-balance`'s rule, and what a
-/// player has to do. `mix` and `distil` leave their instruments charged, and a
-/// charged instrument refuses a second load in silence.
-fn brew_one(sim: &mut Sim) {
-    run_all(
-        sim,
-        &[
-            "empty mortar_and_pestle",
-            "empty balneum_mariae",
-            "empty flask_and_rod",
-            "empty alembic",
-            "grind sage",
-            "meditate 9",
-            "empty mortar_and_pestle",
-            "digest ground-sage",
-            "meditate 14",
-            "grind rock-salt",
-            "meditate 9",
-            "empty mortar_and_pestle",
-            "mix sage-tincture with ground-salt",
-            "meditate 12",
-            "distil clarified-draught",
-        ],
-    );
-    sim.step_n(60);
 }
 
 /// How many grinds have completed.

@@ -15,6 +15,6 @@ mod apply;
 mod kind;
 mod readings;
 
-pub use apply::{Charm, Charmed, charm_left, charmed};
+pub use apply::{Charm, Charmed, charm_left, charmed, longest_of_each, soonest};
 pub use kind::Kind;
 pub use readings::{EBBING, EBBING_AT, FORGE, GRACED, LATTICE, LIT, readings};

@@ -129,6 +129,37 @@ fn truncated_text_is_spoken_in_full() {
 }
 
 #[test]
+fn what_the_screen_could_not_fit_is_named() {
+    // What a reader hears whole and the screen cuts: a line past the edge, a
+    // paragraph out of rows, a row outside the region. Spaces are no loss.
+    let clipped = |frame: &Frame| -> Vec<String> {
+        frame
+            .clipped()
+            .iter()
+            .map(|clip| clip.text.clone())
+            .collect()
+    };
+    let mut lines = frame(8, 3);
+    let mut painter = lines.painter(Rect::new(0, 0, 8, 2));
+    painter.span(Pos::new(0, 0), &Span::new("the east wall"));
+    painter.span(Pos::new(0, 1), &Span::new("the west    "));
+    painter.span(Pos::new(0, 2), &Span::new("below"));
+    painter.paragraph(Rect::new(0, 0, 8, 2), &Span::new("one two three four"));
+    assert_eq!(clipped(&lines), ["the east wall", "below", "four"]);
+
+    let mut fits = frame(8, 3);
+    fits.painter(Rect::new(0, 0, 8, 3))
+        .paragraph(Rect::new(0, 0, 8, 3), &Span::new("one two\n\nthree"));
+    assert!(fits.clipped().is_empty(), "{:?}", fits.clipped());
+
+    lines.reset(GridSize::new(8, 3));
+    assert!(
+        lines.clipped().is_empty(),
+        "a new frame starts with nothing cut"
+    );
+}
+
+#[test]
 fn eldritch_output_speaks_its_authored_variant() {
     // §3: eldritch achieves its effect through diction and cadence in the linear
     // channel, never through the glyph damage a reader cannot perceive.

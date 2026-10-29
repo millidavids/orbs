@@ -72,8 +72,16 @@ pub fn split(body: Rect, line: Option<&Line>) -> Split {
 /// The name, then a run with the stations standing on it, then the next deed
 /// as a sentence and its count pinned to the right edge. **The count outranks
 /// the sentence** when the row is short: `3 of 5` is the fact, and the
-/// sentence is what the weave's panel says at length.
-pub fn paint(painter: &mut Painter<'_>, area: Rect, line: &Line, climb: &Climb, prose: &Prose) {
+/// sentence is what the weave's panel says at length. The forecast, `~3 min`
+/// at `pace`, is the first thing to go.
+pub fn paint(
+    painter: &mut Painter<'_>,
+    area: Rect,
+    line: &Line,
+    pace: Option<orbs_sim::tower::Pace>,
+    climb: &Climb,
+    prose: &Prose,
+) {
     if area.is_empty() {
         return;
     }
@@ -110,21 +118,22 @@ pub fn paint(painter: &mut Painter<'_>, area: Rect, line: &Line, climb: &Climb, 
     let sentence = line
         .next()
         .map(|next| prose.counted(&format!("mastery_{}", next.id), next.needed));
-    let candidates: [Option<(String, String)>; 3] = [
-        match (&sentence, &count) {
-            (Some(sentence), Some((truth, shown))) => Some((
-                format!("{sentence}{SEP}{truth}"),
-                format!("{sentence}{SEP}{shown}"),
-            )),
-            (None, None) => {
-                let done = prose.line("road_done", &[]);
-                Some((done.clone(), done))
-            }
-            _ => None,
-        },
-        count.clone(),
-        None,
-    ];
+    let whole = match (&sentence, &count) {
+        (Some(sentence), Some((truth, shown))) => Some((
+            format!("{sentence}{SEP}{truth}"),
+            format!("{sentence}{SEP}{shown}"),
+        )),
+        (None, None) => {
+            let done = prose.line("road_done", &[]);
+            Some((done.clone(), done))
+        }
+        _ => None,
+    };
+    // Only beside a deed: a finished line has nothing to forecast.
+    let forecast = crate::forecast::road(prose, line, pace)
+        .zip(whole.as_ref().filter(|_| sentence.is_some()))
+        .map(|(eta, (truth, shown))| (format!("{truth}{SEP}{eta}"), format!("{shown}{SEP}{eta}")));
+    let candidates: [Option<(String, String)>; 4] = [forecast, whole, count, None];
     let label = candidates.into_iter().flatten().find(|(truth, _)| {
         let cells = u16::try_from(truth.chars().count()).unwrap_or(u16::MAX);
         run_needed.saturating_add(cells).saturating_add(2) <= width
@@ -177,6 +186,7 @@ mod tests {
                     walk: if index == 0 { Walk::Next } else { Walk::Later },
                     done: 2,
                     needed: 5,
+                    key: "potion".to_owned(),
                     opens: Vec::new(),
                 })
                 .collect(),
@@ -228,20 +238,8 @@ mod tests {
         // Wide enough for the deed's sentence, and narrow enough for the count
         // alone.
         for cols in [100, 40] {
-            let draw = |climb: &Climb| {
-                let mut frame = orbs_render::Frame::new(orbs_render::GridSize::new(cols, 1));
-                let mut painter = frame.painter(Rect::new(0, 0, cols, 1));
-                paint(
-                    &mut painter,
-                    Rect::new(0, 0, cols, 1),
-                    &after,
-                    climb,
-                    &prose,
-                );
-                frame
-            };
-            let rolling = draw(&climb);
-            let settled = draw(&Climb::default());
+            let rolling = drawn(&after, cols, None, &climb, &prose);
+            let settled = drawn(&after, cols, None, &Climb::default(), &prose);
             assert!(
                 rolling.to_text().contains("1 of 5"),
                 "{}",
@@ -253,5 +251,52 @@ mod tests {
                 "a road on its way spoke differently at {cols}",
             );
         }
+    }
+
+    /// The road alone, `cols` wide.
+    fn drawn(
+        line: &Line,
+        cols: u16,
+        pace: Option<orbs_sim::tower::Pace>,
+        climb: &Climb,
+        prose: &Prose,
+    ) -> orbs_render::Frame {
+        let mut frame = orbs_render::Frame::new(orbs_render::GridSize::new(cols, 1));
+        let mut painter = frame.painter(Rect::new(0, 0, cols, 1));
+        paint(
+            &mut painter,
+            Rect::new(0, 0, cols, 1),
+            line,
+            pace,
+            climb,
+            prose,
+        );
+        frame
+    }
+
+    /// The forecast is the first thing to go, is said as it is drawn, and is
+    /// not there at all without a pace.
+    #[test]
+    fn the_forecast_yields_before_the_count() {
+        let prose = Prose::builtin();
+        let road = line(true, 3);
+        let pace = Some(orbs_sim::tower::Pace { ticks: 60, made: 1 });
+        let draw = |cols, pace| drawn(&road, cols, pace, &Climb::default(), &prose);
+        // Three to go at a minute each.
+        let wide = draw(100, pace);
+        assert!(
+            wide.to_text().contains("2 of 5 · ~3 min"),
+            "{}",
+            wide.to_text()
+        );
+        assert!(
+            wide.speech().to_transcript().contains("~3 min"),
+            "a drawn forecast went unsaid"
+        );
+        let narrow = draw(40, pace);
+        assert!(!narrow.to_text().contains('~'), "{}", narrow.to_text());
+        assert!(narrow.to_text().contains("2 of 5"), "{}", narrow.to_text());
+        let unpaced = draw(100, None);
+        assert!(!unpaced.to_text().contains('~'), "{}", unpaced.to_text());
     }
 }

@@ -137,6 +137,7 @@ fn crossed(world: &mut World, before: usize) {
     };
     let message = world.resource::<Prose>().line(key, &[("name", &title)]);
     let role = if climbed { Role::Success } else { Role::Danger };
+    // News both ways: the title is the tower's, whoever's hand moved it.
     world
         .resource_mut::<Scrollback>()
         .records_mut()
@@ -144,6 +145,7 @@ fn crossed(world: &mut World, before: usize) {
         .text(FieldName::Name, &id)
         .text(FieldName::Message, &message)
         .role(role)
+        .news()
         .finish();
 }
 

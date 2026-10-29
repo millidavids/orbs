@@ -108,6 +108,7 @@ pub(super) fn extract(
     settings: Extract<Query<&CrtSettings>>,
     picture: Extract<Option<Res<super::Picture>>>,
     stillness: Extract<Option<Res<crate::shell::Stillness>>>,
+    strain: Extract<Option<Res<super::Strain>>>,
     time: Extract<Res<Time>>,
     tube: Extract<Res<Tube>>,
     mut commands: Commands,
@@ -118,9 +119,14 @@ pub(super) fn extract(
     let still = stillness
         .as_deref()
         .is_some_and(|stillness| stillness.still());
+    // On the copy, never the component: `F3` compares the component against its
+    // presets, and a strained one would match none of them.
+    let strained = strain
+        .as_deref()
+        .map_or(*settings, |strain| strain.apply(*settings));
     commands.insert_resource(Extracted(CrtUniform::new(
         super::effective::effective(
-            *settings,
+            strained,
             picture.as_deref().copied().unwrap_or(super::Picture::FULL),
             still,
         ),
@@ -187,9 +193,9 @@ mod tests {
 
     #[test]
     fn an_unrecognised_state_lands_somewhere_the_player_can_see() {
-        // The fallback arm. Something world-driven will eventually leave the
-        // settings equal to no preset — §4 wires vignette to threat and flash to
-        // breach — and the wrong answer would be to leave the key doing nothing.
+        // The fallback arm. A settings value equal to no preset — `Strain` is
+        // applied to the extracted copy, but a future writer might not be — and
+        // the wrong answer would be to leave the key doing nothing.
         let odd = CrtSettings {
             vignette: 0.61,
             ..CrtSettings::DEFAULT

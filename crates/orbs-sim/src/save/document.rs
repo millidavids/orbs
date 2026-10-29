@@ -235,6 +235,13 @@ pub struct ProgressSave {
     /// an empty map has genuinely made nothing.
     #[serde(default)]
     pub stores: Option<std::collections::BTreeMap<String, Vec<u64>>>,
+    /// How fast the tower has made things, lately — what `status rates` and a
+    /// forecast read.
+    ///
+    /// No `FORMAT` bump, on `renown`'s rule: absent is a document from before
+    /// rates, which starts watching at the tick it loads into.
+    #[serde(default)]
+    pub throughput: Option<ThroughputSave>,
     /// Mastery stations reached, by id.
     ///
     /// Saved rather than derived from `tally`, because reaching is *said* and
@@ -263,6 +270,23 @@ pub struct ProgressSave {
     /// One entry per domain the rail has something to say about.
     #[serde(default, rename = "mark")]
     pub marks: Vec<MarkSave>,
+}
+
+/// The tower's rate of making, as `tower::Throughput` keeps it.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ThroughputSave {
+    /// The tick it began watching.
+    pub since: u64,
+    /// Each tally key's recent making ticks, oldest first.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub made: std::collections::BTreeMap<String, Vec<u64>>,
+    /// Each key's makings older than those, inside the hour: a minute and how
+    /// many, so a busy hour is counted whole.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub spilled: std::collections::BTreeMap<String, Vec<[u64; 2]>>,
+    /// The tick and the experience total at each recent credit.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub earned: Vec<[u64; 2]>,
 }
 
 /// The standing garrison: bodies at home, and those waiting out a siege.
@@ -325,6 +349,10 @@ pub struct RecordSave {
     /// Logged but not drawn — `follow`'s step, and everything else `quiet`.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub quiet: bool,
+    /// The tower's news, drawn whoever caused it. No `FORMAT` bump: absent is
+    /// what every record was before news.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub news: bool,
     /// The authored linear variant (§14), if the record was given one.
     ///
     /// Not optional for an eldritch record: `RecordBuilder::finish` asserts one

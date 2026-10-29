@@ -349,6 +349,32 @@ fn a_plus_is_drawn_after_the_reading_and_says_nothing() {
     );
 }
 
+/// A forecast takes only blank space, and a gain's `+N` is not blank space.
+#[test]
+fn a_forecast_gives_way_to_a_plus() {
+    let prose = Prose::builtin();
+    let truth = tier(12, 16);
+    let plus = Rolled {
+        plus: Some((4, Intensity::Bright)),
+        ..still(truth)
+    };
+    let ley = prose.line("gauge_ley", &[]);
+    for cols in 30..=120 {
+        let at = Rect::new(0, 0, cols, 1);
+        let mut frame = Frame::new(GridSize::new(120, 1));
+        if let Some(laid) = super::row::lay(&ley, truth, plus, None, Some("under a minute"), &prose)
+        {
+            laid.draw(&mut frame.painter(Rect::new(0, 0, 120, 1)), at);
+        }
+        assert_eq!(
+            frame.to_text().contains("+4"),
+            ley_row(truth, plus, cols).to_text().contains("+4"),
+            "the forecast pushed the +4 off at {cols}: {}",
+            frame.to_text()
+        );
+    }
+}
+
 /// A `+N` with no room is dropped, never squeezed into the bar.
 #[test]
 fn a_plus_with_no_room_is_dropped() {
@@ -421,6 +447,7 @@ fn crossing_the_last_station_draws_digits_until_it_lands() {
 fn potions(count: u32, spelled: u32) -> LedgerRow {
     LedgerRow {
         id: "potions".to_owned(),
+        key: "potion".to_owned(),
         domain: Some("laboratory".to_owned()),
         count,
         by_spell: spelled,
@@ -429,6 +456,11 @@ fn potions(count: u32, spelled: u32) -> LedgerRow {
 
 /// The whole strip, `cols` wide, with a rank and maybe a room's row.
 fn strip(cols: u16, room: Option<&LedgerRow>, climb: &Climb) -> Frame {
+    strip_with(cols, room, None, climb)
+}
+
+/// [`strip`], with a forecast for the ley row.
+fn strip_with(cols: u16, room: Option<&LedgerRow>, forecast: Option<&str>, climb: &Climb) -> Frame {
     let prose = Prose::builtin();
     let mut frame = Frame::new(GridSize::new(cols, 2));
     let mut painter = frame.painter(Rect::new(0, 0, cols, 2));
@@ -443,10 +475,41 @@ fn strip(cols: u16, room: Option<&LedgerRow>, climb: &Climb) -> Frame {
         },
         Some("cunning_man"),
         room,
+        forecast,
         climb,
         &prose,
     );
     frame
+}
+
+#[test]
+fn the_ley_forecast_takes_only_blank_space() {
+    // The bar outranks it and the column outranks it: at every width, a strip
+    // with a forecast has the same bars and the same column as one without.
+    let climb = Climb::default();
+    let row = potions(42, 30);
+    for cols in 40..=120 {
+        for room in [None, Some(&row)] {
+            let with = strip_with(cols, room, Some("~3 min"), &climb);
+            let without = strip_with(cols, room, None, &climb);
+            assert_eq!(bar_ends(&with), bar_ends(&without), "a bar moved at {cols}");
+            assert_eq!(
+                with.to_text().contains("brews finished"),
+                without.to_text().contains("brews finished"),
+                "the column dropped for a forecast at {cols}",
+            );
+        }
+    }
+    let wide = strip_with(120, None, Some("~3 min"), &climb);
+    assert!(
+        wide.to_text().contains("8/16  ~3 min"),
+        "{}",
+        wide.to_text()
+    );
+    assert!(
+        wide.speech().to_transcript().contains("~3 min"),
+        "a drawn forecast went unsaid"
+    );
 }
 
 /// Where the bars end, row by row.

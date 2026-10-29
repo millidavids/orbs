@@ -29,6 +29,15 @@ impl Plugin for CrtPlugin {
                 cycle
                     .run_if(input_just_pressed(KeyCode::F3))
                     .run_if(crate::boot::booted),
+            )
+            // Every frame, for the ramp; it writes only on a change. After the
+            // panel is refreshed, which is the one thing it reads.
+            .add_systems(
+                Update,
+                super::strain::notice
+                    .after(crate::shell::ShellSystems::Drive)
+                    .run_if(resource_exists::<orbs_shell::Panel>)
+                    .run_if(resource_exists::<super::Strain>),
             );
 
         let Some(render_app) = app.get_sub_app_mut(RenderApp) else {

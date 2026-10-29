@@ -30,6 +30,7 @@ mod dump;
 mod editor;
 mod environment;
 mod focus;
+mod forecast;
 mod framed;
 mod gauges;
 mod glance;
@@ -58,6 +59,7 @@ mod reveal;
 mod road;
 mod save;
 mod screen;
+mod script;
 mod scrollback;
 mod seed;
 pub mod settings;
@@ -71,13 +73,15 @@ mod stations;
 pub mod tabbing;
 mod tapestry;
 mod threshold;
+pub mod tour;
 mod transition;
 
 pub use autosave::{AUTOSAVE_TICKS, autosave_due, keep};
 pub use bench::Bench;
 pub use climb::{Climb, Rolled, Watch};
 pub use dump::{
-    PASSAGE as PASSAGE_VAR, requested as dump_requested, run as dump, run_script as dump_script,
+    PASSAGE as PASSAGE_VAR, describe, requested as dump_requested, run as dump,
+    run_script as dump_script,
 };
 pub use editor::{Editor, Mode as EditorMode, Outcome as EditorOutcome};
 pub use environment::{LENGTH, RUSTC, Readers, SEALED, fresh, new_wizard, wizard, wizard_named};
@@ -106,7 +110,8 @@ pub use reveal::{Pace, Reveal};
 pub use save::{
     Held, Keep, OFF as SAVE_OFF, Opened, SAVE_PATH, SAVE_VAR, SLOTS as SAVE_SLOTS, Slot, abandon,
     app_data, away_for, free_slot, migrate as migrate_saves, path as save_path, read as read_save,
-    read_from as read_save_from, saves, slot_path, write as write_save, write_to as write_save_to,
+    read_from as read_save_from, saves, seal as seal_saves, slot_path, write as write_save,
+    write_to as write_save_to,
 };
 pub use screen::{Fit, Screen};
 pub use scrollback::{Scroll, apply_to_reading, page_step};

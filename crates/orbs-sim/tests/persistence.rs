@@ -743,7 +743,7 @@ fn show_a_save() {
 #[test]
 fn every_resource_the_world_holds_is_one_the_save_knows_about() {
     // In the document.
-    const CARRIED: [&str; 23] = [
+    const CARRIED: [&str; 24] = [
         "orbs_sim::tick::Tick",
         "orbs_sim::rng::Rngs",
         "orbs_sim::tower::node::NodeIds",
@@ -768,6 +768,9 @@ fn every_resource_the_world_holds_is_one_the_save_knows_about() {
         // Growth toward the next herb, which a dry verdant supply keeps.
         "orbs_sim::tower::cultivation::Cultivation",
         "orbs_sim::tower::stores::Stores",
+        // How fast the tower makes things, for `status rates` and a forecast:
+        // a history of makings, for `Stores`' reason.
+        "orbs_sim::tower::throughput::Throughput",
         "orbs_sim::tower::erosion::Integrity",
         "orbs_sim::tower::ley::Taken",
         "orbs_sim::tower::learned::Learned",

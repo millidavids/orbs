@@ -27,6 +27,11 @@ pub use plugin::RenderPlugin;
 // The phosphor as a *setting*. `shell::setting` reads the theme that is in
 // effect from here and the list of them from `palette`.
 pub(crate) use plugin::Theme;
+// The frame as painted, which a tour's screenshot keeps as text.
+pub(crate) use plugin::Canvas;
+// The paint alone, for the tour's test, which has no GPU to rasterise with.
+#[cfg(test)]
+pub(crate) use plugin::repaint;
 // `contrast high`, a filter beside the theme rather than a theme.
 pub(crate) use legibility::Contrast;
 // `weight heavy`, the same font a pixel bolder.

@@ -57,6 +57,9 @@ pub struct Run {
     /// What a policy that spends a supply was handed as it went, by name.
     /// Less [`held`](Self::held), it is what the run spent (§19, *Supply*).
     pub given: BTreeMap<String, u32>,
+    /// Every open room's rate and wait when the run ended — what `status
+    /// rates` says, read through the same function.
+    pub yields: Vec<orbs_sim::tower::Yield>,
 }
 
 impl Run {
@@ -184,6 +187,7 @@ pub fn run(
         reasons,
         held,
         given,
+        yields: sim.yields(),
     }
 }
 
@@ -724,5 +728,27 @@ mod tests {
         let sim = Sim::new(0);
         let (_, landed, _) = tally(&sim);
         assert_eq!(landed, 0, "the tower reported finished work at tick zero");
+    }
+
+    #[test]
+    fn a_sweep_reads_the_rate_status_rates_says() {
+        // One function for the verb and the sweep: a brewing loop's laboratory
+        // reads a rate in the run, as it would to a player typing `status rates`.
+        // Not `grind`, which finishes no brew and so honestly reads none.
+        let clarity = crate::policy::Policy::ALL
+            .into_iter()
+            .find(|policy| policy.name == "clarity")
+            .expect("a clarity policy");
+        let run = super::run(clarity, 0, 1_200, 60, orbs_sim::content::Length::Medium);
+        let laboratory = run
+            .yields
+            .iter()
+            .find(|one| one.room == "laboratory")
+            .expect("the laboratory is open");
+        assert!(
+            matches!(laboratory.rate, orbs_sim::tower::Hourly::PerHour(rate) if rate > 0),
+            "{:?}",
+            laboratory.rate
+        );
     }
 }

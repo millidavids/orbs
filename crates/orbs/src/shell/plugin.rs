@@ -65,6 +65,10 @@ macro_rules! shell_resources {
             // The audio watermark, derived from this tower's transcript, so
             // reset too, or a restored tail rings at once.
             crate::sound::Heard,
+            // The glass's answer to this tower, or a swap carries a siege over.
+            crate::crt::Strain,
+            // Whether this tower's threshold menu is up yet.
+            super::thresholding::Opened,
         );
     };
 }

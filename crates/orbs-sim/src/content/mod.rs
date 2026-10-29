@@ -32,7 +32,7 @@ pub use phrasing::{CORPUS_CAP, Example, Phrasing, Phrasings, Refusal, Span, corp
 pub use progression::{Catalogue, Milestone, Progression, Rank, Station};
 pub use prose::Prose;
 pub use rate::{Rate, Rates};
-pub use recipe::{Recipe, Recipes};
+pub use recipe::{Lack, Recipe, Recipes};
 pub use scrolls::{Calm, Scrolls};
 pub use siege::{Kind as SupplyKind, Spendable, Spendables, Summoned};
 pub use spell::{EXTENSION, Spell, Spells, with_extension, without_extension};

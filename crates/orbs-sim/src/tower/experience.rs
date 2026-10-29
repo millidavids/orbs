@@ -117,6 +117,7 @@ fn say_gained(world: &mut World, level: usize) {
         .count(FieldName::Quantity, level as u64)
         .text(FieldName::Message, &message)
         .role(Role::Success)
+        .news()
         .finish();
 }
 

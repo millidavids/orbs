@@ -49,12 +49,13 @@ pub(crate) fn publish(world: &mut World, lattice: Entity) {
 ///
 /// No count, so it can run on a tick: presence and the
 /// [`EBBING_AT`](charm::EBBING_AT) threshold change rarely, and re-raising a
-/// node a second would churn `NodeId`s. The exact figure is on the panel.
+/// node a second would churn `NodeId`s. The exact figure is the rail's forge
+/// box, read from the same [`charm::longest_of_each`].
 pub(crate) fn charms(world: &mut World, room: Entity) {
     // One query for all five, hoisted out of the loop: a fresh `QueryState` per
     // `Kind` is five a tick, and `meditate 3600` collapses those ticks into one
     // `step` — ~18,000 query states inside a single command.
-    let longest = longest_of_each(world);
+    let longest = charm::longest_of_each(world);
     for kind in Kind::ALL {
         let Some(node) = reading(world, room, kind.word()) else {
             continue;
@@ -117,26 +118,6 @@ pub fn lapse(world: &mut World) {
         return;
     };
     charms(world, room);
-}
-
-/// The most ticks any tool in the tower has left, of every kind at once.
-///
-/// The longest, so `ebbing` fires when the last runs out rather than relaying
-/// a charm with life left. One pass for all five, since this runs on a tick.
-fn longest_of_each(world: &mut World) -> [u64; Kind::ALL.len()] {
-    let now = *world.resource::<crate::tick::Tick>();
-    let mut out = [0u64; Kind::ALL.len()];
-    let mut held = world.query::<&charm::Charmed>();
-    for charmed in held.iter(world) {
-        for kind in Kind::ALL {
-            let left = charmed.left(kind, now);
-            let slot = &mut out[kind as usize];
-            if left > *slot {
-                *slot = left;
-            }
-        }
-    }
-    out
 }
 
 // No `Cwd`-based refresh: at construction `Cwd` is the root. The verbs pass the

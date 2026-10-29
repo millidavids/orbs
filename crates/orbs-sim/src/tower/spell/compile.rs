@@ -669,9 +669,9 @@ fn one(line: &str, scene: &Scene, known: &[&str], bound: &[String]) -> Reading {
     let intent = match resolution {
         Resolution::Resolved { intent, .. } => intent,
         // `muster the troops` names no missing referent: the verb takes nothing.
-        Resolution::TakesNothing { extra, .. } => {
+        Resolution::TakesNothing { verb, extra, .. } => {
             return verbatim(Some(Fault {
-                key: "spell_takes_nothing",
+                key: super::run::takes_nothing_key(verb),
                 detail: Some(extra),
             }));
         }

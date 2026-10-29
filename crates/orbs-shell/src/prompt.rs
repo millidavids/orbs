@@ -516,6 +516,8 @@ pub(super) fn session(
         body = strip.rest;
     } else {
         let gauges = super::gauges::split(body);
+        let forecast =
+            super::forecast::ley(sim.prose(), panel.station, panel.experience, panel.earning);
         super::gauges::paint(
             &mut painter,
             gauges.area,
@@ -523,6 +525,7 @@ pub(super) fn session(
             panel.rankward,
             panel.rank.as_deref(),
             panel.ledger.as_ref(),
+            forecast.as_deref(),
             climb,
             sim.prose(),
         );
@@ -530,7 +533,14 @@ pub(super) fn session(
 
         let road = super::road::split(body, panel.line.as_ref());
         if let Some(line) = panel.line.as_ref() {
-            super::road::paint(&mut painter, road.area, line, climb, sim.prose());
+            super::road::paint(
+                &mut painter,
+                road.area,
+                line,
+                panel.pace,
+                climb,
+                sim.prose(),
+            );
         }
         body = road.rest;
     }

@@ -34,6 +34,10 @@ fn scene() -> Scene {
     for (word, _) in single_words() {
         scene = scene.with(NounKind::Command, word);
     }
+    // What `status` narrows to, as `tower::scene_at` registers it.
+    for word in orbs_sim::parser::REPORTS {
+        scene = scene.with(NounKind::Report, word);
+    }
     scene.knowing(single_words().map(|(word, _)| word.to_owned()))
 }
 
@@ -71,6 +75,7 @@ const fn sample_argument(verb: Verb) -> &'static str {
         NounKind::Workable => "/tower/laboratory",
         NounKind::Portable => "sage",
         NounKind::Any => "sludge",
+        NounKind::Report => orbs_sim::parser::RATES,
     }
 }
 

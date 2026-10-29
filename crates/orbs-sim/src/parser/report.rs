@@ -67,9 +67,19 @@ pub fn report(input: &str, resolution: &Resolution, prose: &Prose, records: &mut
         // A verb that takes nothing, handed words anyway: the verb as a fact,
         // the sentence the content's. Drawn as `Unresolved`, since nothing ran.
         Resolution::TakesNothing { verb, extra, .. } => {
+            // Or takes only a closed few, which it names (`Verb::narrows`).
+            let (key, only) = verb
+                .narrows()
+                .map_or(("verb_takes_nothing", String::new()), |only| {
+                    ("verb_takes_only", only.join(" or "))
+                });
             let message = prose.line(
-                "verb_takes_nothing",
-                &[("name", verb.canonical()), ("words", extra)],
+                key,
+                &[
+                    ("name", verb.canonical()),
+                    ("words", extra),
+                    ("detail", &only),
+                ],
             );
             records
                 .push(RecordKind::Echo)

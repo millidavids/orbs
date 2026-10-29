@@ -7,23 +7,10 @@
 
 mod common;
 
+#[cfg(debug_assertions)]
+use common::distil_spawned;
 use common::{run_all, said, words};
 use orbs_sim::Sim;
-
-/// Distil one clarity in a sealed tower, the cheap way.
-#[cfg(debug_assertions)]
-fn brew_a_clarity(sim: &mut Sim) {
-    run_all(
-        sim,
-        &[
-            "attend laboratory",
-            "kindle charcoal",
-            "debug_spawn clarified-draught 1",
-            "distil clarified-draught",
-        ],
-    );
-    sim.step_n(60);
-}
 
 /// The installation's practice tower is the tower the player will get, minus
 /// the opening report — so the report is read once, in the real one.
@@ -137,7 +124,7 @@ fn a_shut_room_is_not_listed_named_or_reported() {
 #[test]
 fn brewing_a_clarity_opens_the_archive_and_says_so_once() {
     let mut sim = Sim::sealed(1);
-    brew_a_clarity(&mut sim);
+    distil_spawned(&mut sim, 1);
 
     assert!(
         sim.is_open("archive"),
@@ -275,7 +262,7 @@ fn a_document_that_reached_a_station_without_its_opening_catches_up_too() {
     // the deed asks and the walk goes straight by. The ley line's catching-up
     // needed a twin.
     let mut sim = Sim::sealed(1);
-    brew_a_clarity(&mut sim);
+    distil_spawned(&mut sim, 1);
     let mut save = sim.snapshot();
     assert!(save.progress.reached.contains(&"laboratory_1".to_owned()));
     if let Some(opened) = save.progress.opened.as_mut() {
@@ -360,7 +347,7 @@ fn the_wall_is_armed_by_the_sanctum_and_a_charm_by_its_station() {
 #[test]
 fn a_sealed_tower_replays_to_the_same_world() {
     let mut live = Sim::sealed(1);
-    brew_a_clarity(&mut live);
+    distil_spawned(&mut live, 1);
     run_all(&mut live, &["attend archive"]);
 
     let replayed = common::replayed(&live, Sim::sealed(1));

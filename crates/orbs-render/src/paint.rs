@@ -21,6 +21,7 @@
 use crate::bath;
 use crate::cell::Cell;
 use crate::cp437::box_drawing;
+use crate::figure;
 use crate::fire;
 use crate::frame::Frame;
 use crate::geometry::{Pos, Rect};
@@ -119,23 +120,25 @@ impl<'a> Painter<'a> {
         }
 
         let mut row = area.row;
-        for line in span.text().split('\n') {
-            if row >= area.bottom() {
-                break;
-            }
+        'lines: for line in span.text().split('\n') {
             if line.is_empty() {
                 row = row.saturating_add(1);
                 continue;
             }
             for wrapped in Wrap::new(line, area.cols) {
                 if row >= area.bottom() {
-                    break;
+                    // The first line out of room is enough to name.
+                    if !blank(wrapped) {
+                        self.frame.clip(Pos::new(area.col, row), wrapped);
+                        break 'lines;
+                    }
+                    continue;
                 }
                 self.put_str(Pos::new(area.col, row), wrapped, span.style(), area.right());
                 row = row.saturating_add(1);
             }
         }
-        row.saturating_sub(area.row)
+        row.min(area.bottom()).saturating_sub(area.row)
     }
 
     /// Draw a bracketed gauge — `[||||||      ]` — and record `spoken`.
@@ -380,6 +383,40 @@ impl<'a> Painter<'a> {
         inputs: [Option<Wash>; 2],
     ) {
         self.stirring(area, done, total, work, inputs, Runs::Upward);
+    }
+
+    /// [`Painter::meter`], drawn as one of the five puzzle instruments.
+    ///
+    /// Silent, its length `filled_of` and its hue the gauge's step for that
+    /// length, set here so no caller can hand one that disagrees.
+    pub fn figure_meter(&mut self, area: Rect, done: u32, total: u32, rite: figure::Rite) {
+        self.figuring(area, done, total, rite, Runs::Rightward);
+    }
+
+    /// [`Painter::meter_upward`], drawn as a figure. See [`Painter::figure_meter`].
+    pub fn figure_meter_upward(&mut self, area: Rect, done: u32, total: u32, rite: figure::Rite) {
+        self.figuring(area, done, total, rite, Runs::Upward);
+    }
+
+    /// Both figure painters.
+    fn figuring(&mut self, area: Rect, done: u32, total: u32, rite: figure::Rite, runs: Runs) {
+        let area = area.intersection(self.area);
+        if area.is_empty() {
+            return;
+        }
+        let steps = runs.steps(area);
+        let filled = filled_of(steps, done, total);
+        let rite = figure::Rite {
+            fill: crate::style::Fill::of(done, total),
+            ..rite
+        };
+        for (step, lane, at) in runs.cells(area) {
+            let (glyph, depiction) = figure::cell(lane, step, filled, steps, rite);
+            self.frame.set(
+                at,
+                Cell::new(glyph, Style::NORMAL.with_depiction(depiction)),
+            );
+        }
     }
 
     /// Both flask painters.
@@ -759,6 +796,9 @@ impl<'a> Painter<'a> {
     /// `right_limit`. Returns cells written.
     fn put_str(&mut self, at: Pos, text: &str, style: Style, right_limit: u16) -> u16 {
         if at.row < self.area.row || at.row >= self.area.bottom() {
+            if !blank(text) {
+                self.frame.clip(at, text);
+            }
             return 0;
         }
 
@@ -767,9 +807,16 @@ impl<'a> Painter<'a> {
         // Glyphs falling left of the region are consumed, not shifted right.
         let skipped = usize::from(col.saturating_sub(at.col));
 
+        let mut glyphs = text.chars();
+        let mut lost = false;
+        // Every skipped glyph consumed, which `any` would stop short of.
+        for glyph in glyphs.by_ref().take(skipped) {
+            lost |= glyph != ' ';
+        }
         let mut written = 0u16;
-        for glyph in text.chars().skip(skipped) {
+        for glyph in glyphs.by_ref() {
             if col >= limit {
+                lost |= glyph != ' ';
                 break;
             }
             self.frame
@@ -777,8 +824,16 @@ impl<'a> Painter<'a> {
             col = col.saturating_add(1);
             written = written.saturating_add(1);
         }
+        if lost || !blank(glyphs.as_str()) {
+            self.frame.clip(at, text);
+        }
         written
     }
+}
+
+/// Whether `text` shows nothing, so losing it at an edge loses nothing.
+fn blank(text: &str) -> bool {
+    text.chars().all(|glyph| glyph == ' ')
 }
 
 /// Which way a picture bar runs, and the axis mapping that follows from it.

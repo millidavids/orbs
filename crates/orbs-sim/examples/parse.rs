@@ -519,12 +519,18 @@ fn show(resolution: &Resolution, indent: &str) {
             println!("{indent}-> {} {}", verb.canonical(), so_far.join(" "));
             println!("{indent}{} what? ({missing:?})", verb.canonical());
         }
-        Resolution::TakesNothing { verb, extra, .. } => {
-            println!(
+        // A verb with a closed slot takes only its few words, as the game says.
+        Resolution::TakesNothing { verb, extra, .. } => match verb.narrows() {
+            Some(only) => println!(
+                "{indent}{} takes only {} — '{extra}' is not one of them",
+                verb.canonical(),
+                only.join(" or ")
+            ),
+            None => println!(
                 "{indent}{} takes nothing — '{extra}' is not something it can use",
                 verb.canonical()
-            );
-        }
+            ),
+        },
         Resolution::Elsewhere { verb } => {
             println!(
                 "{indent}there is nothing here to {} with (§7)",
@@ -562,7 +568,12 @@ fn siege_contrast(scene: &Scene) {
                 println!("  {label}  needs a {missing:?} for {}", verb.canonical());
             }
             Resolution::TakesNothing { verb, .. } => {
-                println!("  {label}  takes nothing: {}", verb.canonical());
+                let takes = if verb.narrows().is_some() {
+                    "takes only a few words"
+                } else {
+                    "takes nothing"
+                };
+                println!("  {label}  {takes}: {}", verb.canonical());
             }
             Resolution::Elsewhere { verb } => {
                 println!("  {label}  not here: {}", verb.canonical());

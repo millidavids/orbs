@@ -15,6 +15,25 @@ use serde::Deserialize;
 /// The compiled-in default, so a headless `Sim` needs no filesystem.
 const BUILTIN: &str = include_str!("../../content/recipes.toml");
 
+/// What a gathering instrument still lacks — see [`Recipes::missing`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Lack {
+    /// A kind it holds none of.
+    Kind(String),
+    /// More of a kind it holds too few of.
+    More(String),
+}
+
+impl Lack {
+    /// The material named.
+    #[must_use]
+    pub fn material(&self) -> &str {
+        match self {
+            Self::Kind(name) | Self::More(name) => name,
+        }
+    }
+}
+
 /// One transformation an instrument can perform.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Recipe {
@@ -255,6 +274,8 @@ impl Recipes {
 
     /// The first recipe `instrument` can run on exactly `held`.
     ///
+    /// See also [`missing`](Self::missing), for what a partial load lacks.
+    ///
     /// File order is the tie-break. On the multiset held, so a third thing
     /// stops it — clearing is part of the loop. `held` is a name and count
     /// ([`Recipe::count`]); a recipe not `known` does not fire and the
@@ -303,34 +324,58 @@ impl Recipes {
         held: &[(String, u32)],
         known: &crate::tower::Known<'_>,
     ) -> bool {
+        self.missing(instrument, held, known).is_some()
+    }
+
+    /// What a gathering instrument still lacks, by the first recipe it is
+    /// collecting for. [`gathering`](Self::gathering) is this being `Some`.
+    #[must_use]
+    pub fn missing(
+        &self,
+        instrument: &str,
+        held: &[(String, u32)],
+        known: &crate::tower::Known<'_>,
+    ) -> Option<Lack> {
         if held.is_empty() {
-            return false;
+            return None;
         }
-        self.by_instrument.get(instrument).is_some_and(|recipes| {
-            recipes.iter().any(|recipe| {
+        self.by_instrument
+            .get(instrument)?
+            .iter()
+            .find_map(|recipe| {
                 if !self.reachable(recipe, known) {
-                    return false;
+                    return None;
                 }
-                let mut wanted: Vec<&str> = recipe.inputs();
+                let inputs = recipe.inputs();
+                let mut wanted = inputs.clone();
                 if held.len() > wanted.len() {
-                    return false;
+                    return None;
+                }
+                let all_wanted = held.iter().all(|(item, _)| {
+                    wanted
+                        .iter()
+                        .position(|want| *want == item.as_str())
+                        .is_some_and(|at| {
+                            wanted.swap_remove(at);
+                            true
+                        })
+                });
+                if !all_wanted {
+                    return None;
                 }
                 // Short of a kind, or short of a count of one — either way the
-                // player is collecting rather than holding leavings.
-                let short = held.len() < wanted.len()
-                    || held.iter().any(|(_, units)| *units < recipe.count);
-                short
-                    && held.iter().all(|(item, _)| {
-                        wanted
-                            .iter()
-                            .position(|want| *want == item.as_str())
-                            .is_some_and(|at| {
-                                wanted.swap_remove(at);
-                                true
-                            })
-                    })
+                // player is collecting rather than holding leavings. What is left
+                // of `wanted` is the kinds not held. Named in the recipe's own
+                // order, so the answer does not move between ticks.
+                if let Some(kind) = inputs.iter().find(|input| wanted.contains(input)) {
+                    return Some(Lack::Kind((*kind).to_owned()));
+                }
+                inputs.iter().find_map(|input| {
+                    held.iter()
+                        .any(|(item, units)| item == input && *units < recipe.count)
+                        .then(|| Lack::More((*input).to_owned()))
+                })
             })
-        })
     }
 
     /// Every instrument the recipes name, alphabetically.

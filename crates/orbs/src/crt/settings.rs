@@ -17,9 +17,8 @@ pub(crate) struct CrtSettings {
     /// Whether the tube is on at all.
     ///
     /// Explicit, never inferred from the effects, which world state such as
-    /// [`flash`] and [`desaturation`] may drive: §14's switch must stay off.
+    /// [`desaturation`] may drive: §14's switch must stay off.
     ///
-    /// [`flash`]: Self::flash
     /// [`desaturation`]: Self::desaturation
     pub(crate) on: bool,
     /// How far the tube bulges. 0 is a flat panel.
@@ -56,10 +55,12 @@ pub(crate) struct CrtSettings {
     /// that is the one the radius can actually run out of: at 0.5 the corners
     /// meet and the tube is a stadium.
     pub(crate) corner_radius: f32,
-    /// Drains colour. Reserved for world state — §4 wires this to failure.
+    /// Drains colour: peak threat's, and a broken spell's through `Strain`.
+    ///
+    /// There is no flash beside it. §4 reserved one for a breach, and §19 says
+    /// nothing in this game flashes; a field that will never fire was a lie in
+    /// the struct (§19, *the tower speaks up*).
     pub(crate) desaturation: f32,
-    /// Additive flash colour. Reserved for world state — flash on breach.
-    pub(crate) flash: LinearRgba,
 }
 
 impl CrtSettings {
@@ -81,7 +82,6 @@ impl CrtSettings {
         flicker: 0.0,
         corner_radius: 0.0,
         desaturation: 0.0,
-        flash: LinearRgba::NONE,
     };
 
     /// A tube in a dark room, tuned so text stays readable.
@@ -104,7 +104,6 @@ impl CrtSettings {
         // at `(0, 0)` binds it at `0.0278`.
         corner_radius: 0.027,
         desaturation: 0.0,
-        flash: LinearRgba::NONE,
     };
 
     /// Peak threat: what the legibility test must be run against (§4).
@@ -139,10 +138,6 @@ pub(crate) struct CrtUniform {
     pub(crate) flicker: f32,
     pub(crate) corner_radius: f32,
     pub(crate) desaturation: f32,
-    pub(crate) flash_r: f32,
-    pub(crate) flash_g: f32,
-    pub(crate) flash_b: f32,
-    pub(crate) flash: f32,
     pub(crate) time: f32,
     /// Physical pixels per cell. Everything periodic in the shader divides
     /// these, so the pattern lands identically inside every glyph at every
@@ -174,10 +169,6 @@ impl CrtUniform {
             flicker: settings.flicker,
             corner_radius: settings.corner_radius,
             desaturation: settings.desaturation,
-            flash_r: settings.flash.red,
-            flash_g: settings.flash.green,
-            flash_b: settings.flash.blue,
-            flash: settings.flash.alpha,
             time,
             cell_width: tube.width,
             cell_height: tube.height,
@@ -269,7 +260,6 @@ mod tests {
             uniform.flicker,
             uniform.corner_radius,
             uniform.desaturation,
-            uniform.flash,
         ] {
             assert_eq!(value, 0.0);
         }
@@ -280,10 +270,6 @@ mod tests {
         // A world-driven field must not turn the tube back on (§14). Field by
         // field, since the failure is another writer, not a key.
         for lit in [
-            CrtSettings {
-                flash: LinearRgba::rgb(1.0, 1.0, 1.0),
-                ..CrtSettings::OFF
-            },
             CrtSettings {
                 desaturation: 0.9,
                 ..CrtSettings::OFF

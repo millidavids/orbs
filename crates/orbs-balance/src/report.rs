@@ -128,7 +128,15 @@ pub fn csv(runs: &[Run]) -> String {
 pub fn why(runs: &[Run]) -> String {
     let mut out = String::new();
     for run in runs {
-        if run.reasons.is_empty() && run.given.is_empty() && !run.held.contains_key("fragment") {
+        // Where the loop ended up waiting: `status rates`, as the run left it.
+        // Only rooms that made something or are held, or six idle rows bury
+        // the one that matters.
+        let rooms: Vec<String> = run.yields.iter().filter_map(yielded).collect();
+        if run.reasons.is_empty()
+            && run.given.is_empty()
+            && !run.held.contains_key("fragment")
+            && rooms.is_empty()
+        {
             continue;
         }
         let _ = writeln!(out, "\n{} — {} cost", run.policy, run.cost);
@@ -147,8 +155,33 @@ pub fn why(runs: &[Run]) -> String {
         if let Some(fragments) = run.held.get("fragment") {
             let _ = writeln!(out, "  fragment: {fragments} held");
         }
+        for line in rooms {
+            let _ = writeln!(out, "  {line}");
+        }
     }
     out
+}
+
+/// One room's rate and wait, for `--why`; `None` for a room with nothing to say.
+fn yielded(one: &orbs_sim::tower::Yield) -> Option<String> {
+    use orbs_sim::tower::{Hourly, Wait};
+    let rate = match one.rate {
+        Hourly::PerHour(count) => format!("{count} an hour"),
+        Hourly::None | Hourly::Unknown => {
+            if !matches!(one.wait, Wait::Held { .. }) {
+                return None;
+            }
+            "none".to_owned()
+        }
+    };
+    let wait = match &one.wait {
+        Wait::At {
+            instrument, state, ..
+        } => format!("{} at {instrument}", state.label()),
+        Wait::Held { spell, .. } => format!("{spell} held"),
+        Wait::Nothing => "nothing".to_owned(),
+    };
+    Some(format!("{}: {rate}, {wait}", one.room))
 }
 
 /// What a policy is pinned to earn per tick, if anything.
@@ -217,6 +250,7 @@ mod tests {
             reasons: std::collections::BTreeMap::new(),
             held: std::collections::BTreeMap::new(),
             given: std::collections::BTreeMap::new(),
+            yields: Vec::new(),
         }
     }
 

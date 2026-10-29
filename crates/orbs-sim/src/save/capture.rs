@@ -7,7 +7,9 @@
 use bevy_ecs::prelude::*;
 use orbs_render::{Presentation, Role, Value};
 
-use super::document::{Away, FORMAT, MarkSave, ProgressSave, RecordSave, RngSave, Save, WorldSave};
+use super::document::{
+    Away, FORMAT, MarkSave, ProgressSave, RecordSave, RngSave, Save, ThroughputSave, WorldSave,
+};
 use super::naming;
 use super::node::{
     CharmSave, NodeSave, ReadSave, RunningSave, SpanSave, SubstitutedSave, WorkingSave,
@@ -128,6 +130,32 @@ fn progress(world: &World) -> ProgressSave {
                 .map(|(name, makings)| (name.to_owned(), makings.to_vec()))
                 .collect(),
         ),
+        // Always `Some`, for `stores`' reason: `since` must survive the round
+        // trip, or a reload would restart the watch.
+        throughput: Some({
+            let parts = world.resource::<tower::Throughput>().parts();
+            ThroughputSave {
+                since: parts.since,
+                made: parts
+                    .made
+                    .iter()
+                    .map(|(key, ticks)| ((*key).to_owned(), ticks.to_vec()))
+                    .collect(),
+                spilled: parts
+                    .spilled
+                    .iter()
+                    .map(|(key, minutes)| {
+                        let minutes = minutes.iter().map(|(at, count)| [*at, *count]);
+                        ((*key).to_owned(), minutes.collect())
+                    })
+                    .collect(),
+                earned: parts
+                    .earned
+                    .iter()
+                    .map(|(at, total)| [*at, *total])
+                    .collect(),
+            }
+        }),
         reached: world.resource::<tower::mastery::Reached>().ids().to_vec(),
         // Always written, so a document from this build never reads as one
         // from before sealing existed.
@@ -405,6 +433,7 @@ fn tail(records: &orbs_render::Records) -> Vec<RecordSave> {
             register: (record.presentation() != Presentation::default())
                 .then(|| naming::register_word(record.presentation()).to_owned()),
             quiet: record.is_quiet(),
+            news: record.is_news(),
             spoken: record.spoken().map(str::to_owned),
             fields: record
                 .fields()

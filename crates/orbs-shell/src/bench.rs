@@ -11,7 +11,7 @@
 //! scripted runs.
 
 use bevy_ecs::prelude::Resource;
-use orbs_render::{Burn, Grind, Motion, Steep, Stir};
+use orbs_render::{Burn, Figure, Fill, Grind, Motion, Rite, Steep, Stir};
 use orbs_sim::tower::{Craft, State};
 
 /// How long a fire takes to catch, in seconds.
@@ -183,6 +183,22 @@ impl Bench {
             advance: if self.enabled { self.advance } else { 0.0 },
             spent,
             leavings,
+        }
+    }
+
+    /// How a painter should draw one of the five puzzle instruments.
+    ///
+    /// Still with motion off, for its siblings' reason: the switch costs the
+    /// movement, never the picture.
+    #[must_use]
+    pub const fn rite(&self, figure: Figure, working: bool, settling: bool) -> Rite {
+        Rite {
+            phase: if self.enabled { self.phase } else { 0.0 },
+            figure,
+            working: working && self.enabled,
+            settling,
+            // The painter's, set from the length it draws.
+            fill: Fill::Faint,
         }
     }
 

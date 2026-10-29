@@ -30,16 +30,20 @@ pub(crate) use orbs_shell::{
 
 pub(crate) use away::{Absence, Away};
 pub(crate) use editing::Editing;
+pub(crate) use input::SubmittedMessage;
 pub(crate) use installing::{Installing, Installs};
-pub(crate) use manualling::Reading;
-pub(crate) use menuing::Standing;
+pub(crate) use manualling::{OpenManualMessage, Reading};
+pub(crate) use menuing::{SettingMessage, Standing, SwapMessage};
 pub(crate) use motion::{Stillness, moving, moving_at_launch};
 pub use plugin::ShellPlugin;
-pub(crate) use plugin::ShellSystems;
+pub(crate) use plugin::{ShellSystems, reset_for_swap};
+pub(crate) use setting::apply as apply_setting;
 // A function key and the settings page are **one setting seen twice**: the key
 // cycles and writes its word down, so the page cannot disagree on the next
 // launch. These are the words the window's own keys write.
 pub(crate) use setting::{CRT, THEME, defaults as default_settings, pair};
+#[cfg(test)]
+pub(crate) use thresholding::Opened as ThresholdOpened;
 pub(crate) use thresholding::playing;
 pub(crate) use wandering::Walk;
 pub(crate) use weaving::Loom;

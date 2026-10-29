@@ -30,6 +30,9 @@ const FAULT: &str = "‼";
 /// `▪` defect (§19), found the same way: by looking.
 const RUNNING: char = '►';
 
+/// Cells the state row is set in by, under the room's name.
+const STATE_INDENT: usize = 2;
+
 /// Draw the rail, if the layout found room for it.
 ///
 /// `boxes` and `foot` come from [`ScreenLayout`](orbs_render::ScreenLayout),
@@ -124,28 +127,33 @@ fn domain(painter: &mut orbs_render::Painter<'_>, brief: &Brief, at: Rect, ruled
     if row >= floor {
         return;
     }
-    let state = format!("  {}", word(brief.state));
+    // The percentage to the next mastery station, on the state row, since a
+    // box has no spare row (§11.5). Silent: progress speaks on completion
+    // only (§14). Kept on the row (§19): a long word like `gathering` gives up
+    // its indent before the percentage gives up its place.
+    let said = word(brief.state);
+    let label = brief
+        .mastery
+        .map(|progress| format!("{}%", progress.percent()))
+        .filter(|label| said.chars().count() + 1 + label.len() <= width);
+    let spare = label.as_ref().map_or(STATE_INDENT, |label| {
+        width - said.chars().count() - 1 - label.len()
+    });
+    let state = format!("{}{said}", " ".repeat(spare.min(STATE_INDENT)));
     painter.span(
         Pos::new(at.col, row),
         &Span::new(&state).with_style(Style::DIM),
     );
-    // The percentage to the next mastery station, on the state row, since a
-    // box has no spare row (§11.5). Silent: progress speaks on completion
-    // only (§14).
-    if let Some(progress) = brief.mastery {
-        let label = format!("{}%", progress.percent());
-        let taken = state.chars().count() + 1;
-        if taken + label.len() <= width {
-            painter.glyphs(
-                Pos::new(
-                    at.col
-                        .saturating_add(u16::try_from(width - label.len()).unwrap_or(0)),
-                    row,
-                ),
-                &label,
-                Style::DIM,
-            );
-        }
+    if let Some(label) = label {
+        painter.glyphs(
+            Pos::new(
+                at.col
+                    .saturating_add(u16::try_from(width - label.len()).unwrap_or(0)),
+                row,
+            ),
+            &label,
+            Style::DIM,
+        );
     }
 
     // What is working, and what is automating it. Both are optional and both
@@ -157,11 +165,13 @@ fn domain(painter: &mut orbs_render::Painter<'_>, brief: &Brief, at: Rect, ruled
         if row >= floor {
             return;
         }
-        painter.span(
-            Pos::new(at.col, row),
-            &Span::new(&format!("  {}", truncate(detail, width.saturating_sub(2))))
-                .with_style(Style::DIM),
-        );
+        let drawn = format!("  {}", truncate(detail, width.saturating_sub(2)));
+        // A wait in shorthand is heard as the sentence `status rates` says.
+        let mut said = Span::new(&drawn).with_style(Style::DIM);
+        if let Some(spoken) = &brief.detail_spoken {
+            said = said.with_spoken(spoken);
+        }
+        painter.span(Pos::new(at.col, row), &said);
     }
     if let Some(spell) = &brief.spell {
         row = row.saturating_add(1);
@@ -401,6 +411,14 @@ mod tests {
             State::Cold,
         ] {
             assert!(!word(state).is_empty(), "{state:?} has no word");
+            // ...and every word keeps the mastery % beside it, giving up its
+            // indent if it must: §19 keeps the % on this row.
+            let inside = usize::from(RAIL_COLS) - 2;
+            assert!(
+                word(state).chars().count() + 1 + "100%".len() <= inside,
+                "`{}` leaves no room for its %",
+                word(state)
+            );
         }
     }
 }

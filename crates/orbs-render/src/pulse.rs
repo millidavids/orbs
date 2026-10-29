@@ -110,6 +110,20 @@ pub(crate) const fn falling(step: u16, travelled: u16, span: u16) -> u16 {
     offset(step, travelled % span, span)
 }
 
+/// The shortest run of `beats` that is a whole share of a cycle of them and
+/// holds `at_least`, or the whole cycle when no shorter share does.
+///
+/// A motion counted `beat % n` tears at the wrap unless the cycle's beats are
+/// a whole number of `n`: one pass is cut short, or the start held twice. A
+/// motion that runs a whole share and rests out the remainder repeats exactly.
+pub(crate) const fn whole_share(beats: u16, at_least: u16) -> u16 {
+    let mut share = if at_least == 0 { 1 } else { at_least };
+    while share < beats && !beats.is_multiple_of(share) {
+        share += 1;
+    }
+    if share > beats { beats } else { share }
+}
+
 /// A position shifted along a pattern that repeats every `span` cells.
 ///
 /// `step` is reduced too, so a bar longer than `span` repeats its texture rather

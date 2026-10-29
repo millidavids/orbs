@@ -21,6 +21,7 @@ mod pipeline;
 mod price;
 mod queue;
 mod quit;
+mod rates;
 mod readings;
 mod recall;
 mod research;

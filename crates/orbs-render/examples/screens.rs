@@ -9,10 +9,10 @@
 //! same stream (§9).
 
 use orbs_render::{
-    Burn, Crossing, Depiction, DisplayMode, FieldName, Frame, GRID, GridSize, Grind, Intensity,
-    Kept, Outcome, PICTURE, Painter, Passage, Pos, Presentation, RecordKind, RecordView, Records,
-    Rect, Role, ScreenLayout, ScreenRequest, Sift, Span, Square, Stacks, Steep, Style, Toward,
-    UtteranceKind,
+    Burn, Crossing, Depiction, DisplayMode, FieldName, Figure, Frame, GRID, GridSize, Grind,
+    Intensity, Kept, Outcome, PICTURE, Painter, Passage, Pos, Presentation, RecordKind, RecordView,
+    Records, Rect, Rite, Role, ScreenLayout, ScreenRequest, Sift, Span, Square, Stacks, Steep,
+    Style, Toward, UtteranceKind,
 };
 
 /// The wizard's name is world state (`orbs_sim::Wizard`), which this crate does
@@ -133,6 +133,7 @@ fn main() {
     burning();
     grinding();
     steeping();
+    figures();
     crossing();
     worst_case();
 }
@@ -322,6 +323,81 @@ fn steeping() {
     println!("    lies too low to be mistaken for a level.");
 
     distilling();
+}
+
+/// The five puzzle instruments, a column per beat of each one's own tempo.
+///
+/// Glyphs where a picture moves in glyphs; ramp digits for the lattice, whose
+/// fire is hue throughout, like the athanor's body.
+fn figures() {
+    const ROWS: u16 = 12;
+    let tick = 1.0 / orbs_render::FLIP_HZ;
+
+    println!("\n── The puzzle instruments — each at its own tempo (§19) ──\n");
+    println!("    ▓ only inside the fill and ▒ only outside it, at every frame, so");
+    println!("    each value survives greyscale whatever moves.");
+    let shown = [
+        (
+            Figure::Prism,
+            false,
+            4,
+            "prism — a focus searching the open sockets",
+        ),
+        (
+            Figure::Lattice,
+            false,
+            6,
+            "lattice — snapped columns burning (2 body, 3 blaze)",
+        ),
+        (
+            Figure::Lattice,
+            true,
+            8,
+            "lattice — annealing, cooler (1 ember, 2 body)",
+        ),
+        (
+            Figure::Pylon,
+            false,
+            9,
+            "pylon — the top course settling while a course is up",
+        ),
+        (
+            Figure::Lectern,
+            false,
+            16,
+            "lectern — the four fragments' seams knitting",
+        ),
+        (
+            Figure::Circle,
+            false,
+            6,
+            "circle — balking rows pulling at the wires",
+        ),
+    ];
+    for (figure, settling, every, title) in shown {
+        println!("\n    {title}, every {every} ticks\n");
+        let mut columns = Vec::new();
+        for beat in 0u16..8 {
+            let mut frame = Frame::new(GridSize::new(2, ROWS));
+            let area = Rect::new(0, 0, 2, ROWS);
+            let rite = Rite {
+                phase: f32::from(beat * every) * tick,
+                figure,
+                working: true,
+                settling,
+                ..Rite::default()
+            };
+            frame.painter(area).figure_meter_upward(area, 5, 12, rite);
+            columns.push(frame);
+        }
+        if figure == Figure::Lattice {
+            filmstrip(&columns, ROWS, 2, |cell| {
+                depiction_mark(cell.style.depicted())
+            });
+        } else {
+            filmstrip(&columns, ROWS, 2, |cell| cell.glyph);
+        }
+    }
 }
 
 /// The alembic: the same vessel, boiling hard enough to throw bubbles out of it.

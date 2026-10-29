@@ -738,6 +738,8 @@ struct Tiling {
     stride: u16,
     per_row: u16,
     count: usize,
+    /// Rows the run takes: its tiles' rows, or a described run's wrapped lines.
+    rows: u16,
     /// Width of the name column, when the run reads as `name = value`.
     ///
     /// `None` when nothing in the run has a second field — a listing of places
@@ -874,17 +876,24 @@ impl Tiling {
         // run's widest. Planned here so the padding the draw applies is the
         // padding the measure counted.
         if all_described(run.clone()) {
-            let signature = run
+            let signature = to_cols(
+                run.clone()
+                    .take_while(|record| record.kind().tiles())
+                    .map(|record| signature_of(&record).chars().count())
+                    .max()
+                    .unwrap_or(0),
+            );
+            let rows = run
                 .take_while(|record| record.kind().tiles())
-                .map(|record| signature_of(&record).chars().count())
-                .max()
-                .unwrap_or(0);
+                .map(|record| 1 + described(&record, signature, available).1.len())
+                .sum();
             return Some(Self {
                 indent,
                 stride: available,
                 per_row: 1,
                 count,
-                named: Some(to_cols(signature)),
+                rows: to_cols(rows),
+                named: Some(signature),
                 describing: true,
             });
         }
@@ -902,20 +911,52 @@ impl Tiling {
         // A tile never wraps: `per_row` is a whole number of strides and a
         // stride is the widest entry in the run, so an entry either has its own
         // column or the run stacks.
-        (per_row >= 2).then_some(Self {
+        (per_row >= 2).then(|| Self {
             indent,
             stride,
             per_row,
             count,
+            rows: to_cols(count.div_ceil(usize::from(per_row))),
             named,
             describing: false,
         })
     }
 
     /// Rows the whole run needs.
-    fn rows(self) -> u16 {
-        to_cols(self.count.div_ceil(usize::from(self.per_row)))
+    const fn rows(self) -> u16 {
+        self.rows
     }
+}
+
+/// A described entry as it is drawn: its signature padded to the run's
+/// column and the first of what it does, then the rest of that wrapped to the
+/// description's column. Wrapped, never clipped, as a stacked record is (§14);
+/// one definition, so the plan counts the rows the draw takes.
+fn described(record: &Record<'_>, named: u16, available: u16) -> (String, Vec<String>) {
+    let mut first = signature_of(record);
+    for _ in first.chars().count()..usize::from(named) {
+        first.push(' ');
+    }
+    first.push_str(DESCRIBES);
+    let mut detail = String::new();
+    if let Some(field) = record.field(FieldName::Detail) {
+        field.write(&mut detail);
+    }
+    let width = available.saturating_sub(described_lead(named));
+    if width == 0 {
+        first.push_str(&detail);
+        return (first, Vec::new());
+    }
+    let mut fragments = crate::wrap::Wrap::new(&detail, width);
+    if let Some(head) = fragments.next() {
+        first.push_str(head);
+    }
+    (first, fragments.map(str::to_owned).collect())
+}
+
+/// Cells from a described entry's start to its description.
+fn described_lead(named: u16) -> u16 {
+    named.saturating_add(to_cols(DESCRIBES.len()))
 }
 
 /// Draw a tiling run, returning the rows used, the records drawn, and how much
@@ -940,10 +981,14 @@ fn draw_tiled<'r>(
             Arrival::Partial(cells) => Some(cells),
         },
     );
+    // Rows a described run's wrapped descriptions have taken, below their
+    // entries' own.
+    let mut continued = 0u16;
     for record in tiling {
         let row = area
             .row
-            .saturating_add(to_cols(placed / usize::from(per_row)));
+            .saturating_add(to_cols(placed / usize::from(per_row)))
+            .saturating_add(continued);
         if row >= area.bottom() {
             break;
         }
@@ -959,22 +1004,16 @@ fn draw_tiled<'r>(
         // pane, and say each entry twice.
         drawn.clear();
         let mut bound = false;
+        let mut below = Vec::new();
         if plan.describing {
             // `attend <place>` padded to the run's widest, then what it does.
             // Two spaces and no `=`: the second column is a sentence about the
             // first, not a value bound to it.
             //
             // No leader: one suits only a right-aligned column.
-            drawn.push_str(&signature_of(&record));
-            if let Some(named) = plan.named {
-                for _ in drawn.chars().count()..usize::from(named) {
-                    drawn.push(' ');
-                }
-            }
-            drawn.push_str(DESCRIBES);
-            if let Some(detail) = record.field(FieldName::Detail) {
-                detail.write(&mut drawn);
-            }
+            let (first, rest) = described(&record, plan.named.unwrap_or(0), stride);
+            drawn.push_str(&first);
+            below = rest;
             // `bound` stays false: it tells the draw below to overdraw a dim
             // ` = ` at the name column, and there is no `=` in this form, so
             // setting it stamped one over the first character of every
@@ -1016,14 +1055,32 @@ fn draw_tiled<'r>(
         record.speak(&mut speech);
 
         // Row-major, the order the run is drawn in, so a listing fills across
-        // and then down exactly as a terminal would print it.
+        // and then down exactly as a terminal would print it. A wrapped
+        // description arrives after its first row, and the record is whole
+        // only once all of it has.
         let here = left.map_or(Arrival::Whole, Arrival::Partial);
         let (visible, used) = here.clip(&drawn);
         if let Some(left) = left.as_mut() {
             *left = left.saturating_sub(used);
         }
         spent = spent.saturating_add(used);
-        let complete = visible.len() == drawn.len();
+        let mut complete = visible.len() == drawn.len();
+        let lead = col.saturating_add(described_lead(plan.named.unwrap_or(0)));
+        for (line, at) in below.iter().zip(row.saturating_add(1)..) {
+            let here = left.map_or(Arrival::Whole, Arrival::Partial);
+            let (shown, used) = if complete { here.clip(line) } else { ("", 0) };
+            if let Some(left) = left.as_mut() {
+                *left = left.saturating_sub(used);
+            }
+            spent = spent.saturating_add(used);
+            complete &= shown.len() == line.len();
+            // Silent, as a stacked record's continuations are: the record
+            // speaks once, on its first row (§14).
+            if at < area.bottom() && !shown.is_empty() {
+                painter.glyphs(Pos::new(lead, at), shown, record.style());
+            }
+        }
+        continued = continued.saturating_add(to_cols(below.len()));
 
         if complete {
             // Spoken in stream order, one utterance per record, exactly as the
@@ -1050,8 +1107,8 @@ fn draw_tiled<'r>(
         placed += 1;
     }
 
-    let rows = placed.div_ceil(usize::from(per_row));
-    Some((to_cols(rows), placed, spent))
+    let rows = to_cols(placed.div_ceil(usize::from(per_row))).saturating_add(continued);
+    Some((rows, placed, spent))
 }
 
 /// Where column `index` begins, or `None` if it starts past the right edge.

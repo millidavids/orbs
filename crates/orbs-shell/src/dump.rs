@@ -18,6 +18,7 @@ use orbs_sim::Sim;
 use super::line::Line;
 use super::linear::Linear;
 use super::screen::Screen;
+use super::script::SEPARATOR;
 use super::transition::PaneTransition;
 use crate::stage::Stage;
 
@@ -175,9 +176,6 @@ const MANUAL: &str = "ORBS_MANUAL";
 /// ```
 const WALK: &str = "ORBS_WALK";
 
-/// Commands are separated by this, so one shell word can drive a session.
-const SEPARATOR: char = ';';
-
 /// The grid a dump uses unless asked otherwise: **the one the game draws**.
 ///
 /// 120×45, the game's fixed grid; `ORBS_GRID=80x22` is §4's floor check.
@@ -224,8 +222,9 @@ pub fn run_script(
     // A dump neither loads nor saves unless `ORBS_SAVE` names a path, or no
     // capture is a baseline. Sealed for the whole process, since the menu's
     // play page reads saves itself. `save::named`, so a blank `ORBS_SAVE=` is
-    // no path — it once let a capture overwrite the player's tower.
-    let asked = crate::save::named();
+    // no path — it once let a capture overwrite the player's tower. A tour
+    // keeps nothing, whatever `ORBS_SAVE` says.
+    let asked = crate::save::named() && crate::tour::requested().is_none();
     if !asked {
         crate::save::seal();
     }
@@ -235,42 +234,26 @@ pub fn run_script(
         crate::save::Opened::New
     };
     let mut installing = None;
-    let mut sim = match waiting {
-        crate::save::Opened::Restored(save) => {
-            let mut resumed = Sim::restored(&save);
-            resumed.say_resumed(crate::save::away_for(&save));
-            resumed
+    // `ORBS_TOUR` names a scene: its world is where the script starts.
+    let toured = match crate::tour::for_dump(wizard.as_deref()) {
+        Ok(toured) => toured,
+        Err(why) => {
+            eprintln!("{why}");
+            return;
         }
-        crate::save::Opened::Unreadable => {
-            // Baseline: all 138 captures read the authored curve, and a default
-            // length would move every one of them the day a tier was retuned.
-            let mut fresh =
-                crate::environment::fresh(seed, false, orbs_sim::content::Length::Baseline);
-            if let Some(name) = wizard {
-                fresh.rename(&name);
-            }
-            fresh.say_save_unreadable();
-            fresh
+    };
+    // A scene's own opening: the orb's menu, or the boot card.
+    let mut waiting_at_threshold = crate::Threshold::chosen(crate::Threshold::Playing).is_waiting();
+    let mut boot_card = requested_stage();
+    let mut sim = if let Some(staged) = toured {
+        installing = staged.install;
+        waiting_at_threshold |= staged.threshold;
+        if staged.boot {
+            boot_card = boot_card.or(Some((Stage::Post, 1.0)));
         }
-        // `ORBS_INSTALL=1`: the practice tower, with the strip over it.
-        crate::save::Opened::New if crate::install::posed() => {
-            let (sandbox, install) = crate::install::pose_for_dump(seed, wizard.as_deref());
-            installing = install;
-            sandbox
-        }
-        crate::save::Opened::New => {
-            // Baseline: all 138 captures read the authored curve, and a default
-            // length would move every one of them the day a tier was retuned.
-            let mut fresh =
-                crate::environment::fresh(seed, false, orbs_sim::content::Length::Baseline);
-            // Only a *new* world takes its wizard from the environment: a save
-            // carries one, and `session::Wizard` is explicit that a save
-            // outranks the machine.
-            if let Some(name) = wizard {
-                fresh.rename(&name);
-            }
-            fresh
-        }
+        staged.sim
+    } else {
+        raised(waiting, seed, wizard, &mut installing)
     };
     // Authored content, if `ORBS_CONTENT` names a directory (rule 6), so a
     // writer sees their edit — and a malformed file says so, since a dump has
@@ -341,7 +324,7 @@ pub fn run_script(
     // launch and the window will not composite in a detached shell, so without
     // this the sequence could only be checked by a person sitting in front of it
     // — which is exactly the position `ORBS_DUMP` exists to get out of.
-    if let Some((stage, progress)) = requested_stage() {
+    if let Some((stage, progress)) = boot_card {
         super::prompt::paint_booting(&mut frame, stage, progress, engine);
         print(&frame);
         return;
@@ -369,7 +352,12 @@ pub fn run_script(
         // ...and the same for a `menu`. Taken here so one in `ORBS_DUMP` and one
         // in `ORBS_THEN` both reach it.
         let mut opened_manual = false;
-        let mut menuing = menued(&mut sim, &settings, &mut opened_manual);
+        let mut menuing = menued(
+            &mut sim,
+            &settings,
+            waiting_at_threshold,
+            &mut opened_manual,
+        );
         // Commands to run *after* the editing session. A `:w` queues its write
         // for the next tick, so a `peruse` in `ORBS_DUMP` runs before the spell
         // exists and offers the other readables — which looks like a bug. The
@@ -383,7 +371,14 @@ pub fn run_script(
             editing = editing.or_else(|| open(&mut sim));
             weaving = weaving.or_else(|| woven(&mut sim));
             walking |= walked(&mut sim);
-            menuing = menuing.or_else(|| menued(&mut sim, &settings, &mut opened_manual));
+            menuing = menuing.or_else(|| {
+                menued(
+                    &mut sim,
+                    &settings,
+                    waiting_at_threshold,
+                    &mut opened_manual,
+                )
+            });
         }
         // A maze can close under the walker; both frontends then give the
         // keyboard back.
@@ -497,6 +492,53 @@ pub fn run_script(
     print(&frame);
 }
 
+/// The world a dump starts from when no scene is named: the save, or a fresh
+/// tower, or the practice one.
+fn raised(
+    waiting: crate::save::Opened,
+    seed: u64,
+    wizard: Option<String>,
+    installing: &mut Option<crate::install::Install>,
+) -> Sim {
+    match waiting {
+        crate::save::Opened::Restored(save) => {
+            let mut resumed = Sim::restored(&save);
+            resumed.say_resumed(crate::save::away_for(&save));
+            resumed
+        }
+        crate::save::Opened::Unreadable => {
+            // Baseline: all 138 captures read the authored curve, and a default
+            // length would move every one of them the day a tier was retuned.
+            let mut fresh =
+                crate::environment::fresh(seed, false, orbs_sim::content::Length::Baseline);
+            if let Some(name) = wizard {
+                fresh.rename(&name);
+            }
+            fresh.say_save_unreadable();
+            fresh
+        }
+        // `ORBS_INSTALL=1`: the practice tower, with the strip over it.
+        crate::save::Opened::New if crate::install::posed() => {
+            let (sandbox, install) = crate::install::pose_for_dump(seed, wizard.as_deref());
+            *installing = install;
+            sandbox
+        }
+        crate::save::Opened::New => {
+            // Baseline: all 138 captures read the authored curve, and a default
+            // length would move every one of them the day a tier was retuned.
+            let mut fresh =
+                crate::environment::fresh(seed, false, orbs_sim::content::Length::Baseline);
+            // Only a *new* world takes its wizard from the environment: a save
+            // carries one, and `session::Wizard` is explicit that a save
+            // outranks the machine.
+            if let Some(name) = wizard {
+                fresh.rename(&name);
+            }
+            fresh
+        }
+    }
+}
+
 /// A wash's colour, as a writer would name it.
 ///
 /// Two names joined for the flask's mixing band, which is two materials.
@@ -509,10 +551,23 @@ fn label(wash: orbs_render::Wash) -> String {
 
 /// The frame, then what it says, then what it is tinted.
 fn print(frame: &Frame) {
-    println!("{}", frame.to_text());
-    println!("-- linearised (DESIGN.md §14) --");
+    print!("{}", describe(frame));
+}
+
+/// A frame as a dump prints it: the cells, what it says, what it is tinted,
+/// which words are lit and what did not fit. What a tour's screenshot keeps
+/// beside its picture.
+#[must_use]
+pub fn describe(frame: &Frame) -> String {
+    use std::fmt::Write as _;
+
+    // `writeln!` into a `String` cannot fail.
+    let mut text = String::new();
+    let _ = writeln!(text, "{}", frame.to_text());
+    let _ = writeln!(text, "-- linearised (DESIGN.md §14) --");
     for utterance in frame.speech().utterances() {
-        println!(
+        let _ = writeln!(
+            text,
             "  {:<10} {}",
             format!("{:?}", utterance.kind),
             utterance.text
@@ -522,9 +577,10 @@ fn print(frame: &Frame) {
     // A tint is colour the glyphs above cannot show. Printed only when there
     // are some.
     if !frame.tints().is_empty() {
-        println!("-- tinted regions (DESIGN.md §19) --");
+        let _ = writeln!(text, "-- tinted regions (DESIGN.md §19) --");
         for (area, wash) in frame.tints() {
-            println!(
+            let _ = writeln!(
+                text,
                 "  {:<8} {}×{} at {},{}",
                 label(*wash),
                 area.cols,
@@ -539,15 +595,30 @@ fn print(frame: &Frame) {
     // gate the Bevy build has. In reading order, so a misclassified word
     // shows beside its neighbours.
     if !frame.syntax().is_empty() {
-        println!("-- lit runs (DESIGN.md §19) --");
+        let _ = writeln!(text, "-- lit runs (DESIGN.md §19) --");
         for (area, kind) in frame.syntax() {
             let word: String = (area.col..area.right())
                 .filter_map(|col| frame.cell(orbs_render::Pos::new(col, area.row)))
                 .map(|cell| cell.glyph)
                 .collect();
-            println!("  {:<8} {word:?} at {},{}", part(*kind), area.col, area.row);
+            let _ = writeln!(
+                text,
+                "  {:<8} {word:?} at {},{}",
+                part(*kind),
+                area.col,
+                area.row
+            );
         }
     }
+
+    // What a reader hears whole and the screen cut short.
+    if !frame.clipped().is_empty() {
+        let _ = writeln!(text, "-- clipped (DESIGN.md §19) --");
+        for clip in frame.clipped() {
+            let _ = writeln!(text, "  {:?} at {},{}", clip.text, clip.at.col, clip.at.row);
+        }
+    }
+    text
 }
 
 /// A part of speech, as the dump names it.
@@ -780,90 +851,31 @@ fn scrolled(sim: &mut orbs_sim::Sim) -> super::scrollback::Scroll {
 
 /// Submit every `;`-separated command in `script`, stepping between them.
 ///
-/// One loop for before and after an editing session. While `installing`, a
-/// line goes through the installation, as in both frontends.
+/// One loop for before and after an editing session, and the tour's.
 fn drive(sim: &mut Sim, installing: &mut Option<crate::install::Install>, script: &str) {
     // Read once, for the whole script. `ORBS_AUGURY` is off unless asked for,
     // so an older dump drives as it always did, and one with `stub` set reaches
     // a divined line — the only way `dumps.sh` sees that surface at all.
     let augury = super::environment::augury();
-    for line in script
-        .split(SEPARATOR)
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-    {
-        if installing.is_some() {
-            crate::install::drive_dump(sim, installing, line, augury.as_deref());
-            continue;
-        }
-        sim.submit_with(line, augury.as_deref());
-        sim.step();
-    }
+    super::script::drive(sim, installing, script, augury.as_deref());
 }
 
 /// The editor a pending `scribe` asked for, with nothing typed into it.
 ///
-/// `editing::open_requested`'s two lines; apart from [`opened`], since a later
-/// `scribe` opens a buffer rather than replaying `ORBS_EDIT`.
+/// Apart from [`opened`], since a later `scribe` opens a buffer rather than
+/// replaying `ORBS_EDIT`.
 fn open(sim: &mut orbs_sim::Sim) -> Option<super::Editor> {
-    let request = sim.opening()?;
-    Some(super::Editor::open(
-        &request.name,
-        &request.domain,
-        &request.lines,
-    ))
+    super::script::open(sim)
 }
 
 /// The editor, if a `scribe` in this dump opened one, with `ORBS_EDIT` typed in.
-///
-/// The keystrokes replay through the [`Editor`](super::Editor) methods the key
-/// handler calls, every character through `insert`, so dump and game agree.
-/// The editor's state says what a segment is. A save writes for real.
 fn opened(sim: &mut orbs_sim::Sim) -> Option<super::Editor> {
-    let mut editor = open(sim)?;
-
+    let editor = open(sim)?;
     let Ok(script) = std::env::var(EDIT) else {
         return Some(editor);
     };
-    // `\n` as two characters, because a shell word carries it that way.
-    let mut wrote_a_line = false;
-    for segment in script.replace("\\n", "\n").split('\n') {
-        // The one token a keyboard has and a shell word does not.
-        if segment.trim() == "<esc>" {
-            editor.escape();
-            continue;
-        }
-
-        // In the buffer, a break goes **between** lines rather than after each
-        // one: a trailing newline would put an empty line at the end of every
-        // spell the dump writes, and the log would report one line more than was
-        // typed.
-        if editor.mode() == super::EditorMode::Editing && wrote_a_line {
-            editor.enter();
-        }
-        for character in segment.chars() {
-            editor.type_text(&character.to_string());
-        }
-
-        if editor.mode() == super::EditorMode::Editing {
-            wrote_a_line = true;
-            continue;
-        }
-        // Command state: `Enter` runs the word.
-        match editor.enter() {
-            Some(super::EditorOutcome::Save) => {
-                wrote(sim, &editor);
-                editor.saved();
-            }
-            Some(super::EditorOutcome::SaveAndClose) => {
-                wrote(sim, &editor);
-                sim.step();
-                return None;
-            }
-            None => {}
-        }
-    }
-    Some(editor)
+    let scrivener = super::environment::scrivener();
+    super::script::type_into(sim, editor, &script, scrivener.as_deref())
 }
 
 /// The arrow keys a `wander` in the dump asked for, with `ORBS_WALK` played
@@ -893,16 +905,6 @@ fn walked(sim: &mut orbs_sim::Sim) -> bool {
     true
 }
 
-/// Save the buffer, through whatever scrivener the environment named.
-///
-/// One place for `w` and `wq`, so the spell never depends on how it closed.
-fn wrote(sim: &mut orbs_sim::Sim, editor: &super::Editor) {
-    match super::environment::scrivener() {
-        Some(reader) => sim.write_spell_reading(editor.name(), editor.lines(), reader.as_ref()),
-        None => sim.write_spell(editor.name(), editor.lines()),
-    }
-}
-
 /// The orb's menu, if a `quit` in the script opened it, with [`MENU`] typed in.
 ///
 /// `sim.menuing()` takes the handshake, so it fires once per `menu`, as in the
@@ -910,12 +912,13 @@ fn wrote(sim: &mut orbs_sim::Sim, editor: &super::Editor) {
 fn menued(
     sim: &mut orbs_sim::Sim,
     settings: &[crate::settings::Row],
+    waiting: bool,
     opened: &mut bool,
 ) -> Option<super::Menu> {
-    // `ORBS_THRESHOLD=1` opens it with no word, in the threshold's stance — no
-    // `resume`, and `<esc>` does not close it.
-    let stance = crate::Threshold::chosen(crate::Threshold::Playing);
-    let stance = if stance.is_waiting() {
+    // At the threshold (`ORBS_THRESHOLD=1`, or a threshold scene) it opens with
+    // no word, in the threshold's stance — no `resume`, and `<esc>` does not
+    // close it.
+    let stance = if waiting {
         crate::Stance::Threshold
     } else {
         crate::Stance::InTower

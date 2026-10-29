@@ -404,6 +404,7 @@ fn room(id: &str, count: u32, spelled: u32) -> Panel {
     Panel {
         ledger: Some(orbs_sim::tower::LedgerRow {
             id: id.to_owned(),
+            key: "potion".to_owned(),
             domain: Some("laboratory".to_owned()),
             count,
             by_spell: spelled,
@@ -447,6 +448,7 @@ fn reaching_a_station_does_not_roll_the_road_back() {
         walk: orbs_sim::Walk::Next,
         done,
         needed: 10,
+        key: "potion".to_owned(),
         opens: Vec::new(),
     };
     let road = |stop| Panel {

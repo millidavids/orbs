@@ -253,15 +253,32 @@ fn a_half_written_binding_refuses_the_line_rather_than_guessing() {
 fn a_spell_line_whose_verb_takes_nothing_says_so_rather_than_naming_a_referent() {
     // The prompt names the verb and the words it could not use. A spell used to
     // answer §8's *Referent missing*, which is the one thing not wrong with the
-    // line: `status report` hands a verb words it has no slot for.
+    // line: `weave report` hands a verb words it has no slot for.
+    let sim = Sim::new(3);
+    let readings = sim.read_spell("archive", &["weave report".to_owned()]);
+    let fault = readings[0]
+        .fault
+        .as_ref()
+        .expect("`weave report` was read as a command");
+    assert_eq!(fault.key, "spell_takes_nothing");
+    assert_eq!(fault.detail.as_deref(), Some("report"));
+}
+
+#[test]
+fn a_spell_line_handing_status_a_word_it_does_not_know_says_what_it_takes() {
+    // `status` takes one closed word, so `status report` is refused as a verb
+    // taking nothing is, and says the word it does take.
     let sim = Sim::new(3);
     let readings = sim.read_spell("archive", &["status report".to_owned()]);
     let fault = readings[0]
         .fault
         .as_ref()
         .expect("`status report` was read as a command");
-    assert_eq!(fault.key, "spell_takes_nothing");
+    assert_eq!(fault.key, "spell_takes_only");
     assert_eq!(fault.detail.as_deref(), Some("report"));
+    // ...and `status rates` is a command.
+    let readings = sim.read_spell("archive", &["status rates".to_owned()]);
+    assert!(readings[0].fault.is_none(), "{:?}", readings[0].fault);
 }
 
 #[test]
