@@ -37,7 +37,8 @@ Progression, `v0.11.x` is Renown. Nothing below is edited again.
 **Every pass was done highest-first**, and there is no fifth. Phase numbers
 survive below as names, not as an order.
 
-Last updated: 2026-10-28 · `0.23`, *the tour*, closed at `0.23.4`, after `0.22`,
+Last updated: 2026-10-29 · `v0.23.4` released, carrying `0.21`–`0.23`; `0.23`,
+*the tour*, closed at `0.23.4`, after `0.22`,
 *every instrument has a tempo*, at `0.22.5`.
 
 ---
@@ -50,13 +51,13 @@ not consecutive.
 
 ### Done
 
-| | Shipped at | |
+| | Closed at | |
 |---|---|---|
 | Phase 0. Vertical slice | — | ✅ numeric gate **deferred** |
 | Phase 0.5. Interlude | — | ✅ every box ticked · settings moved to *Ship* |
 | Phase 1. Core loop | — | ✅ testers clause moved to *Breadth* |
 | **Phase 2. Scrying** `lens/` | — | ✅ every box ticked |
-| **Phase 3. Spellcraft** `grimoire/` | `0.3.35` | ✅ exit met · **three boxes left**, open below |
+| **Phase 3. Spellcraft** `grimoire/` | `0.3.35` | ✅ exit met · **four boxes left**, open below |
 | **Phase 4. Defense** `sanctum/` | `0.4.2` | ✅ swapped with Enchanting (§19) |
 | **Phase 5. Summoning** `menagerie/` | — | ✅ |
 | Phase 8. Siege | `0.8.7` | ✅ three items deferred, named in the section |
@@ -83,8 +84,8 @@ not consecutive.
 
 | | Months | Words | |
 |---|---|---|---|
-| [**The tower as one machine**](#the-tower-as-one-machine) — `0.17` | 2 | ~3k | the dependency web, and two defects it cannot open on top of (§19) — the first fixed at `0.17.0` |
-| [Spellcraft's three](#phase-3--spellcraft) | — | ~1k | the terse register, a typed action at execution, hidden-directory authoring |
+| [**The tower as one machine**](#the-tower-as-one-machine) — `0.17` | 2 | ~3k | the dependency web; both defects fixed at `0.17.0`–`0.17.1`, the bottleneck seen at `0.21` · paused, resumes under the minor in hand (§19) |
+| [Spellcraft's four](#phase-3--spellcraft) | — | ~1k | the terse register, a typed action at execution, `F5` over the modal surfaces, hidden-directory authoring |
 | [Enchanting's two](#phase-9--enchanting) | — | ~1k | the shared-engine extraction, split into a refactor and a behaviour box |
 | [Breadth](#breadth) | 2 | ~4k | all seven domains, research, full drift, offline progression |
 | [Remote hosts](#remote-hosts) | 3 | ~12k | `connect`, infiltration, trace |
@@ -93,7 +94,7 @@ not consecutive.
 | [Ship](#ship) | 3 | ~5k | settings, accessibility, store, launch |
 | [**Standing**](#standing--work-that-rides-with-the-content) | — | — | ♾ never closes, and blocks nothing |
 
-**~16 months of open work**, against a whole-plan estimate that reached 41 months
+**~15 months of open work**, against a whole-plan estimate that reached 45 months
 on a 24-month target; the [cut line](#cut-line--decided-in-advance) below says
 how the gap closes. §16 rates schedule overrun **Critical**, so the total is
 carried rather than dropped with the ordering.
@@ -1111,9 +1112,9 @@ brewing loop (§19); §8.1's cooldown still prices repeated looking.
 > **Where this stands.** The save format is closed (three boxes), and the
 > language overhaul closed at `0.3.26` (seven boxes). **Spellcraft's exit is
 > met.** Left, deliberately: the terse register (nothing needs it), the typed
-> action at execution (an argument cannot be typed at cast, §19), the naming
-> pass and hidden-directory authoring. `0.3.21`–`0.3.22` were Phase 2 and
-> Standing work rebased in.
+> action at execution (an argument cannot be typed at cast, §19), the `F5`
+> mirror over the modal surfaces, and hidden-directory authoring.
+> `0.3.21`–`0.3.22` were Phase 2 and Standing work rebased in.
 
 **Exit:** a spell factors into named parts and still reads as one file.
 
@@ -3289,7 +3290,7 @@ ticked at `0.22.5`.**
       muster; haul wellspring barrier" cargo run -p orbs` — the `py` column's
       top `▓▓`; at phase `0` it is `██`
 - [x] **The lectern** (`0.22.4`) — the scroll so far, its three seams open `▓`
-      and knitting from the base one per sixteen ticks; a finished scroll
+      and knitting from the base one per eighteen ticks; a finished scroll
       stands whole, where it drew nothing
       **See it:** `ORBS_BOOT=0 ORBS_FIRE_PHASE=2 ORBS_DUMP="debug_spawn fragment
       4 lectern; attend archive; wield lectern; meditate 6" cargo run -p orbs`
@@ -3321,8 +3322,9 @@ instrument: the setups use the debug words.
 - [x] **The catalogue, staged headless** (`0.23.0`) — `orbs_shell::tour`: the
       scenes, `stage`, the `expect` check; `drive` and the editor replay moved
       from `dump.rs` to `script.rs`, one copy for both
-      **See it:** `ORBS_TOUR=list cargo run -p orbs` — twelve scenes;
-      `ORBS_TOUR=forge.lattice ORBS_DUMP=1 cargo run -p orbs` — the forge with
+      **See it:** `ORBS_TOUR=list cargo run -p orbs` — one line a scene, 87
+      at `0.23.4`; `ORBS_TOUR=forge.lattice ORBS_DUMP=1 cargo run -p orbs` —
+      the forge with
       the lattice half snapped; `scripts/dumps.sh` before and after, `diff -r`
       empty
 - [x] **One scene in the window, and its screenshots** (`0.23.1`) — the steps
@@ -3342,8 +3344,8 @@ instrument: the setups use the debug words.
 - [x] **The boot card and the threshold as scenes** (`0.23.3`) — the card
       replayed mid-session, a blank frame's mesh, the threshold reopened; the
       orb's menu, manual, installation, wake, `quit` and a resumed tower
-      **See it:** `scripts/tour.sh shots <dir> boot,orb` — 33 shots, none
-      `BLANK`, the card's letters arriving mid-session, and `stderr.log` holds
+      **See it:** `scripts/tour.sh shots <dir> boot,orb` — every shot with its
+      `.txt`, none `BLANK`, the card's letters arriving mid-session, and `stderr.log` holds
       nothing but the driver's notice. `scripts/tour.sh boot.card` to watch it
 - [x] **The whole catalogue** (`0.23.4`) — every room, puzzle, crossing,
       surface and effect, and the tests that hold it whole
@@ -3897,7 +3899,8 @@ under known risk.
       triad still reads as three things, and greyscale mode has no hue anywhere
 - [ ] Accessibility pass (see DESIGN.md §14)
       **See it:** play a full session with the CRT off, at every toggle
-- [ ] Screen-reader siege mode (ticks advance on player input)
+- [ ] Screen-reader siege mode — a siege waits for every player since `0.17.0`;
+      what is left is reading it by ear
       **See it:** survive a siege with the screen off, by ear
 - [x] **Sticky skip and persisted CRT-off** — **moved here from Phase 0.5**,
       where it was the one open item and never belonged: §4 asks for skip to be
@@ -4003,6 +4006,9 @@ content item, never all of it true — move it here.
       a room produces; a *balance* says whether the room downstream is starving.
       §19's exit for Phase 12 — one good, two consumers, three answers — cannot be
       read off an experience rate at all.
+      ✅ **A room's rate and wait in `--why`** (`0.21.0`) — `status rates`' line
+      for each room that made something or is held. It counts runs, not goods:
+      the goods column and the dry consumer are still open.
       **See it:** `cargo run -p orbs-balance -- sweep --why` with a goods column
       beside the experience one, and a consumer that runs dry named in it
 
@@ -4022,7 +4028,7 @@ content item, never all of it true — move it here.
       each time a screen is built.
 
       **The dividend is that a screen can be driven rather than described.**
-      `ORBS_DUMP` is a still photograph and now needs eighteen environment
+      `ORBS_DUMP` is a still photograph and now needs dozens of environment
       variables to pose; a terminal build is the running game under `tmux
       send-keys`, which is a test harness for everything that moves.
 
@@ -4073,6 +4079,9 @@ content item, never all of it true — move it here.
       sheet vanishing at the authoring floor, and three keyboard-parity gaps
       whose comments all claimed parity. §19 records the set.
 
+      Still owed: `0.21`–`0.22` have no played scenario — `status rates`, the
+      rail's wait, the forecasts, the news, the five figures.
+
       What is left is what accretes: every screen built after this either goes
       through the Frame or quietly does not, and this is the only thing that can
       tell the difference.
@@ -4094,7 +4103,8 @@ Drop in this order under schedule pressure:
 2. OS-window pane detaching (already deferred)
 3. Ship-quality `orbs-tui` (boundary and dev-tool build kept regardless)
 4. Remote hosts → read-only scrying feeds
-5. Enchanting, then Summoning (extraction task cut with them)
+5. ~~Enchanting, then Summoning (extraction task cut with them)~~ Both built;
+   only Enchanting's open shared-engine extraction is left to cut
 6. Screen-reader support slips further post-launch (architecture retained)
 7. Multiplexing capped at two panes
 

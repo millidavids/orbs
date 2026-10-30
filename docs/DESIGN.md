@@ -76,8 +76,8 @@ Rules:
   and §9 mandates a permanent input line, so a missing prompt cannot be a tell
   without breaking a layout invariant. Both signals are retired.
 
-- **Routine completions route to their own pane; the main line is reserved for
-  eldritch.** This is what keeps the register legible now that async output is
+- **A spell's routine completions go to its room's log, not the transcript**
+  (§8). This is what keeps the register legible now that async output is
   ordinary.
 
 - **Script listings, schedule listings, and log output are corruption-exempt
@@ -108,8 +108,8 @@ not a hue slider.
   and a reason not to open on it.
 - *(Bevy frontend only — the terminal frontend inherits the user's terminal theme
   via indexed ANSI, §13.)*
-- **Amber** — warm, classic, second default.
 - **Green** — canonical terminal.
+- **Muted violet**, the original default, and **monochrome**.
 - All cosmetic; none unlockable (art direction should not be gated behind the
   economy).
 
@@ -137,8 +137,13 @@ each theme defines its own accent triad so contrast holds against its base.
 
 Ported from `court_wizard`'s `crt_effect.wgsl`: barrel distortion, scanlines, RGB
 subpixel grid, vignette, chromatic aberration, flicker, rounded corners, phosphor
-glow, desaturation, screen flash, viewport letterboxing. Effects wire to game
-state — vignette pulses as threat rises, flicker on strain, flash on breach.
+glow, desaturation, viewport letterboxing. The port's screen flash is deleted:
+nothing in this game flashes. The glass answers the tower in levels that ease and
+never step — the corners draw in as a siege turns against the garrison, and
+colour drains while a spell's fault is latched — under the `edge` setting (§19,
+*The glass answers the tower*). Under the tube, an afterglow keeps a changed cell
+for about a tenth of a second; it rides `glow`, and is off with motion still or
+the tube off (§19, *Afterglow*).
 
 **A Phase 0 task with real cost — 2,638 lines of surrounding Rust across 15 files
 plus a 242-line shader** (of which ~530 lines are the separately-credited
@@ -153,7 +158,7 @@ accessibility pipeline):
 - **The Phase 0 legibility test must use the genuine worst case**, not a calm
   prompt and not default effect levels: **tier 2 fidelity at the minimum supported
   window**, four panes, a siege in progress, dense log output, **peak-threat CRT
-  state (maximum flicker and vignette pulse), and eldritch presentation active**,
+  state (the `peak` preset: maximum flicker and vignette), and eldritch presentation active**,
   while requiring the tester to spot a single-character sabotage tell. Three
   systems degrade legibility simultaneously at peak threat and the test must
   exercise all three at once.
@@ -211,8 +216,9 @@ variants within the codepage give sabotage tells (§8.1) a place to live.
 
 **The boot sequence is a status report** reflecting real world state — damaged
 systems fail to initialise, undiscovered domains show `not found`, corruption
-appears as failed checks. **Skip is a sticky setting, not a per-launch keypress**,
-and the same content is available any time via `status`.
+appears as failed checks. **Skip is a sticky setting, not a per-launch keypress**.
+The report is printed once, when a tower is made; `status` gives the tower's
+numbers any time (§6.1).
 
 ```
 O.R.B.S. v0.9.3  —  cold start
@@ -565,7 +571,7 @@ question they actually asked:
 
 ```
 orbs:~$ make a potion of clarity
-  → grimoire clarity
+  → recall clarity
 ```
 
 That is deliberately the *tutorial entry point* rather than a refusal. §15 chose
@@ -595,7 +601,7 @@ The Phase 0 vocabulary (16 commands), canonical arcane with synonym registers:
 | `survey [path]` | List what is here | `ls`, `dir` | look, list, "what's here" |
 | `peruse <file>` | Read a file | `cat`, `less` | read, open, show |
 | `sift <pat> <src>` | Filter for matches | `grep`, `find` | search, filter, "look for" |
-| `status` | Tower overview (the boot report) | — | overview, "how are things" |
+| `status [report]` | Tower overview: its numbers, ledger and running spells. `status rates` is each room's rate and wait | — | overview, "how are things" |
 | `recall <topic>` | In-world manual | `man`, `help`, `?` | explain, "how do I", decoct, brew, make |
 | `meditate <n>` | Fast-forward the clock | `sleep` | rest, pass — **not `wait`, see §19** |
 | `verify <target>` | Detect tampering | `check` | inspect, audit |
@@ -618,10 +624,12 @@ still listed `mix` and `distil`, both of which became verbs of their own. Six
 rows in all. `the_slice_table_in_this_document_matches_the_vocabulary` is what
 holds the two together now, and it reads this file.
 
-**The other fourteen verbs are not here on purpose.** This is the *slice*
+**The other twenty-seven verbs are not here on purpose.** This is the *slice*
 vocabulary — §6.1 is a Phase 0 section — and the domains coined the rest:
-`grind`, `digest`, `mix`, `distil`, `kindle`, `stop`, `probe`, `dial`, `follow`,
-`wander`, `weave`, `unfurl`, `quit`, `move`. `Verb::ALL` is the list, and
+`grind`, `digest`, `mix`, `distil`, `kindle`, `probe`, `dial`, `follow`,
+`wander`, `weave`, `unfurl`, `quit`, `menu`, `muster`, `haul`, `summon`, `limn`,
+`queue`, `defend`, `deploy`, `quaff`, `hold`, `pledge`, `imbue`, `snap`,
+`anneal`, `petition`. `Verb::ALL` is the list, and
 `tests/naming.rs` is what keeps it honest.
 
 **Three canonical names changed in the Phase 0 naming pass** (§19) —
@@ -661,8 +669,8 @@ player something false, which is exactly what §6's echo mechanism must not do.
 the design's whole thesis about automation (§8), and a built-in shortcut would
 have been the orb doing for free the thing the player is meant to build.
 
-**Its words stay claimed, pointed at `grimoire`.** `decoct`, `brew`, `make`,
-`mix` and `distil` all resolve to a recipe lookup, so *"make a potion of
+**Its words stay claimed, pointed at `recall`.** `decoct`, `brew` and `make`
+resolve to a recipe lookup, so *"make a potion of
 clarity"* answers with how. This is not courtesy — the Phase 0 naming pass
 established that **a released word does not stop resolving, it resolves to
 whatever it is nearest**, and an unclaimed `decoct` would land on some other
@@ -721,11 +729,14 @@ The directory tree *is* the tower. Navigation is diegetic; paths are places.
 ├── sanctum/         defense — the pylon, and the wards it draws (§19: was `battlements/`)
 ├── laboratory/         brewing — reagents, recipes, potions
 ├── lens/            scrying — feeds, logs, intelligence, observed/
-├── grimoire/        spellcraft — spell composition
 ├── menagerie/       summoning — familiars and constructs
 ├── forge/           enchanting — imbuing items and wards
-└── archive/         research — fragments, translation, discovery
+├── archive/         research — fragments, translation, discovery
+├── arsenal/         goods, reachable from every room
+└── bailey/          the wall, where sieges are fought
 ```
+
+`/grimoire`, the spellbook, is a root beside `/tower` (§19).
 
 Files represent real state. Hidden and locked branches exist and are discoverable
 — where lore and the eldritch register live.
@@ -890,10 +901,15 @@ invisible.
   They contend only for reagents and mana, resolved under the resource-contention
   rule above, with the manual action taking precedence: the player's own hand
   wins over the orb's.
-- **Concentration exhaustion is a visible condition**, surfaced in `status` and in
-  the sidebar — never a quiet log line. At concentration 0 it is not an exhaustion
-  at all but the **starting state**, and `bind` says so in those terms: the orb
-  cannot hold a spell for you yet.
+- **Concentration exhaustion is a visible condition**, surfaced in `status` and on
+  the rail's `held` row — never a quiet log line. At concentration 0 it is not an
+  exhaustion at all but the **starting state**, and `bind` says so in those
+  terms: the orb cannot hold a spell for you yet.
+- **A spell's records go to its room's log, not the transcript.** The transcript
+  draws what the player did; `peruse <room>.log` and `sift` read the rest, each
+  record naming its spell. The tower's news — a station, a room opened, a rank, a
+  level, a ley fork — is drawn whoever earned it, and marks the room's rail box
+  `!` when reached while the player is elsewhere (§19, *The tower speaks up*).
 - **Instruction dispatch is atomic within a tick; saves are permitted only at tick
   boundaries.** Autosave runs every N ticks and on significant events, not every
   second.
@@ -1071,8 +1087,15 @@ concentration level a real unlock rather than a raised ceiling.
 
 - **The main window** holds every open pane, all **fully rendered and fully
   functional**, up to multiplex capacity.
-- **The sidebar** holds every other unlocked pane, minimised to a single line.
-  Awareness only, **not commandable**.
+- **The rail** (§19, *The tower rail replaces the telemetry pane*), sixteen
+  columns down the right, holds a box per room: its name and mark (`‼` a fault,
+  `!` news), a state row with the percentage to its next mastery station, a
+  detail row — a running meter (`al 22t`) or what a stalled room waits on (`at
+  mp`, `fr +tincture`, `bides 12t`), heard as the sentence `status rates` says —
+  and the spell running there. A shut room is a dim row. Its foot reads `tick`,
+  `held`, `scale`, `grid` and `focus`. Awareness only, **not commandable**.
+- **A room's pane** opens with the ley and renown gauges and the room's road, and
+  draws its instruments as a panel beside the transcript (§10.1, §11.5).
 - **One input line, always at the bottom.**
 
 > **Superseded in full by §19's fixed grid.** Everything from here to the end of
@@ -1188,7 +1211,7 @@ counterweight — see below.
 
 ### Progression
 
-The player begins with two domain panes and capacity 1. Multiplexing is researched
+The player begins with one room, the laboratory, and capacity 1. Multiplexing is researched
 and unlocked, raising capacity. Thematically, the wizard splits his mind.
 
 ### Synergy: all pairs, plus exposure
@@ -1261,12 +1284,12 @@ Seven at launch, with tiered depth to survive solo scale.
 | Domain | Path | Minigame form | Depth |
 |---|---|---|---|
 | **Defense** | `sanctum/` | ~~Command pressure at 1 Hz, ward placement~~ → **Tower of Hanoi** (§19) | Bespoke |
-| **Scrying** | `lens/` | Deduction — parse noisy logs to find truth | Bespoke |
+| **Scrying** | `lens/` | ~~Deduction — parse noisy logs to find truth~~ → **Mastermind** on the prism, `dial` and `probe` (§19) | Bespoke |
 | **Spellcraft** | `grimoire/` | Composition — build spells from components | Bespoke |
 | **Brewing** | `laboratory/` | Sequence/recipe puzzle with timing — **see §10.1** | Bespoke |
-| **Archive** | `archive/` | Decipherment; powers all discovery | Bespoke |
+| **Archive** | `archive/` | ~~Decipherment~~ → **a maze**, the stacks, walked by `wander` and `follow`; the lectern copies scrolls. Powers all discovery | Bespoke |
 | **Summoning** | `menagerie/` | ~~Resource allocation → autonomous siege units~~ → ~~a chant, performed or scripted~~ → **a circle of logic gates, chosen** — a beast's temper is a truth table, and three glyphs are limned to answer it (§19) | ~~Derived~~ **Bespoke** |
-| **Enchanting** | `forge/` | Sequence + resource cost → persistent buffs | Derived |
+| **Enchanting** | `forge/` | ~~Sequence + resource cost → persistent buffs~~ → **Lights Out** on the lattice, `snap` and `anneal`, binding charms that lapse (§19) | Derived |
 
 **These forms are a table, not a design.** Phase 0 built brewing and archive as
 commands with a duration and no decision content, which is what the column
@@ -1315,17 +1338,21 @@ requirement. And a second fuel supply contradicts `build.rs`'s own reason for
 endless charcoal: *"a cold athanor with nothing to burn is a laboratory with
 nothing to do."*
 
-**Defense is the one that can still fail the rule.** *Command pressure at 1 Hz*
+~~**Defense is the one that can still fail the rule.** *Command pressure at 1 Hz*
 is a reflex mechanic unless something makes it a decision, and §5.1's answer for
 aberrations — *"identifying any aberration costs exactly one command, never a
 sequence"* — has no ward-placement analogue yet. Finding one is head-of-phase
-work and the phase does not start without it.
+work and the phase does not start without it.~~ *Answered: the Tower of Hanoi,
+which has no clock in it (§19, Phase 4).*
 
 ### 10.1 Brewing — the worked example
 
 **The laboratory holds five instruments, four of which take Focus.** Brewing is
 moving materials through them; each is a place you can `survey`, and the
-laboratory's pane draws them as a permanent instrument panel.
+laboratory's pane draws them as a permanent instrument panel. Every room has
+one, and each bar is a picture of its contents at a tempo of its own: the
+laboratory's four, and the prism, lattice, pylon, lectern and circle while their
+puzzle is open (§19, *Every instrument has a tempo*).
 
 | Stage | Instrument | Needs heat | Focus | Leaves behind |
 |---|---|---|---|---|
@@ -1342,13 +1369,13 @@ athanor is infrastructure rather than a stage, which is what makes the arithmeti
 exact instead of argued.
 
 **The loop, per tool:** clear it (`purge`), load it (`move`), start it (`wield`),
-collect (`siphon`). A running tool is locked — `stop` cancels with a refund, or
+collect (`empty`). A running tool is locked — `stop` cancels with a refund, or
 you wait. That lock is what makes different recipes need different scripts.
 
 **There is no command that brews a potion.** `decoct` is retired (§6.1): the only
 way one line makes a potion is a spell the player wrote, which is §8's whole
 argument for automation and would be given away by any built-in shortcut.
-*"make a potion of clarity"* resolves to `grimoire clarity` — the recipe — which
+*"make a potion of clarity"* resolves to `recall clarity` — the recipe — which
 is the tutorial entry point rather than a refusal.
 
 **The athanor is a shared, depleting resource.** It takes fuel (charcoal), burns
@@ -1518,7 +1545,7 @@ because automation is *non-blocking*.
 
 | Track | Start | Growth |
 |---|---|---|
-| **Domain panes** (breadth) | 2 of 7 | One per activity discovered; all 7 by ~hour 10 |
+| **Domain panes** (breadth) | 1 of 7 — the laboratory | One per activity discovered; all 7 by ~hour 10 |
 | **Focus / multiplex capacity** (depth) | 1 | 2 at ~1.5h, 3 at ~5h, 4 at ~10h |
 | **Concentration** (automation) | **0** — everything by hand | **1** at 16 experience — one clarity, brewed by hand; **~8** by the soft ending, along **the Ley Line** (below) |
 
@@ -1571,7 +1598,7 @@ One completed run earns by the instrument that did it, doubling per tier:
 | `balneum_mariae` | **2** | |
 | `flask_and_rod` | **4** | |
 | `alembic` | **8** | |
-| `research` (archive) | **1** | one of the two opening domains; at zero, half the opening would be dead progression |
+| `stacks`, `lectern` (archive) | **4** each | the flask's tier. Every other room's rate is in `progression.toml`'s `[earns]` |
 
 Binary, so **each tier of tool is worth every use of the one below** — the next
 rung always pays more than grinding the last one forever, without the number
@@ -1585,9 +1612,9 @@ is why the number is derived from the recipe rather than chosen against a clock.
 Only work that *succeeded* earns. A scour, a refused command, a run that matched
 no recipe, and the debug reagent spawn all earn nothing.
 
-**Content gates are future work, not built.** *"Brew this to open that domain"* is
-the shape §11's discovery loop wants, and it is a second axis over experience
-rather than a replacement for it.
+**Content gates are built, as stations that open things** (below). *"Brew this
+to open that domain"* is the shape §11's discovery loop wants, and it is a second
+axis over experience rather than a replacement for it.
 
 ### The two tracks: the Ley Line and Mastery
 
@@ -1630,8 +1657,13 @@ the orb — steps, the satchel, cursors, and `haste_n`, which is struck invarian
 the war lane the wall and the dice.
 
 **Both are authored in `progression.toml`** and are drawn by `weave` (§6.1), which
-is the only *progression* surface; the rail's percentage and the room's road are
-readings of it (rule 2). An **id** is a decision and lives in that file; its
+is where progression is acted on; the ley and renown gauges, the rail's
+percentage and the room's road are readings of it (rule 2). The road and the ley
+gauge forecast the next station (`~3 min`) from the pace of past makings, never
+the clock, so a forecast moves only when something is made; renown, which falls,
+gets none. Reaching a station, opening a room, a rank, a level or a ley fork is
+the tower's news, drawn even when a spell earned it (§8, §19 *The tower speaks
+up*). An **id** is a decision and lives in that file; its
 **sentence** is prose and lives in `prose.toml` keyed by the id. `grimoire rank`
 stays dropped (§19).
 
@@ -1898,16 +1930,20 @@ orbs/
 ├── crates/
 │   ├── orbs-sim/       world model, parser, script engine, aberrations,
 │   │                   threat composition — no rendering deps, headless
-│   ├── orbs-render/    Frame / cell-buffer types, layout, semantic styling.
+│   ├── orbs-render/    Frame / cell-buffer types, the record model, layout,
+│   │                   semantic styling, the instruments' pictures.
 │   │                   Consumed by BOTH frontends. No backend deps
 │   ├── orbs-shell/     The shell BOTH frontends share: painters, surfaces,
-│   │                   the headless dump. orbs-sim + orbs-render + bevy_ecs
-│   ├── orbs/           Bevy frontend: GPU cell renderer, CRT, audio, Steam
+│   │                   the headless dump, the tour's catalogue.
+│   │                   orbs-sim + orbs-render + bevy_ecs
+│   ├── orbs/           Bevy frontend: GPU cell renderer, afterglow, CRT,
+│   │                   sight, audio, the tour
 │   ├── orbs-tui/       Terminal frontend: crossterm, raw mode, ANSI
 │   ├── orbs-augury/    The trained readers (§6, §19 *the augury*); training
 │   │                   and its GPU stack behind a `train` feature
 │   └── orbs-balance/   CLI harness driving orbs-sim (§11.5 sweeps)
 ├── assets/
+├── scripts/          dumps.sh, tour.sh, play.sh, tui.sh — the See-it instruments
 ├── docs/
 └── .github/workflows/
 ```
@@ -1932,7 +1968,8 @@ build is if the schedule demands it.
 **The abstraction, however, is not optional.** `orbs-render` owns the **`Frame`** —
 a cell buffer with semantic styling (role tags like *danger*, *cost*, *success*,
 *eldritch*, never concrete colours) plus layout. `orbs-sim` produces records;
-`orbs-render` turns records into a Frame; a frontend rasterises the Frame.
+`orbs-shell` paints each screen around them through `orbs-render`, into a Frame;
+a frontend rasterises the Frame.
 
 > **Rule: `orbs-render` decides what appears and where. Frontends decide only how
 > a cell is drawn.** A frontend may add enrichment the other cannot reproduce —
@@ -2036,22 +2073,25 @@ panic = "abort"
 strip = "symbols"
 ```
 
-Dev iteration additionally uses `bevy/dynamic_linking` and a fast linker (lld or
-mold). This is the largest quality-of-life lever available and should be set up in
-Phase 0, not discovered in Phase 12.
+Linux links with mold (`.cargo/config.toml`). `bevy/dynamic_linking` is the
+opt-in `fast-compile` feature, off by default: measured, it saves about a tenth
+of a second (SETUP.md, *Dev iteration speed*).
 
 ### Distribution — not literally one binary
 
 Earlier drafts claimed "a single self-contained binary." **Steam integration makes
 that false**: `libsteam_api.{so,dylib,dll}` ships beside the executable, which is
 why court_wizard carries `.cargo/config.toml` rpath flags (`$ORIGIN` on Linux,
-`@loader_path` on macOS). O.R.B.S. inherits both the dependency and the flags.
+`@loader_path` on macOS). O.R.B.S. takes both with *Ship*; neither is in the
+tree yet.
 
 The honest claim is **one executable plus one Steam shim, with all assets
 embedded** — still far simpler than the engine + extension + pack arrangement that
 ruled Godot out, but not a single file. Assets (the CP437 bitmap font, shaders,
 content tables) are compiled in, so there is no loose `assets/` directory at
-runtime.
+runtime. **The augury's weights are compiled in too**: one set is kept in
+`orbs-augury/weights/` and `build.rs` copies it into the build (§19, *The
+weights are compiled in*).
 
 ### CI and platforms
 
@@ -2064,7 +2104,11 @@ Mirroring court_wizard's proven shape:
 | `aarch64` + `x86_64-apple-darwin` | `macos-latest` | Universal via `lipo`, signed and notarised with `rcodesign`, release-only |
 
 macOS is built only for releases because signing and notarisation are slow.
-Workflows: `build.yml`, `macos-release.yml`, `release.yml`, `steam-upload.yml`.
+
+**Not yet: the table is the shape *Ship* restores.** Today `dev-release.yml`
+runs the gate on every push to `dev`, and `release.yml`, on a fast-forward to
+`main`, tags and announces when a changelog block opts in. Neither builds
+binaries; the Steam jobs are written and commented out.
 
 ### Audio
 
@@ -2080,16 +2124,17 @@ completion/warning/sabotage give screen-reader players an ambient channel that
 does not compete with speech. This applies to the Bevy build; audio in the
 terminal build is a luxury (§13, frontend table) and is never a schedule item.
 
-Scope: a small library of synthesised or short sampled cues, no music bed at
-launch beyond an optional drone. `bevy_audio` + `vorbis`, already in the feature
-list.
+Scope: a few cues, generated in code and never sampled (§19, *The orb has a
+voice*), no music bed and no drone (*The hum is gone*). `bevy_audio` plays them;
+`vorbis` decodes nothing yet.
 
 ### Other
 
 - **Conventions:** inherit court_wizard's — feature-sliced modules, `plugin.rs`
   for registration only, ~300-line file cap, `Message` not `Event`, mandatory
   `run_if` guards. `clippy.toml` with `type-complexity-threshold = 500`.
-- **Crash handling:** port court_wizard's crash handler.
+- **Crash handling:** owed. court_wizard's handler is not ported; only
+  `orbs-tui` has a panic hook, to restore the terminal.
 - **Structured records everywhere.** Commands emit records; presentation is a view.
   Pipes, `sift`, the eldritch renderer, screen-reader linearisation, and the test
   harness all depend on this.
@@ -2100,7 +2145,7 @@ list.
   use their backend's concurrency (Bevy task pools, `crossterm`'s loop) but never
   to drive the sim. No `tokio`: there is no networking. Long work goes to a worker
   thread, not an async runtime.
-- **Determinism is architected, not assumed.** Two rules binding from Phase 0,
+- **Determinism is architected, not assumed.** Three rules binding from Phase 0,
   because §5 requires offline simulation to match online exactly and §6 requires
   every parse to be reproducible:
   1. **Seeded RNG with per-subsystem streams**, so adding an aberration roll
@@ -2116,14 +2161,22 @@ list.
      count, parallelism buys nothing and costs the property everything else rests
      on. If the live game and the CLI harness diverged, we would not find out
      until Phase 12.
-- **Balance harness (Phase 1):** an `orbs-sim` CLI running a scripted synthetic
-  player for N simulated hours, dumping §11.5's curves to CSV. Converts balance
+- **Balance harness (Phase 1):** `orbs-balance`, a CLI over `orbs-sim`, running
+  a scripted synthetic player for N simulated hours, dumping §11.5's curves to
+  CSV. Converts balance
   from vibes into sweeps.
 - **Parser instrumentation (Phase 0):** full input, resolution, and candidate-score
   capture with export. Required by the Phase 0 gate.
-- **Rendering:** cell-grid text renderer (glyph atlas + instanced quads) with
-  integer fidelity tiers (§4, §9), CRT post-process ported from court_wizard and
-  made cell-size-aware.
+- **Rendering:** the cell grid is one mesh over a glyph atlas, one draw call,
+  the fixed 120×45 picture scaled to the window (§19, *A fixed 4:3 picture*).
+  Three full-screen passes follow, sharing `fullscreen/`: the afterglow, then the
+  CRT tube, ported from court_wizard and made cell-size-aware, then `sight`,
+  which the tube cannot switch off (§14).
+- **Instruments:** `ORBS_DUMP` prints a screen as text with no `App`, driven by
+  `orbs-shell/src/script.rs`; `scripts/dumps.sh` captures every surface;
+  `ORBS_CAPTURE` takes a screenshot; `scripts/tour.sh` plays
+  `orbs-shell/src/tour/scenes.toml` in the window, debug builds only (§19, *The
+  tour*). SEEING-IT.md says how to reach each.
 - **Save format:** plain text/TOML — on-theme and debuggable; invites external
   editing, which is accepted (§15).
 
@@ -2140,7 +2193,8 @@ diagnosis (§5.1), not merely asserted.
 *(Built at `0.17.9`–`0.17.15` — §19, *The orb made yours*: the CRT disableable
 per effect and motion on a switch of its own, high contrast and a heavy stroke,
 echo verbosity, and the health warning. Font size — the 80×30 grid — and
-remapping are still owed.)*
+remapping are still owed. Greyscale is `F8` in both builds, §19 *Greyscale in
+the terminal*.)*
 
 **Post-launch: first-class screen-reader support.** A text-only game is one of very
 few genres that can be natively blind-accessible — a real differentiator, a press
@@ -2158,19 +2212,22 @@ the terminal build, whichever the schedule reaches first.
 progress bars; eldritch messages logged and carrying authored linear variants;
 echo tagged as metadata; sabotage tells command-detectable, not merely visual.
 
+**Nothing flashes.** No cell of an instrument's picture changes more than once a
+second, a third of the photosensitive limit, and `figure/tests.rs` measures it.
+The afterglow is off with motion still, the tube off or `glow` off. Text cut at
+its pane's edge is still heard whole, and the tour's test fails on any cut at
+120×45 or 80×22 (§19, *The tour checks what it shows*).
+
 **Progress announcements: completion only.** At endgame a player may have ~25
 in-flight duration-actions; announcing every progress update would be unusable.
 Screen readers announce **completions only**, and `status` enumerates everything
-in flight on request.
+in flight on request. A wait the rail draws in shorthand is heard as the
+sentence `status rates` says (§19, *The tower speaks up*).
 
-**The real-time siege needs its own accessible mode, decided now.** Text-only
-games are natively blind-accessible when they are *turn-based*. Speech is serial
-and slow; a multiplexed three-pane siege emitting concurrently against a
-wall-clock is not consumable that way. **In screen-reader mode, siege ticks
-advance on player input rather than wall-clock.** The siege becomes turn-based for
-those players — preserving every decision (triage order, diagnosis, repair) while
-removing the one dimension speech cannot serve. Deciding this before the siege is
-built is what makes "designing for it is nearly free" actually true.
+**The siege is turn-based for every player** (§19, *The siege, built*): the
+enemy acts only when a round resolves, never on a tick (*A siege waits for the
+player*, `0.17.0`). The input-paced mode this paragraph once asked for is the
+siege itself; *Ship* still owes playing one by ear.
 
 ## 15. Scope and phasing
 
@@ -2245,7 +2302,7 @@ in the suite would have caught it, and none was ever written that could have.
   hard to convey in a capsule, and a deliberate audience-building play for
   Blackhearth's catalogue. Note the trade honestly: at ~$2.50 net per unit after
   Steam's cut and tax, matching a $14.99 return takes roughly four times the
-  units. Revisit at Phase 13 when content volume is visible.
+  units. Revisit at Phase 14 when content volume is visible.
 - **Positioning: Duskers + Zachtronics.** Lead with the terminal atmosphere —
   Duskers proved players will type commands into the dark and love it — and
   support with automation depth for the Exapunks/Shenzhen I/O audience. The two
@@ -2257,39 +2314,40 @@ in the suite would have caught it, and none was ever written that could have.
 
 | Phase | Goal | Words | Cal. | Exit criterion |
 |---|---|---|---|---|
-| **0. Vertical slice** | Parser + instrumentation, **the prompt — an interactive command line, built before the domains and used to verify them**, **brewing + archive (the two starting domains)**, **`orbs-render` Frame boundary**, **log-poisoning sabotage on brewing logs**, cell-grid renderer + fidelity tiers, worst-case CRT legibility test, structured-record output model, seeded-RNG + `step()` determinism spine, boot, scaffold tutorial | ~3k | 4 mo | Numeric gate below |
-| **1. Core loop** | World clock, script engine + **concentration** + failure taxonomy, remaining sabotage surfaces, 3 domains, minimal apprenticeship, content data format, balance CLI **sweeping §11.5's first-pass numbers**, **scrappy internal `orbs-tui` as a dev tool** | ~15k | 5 mo | A player automates a duty and feels clever; non-terminal testers in the loop |
-| **2. Scrying** | The `lens/` domain: deduction over sources that disagree. **World sabotage surface**, **`orbs-balance` sweeping §11.5's first-pass numbers** | ~6k | 3 mo | A player finds which of two accounts is lying, and a spell repeats it |
-| **3. Spellcraft** | The `grimoire/` domain: a spell factors into named parts, **within one `.spell` file** (§19 — cross-file sharing struck). **The language overhaul that composition needs** — values, variables, lists, `for each`, in-file parts, builtins over the domains. **Naming pass (~35 verbs)**, hidden-directory authoring | ~7k | 5 mo | A spell factors into named parts and still reads as one file |
+| **0. Vertical slice** ✅ | Parser + instrumentation, **the prompt — an interactive command line, built before the domains and used to verify them**, **brewing + archive (the two starting domains)**, **`orbs-render` Frame boundary**, **log-poisoning sabotage on brewing logs**, cell-grid renderer + fidelity tiers, worst-case CRT legibility test, structured-record output model, seeded-RNG + `step()` determinism spine, boot, scaffold tutorial | ~3k | 4 mo | Numeric gate below — *deferred, not passed* |
+| **1. Core loop** ✅ | World clock, script engine + **concentration** + failure taxonomy, remaining sabotage surfaces, 3 domains, minimal apprenticeship, content data format, balance CLI **sweeping §11.5's first-pass numbers**, **scrappy internal `orbs-tui` as a dev tool** | ~15k | 5 mo | A player automates a duty and feels clever; non-terminal testers in the loop |
+| **2. Scrying** ✅ | The `lens/` domain: deduction over sources that disagree. **World sabotage surface**, **`orbs-balance` sweeping §11.5's first-pass numbers** | ~6k | 3 mo | A player finds which of two accounts is lying, and a spell repeats it |
+| **3. Spellcraft** ✅ | The `grimoire/` domain: a spell factors into named parts, **within one `.spell` file** (§19 — cross-file sharing struck). **The language overhaul that composition needs** — values, variables, lists, `for each`, in-file parts, builtins over the domains. **Naming pass (~35 verbs)**, hidden-directory authoring | ~7k | 5 mo | A spell factors into named parts and still reads as one file |
 | **4. Defense** ✅ | The `sanctum/` domain: a course of wards, drawn and assembled. **Reflex-avoidance mechanism decided first** — it is the Tower of Hanoi, which has no clock in it, so the accessible-mode item moved to Phase 8 (§19) | ~5k | 3 mo | A pressure survived by choosing, not by reacting |
 | **5. Summoning** ✅ | The `menagerie/` domain (derived): allocation → a unit with a standing rule. *Built as a chant (`0.5`); rebuilt as a circle of logic gates (`0.15`, §19)* | ~4k | 2 mo | A summoned thing acts without being told to that tick |
-| **9. Enchanting** | The `forge/` domain (derived): a **lattice** — Lights Out on three columns — plus a quintessence cost → a decaying charm on a tool. **Shared-engine extraction**, pulled forward from 12a | ~4k | 2 mo | A buffed instrument is visibly faster and the buff runs out |
-| **10. Progression** | The two tracks re-strung: **the Ley Line** with a choice at each fork, **Mastery** as per-domain lines of deeds (seven, then six at `0.11.3`), and rooms, recipes and charms opening along both. A sealed fresh tower, the rail's percentage, the domain's road, the line authored to the soft ending | ~4k | 2 mo | A fresh tower is a laboratory, and the rest is earned |
-| **11. One machine** | Reagents cross domains, **Focus-slot reservation**, pane addressing, the authored edges between domains | ~3k | 2 mo | The tower runs itself across rooms |
-| **8. Siege** ✅ | Autobattler on the seven dice, adversarial aberrations closing §8.1's four surfaces, escrow economy, one siege type, the cadence. **Pane addressing struck from this row** — it is Phase 11's, and listing it in both is what made it read as a siege prerequisite (§19). Trait composition, the backlog and difficulty tiers are deferred with reasons in ROADMAP | ~15k | 4 mo | Sieges are tense and scripts visibly matter |
-| **12a. Breadth** | Discovery/research, full drift, **offline progression + its unlock**. *(The five domains and the shared-engine extraction moved to the domain phases.)* | ~4k | 2 mo | Discovery closed |
-| **12b. Remote hosts** | The second content type: trees, verbs, infiltration, trace amplification. **`orbs-tui` to ship quality, if the schedule allows** | ~12k | 3 mo | Infiltration loop closed |
-| **12c. Engine upgrade** | Bevy version window — whole-codebase, isolated from new-system work | — | 1 mo | Green on all three platforms |
-| **13. Onboarding + demo** | Polish apprenticeship, progressive reveal, grimoire, soft ending, **demo + capsule + trailer** | ~20k | 4 mo | A non-terminal player reaches hour two unaided |
-| **14. Ship** | Accessibility, screen-reader siege mode, options, Steam (**both launch options**), polish | ~5k | 3 mo | Release |
+| **9. Enchanting** ✅ | The `forge/` domain (derived): a **lattice** — Lights Out on three columns — plus a quintessence cost → a decaying charm on a tool. **Shared-engine extraction**, pulled forward from 13a | ~4k | 2 mo | A buffed instrument is visibly faster and the buff runs out |
+| **10. Progression** ✅ | The two tracks re-strung: **the Ley Line** with a choice at each fork, **Mastery** as per-domain lines of deeds (seven, then six at `0.11.3`), and rooms, recipes and charms opening along both. A sealed fresh tower, the rail's percentage, the domain's road, the line authored to the soft ending | ~4k | 2 mo | A fresh tower is a laboratory, and the rest is earned |
+| **11. Renown** ✅ | The tower's second number: earned by making, lost by fighting badly, spent on a smaller siege, and setting its size (§19, *Renown, the tower's second number*) | — | — | There is a reason to keep making things after the Ley Line stops buying anything |
+| **12. One machine** | Reagents cross domains, **Focus-slot reservation**, pane addressing, the authored edges between domains | ~3k | 2 mo | The tower runs itself across rooms |
+| **8. Siege** ✅ | Autobattler on the seven dice, adversarial aberrations closing §8.1's four surfaces, escrow economy, one siege type, the cadence. **Pane addressing struck from this row** — it is Phase 12's, and listing it in both is what made it read as a siege prerequisite (§19). Trait composition, the backlog and difficulty tiers are deferred with reasons in ROADMAP | ~15k | 4 mo | Sieges are tense and scripts visibly matter |
+| **13a. Breadth** | Discovery/research, full drift, **offline progression + its unlock**. *(The five domains and the shared-engine extraction moved to the domain phases.)* | ~4k | 2 mo | Discovery closed |
+| **13b. Remote hosts** | The second content type: trees, verbs, infiltration, trace amplification. **`orbs-tui` to ship quality, if the schedule allows** | ~12k | 3 mo | Infiltration loop closed |
+| **13c. Engine upgrade** | Bevy version window — whole-codebase, isolated from new-system work. *Bevy 0.20 ran at `0.17.17` (§19); the platforms remain* | — | 1 mo | Green on all three platforms |
+| **14. Onboarding + demo** | Polish apprenticeship, progressive reveal, grimoire, soft ending, **demo + capsule + trailer** | ~20k | 4 mo | A non-terminal player reaches hour two unaided |
+| **15. Ship** | Accessibility, a siege played by ear, options, Steam (**both launch options**), polish | ~5k | 3 mo | Release |
 
-**Total: 43 months of work against a 24-month target**, where it was 28 before
-the domains were given phases of their own and 41 before Spellcraft's language
-overhaul was priced into it. That gap is deliberate and should be
+**Total: 45 months of work against a 24-month target**, where it was 28 before
+the domains were given phases of their own, 41 before Spellcraft's language
+overhaul was priced into it, and 43 before Progression's two months. That gap is deliberate and should be
 read as the buffer being *already spent* — it is the number to attack with the
 cut line, not a scheduling error to hide. §16's "per-phase scope buffers"
 mitigation is only real if the calendar exists to measure against.
 
 **The 13 months are an admission, not an inflation.** Five domains and the
 extraction task were budgeted at 4 months and ~18k words *combined*, filed as one
-line inside a breadth phase; 12a shrinks by exactly that as they leave. Giving
+line inside a breadth phase; 13a shrinks by exactly that as they leave. Giving
 each domain a phase says plainly that the old figure was priced for a table entry
 rather than for five minigames — which is the same correction §10 makes about its
 own table: *"these forms are a table, not a design"*. A 41-month plan that is
 honest is more useful than a 28-month one that was never going to hold, and the
 cut line below is where the difference gets argued.
 
-**Phase 12 is split three ways.** Draft 5 loaded five domains, discovery, full
+**Phase 13 is split three ways.** Draft 5 loaded five domains, discovery, full
 drift, the entire remote-host content type, the engine upgrade, and the extraction
 task into one phase. The engine upgrade in particular must not share a phase with
 new-system work — it touches everything.
@@ -2309,7 +2367,7 @@ instant-startup, trivially scriptable target. It pays for itself in iteration
 speed on the two things Phase 1 is built around, which is why it costs no
 additional calendar.
 
-**Ship-quality `orbs-tui`** sits in Phase 12b and is explicitly cuttable. The Bevy
+**Ship-quality `orbs-tui`** sits in Phase 13b and is explicitly cuttable. The Bevy
 build never waits for it.
 
 **Two things moved into Phase 0.** The naming pass for the slice's 16 commands (now done — §6.1),
@@ -2319,10 +2377,10 @@ sabotage surface (log poisoning — cheapest and most legible), because §16 cla
 Phase 0 de-risks "siege is empty" and it cannot do that with a scrying stub and no
 sabotage at all.
 
-**The demo sits in Phase 13** because its purpose is validating onboarding, and a
+**The demo sits in Phase 14** because its purpose is validating onboarding, and a
 text-game demo is almost entirely apprenticeship and progressive reveal.
 
-**Running total: ~88k words.** If a phase overruns, the vocabulary budget (§11) is
+**Running total: ~107k words**, the column's sum. If a phase overruns, the vocabulary budget (§11) is
 the first lever.
 
 ### Phase 0 gate — numeric, defined now
@@ -2342,6 +2400,9 @@ thrown away afterwards — so a failure is diagnosable as parser-vs-onboarding
 rather than confounded. Numbers set before results exist; a gate authored after
 seeing results is not a gate.
 
+*Not run: deferred to Phase 14, which puts non-terminal players in front of the
+game (ROADMAP, Phase 0).*
+
 **Read the clustering, not the aggregate.** Eight testers over fifteen minutes is a
 small sample with wide confidence intervals around 85%. It is sound for a go/no-go
 on a catastrophic outcome (below 70%), but 84% versus 86% is noise. The artefact
@@ -2357,8 +2418,9 @@ missing synonym, or the scoring function.
    regardless; only the polished, supported frontend is dropped
 4. **Remote hosts** reduced to read-only scrying feeds rather than navigable
    filesystems
-5. Enchanting, then Summoning (derived domains — the extraction task is cut with
-   them)
+5. ~~Enchanting, then Summoning (derived domains — the extraction task is cut with
+   them)~~ Both are built. Only Enchanting's open shared-engine extraction is
+   left to cut
 6. Screen-reader support slips further post-launch (architecture retained)
 7. Multiplexing capped at two panes (may become the default — see §4)
 
@@ -2367,10 +2429,13 @@ siege, onboarding.
 
 #### How a domain phase is cut, now that item 5 is two numbered phases
 
-Item 5 used to name two entries inside a breadth phase. They are **Phases 4 and
-5** now, sitting *ahead* of the never-cut siege, and cutting a numbered
-mid-sequence phase is a different and larger operation — it would re-trigger the
-renumber that this restructure just paid for.
+*Both derived domains are built, Summoning as Phase 5 and Enchanting as Phase 9,
+so item 5 now cuts only the extraction. The rule below stands for any domain
+phase.*
+
+Item 5 used to name two entries inside a breadth phase. Cutting a numbered
+mid-sequence phase is a different and larger operation — it would re-trigger a
+renumber.
 
 So the rule is: **a cut domain phase is emptied, not removed.** Its number stays,
 its heading stays, its items become a one-line record of what was dropped and
@@ -2378,13 +2443,26 @@ why, and nothing after it moves. That keeps the cut cheap, keeps every
 cross-reference valid, and keeps the decision visible in the document rather than
 inferable from a gap in the numbering.
 
-**And the order of the five is itself a hedge.** Scrying and Spellcraft are first
-because they are the two whose absence would be felt everywhere — sabotage stays
-illegible without one, and the language stops growing without the other. The two
-**derived** domains sit at 4 and 5 precisely because they are the cut candidates:
-late enough that cutting them costs the least, early enough that the extraction
-task they carry lands before Phase 11 needs it. If both are cut, the extraction
-moves to 7 and 7 absorbs it.
+### Versions
+
+`0.<feature>.<iteration>` until `1.0`, the release on Steam (§19, *There is no
+fifth renumber*). `0.0`–`0.11` named phases. A tag is a release, opted into by a
+changelog block, so a minor can close untagged and ship inside a later one.
+
+| Minor | Feature | Closed at | Released in |
+|---|---|---|---|
+| `0.12` | The orb's menu | `0.12.7` | `v0.12.7` |
+| `0.13` | The augury | `0.13.19` | `v0.13.17`, `v0.13.19` |
+| `0.14` | The scrivener | `0.14.11` | `v0.14.5`, `v0.14.11` |
+| `0.15` | The circle | `0.15.7` | `v0.15.7` |
+| `0.16` | The threshold | `0.16.13` | `v0.16.13` |
+| `0.17` | The tower as one machine, paused; number go up, the installation and the orb made yours were built inside it | open | `v0.17.0`–`v0.17.18` |
+| `0.18` | Supply | `0.18.7` | `v0.19.13` |
+| `0.19` | The terminal kept true | `0.19.13` | `v0.19.13` |
+| `0.20` | The tower swept | `0.20.22` | `v0.20.22` |
+| `0.21` | The tower speaks up | `0.21.5` | `v0.23.4` |
+| `0.22` | Every instrument has a tempo | `0.22.5` | `v0.23.4` |
+| `0.23` | The tour | `0.23.4` | `v0.23.4` |
 
 ### Naming pass
 
@@ -2402,13 +2480,13 @@ re-audited by hand.
 |---|---|---|
 | Parser feels frustrating rather than magical | **Critical** | Phase 0 gate with recovery metric; instrumentation; forgiving pipe stages |
 | Siege is empty once scripts are good | **Critical** | Aberration system prototyped Phase 0; four-surface sabotage; trait novelty |
-| Onboarding loses non-terminal players | **Critical** | Three layered approaches from Phase 1; continuous external testing; demo in Phase 13 |
+| Onboarding loses non-terminal players | **Critical** | Three layered approaches from Phase 1; continuous external testing; demo in Phase 14 |
 | **Writing volume overruns the schedule** | **Critical** | Composition over authorship; per-phase word budget; vocabulary as first lever. court_wizard's speed came from externalised art — unavailable here |
 | Economy is wrong or untuneable | High | §11.5 settled with first-pass numbers and worked sinks; balance CLI sweeps them in Phase 1; one headline scarcity per phase — Focus in the tower, mana in the siege |
-| Seven domains + remote hosts spreads thin | High | Concrete-first with a budgeted Phase 12 extraction; cut line |
+| Seven domains + remote hosts spreads thin | High | Concrete-first, with the shared-engine extraction pulled forward into Enchanting; cut line |
 | CRT over text is illegible | High | Phase 0 worst-case test at min resolution and max font scale |
 | Sabotage feels unfair rather than solvable | High | Every surface has a structural tell AND a one-command `verify`; log poisoning always leaves a trustworthy source |
-| The pinned Bevy goes stale over two years | Medium | ~4-month cadence means shipping 5–6 versions behind; one deliberate upgrade window in Phase 12, budgeted |
+| The pinned Bevy goes stale over two years | Medium | ~4-month cadence means shipping 5–6 versions behind; one deliberate upgrade window, which ran at `0.17.17` (§19, *Bevy 0.20*) |
 | Second frontend divides effort | Low-Medium | Bevy is the product and never waits. `orbs-render` owns presentation, so the boundary is cheap and reusable. Ship-quality TUI is cut-line item 3 |
 | Solo continuity — illness, burnout, life | Medium | Cut line defined in advance; minimum shippable state named; per-phase scope buffers |
 | Market: text-only is hard to sell | Medium | CRT *motion* is the hook — trailer over capsule; demo as primary conversion tool |
@@ -2422,9 +2500,9 @@ re-audited by hand.
 
 ## 18. Live open questions
 
-**Nothing blocks Phase 0.** The slice vocabulary is named (§6.1), the starting
-domains are settled (brewing + archive), and the fragment trickle has a rate
-(§11.5).
+**Phase 0 is closed**, its gate deferred (§15). The slice vocabulary is named
+(§6.1), the starting domains are settled (brewing + archive), and the fragment
+trickle has a rate (§11.5).
 
 **Blocking Phases 2–7** *(these blocked Phase 1; it closed and they did not, so
 they are re-pointed at the phases that now need them rather than quietly dropped)*
@@ -2446,12 +2524,12 @@ they are re-pointed at the phases that now need them rather than quietly dropped
 5. **Nuisance aberrations are unscheduled in every phase.** §5.1 calls them *"the
    core of manual play"* and Phase 8 lists only the adversarial ones; Phase 0
    shipped log-poisoning drift and nothing else, and `RngStream::Aberration` has
-   never been rolled. **→ Phase 2**, and this is the phase that fixes it: scrying
-   is deduction over things that have gone wrong, and a domain built to read
-   sabotage with nothing generating any is a puzzle with no inputs. Still a gap
-   rather than a deferral — it just now has a phase that cannot ship without it.
+   never been rolled. ~~**→ Phase 2**~~ **→ unscheduled again.** Phase 2 closed
+   on the world surface, drawn from `RngStream::Threat`; `RngStream::Aberration`
+   is still drawn only in its own test.
 
-**Blocking Phase 8**
+**Deferred when Phase 8 closed** (synergies to the tower as one machine; tiers
+wait on trace)
 
 6. The 21-pair synergy template: which mechanical parameters it exposes, and the
    per-pair tuning values.
@@ -2461,7 +2539,7 @@ they are re-pointed at the phases that now need them rather than quietly dropped
    definition or escrow cannot settle.
 8. Difficulty-tier definitions within the progression-gated range.
 
-**Commercial, before Phase 13**
+**Commercial, before Phase 14**
 
 9. Wishlist target, and whether $4 survives contact with actual content volume.
    Note that $4 forfeits discount room (a 50% sale is $2) and may read as a
@@ -2469,6 +2547,39 @@ they are re-pointed at the phases that now need them rather than quietly dropped
    price-shop — Exapunks is $19.99.
 
 ## 19. Decisions log
+
+### A cold hearth names its fire
+
+**Rule: a cold hearth the room waits on says which fire and what to do, as
+every other wait does.** The rail draws `cold` over `at athanor`; `status rates`
+and the reader say *the athanor is cold. kindle it*. Before, the detail row was
+empty and the sentence stopped at *cold*, while *ready. empty it* and *charged.
+wield it* each named the next keystroke. A cold hearth is reported only when
+something wants heat (*The tower speaks up*, *A cold hearth*), so the line is
+never drawn over a resting laboratory. The owner's wording, shipped in `0.23.5`.
+
+### The weights are compiled in
+
+**Rule: one set of the augury's weights is kept in git, and a game carries it
+in its binary.** `build.rs` copies `orbs-augury/weights/*.bin` into the build,
+`include_bytes!` holds them, and `Trained::load` and `Scribe::load` read that
+copy. Before, the weights were gitignored and both loaders read
+`concat!(env!("CARGO_MANIFEST_DIR"), "/weights/reader")` at runtime, a path only
+the machine that built the game has, so a copy anywhere else, or a build from
+CI, ran without a reader and, by *The reader is on by default*'s silence, said
+nothing. Found by the audit after `0.23.4`; not a box, and shipped in `0.23.5`.
+
+| Question | Decision |
+|---|---|
+| What git keeps | One set, `reader.bin` and `scribe.bin`, replaced when a run is chosen. *Supersedes* the `.gitignore`'s *"the trainer is deterministic, so the recipe is what is kept"*: a seeded run on `wgpu` is not bit for bit (`0.14.5`), so the recipe never named the weights a game held. The cost is 4 MB of history per set kept |
+| A retrain | Writes over the kept set, since that directory is the trainer's default `--out`, and shows in `git status` until it is kept or restored. `seeds.sh` writes under `target/` |
+| A tree with no weights | Builds: a missing file is copied as empty, which loads as no reader. `the_build_carries_the_weights_on_disk` fails on it, since a game with no reader says nothing |
+| Rebuilds | `build.rs` watches `weights/`, and the crate until that exists, since cargo reruns a script on every build while a watched path is missing. A retrain rebuilds the crate and relinks the game; before, the next start read the new file |
+| What still reads files | `load_from`, for `seeds.sh` and `measure`, which compare runs nobody has chosen yet |
+| Bytes that do not decode | Burn's byte loader panics where the file loader returned an error. Only weights for another model shape do it, and `weights_on_disk_are_this_vocabularys` fails on them first |
+| The scrivener's identity | Unchanged: FNV-1a over the same bytes, so no saved spell is read again. `the_carried_scrivener_is_named_as_the_one_on_disk` holds it |
+| The instruments | Still off the trained reader: `dumps.sh`, `tour.sh`, the tmux harness and `cargo test`'s `SimPlugin`. *The reader is on by default*, *`interpret` marks what it read*, *One driver, two registers*, *The play harness read a border* and *The tour* gave "gitignored" as part of the reason; what is left of it holds alone: the weights change on every retrain, and a capture or a scenario should not move with them |
+| What it costs | 4 MB of binary |
 
 ### The tour checks what it shows
 
@@ -2482,7 +2593,7 @@ rail and gauge defects were in states no scene set up. A correction inside
 | Question | Decision |
 |---|---|
 | What *shows all it says* means | A painter cuts text at its region's edge and speaks it whole (`Painter::span`), so a cut is exactly what a reader hears and the screen drops. The frame keeps each one, `Frame::clipped`: a span past the edge, a row outside the region, a paragraph out of rows, a border's title. Spaces are no loss |
-| Where it is read | The dump prints `-- clipped --`, so `dumps.sh` and every shot's `.txt` show a cut. The in-App test paints every frame of the catalogue with the window's own `repaint`, which needs no GPU, and fails naming the scene and the line |
+| Where it is read | The dump prints `-- clipped (DESIGN.md §19) --`, so `dumps.sh` and every shot's `.txt` show a cut. The in-App test paints every frame of the catalogue with the window's own `repaint`, which needs no GPU, and fails naming the scene and the line |
 | Which grids | Both, as two tests. *Supersedes "the two grids (the window has one)"* under *Left out* below. At 120×45 alone, a row cut at 80 passes: with the described-row wrap undone, only the 80×22 run fails, naming the guide's rows in `text.unfurl`, `text.tab` and `text.pace` |
 | What it cannot see | Layout that leaves something out for want of room — a `+N`, a share, a title — draws less without cutting. The shots judge that |
 | What it costs | *Supersedes "a fraction of a second"* under *In-App test* below: painting every frame takes the catalogue to about twenty seconds a grid, the two in parallel |
@@ -2494,11 +2605,11 @@ rail and gauge defects were in states no scene set up. A correction inside
 
 A `/code-review max` of the uncommitted `0.21`–`0.23` work, each finding
 checked against the code by a second agent. Corrections inside finished
-items, so no version moves. Where one changes a rule above, it says so.
+items, so no version moves. Where one changes a rule below, it says so.
 
 | Finding | Decision |
 |---|---|
-| A rate jumped tenfold at the 64th making | *Supersedes the full-ring arm* of *`status rates`*. A full ring was read as what it held over the time since its oldest, while a ring short of full counted the watched hour, so the making that filled the ring moved the rate from 201 an hour to 1,828 at one pace. Now one measure: the ring keeps its 64 newest for the pace, and what its cap lets go while still inside the hour is kept as a count a minute (`[progress.throughput].spilled`). The hour is counted whole to the minute, and a stopped room falls to `none` an hour after its last making |
+| A rate jumped tenfold at the 64th making | *Supersedes the full-ring arm* of *What the review of the whole found* (`0.21`). A full ring was read as what it held over the time since its oldest, while a ring short of full counted the watched hour, so the making that filled the ring moved the rate from 201 an hour to 1,828 at one pace. Now one measure: the ring keeps its 64 newest for the pace, and what its cap lets go while still inside the hour is kept as a count a minute (`[progress.throughput].spilled`). The hour is counted whole to the minute, and a stopped room falls to `none` an hour after its last making |
 | The athanor's fuel read as burnt | A fire's meter drains (`Burning::fuel`), so the ticks left are what it shows, not what is left to fill: `Instrument::remaining`, read by `status rates` and by the rail's own meter detail, which had the same inversion (`at 12t` of a fire with 588 to burn, and nothing at all for one just lit). Five captures move by it. A scour on its last tick has its own sentence instead of *with t left* |
 | *Charged. wield it* over a cold hearth | *Supersedes "`Charged` above `Cold`: one keystroke from running"* where the run wants heat and the room's fire is out. The panel marks such an instrument `wants_fire`, read in the same walk that finds its recipe; it ranks as cold and the hearth takes the charged rank, so the room waits on the fire. The same walk now gives a gathering tool its lack, once |
 | `at at` | The athanor's two letters are the detail's preposition. Where the short name would read as one word twice, the detail names the instrument whole: `at athanor` |
@@ -2590,7 +2701,7 @@ and where the built one differs it is superseded.
 | lattice | snapped columns `█` at flame body, unsnapped `░` | one cell in eight lifts to blaze, staggered | 6 |
 | lattice, annealing | the settle's ticks `█` at ember | one in eight lifts to body, staggered | 8 |
 | pylon | the wall `█` in the gauge's hue, at rest too | the top course `█`↔`▓` while a course is up | 9 |
-| lectern | the scroll so far `█`; a ready one whole | three seams `▓` knitting from the base, shared clock | 16 |
+| lectern | the scroll so far `█`; a ready one whole | three seams `▓` knitting from the base, shared clock | 16 — *superseded:* 18, two whole passes a cycle (*What the review of `0.21`–`0.23` found*) |
 | circle | agreeing rows `█` in the gauge's hue | a quarter of the balking rows `░`↔`▒`, in place | 6 |
 
 | Question | Decision |
@@ -2613,7 +2724,7 @@ asked for a stronger look and, above all, progress a player of an incremental
 game can stay engaged by. Two window captures and a dozen dumps showed the gap:
 every surface said *where* the tower stood, none said *how fast*, *what a
 stalled room waits on* or *when*, and what a spell earned never reached the
-screen. Kittens Game's loop (above, *the web's job is bottlenecks*) is *find the
+screen. Kittens Game's loop (below, *the web's job is bottlenecks*) is *find the
 bottleneck, fix it*; the bottleneck was invisible.
 
 | Question | Decision |
@@ -2641,7 +2752,7 @@ slot would swallow, and a `tower::Reading` already taken. Each is answered below
 | `Hourly` | `Unknown` while fewer than two makings and under five minutes watched; `None`; `PerHour`. Not `Rate` — `content::Rate` is a supply's |
 | The pace | From the gaps between remembered makings, never from now, so a forecast drawn from it changes only when something is made (§14: progress is not announced) |
 | Saved | Yes, `[progress.throughput]`, no `FORMAT` bump: absent is a document from before rates, which watches from the tick it loads into. The window is in ticks and none run while the orb is closed (§5), so a saved ring is the honest reading across a quit. Offline accrual, when it lands, has to feed it |
-| The wait | `wait::reported` ranks a room's instruments — a run in hand, then ready, fouled, charged, gathering, cold, burning, banked, empty — exhaustively over `State`. A run outranks a held spell; a held spell outranks an idle instrument, since when automation is stuck *why* is the answer. `Charged` above `Gathering` and `Cold`: one keystroke from running |
+| The wait | `wait::reported` ranks a room's instruments — a run in hand, then ready, fouled, charged, gathering, cold, burning, banked, empty — exhaustively over `State`. A run outranks a held spell; a held spell outranks an idle instrument, since when automation is stuck *why* is the answer. `Charged` above `Gathering` and `Cold`: one keystroke from running. *Superseded:* a cold hearth ranks last, below empty (*A cold hearth*, below), and a charged run wanting heat over a cold fire ranks as cold, the hearth reported in its place (*What the review of `0.21`–`0.23` found*) |
 | What a gathering one lacks | `Recipes::missing`, a `Lack::{Kind, More}`; `gathering` is now `missing.is_some()`, one rule. Both of `gathering`'s arms: a kind not held, or too few of one |
 | A spell's hold | `spell::Hold`, set on all four paths that yield — a busy tool (`Blocked`, kept), `wait for`, an empty `pull`, `bide` — through one `hold` helper, and cleared at the top of each turn. Derived, never saved |
 | `status`'s argument | One optional closed word, `NounKind::Report` and `REPORTS`. Supersedes *`status` takes none* (`0.17.4`). Not `Any`: the plain register's *how are things going* runs past its command, and an open slot would swallow `going` and refuse. `Any` does not accept a report, for `Command`'s reason |
@@ -2654,7 +2765,7 @@ slot would swallow, and a `tower::Reading` already taken. Each is answered below
 | Question | Decision |
 |---|---|
 | What the state row says | The instrument `wait::reported` ranks first, not the first busy one. `brief::busiest` is gone; the rail and `status rates` read `wait_in` over the same instruments, and `the_rail_and_status_rates_read_one_function` holds it |
-| A cold hearth | Ranked last, below empty. Ranked above it, a resting laboratory read `cold` for ever: a cold athanor is a wait only when something wants heat, and then the thing wanting it is what is reported |
+| A cold hearth | Ranked last, below empty. Ranked above it, a resting laboratory read `cold` for ever: a cold athanor is a wait only when something wants heat, and then the thing wanting it is what is reported. *Superseded in review:* the hearth is reported, at the charged run's rank (*What the review of `0.21`–`0.23` found*) |
 | The `%` | Kept on the state row. `wants salt` there would have evicted it (`rail.rs`'s fit), so the specific wait went to the detail row, which is empty exactly when a room is stalled |
 | The detail row | A running meter keeps its own (`al 22t`). Otherwise the wait in twelve cells, as `brief_*` prose: `at mp` for ready, fouled or charged, `fr +tincture` for a lack (the material's last word, `short_material`), `after mp`, `watching`, `pulling`, `bides 12t` for a held spell. A held spell outranks a meter, since it is the room's answer |
 | What a reader hears | The shorthand's sentence — `wait::sentence`, the one `status rates` prints — through `Span::with_spoken`. A running meter is heard as drawn, unchanged |
@@ -2667,7 +2778,7 @@ slot would swallow, and a `tower::Reading` already taken. Each is answered below
 | Question | Decision |
 |---|---|
 | What is forecast | The room's next station, at its deed's pace (`Stop.key`, the tally key the deed counts), and the next Ley station, at the pace experience was earned (`Throughput::earning`). Renown is not: it falls, and a forecast of a falling number is a promise |
-| From what | The gaps between the makings remembered, never now. A forecast drawn from the clock would count down a second at a time on a screen where nothing happened — the exposure §14's *progress is completion only* exists to prevent. `a_forecast_does_not_change_while_nothing_is_made` holds both paces still over six hundred idle ticks |
+| From what | The gaps between the makings remembered, never now. A forecast drawn from the clock would count down a second at a time on a screen where nothing happened — the exposure §14's *progress is completion only* exists to prevent. `the_pace_does_not_move_while_nothing_is_made` holds both paces still over six hundred idle ticks |
 | The words | `forecast.rs`, one place for the road and the gauge: *under a minute*, *~3 min* rounded up, *~5 h* past a hundred minutes. Coarse, as the resume line is: a few makings' average claims no more |
 | Where it goes on the road | A fourth candidate label, tried first: `sentence · count · eta`, then the three that were there. The forecast is the first thing to go |
 | Where it goes on the gauge | After the reading, before a title. It takes only blank space: drawn only if the bar keeps every cell it would have had, and `needs` leaves it out, so the room's column is never dropped for one. `the_ley_forecast_takes_only_blank_space` sweeps forty to a hundred and twenty columns with and without the column |
@@ -2741,7 +2852,7 @@ its box, so no version moves.
 |---|---|
 | The `!` latch read `Cwd`, which a spell's line sets to the spell's room, so a ward, course, charm or beast a bound solver finished never latched. Only a brew landing on the tick did — the one path the tests covered | `Casting` carries the player's own position; `news::latch` reads it under a caller. `a_station_a_bound_spell_reaches_inline_latches_where_the_player_is_not` fails on the old read |
 | A retimed spell's hold was cleared every tick but set only on the ticks sabotage let it run, so the rail flickered between the hold and the tool | Cleared only on a turn the spell takes. `a_retimed_spells_hold_does_not_flicker` fails on the old reset |
-| A full ring pinned the hourly rate at 64: every sweep read *64 an hour* for the lens and the sanctum | A full ring of recent makings is a rate over the time since its oldest, which still falls when making stops. `a_fast_room_is_not_pinned_at_what_the_ring_holds` |
+| A full ring pinned the hourly rate at 64: every sweep read *64 an hour* for the lens and the sanctum | A full ring of recent makings is a rate over the time since its oldest, which still falls when making stops. `a_fast_room_is_not_pinned_at_what_the_ring_holds`. *Superseded by* What the review of `0.21`–`0.23` found: *the ring's newest and the minutes it let go count together over the hour* |
 | Two tests could not fail: one asked a pace of a note it never fired, the other compared *too soon* with *too soon* | A real `bind` note, asked of the saved ring; a measured rate past `SETTLE`, and the saved ring compared across the reload |
 | The trained reader kept `status <any word>` as a reading, which could only be refused, ahead of a better one | A verb with a closed slot is dropped unless the tagged word is one it takes |
 | *Not acted on:* an 8-bit sRGB target stops fading a trail at a code or two above black | Every theme's background sits above it, so it never shows |
@@ -4196,7 +4307,7 @@ still)` is the one combiner, and it is what the shader is handed.
 |---|---|
 | Ceilings, not presets | Per-effect values that *replaced* the preset would be a second expression of the tube, and F3 would cycle one while the page showed the other. A ceiling composes with any state, `peak` included |
 | Toward each effect's own off | `vignette_radius` is `1.0` when off and `0.9` on, so scaling toward zero would *widen* the dark corners. Each field moves toward `CrtSettings::OFF`'s value for it, and `off` and `full` return the ends exactly |
-| No threat modulation claimed | Nothing writes `CrtSettings` from world state yet. The ceilings scale the chosen preset, and say nothing more |
+| No threat modulation claimed | Nothing writes `CrtSettings` from world state yet. The ceilings scale the chosen preset, and say nothing more. *Superseded at `0.21.4`:* `crt::Strain` writes the vignette and the grey from the tower, before `effective`, under `edge` (*The glass answers the tower*) |
 | `curve lines glow flicker mask split edge` | Barrel, scanline, glow, the hum band, grille, aberration, vignette. No two share a letter and none starts with `b`, which `back` takes first. The rounded bezel is not a row: it is the shape of the glass and loses no cell |
 | `off / soft / full` | Three words, like `Levels`' four: a menu with no slider to drag |
 | A word this build does not know | Off, for `motion`'s reason |
@@ -6282,6 +6393,10 @@ asked for a thing that is missing, and silence there looks like it working. An
 unrecognised value now warns too, which it did not need to before: with the
 reader off by default a typo cost you a feature you were already not getting.
 
+> Superseded in part by *The weights are compiled in*: the weights are kept in
+> git and a clone has them. Unset stays silent, now for a build made without
+> them.
+
 **The cost is paid by `scripts/dumps.sh`, and it is a real one.** Its `run`
 helper passes `off` before every block's own arguments, so **the captures no
 longer show the shipping default**. The alternative is worse: weights change on
@@ -7131,6 +7246,10 @@ Still wrong, and recorded rather than chased here:
   spell, are where most of the misses are.
 
 ### A verb that takes nothing says so, rather than running without the word (`0.14.6`)
+
+> **Superseded for `status` at `0.21.0`.** It takes one closed word, `rates`, and
+> refuses any other with `verb_takes_only`. `TakesNothing` stands for every verb
+> that takes nothing.
 
 **`status gibberish` ran `status`, and `undo gibberish` acknowledged** — the word
 thrown away both times. `0.13.18` answered the same defect for a verb with a slot:
@@ -15515,6 +15634,11 @@ second would put ` = ` in it as an utterance.
 
 ### A spell's output goes to the log, not the pane — built
 
+> **Superseded in part by *The tower's news reaches you* (`0.21.3`).** A record
+> flagged as news — a station, a room, a rank, a level, a fork — is drawn
+> whoever caused it. Attribution, `sift`, and the rest of a spell's output
+> staying in the log all stand.
+
 A running spell emits exactly what the same commands typed by hand emit. That is
 right, and it buried the transcript: a `repeat` loop pushes a move, a wait, a
 yield and an empty every few ticks for as long as it runs, so the player's own
@@ -16963,6 +17087,8 @@ of prose rather than a dependency.)*
 The two entries below are kept because the **reasoning** was wrong twice, in
 opposite directions, and that is the part worth not repeating. `CrtSettings`
 keeps its `flash` field: §4 reserves it for *flash on breach*, which is Phase 8.
+*Superseded at `0.21.4`: the field is deleted from `CrtSettings`, the uniform and
+`crt.wgsl` (*The glass answers the tower*).*
 
 #### The flash limit is per window, not per second of effect
 
@@ -17840,7 +17966,7 @@ expected.
 | Dropped | The 16:9 letterbox (the grid fills the window) and the channel-change effect (not in §4's list, and a television retuning is the wrong metaphor for a scrying orb) |
 | Pipeline format | Keyed on the **view's** texture format rather than a default. 0.19 deprecated `TextureFormat::bevy_default` precisely because a view may or may not be HDR, and guessing is a draw-time validation error rather than a compile error |
 | Disableable | `CrtSettings::OFF` is one value and every field reaches zero, per §14. `PEAK_THREAT` — §4's "maximum flicker and vignette pulse" — is reachable on F3, because the legibility test needs the worst case to exist rather than merely be described |
-| Not yet wired | Vignette pulse on threat, flash on breach, desaturation on failure. The uniform carries all three; there is no threat system to drive them |
+| Not yet wired | Vignette pulse on threat, flash on breach, desaturation on failure. The uniform carries all three; there is no threat system to drive them. *Superseded at `0.21.4`:* pressure and a fault drive the vignette and the grey as levels through `crt::Strain`, and `flash` is deleted (*The glass answers the tower*) |
 
 **Two bugs worth recording**, both found by measuring frames rather than by
 reading code:

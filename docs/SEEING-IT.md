@@ -1880,7 +1880,9 @@ ORBS_BOOT=0 ORBS_DUMP="attend laboratory; grind sage; meditate 9; attend archive
 holding salt reads `gathering` / `fr +tincture`; a bound spell waiting reads
 `after mp`, `watching`, `pulling` or `bides 12t` above its `►spell` row. A
 resting laboratory still reads `idle` — a cold hearth is a wait only when
-something wants heat.
+something wants heat. When something does, `digest ground-sage` after
+`debug_spawn ground-sage`, it reads `cold` / `at athanor`, heard as *the
+athanor is cold. kindle it*.
 
 **The forge names its charm** when nothing else is going on, by the word the
 forge itself publishes:
@@ -4901,11 +4903,11 @@ because its whole row is measuring nothing.
 ### The scrivener — a loose line inside a `.spell`
 
 **`ORBS_SCRIVENER` takes the same values as `ORBS_AUGURY` and defaults the same
-way**: unset is the trained spell reader if this checkout has weights, and
+way**: unset is the trained spell reader if this build carries weights, and
 nothing if it does not. `model` says so when there are none; `off` is the game
 with no reader at all; `stub` is `Copyist::worked`, a fixed table — what the
-captures pin, for the reason `dumps.sh` never pins the trained model: weights are
-gitignored and change on every training run.
+captures pin, for the reason `dumps.sh` never pins the trained model: weights
+change on every training run.
 
 ```bash
 # The two views, and the pair is the point — one capture cannot show that a
@@ -4994,18 +4996,17 @@ ORBS_BOOT=0 ORBS_DUMP="attend laboratory; triturate the sage" cargo run -p orbs
 
 ⚠ **`scripts/dumps.sh` runs with `ORBS_AUGURY=off`, so its captures no longer
 show the shipping default.** Its `run` helper supplies `off` before every block's
-own arguments. That is deliberate and it is a real cost: weights are a gitignored
-build artefact that changes on every training run, so a capture made against them
-could not be reproduced on another machine and `diff -r` would report a change
-that means nothing. **The trained reader's behaviour is gated by
+own arguments. That is deliberate and it is a real cost: weights change on every
+training run, so a capture made against them would move with each retrain and
+`diff -r` would report a change that means nothing. **The trained reader's behaviour is gated by
 `orbs-augury --example measure` and the augury tests instead**; `dumps.sh` gates
 the deterministic pipeline and the two readers that need no weights. Four
 captures — `lab_flask`, `augury_off`, `forge_refuse`, and the chant's `chant_refuse` before the circle replaced it — moved
 without that guard, so it is load-bearing rather than tidy.
 
 ```bash
-# ...the trained reader. Needs weights: they are a build artefact, not source.
-cargo run --release -p orbs-augury --example train --features train
+# ...the trained reader, which the game carries (DESIGN.md §19, *The weights are
+# compiled in*).
 ORBS_AUGURY=model ORBS_BOOT=0 \
   ORBS_DUMP="attend laboratory; smash the sage" cargo run -p orbs
 
@@ -5044,11 +5045,10 @@ here, instead of quietly becoming `move gate`.
 cargo test -p orbs-sim --lib content::phrasing -- --nocapture | grep widest
 ```
 
-**`model` is deliberately absent from `scripts/dumps.sh`.** Weights are
-gitignored — 1.4 MB of floats that change on every run — so a capture made with
-them could not be reproduced from a clean checkout, and `diff -r` would report a
-difference that means nothing. The **stub** is what `dumps.sh` pins, for exactly
-that reason.
+**`model` is deliberately absent from `scripts/dumps.sh`.** Weights are 4 MB of
+floats that change on every run, so a capture made with them would move with
+each retrain, and `diff -r` would report a difference that means nothing. The
+**stub** is what `dumps.sh` pins, for exactly that reason.
 
 **Inference runs on the CPU, and that is measured.** One 32-token sentence takes
 **348µs** on `ndarray` against **2.71ms** on `wgpu` — a batch of one is almost
@@ -5064,6 +5064,18 @@ which is why nothing waits behind the POST card:
 ```bash
 # Release is what a player gets; drop --release for what `cargo run -p orbs` builds.
 cargo test --release -p orbs-augury --test loading -- --ignored --nocapture
+```
+
+**The game carries the weights it was built with** and reads no file for them
+(DESIGN.md §19, *The weights are compiled in*). Hide the directory from the
+process and the reader still answers:
+
+```bash
+cargo build -p orbs
+bwrap --dev-bind / / --tmpfs "$PWD/crates/orbs-augury/weights" -- \
+  env ORBS_AUGURY=model ORBS_BOOT=0 \
+  ORBS_DUMP="attend laboratory; smash the sage" target/debug/orbs | grep '≈'
+# ≈ grind sage
 ```
 
 **Whether a retrain helped is measured over seeds, not one run (`0.14.10`).** Any
@@ -5086,7 +5098,10 @@ cat target/seeds/baseline/summary.txt
 A spell-only change reads its command lines through the named label's prompt
 reader of the same seed, because two spell readers compared through two prompt
 readers would be measuring the prompt reader. **To ship a run, copy its `.bin`**
-over `crates/orbs-augury/weights/` — training it again is a new run.
+over `crates/orbs-augury/weights/` and commit it — training it again is a new run.
+That directory holds the one set the game carries, and a plain training run
+writes there too, so a retrain shows in `git status` until it is kept or
+restored.
 
 **A verb that takes nothing says so (`0.14.6`).** `status gibberish` ran `status`
 with the word thrown away; with no reader it names the verb and the words it could
