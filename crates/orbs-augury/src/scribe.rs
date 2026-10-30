@@ -10,7 +10,7 @@ use orbs_sim::Scrivener;
 use orbs_sim::augur::MAX_READINGS;
 
 use crate::decode::decode;
-use crate::trained::{SCRIBE_WEIGHTS, WEIGHTS, identity, weights};
+use crate::trained::{BUILT_IN, SCRIBE_BUILT_IN, SCRIBE_WEIGHTS, built_in, identity, weights};
 use crate::{Reader, Register, Trained, Vocabulary, spelling};
 
 /// The spell reader as a frontend should hold it.
@@ -22,13 +22,11 @@ use crate::{Reader, Register, Trained, Vocabulary, spelling};
 pub type Copying = Scribe<burn::backend::NdArray<f32>>;
 
 impl Copying {
-    /// Load both registers' weights onto the CPU.
+    /// Load both registers' weights, as this build carries them, onto the CPU.
     ///
     /// # Errors
     ///
-    /// If this checkout has no trained spell weights — they are a build artefact
-    /// of `cargo run -p orbs-augury --example train --features train -- --spells`,
-    /// not source, so a fresh clone has none and a caller should carry on
+    /// If it was built without spell weights, and a caller should carry on
     /// without a scrivener.
     pub fn cpu() -> Result<Self, burn::record::RecorderError> {
         Self::load(burn::backend::ndarray::NdArrayDevice::default())
@@ -53,14 +51,34 @@ pub struct Scribe<B: Backend> {
 }
 
 impl<B: Backend> Scribe<B> {
-    /// Load the weights the trainer wrote for the spell register.
+    /// Load the spell register's weights this build carries, and the prompt's.
     ///
     /// # Errors
     ///
-    /// If no spell weights exist, or they fit another vocabulary or shape set —
-    /// hard, since shifted weights give confident nonsense.
+    /// If it carries no spell weights, or they fit another vocabulary or shape
+    /// set — hard, since shifted weights give confident nonsense.
     pub fn load(device: B::Device) -> Result<Self, burn::record::RecorderError> {
-        Self::load_from(SCRIBE_WEIGHTS, WEIGHTS, device)
+        let vocabulary = Vocabulary::builtin();
+        let reader = built_in(
+            SCRIBE_BUILT_IN,
+            SCRIBE_WEIGHTS,
+            Register::Spells,
+            &vocabulary,
+            &device,
+        )?;
+        // Absent is allowed and wrong is not, as in `load_from`.
+        let held = if BUILT_IN.is_empty() {
+            None
+        } else {
+            Some(Trained::load(device.clone())?)
+        };
+        Ok(Self::holding(
+            reader,
+            held,
+            vocabulary,
+            device,
+            &[SCRIBE_BUILT_IN, BUILT_IN],
+        ))
     }
 
     /// Load the spell register's weights from `spell`, and the prompt's — for
@@ -90,18 +108,37 @@ impl<B: Backend> Scribe<B> {
             Err(_) if !std::path::Path::new(&format!("{prompt}.bin")).exists() => None,
             Err(error) => return Err(error),
         };
-        let weighed: Vec<&str> = if held.is_some() {
-            vec![spell, prompt]
-        } else {
-            vec![spell]
-        };
-        Ok(Self {
+        let read = |path: &str| std::fs::read(format!("{path}.bin")).unwrap_or_default();
+        Ok(Self::holding(
             reader,
-            prompt: held,
+            held,
             vocabulary,
             device,
-            identity: identity(&weighed),
-        })
+            &[read(spell), read(prompt)],
+        ))
+    }
+
+    /// The scrivener, named by its weights' bytes: the spell's, then the
+    /// prompt's when it is held.
+    fn holding(
+        reader: Reader<B>,
+        prompt: Option<Trained<B>>,
+        vocabulary: Vocabulary,
+        device: B::Device,
+        weighed: &[impl AsRef<[u8]>; 2],
+    ) -> Self {
+        let weighed = if prompt.is_some() {
+            &weighed[..]
+        } else {
+            &weighed[..1]
+        };
+        Self {
+            identity: identity(weighed),
+            reader,
+            prompt,
+            vocabulary,
+            device,
+        }
     }
 
     /// What the orb makes of one spell line, or [`None`] to leave it as written.
@@ -287,15 +324,30 @@ pub struct Considered {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::trained::WEIGHTS;
     use burn::backend::NdArray;
 
-    /// The trained spell weights, if this checkout has any.
+    /// The spell weights this build carries, if it carries any.
     ///
-    /// Skipped rather than failed when absent, for `Trained`'s reason: weights
-    /// are a build artefact of a GPU run, and `cargo test --workspace` must pass
-    /// on a machine that has never trained anything.
+    /// [`None`] only in a tree without them, which
+    /// `the_build_carries_the_weights_on_disk` fails on.
     fn scribe() -> Option<Scribe<NdArray<f32>>> {
         Scribe::load(burn::backend::ndarray::NdArrayDevice::default()).ok()
+    }
+
+    #[test]
+    fn the_carried_scrivener_is_named_as_the_one_on_disk() {
+        // A spell's reading is kept against the identity that read it, so the
+        // copy and the file it came from must name the same weights or every
+        // saved spell is read again.
+        let Some(carried) = scribe() else { return };
+        let on_disk = Scribe::<NdArray<f32>>::load_from(
+            SCRIBE_WEIGHTS,
+            WEIGHTS,
+            burn::backend::ndarray::NdArrayDevice::default(),
+        )
+        .expect("the files this build was given");
+        assert_eq!(carried.identity, on_disk.identity);
     }
 
     #[test]

@@ -1,9 +1,9 @@
 //! The readers, played: a line and a spell in plain English, and when the orb
 //! will not guess.
 //!
-//! Every other scenario turns both readers off, since the trained weights are
-//! a build artefact. These pin one: `stub` answers a fixed table, and `grammar`
-//! reads `phrasings.toml` with no weights at all.
+//! Every other scenario turns both readers off, since the trained weights
+//! change on every retrain. These pin one: `stub` answers a fixed table, and
+//! `grammar` reads `phrasings.toml` with no weights at all.
 
 use crate::play::Game;
 

@@ -152,8 +152,7 @@ pub(crate) fn scrivener() -> Option<Box<dyn orbs_sim::Scrivener>> {
     }
 }
 
-/// The trained spell reader, if this build has one and this checkout has
-/// weights.
+/// The trained spell reader, if this build has one and was built with weights.
 ///
 /// [`trained`]'s sibling; `asked` is whether the player named it.
 #[cfg(feature = "augury")]
@@ -195,8 +194,8 @@ fn copying(asked: bool) -> Option<Box<dyn orbs_sim::Scrivener>> {
 /// | `stub` | [`Fixture::worked`], a fixed table — what `dumps.sh` pins |
 /// | `grammar` | [`Grammar::builtin`](orbs_sim::Grammar::builtin), the authored templates in `content/phrasings.toml` |
 ///
-/// Unset is silent, since a fresh clone has no weights; `model` by name is
-/// not. `scripts/dumps.sh` passes `off` and a block names a reader after it.
+/// Unset is silent, since a player can do nothing about a build without
+/// weights; `model` by name is not. `scripts/dumps.sh` passes `off` and a block names a reader after it.
 /// `grammar` is a real reader, overlapping the matcher on nothing
 /// (`--bench`). `stub` stays so the instruments, which hold no weights, can
 /// reach every divined surface. An unrecognised value is `off`, and says so.
@@ -221,7 +220,7 @@ pub(crate) fn augury() -> Option<Box<dyn orbs_sim::Augur>> {
     }
 }
 
-/// The trained reader, if this build has one and this checkout has weights.
+/// The trained reader, if this build has one and was built with weights.
 ///
 /// `asked` is whether the player named it, which is the whole difference between
 /// the two silences — see [`augury`].

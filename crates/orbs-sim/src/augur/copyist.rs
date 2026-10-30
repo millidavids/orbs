@@ -1,9 +1,8 @@
 //! A [`Scrivener`] built from a table, for the surfaces a model cannot reach.
 //!
 //! [`Fixture`](super::Fixture)'s sibling, and for the same reason: a trained
-//! reader's weights are a gitignored build artefact that changes on every
-//! training run, so a capture made against one could not be reproduced from a
-//! clean checkout. The *fixed* reader is what a capture pins.
+//! reader's weights change on every training run, so a capture made against
+//! one would move with each retrain. The *fixed* reader is what a capture pins.
 
 use super::Scrivener;
 

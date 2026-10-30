@@ -29,9 +29,9 @@ export ORBS_SAVE=off
 # name=env-assignments...  — one capture per line, `%` separating name from env.
 run() {
   local name="$1"; shift
-  # Both readers off first: weights are a gitignored build artefact, so a
-  # capture made against them is not reproducible from a clean checkout. A
-  # block wanting one names it in its own arguments, which come after and win.
+  # Both readers off first: weights change on every retrain, so a capture made
+  # against them would move with each one. A block wanting one names it in its
+  # own arguments, which come after and win.
   # The installation off for the same reason: a capture poses it only by
   # asking, so an `ORBS_INSTALL` exported in this shell cannot move a baseline.
   # `ORBS_MOTION` blank, so an exported one cannot move the settings rows. Not

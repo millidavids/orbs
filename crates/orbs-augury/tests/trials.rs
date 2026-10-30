@@ -7,9 +7,8 @@
 //! wrong thing. So this is a hard failure rather than a figure in a report, and
 //! it is the one claim about the trained reader the suite makes as a test.
 //!
-//! Skipped when this checkout has no spell weights, for the reason every test of
-//! a trained reader is: weights are a gitignored build artefact, and `cargo test
-//! --workspace` must pass on a machine that has never trained.
+//! Skipped when this build carries no spell weights, as every test of a trained
+//! reader is; `the_build_carries_the_weights_on_disk` is the one that fails.
 
 use burn::backend::NdArray;
 use orbs_augury::Scribe;

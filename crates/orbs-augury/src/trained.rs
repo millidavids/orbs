@@ -4,7 +4,9 @@
 //! world — `parser::resolve` binds its words — so it never goes stale.
 
 use burn::prelude::*;
-use burn::record::{BinFileRecorder, FullPrecisionSettings, Recorder as _};
+use burn::record::{
+    BinBytesRecorder, BinFileRecorder, FullPrecisionSettings, Recorder as _, RecorderError,
+};
 use orbs_sim::augur::{Augur, MAX_READINGS};
 use orbs_sim::parser::Verb;
 
@@ -17,6 +19,13 @@ pub const WEIGHTS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/weights/reader")
 /// Where it leaves the spell reader's.
 pub const SCRIBE_WEIGHTS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/weights/scribe");
 
+/// The prompt reader's weights as `build.rs` found them at [`WEIGHTS`]: empty
+/// when there were none.
+pub(crate) const BUILT_IN: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/reader.bin"));
+
+/// The spell reader's, from [`SCRIBE_WEIGHTS`].
+pub(crate) const SCRIBE_BUILT_IN: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/scribe.bin"));
+
 /// The reader as a frontend should hold it.
 ///
 /// The CPU, measured: 348µs a sentence against the GPU's 2.71ms, within §6's
@@ -24,14 +33,12 @@ pub const SCRIBE_WEIGHTS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/weights/s
 pub type Reading = Trained<burn::backend::NdArray<f32>>;
 
 impl Reading {
-    /// Load the trained weights onto the CPU.
+    /// Load the weights this build carries onto the CPU.
     ///
     /// # Errors
     ///
-    /// If this checkout has no trained weights — they are a build artefact of
-    /// `cargo run -p orbs-augury --example train --features train`, not source,
-    /// so a fresh clone has none and a caller carries on without a reader.
-    pub fn cpu() -> Result<Self, burn::record::RecorderError> {
+    /// If it was built without them, and a caller carries on without a reader.
+    pub fn cpu() -> Result<Self, RecorderError> {
         Self::load(burn::backend::ndarray::NdArrayDevice::default())
     }
 }
@@ -45,15 +52,21 @@ pub struct Trained<B: Backend> {
 }
 
 impl<B: Backend> Trained<B> {
-    /// Load the weights the trainer wrote.
+    /// Load the weights this build carries.
     ///
     /// # Errors
     ///
-    /// If no weights have been trained yet, or they were written for a
+    /// If the tree it was built in had none, or they were written for a
     /// different vocabulary — a hard error rather than a degradation, because a
     /// shifted table produces confident nonsense rather than a visible failure.
-    pub fn load(device: B::Device) -> Result<Self, burn::record::RecorderError> {
-        Self::load_from(WEIGHTS, device)
+    pub fn load(device: B::Device) -> Result<Self, RecorderError> {
+        let vocabulary = Vocabulary::builtin();
+        let reader = built_in(BUILT_IN, WEIGHTS, Register::Verbs, &vocabulary, &device)?;
+        Ok(Self {
+            reader,
+            vocabulary,
+            device,
+        })
     }
 
     /// Load weights from `path`, without its `.bin`, rather than the ones the
@@ -65,7 +78,7 @@ impl<B: Backend> Trained<B> {
     /// # Errors
     ///
     /// As [`load`](Self::load).
-    pub fn load_from(path: &str, device: B::Device) -> Result<Self, burn::record::RecorderError> {
+    pub fn load_from(path: &str, device: B::Device) -> Result<Self, RecorderError> {
         let vocabulary = Vocabulary::builtin();
         let reader = weights(path, Register::Verbs, &vocabulary, &device)?;
         Ok(Self {
@@ -138,10 +151,8 @@ impl<B: Backend> Augur for Trained<B> {
     }
 }
 
-/// Load one register's weights, checked against what this build holds.
-///
-/// Shapes checked first, since `load_record` panics on a changed table, which
-/// ordinary authoring causes.
+/// Load one register's weights from `path`, checked against what this build
+/// holds.
 ///
 /// # Errors
 ///
@@ -152,10 +163,51 @@ pub(crate) fn weights<B: Backend>(
     register: Register,
     vocabulary: &Vocabulary,
     device: &B::Device,
-) -> Result<Reader<B>, burn::record::RecorderError> {
-    let record: <Reader<B> as Module<B>>::Record = BinFileRecorder::<FullPrecisionSettings>::new()
+) -> Result<Reader<B>, RecorderError> {
+    let record = BinFileRecorder::<FullPrecisionSettings>::new()
         .load(std::path::PathBuf::from(path), device)?;
+    fitted(record, path, register, vocabulary, device)
+}
 
+/// Load one register's weights from the copy this build carries; `path` is
+/// where `build.rs` took it from, for the error.
+///
+/// # Errors
+///
+/// As [`weights`], with empty bytes for a missing file.
+///
+/// # Panics
+///
+/// Inside burn, on bytes that do not decode: only weights for another model
+/// shape do it, and `weights_on_disk_are_this_vocabularys` fails on them first.
+pub(crate) fn built_in<B: Backend>(
+    bytes: &'static [u8],
+    path: &str,
+    register: Register,
+    vocabulary: &Vocabulary,
+    device: &B::Device,
+) -> Result<Reader<B>, RecorderError> {
+    if bytes.is_empty() {
+        return Err(RecorderError::FileNotFound(format!(
+            "{path}.bin, when this was built"
+        )));
+    }
+    let record =
+        BinBytesRecorder::<FullPrecisionSettings, &'static [u8]>::new().load(bytes, device)?;
+    fitted(record, path, register, vocabulary, device)
+}
+
+/// A loaded record as a reader, if it fits this build.
+///
+/// Shapes checked first, since `load_record` panics on a changed table, which
+/// ordinary authoring causes.
+fn fitted<B: Backend>(
+    record: <Reader<B> as Module<B>>::Record,
+    path: &str,
+    register: Register,
+    vocabulary: &Vocabulary,
+    device: &B::Device,
+) -> Result<Reader<B>, RecorderError> {
     // The command that retrains *this* register, told rather than guessed: the
     // path cannot say it now `load_from` takes any path a run wrote, and the
     // head's width says it only until the spell corpus has as many shapes as
@@ -168,7 +220,7 @@ pub(crate) fn weights<B: Backend>(
         }
     };
     let stale = |what: &str, was: usize, now: usize| {
-        burn::record::RecorderError::Unknown(format!(
+        RecorderError::Unknown(format!(
             "{path}.bin was trained for {was} {what} and this build has {now}; retrain with \
              `{retrain}`",
         ))
@@ -190,15 +242,15 @@ pub(crate) fn weights<B: Backend>(
         .load_record(record))
 }
 
-/// Which weights these are, as `Scrivener::identity` asks: FNV-1a over the
-/// bytes of each `.bin` file, in the order given.
+/// Which weights these are, as `Scrivener::identity` asks: FNV-1a over each
+/// one's bytes, in the order given.
 ///
 /// The bytes, not the path or a timestamp: a retrain writes the same path, and
-/// a copy changes a timestamp. Read at load, which is once a session.
-pub(crate) fn identity(paths: &[&str]) -> u64 {
+/// a copy changes a timestamp.
+pub(crate) fn identity(weighed: &[impl AsRef<[u8]>]) -> u64 {
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
-    for path in paths {
-        for byte in std::fs::read(format!("{path}.bin")).unwrap_or_default() {
+    for bytes in weighed {
+        for &byte in bytes.as_ref() {
             hash ^= u64::from(byte);
             hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
         }
@@ -211,12 +263,27 @@ mod tests {
     use super::*;
     use burn::backend::NdArray;
 
-    /// The trained weights, if this checkout has any.
+    /// The weights this build carries, if it carries any.
     ///
-    /// Skipped rather than failed when absent: `cargo test --workspace` must
-    /// pass on a machine that has never trained anything.
+    /// [`None`] only in a tree without them, which
+    /// `the_build_carries_the_weights_on_disk` fails on.
     fn trained() -> Option<Trained<NdArray<f32>>> {
         Trained::load(burn::backend::ndarray::NdArrayDevice::default()).ok()
+    }
+
+    #[test]
+    fn the_build_carries_the_weights_on_disk() {
+        // A game that read the tree it was built in passed every other test
+        // here and found no reader on any other machine. Empty fails too: a
+        // game with no reader says nothing about it.
+        for (carried, path) in [(BUILT_IN, WEIGHTS), (SCRIBE_BUILT_IN, SCRIBE_WEIGHTS)] {
+            assert!(!carried.is_empty(), "this build carries no {path}.bin");
+            let on_disk = std::fs::read(format!("{path}.bin")).unwrap_or_default();
+            assert!(
+                carried == on_disk.as_slice(),
+                "{path}.bin is not the copy this build carries",
+            );
+        }
     }
 
     #[test]
@@ -236,8 +303,8 @@ mod tests {
     ///
     /// Every other test here skips when they will not load, so a content
     /// change that adds or drops a word left the reader dead with the gate
-    /// green (§19, *Supply*). With no weights at all, as in CI, there is
-    /// nothing to be stale.
+    /// green (§19, *Supply*). With no weights at all there is nothing to be
+    /// stale.
     #[test]
     fn weights_on_disk_are_this_vocabularys() {
         for (path, register) in [

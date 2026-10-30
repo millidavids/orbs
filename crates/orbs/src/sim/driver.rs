@@ -35,10 +35,9 @@ impl Readers {
     /// builds no `App`, so a reader living in a Bevy resource is invisible to
     /// `scripts/dumps.sh`.
     pub(crate) fn from_environment() -> Self {
-        // Never under `cargo test`: weights are a gitignored build artefact, so
-        // a reader installed here would make every test that adds `SimPlugin`
-        // pass or fail on whether someone ran the trainer. A test that wants one
-        // installs it with [`Readers::holding`].
+        // Never under `cargo test`: a reader installed here would make every
+        // test that adds `SimPlugin` pass or fail on how the last retrain went.
+        // A test that wants one installs it with [`Readers::holding`].
         if cfg!(test) {
             return Self::default();
         }

@@ -23,9 +23,9 @@ orbs="$root/target/debug/orbs"
 
 # The switches that would outrank a scene, cleared, and the wizard pinned, as
 # `dumps.sh` pins it, so a screenshot does not carry who took it. Both readers
-# off, as `dumps.sh` has them: weights are a gitignored build artefact, and the
-# tests that hold every scene to its claims run without them — with them,
-# `purge s` asks a suggestion instead of the numbered question its scene shows.
+# off, as `dumps.sh` has them: the tests that hold every scene to its claims run
+# without them — with them, `purge s` asks a suggestion instead of the numbered
+# question its scene shows.
 clean=(env -u ORBS_PASSAGE -u ORBS_STRAIN -u ORBS_CRT -u ORBS_SIGHT -u ORBS_MOTION
   -u ORBS_AFTERGLOW -u ORBS_FIRE -u ORBS_SEED -u ORBS_BOOT -u ORBS_DUMP -u ORBS_CAPTURE
   -u ORBS_TOUR_SHOTS "ORBS_WIZARD=${ORBS_WIZARD:-wizard}"

@@ -203,9 +203,9 @@ impl Launch {
                     "0"
                 }
             ),
-            // Both readers off: weights are a gitignored build artefact, so a
-            // scenario would behave one way here and another on CI. `dumps.sh`
-            // and `Readers::from_environment` do the same. A scenario *about* a
+            // Both readers off: weights change on every retrain, and a scenario
+            // should not move with them. `dumps.sh` and
+            // `Readers::from_environment` do the same. A scenario *about* a
             // reader names one; `stub` is the fixed table to pin.
             "ORBS_AUGURY=off".to_owned(),
             "ORBS_SCRIVENER=off".to_owned(),
