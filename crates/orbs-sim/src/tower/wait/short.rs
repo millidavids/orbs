@@ -24,13 +24,14 @@ pub fn short(prose: &Prose, wait: &Wait) -> Option<String> {
                     &[("name", short), ("detail", short_material(lack.material()))],
                 )
             }),
-            State::Ready | State::Fouled | State::Charged => Some(at(prose, short, instrument)),
-            State::Working
-            | State::Scouring
-            | State::Burning
-            | State::Banked
-            | State::Empty
-            | State::Cold => None,
+            // A cold hearth is reported only when something wants its heat, and
+            // `cold` alone would not say which fire.
+            State::Ready | State::Fouled | State::Charged | State::Cold => {
+                Some(at(prose, short, instrument))
+            }
+            State::Working | State::Scouring | State::Burning | State::Banked | State::Empty => {
+                None
+            }
         },
         Wait::Held { hold, .. } => Some(match hold {
             Hold::Busy(blocked) => {
@@ -121,6 +122,19 @@ mod tests {
             assert!(words.windows(2).all(|pair| pair[0] != pair[1]), "`{drawn}`");
             assert!(drawn.chars().count() <= ROOM, "`{drawn}`");
         }
+    }
+
+    #[test]
+    fn a_cold_hearth_names_its_fire() {
+        let prose = Prose::builtin();
+        let wait = Wait::At {
+            instrument: crate::tower::ATHANOR.to_owned(),
+            short: crate::tower::panel::abbreviate(crate::tower::ATHANOR),
+            state: State::Cold,
+            left: None,
+            lack: None,
+        };
+        assert_eq!(short(&prose, &wait).as_deref(), Some("at athanor"));
     }
 
     #[test]
