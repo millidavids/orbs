@@ -9,7 +9,7 @@ fn a_word_a_verb_cannot_use_is_named() {
     let Some(game) = Game::start() else { return };
     game.does(
         "status gibberish",
-        "status takes nothing - 'gibberish' is not something it can use",
+        "status takes only rates - 'gibberish' is not one of them",
     )
     .does("verify gibberish", "¿ verify");
 }
