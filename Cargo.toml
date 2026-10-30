@@ -6,7 +6,7 @@ members = ["crates/*"]
 # `0.<feature>.<iteration>` until release: the minor names the feature in hand,
 # the patch a ROADMAP box ticked within it. No public API, so no semver to keep
 # until 1.0, the Steam release (§19).
-version = "0.23.4"
+version = "0.23.5"
 edition = "2024"
 # Bevy 0.20 needs 1.97.1; declared, so an old toolchain is a clear error.
 rust-version = "1.98"

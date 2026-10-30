@@ -15,6 +15,22 @@
   at 1.0 (DESIGN.md §19).
 -->
 
+## [v0.23.5] - 2026-10-30
+
+### Description
+In development — a dev log, not patch notes. The orb's plain-English readers
+now ship inside the game: a copy played anywhere but the machine that trained
+them had gone without, and said nothing. And a cold hearth says to kindle it.
+
+### Fixed
+- **The orb reads plain English wherever the game runs.** Its trained readers
+  were left out of every copy built anywhere but here, so `smash the sage` was
+  refused there and nothing said why. They are part of the game now, in the
+  window and the terminal alike.
+- **A cold hearth says what to do.** When a brew waits on the athanor's fire,
+  the rail names the athanor beneath `cold`, and `status rates` says to kindle
+  it.
+
 ## [v0.23.4] - 2026-10-29
 
 ### Description
