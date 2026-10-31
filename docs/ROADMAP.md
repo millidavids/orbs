@@ -79,12 +79,13 @@ not consecutive.
 | [**The tower speaks up**](#the-tower-speaks-up) | `0.21.5` | ✅ every box ticked · a rate, a wait, a forecast and the tower's news; the glass answers and the phosphor lingers · ticks `0.17`'s bottleneck box |
 | [**Every instrument has a tempo**](#every-instrument-has-a-tempo) | `0.22.5` | ✅ every box ticked · the prism, the lattice, the pylon, the lectern and the circle draw pictures of their own |
 | [**The tour**](#the-tour) | `0.23.4` | ✅ every box ticked · every surface, moving, one scene at a time, in the window and headless; the instrument for judging the look |
+| [**The tower's spell**](#the-towers-spell) | `0.24.6` | ✅ every box ticked · one spell at `/tower` watches every room and starts and stops their spells; every spell held costs a concentration · ticks *the tower as one machine*'s last box |
 
 ### Open — and **this table is not a running order**
 
 | | Months | Words | |
 |---|---|---|---|
-| [**The tower as one machine**](#the-tower-as-one-machine) — `0.17` | 2 | ~3k | the dependency web; both defects fixed at `0.17.0`–`0.17.1`, the bottleneck seen at `0.21` · paused, resumes under the minor in hand (§19) |
+| [**The tower as one machine**](#the-tower-as-one-machine) — `0.17` | 2 | ~3k | the dependency web; both defects fixed at `0.17.0`–`0.17.1`, the bottleneck seen at `0.21`, one spell running the tower at `0.24` · paused, resumes under the minor in hand (§19) |
 | [Spellcraft's four](#phase-3--spellcraft) | — | ~1k | the terse register, a typed action at execution, `F5` over the modal surfaces, hidden-directory authoring |
 | [Enchanting's two](#phase-9--enchanting) | — | ~1k | the shared-engine extraction, split into a refactor and a behaviour box |
 | [Breadth](#breadth) | 2 | ~4k | all seven domains, research, full drift, offline progression |
@@ -2696,6 +2697,10 @@ rooms, not in one.
 > what they run out of. **Pane addressing and slot reservation come first**, since
 > a web routed by hand is a to-do list; potions and scrolls already cross through
 > `keep::admits`.
+>
+> **Superseded for the exit at `0.24`** (§19, *The tower's spell*): the web is
+> routed by a spell at `/tower` that starts and stops the rooms' spells, so it
+> needed neither first. Pane addressing stays open as the hand's half.
 
 - [x] **The calm layer stops poisoning logs, and a siege waits** (`0.17.0`) —
       §5.1 says the idle layer touches *"environmental only, never scripts,
@@ -2725,7 +2730,10 @@ rooms, not in one.
       **See it:** start a grind from the archive
 - [ ] **Focus-slot reservation**, which is the *same* roadmap item as pane
       addressing and moves with it. `CAPACITY = 1` is tower-wide, so this phase's
-      exit is unreachable by construction until it rises
+      exit is unreachable by construction until it rises *(superseded at `0.24`:
+      only instrument runs, the audit and anneal take the slot, and the tower's
+      spell worked four rooms in an hour at 1. The reservation itself is still
+      open)*
       **See it:** two rooms working at once, and the sidebar accounting for both
 - [ ] **A made good crosses and another room consumes it.** No new `NounKind`, no
       content file and no save migration — a `warding` essence already reaches the
@@ -2773,9 +2781,10 @@ rooms, not in one.
       require a bought ceiling gates progression while every rate holds still
       **See it:** `cargo test -p orbs-sim --test floors` — every Mastery line
       walked to its last station with no good ever crossing a room
-- [ ] One spell that runs the whole tower
+- [x] One spell that runs the whole tower (done under *the tower's spell*,
+      `0.24.6`)
       **See it:** bind it, walk away for an hour, come back to work done in four
-      rooms
+      rooms — `ORBS_BOOT=0 ORBS_DUMP="debug_ley 96; bind seneschal; attend grimoire; meditate 3600; attend tower; status" cargo run -p orbs`
 
 **Scarcity: the slot, finally contested.** Every domain has been spending one
 slot alone; this is the phase where they compete for it, which is what §5.0 means
@@ -3355,6 +3364,68 @@ instrument: the setups use the debug words.
       every instrument state included; `cargo test -p orbs tour` plays every
       scene through the keyboard and paints every frame at 120×45 and 80×22,
       failing on any text cut (§19, *The tour checks what it shows*)
+
+---
+
+## The tower's spell
+
+**One spell for the whole tower, watching every room and starting and stopping
+the spells that work them** — automation top to bottom. It ticks *The tower as
+one machine*'s last box. §19, *The tower's spell*, has the decisions.
+**Every box ticked at `0.24.6`.**
+
+**`0.24`, one patch per box.** Every spell the orb runs while you are away
+holds a concentration, children included; one tower spell runs at a time;
+concentration 8 is the seven rooms with a spell each and the tower's. Written
+at `/tower` from concentration 2. Two corrections came first and bump nothing:
+a spell's press, kindle, opening and purge no longer wait out a brew, and a
+resumed spell reads its questions in its own room.
+
+- [x] **A tester's door to experience** (`0.24.0`) — `debug_ley <n>`, through
+      the real credit, never down
+      **See it:** `ORBS_BOOT=0 ORBS_DUMP="debug_ley 96; status" cargo run -p orbs`
+      — experience 96, concentration 2, the rail's `held  0 of 2`. The
+      corrections: `cargo test -p orbs-sim --test slotless`, and
+      `ORBS_BOOT=0 ORBS_DUMP="attend laboratory; kindle charcoal; debug_spawn clarified-draught; distil clarified-draught; attend lens; invoke breaking; meditate 20; peruse lens.log" cargo run -p orbs`
+      presses beside the brew
+- [x] **Every spell the orb runs unattended holds a concentration** (`0.24.1`)
+      — what a held spell starts is held too; a hand invocation stays free
+      **See it:** `ORBS_BOOT=0 ORBS_DUMP="attend laboratory; debug_ley 16; debug_take satchel_1; bind milling; meditate 4; sift milling orb.log" cargo run -p orbs`
+      — *the orb is full, holding milling.spell. not cast*; with `debug_ley 96`
+      and `bind milling; meditate 2; bind first_light`, *the orb holds 2:
+      milling.spell, ordering.spell*. `cargo test -p orbs-sim --test holding`
+- [x] **A spell can ask whether another is running** (`0.24.2`) — `<spell> is
+      running`, `idle` or `empty`, from any spell; a held spell is never idle
+      **See it:** `ORBS_BOOT=0 ORBS_GRID=100x30 ORBS_DUMP="attend laboratory; scribe asking" ORBS_EDIT=$'edit\ninvoke first_light\nif first_light is running\nwait for yes\nelse\nwait for no\nend\n<esc>\ninterpret' cargo run -p orbs`
+      — line 2 reads *if first_light is working*, clean. Ending `<esc>\nquit`
+      with `ORBS_THEN="invoke asking; meditate 2; sift asking orb.log"`:
+      *asking.spell watches for the yes*. `cargo test -p orbs-sim --test watching`
+- [x] **A spell for the whole tower** (`0.24.3`) — written at `/tower` from
+      concentration 2; it starts and stops spells and nothing else; one at a time
+      **See it:** `ORBS_BOOT=0 ORBS_DUMP="debug_ley 16; scribe keeper" cargo run -p orbs`
+      refuses, *go where the work is first*; with `debug_ley 96` and
+      `ORBS_EDIT=$'edit\ninvoke forging\nsurvey\ngrind sage\n<esc>\ninterpret'`
+      the page is *keeper.spell in tower*, lines 2 and 3 unlit, and the guide
+      offers `stop` and `invoke`. `ORBS_BOOT=0 ORBS_DUMP="debug_ley 96; bind seneschal; attend grimoire; meditate 600; attend tower; status" cargo run -p orbs`
+      lists seneschal casting beside a room's spell. `cargo test -p orbs-sim --test overseeing`
+- [x] **It sees every room** (`0.24.4`) — a room is working while a run is in
+      hand; anything in an open room by name; a sealed room out of sight
+      **See it:** `ORBS_BOOT=0 ORBS_DUMP="debug_ley 96; attend tower; scribe looking" ORBS_EDIT=$'edit\nif the lens is idle and the alembic is idle\ninvoke breaking\nend\n<esc>\nquit' ORBS_THEN="bind looking; meditate 30; attend lens" cargo run -p orbs`
+      — a ward open with nobody in the lens, the box reading `►breaking`.
+      `cargo test -p orbs-sim --test surveying`
+- [x] **The tower's spell, shown** (`0.24.5`) — the rail's foot, a `status
+      rates` row, the manual, a tour scene
+      **See it:** `ORBS_BOOT=0 ORBS_DUMP="debug_ley 96; bind seneschal; meditate 30; status rates" cargo run -p orbs`
+      — the rail's foot reads `►seneschal────` above `tick`, and `status rates`
+      a `tower` row; `ORBS_BOOT=0 ORBS_THRESHOLD=1 ORBS_DUMP=1 ORBS_MENU=manual ORBS_MANUAL=spells cargo run -p orbs`
+      opens on *the whole tower*.
+      `scripts/tour.sh spell.tower` in the window
+- [x] **One spell that runs the whole tower** (`0.24.6`) — ticks *The tower as
+      one machine*'s last box; a siege can drag it and `purge` mends it
+      **See it:** `ORBS_BOOT=0 ORBS_DUMP="debug_ley 96; bind seneschal; attend grimoire; meditate 3600; attend tower; status" cargo run -p orbs`
+      — wards broken, courses run, beasts held and charms laid, each *by your
+      spells*, while the player was in the grimoire. `cargo test -p orbs-sim
+      --test overseeing --test surveying`
 
 ---
 

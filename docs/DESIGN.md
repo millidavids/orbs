@@ -2462,7 +2462,8 @@ changelog block, so a minor can close untagged and ship inside a later one.
 | `0.20` | The tower swept | `0.20.22` | `v0.20.22` |
 | `0.21` | The tower speaks up | `0.21.5` | `v0.23.4` |
 | `0.22` | Every instrument has a tempo | `0.22.5` | `v0.23.4` |
-| `0.23` | The tour | `0.23.4` | `v0.23.4` |
+| `0.23` | The tour | `0.23.4` | `v0.23.4`, `v0.23.5` |
+| `0.24` | The tower's spell | `0.24.6` | — |
 
 ### Naming pass
 
@@ -2547,6 +2548,57 @@ wait on trace)
    price-shop — Exapunks is $19.99.
 
 ## 19. Decisions log
+
+### The tower's spell (`0.24`)
+
+**Rule: one spell homed at `/tower` watches the whole tower and acts only by
+starting and stopping room spells, and every spell the orb runs while the
+player is away holds a concentration.** The owner asked for automation top to
+bottom, and decided four things directly: every spell counts, children
+included; one tower spell runs at a time; concentration 8 is the seven rooms
+with a spell each and the tower's; the tower's spell watches everything and
+starts spells, never an instrument; and it is written from concentration 2.
+Closed at `0.24.6`, the boxes ROADMAP's *The tower's spell*; it ticks *The
+tower as one machine*'s last box.
+
+| Question | Decision |
+|---|---|
+| A spell beside a brew | A spell's `probe`, `kindle`, `research` and `purge` no longer wait on the production slot. `block::begins_work` held all four on it, though none takes it: a press is instant, an opening and a fire take no slot, and a purge runs in §9's triage slot. A bound lens solver beside a brew stalled on every press and gave up at `PATIENCE`, which is the many-room case this minor sells. `tests/slotless.rs` holds each, and each failed before the fix. A correction, so no version moves |
+| A resumed spell's names | Compiled against its room, as `invoke::cast` compiles it. `adopt` compiled a restored run against the spell's own node in the grimoire, where the room's satchel and its fixtures' contents are not names, so `repeat until not the satch is empty` stopped on the first lap after a load. Exact names are found again at run time, which is why the lockstep test never saw it. A correction |
+| A tester's door to experience | `debug_ley <n>`, `debug_renown`'s twin, through the real `credit`, so the concentration news, the ley crossings and the rooms they open are play's own. One way only: experience never falls. *Supersedes* SEEING-IT's *"there is no way to grant it"*, for a debug build. `debug_spawn` still earns nothing (`a_tester_cannot_farm_the_curve`), and `orbs-balance` never types it: experience a tester types says nothing about the curve. Its answers are literals through `said`, as its siblings' are |
+| Every spell counts | `held` names every spell bound and every spell running unattended, which is what a held spell's `invoke` starts. *Supersedes* the *"ungated, at concentration 0"* of `invoke` from inside a spell (*Domain-scoped spells*), for a held spell's children. A hand invocation, and what it starts, stays free: it is how a spell is tested, and it ends when the player walks out. §8 already said the pool alone is no recursion guard. `verify --all`, a term per held spell, now counts the children too |
+| A held spell at a full orb | Its `invoke` is refused in `run_line`, naming what is held, said once a line through the rationing that already outlives a lap, and the spell carries on. Danger, so the room's mark latches: §8's failures are never a quiet line. Not in `invoke`, which cannot ration. Binding a running child is free, since it is held already; `bind::room_for` is the one test for both doors |
+| Old saves | A bound parent with a running child at concentration 1 loads as `held 2 of 1` until the child ends, and its next `invoke` is refused. Honest, so no migration |
+| The ley line | No node moves. `milling`, the example of two spells, holds two concentrations bound, so from `satchel_1` at 40 until concentration 2 at 96 the two-spell channel runs by hand, and only one spell queuing for itself can be held. Holding a second spell is what concentration 2 buys, so that is the line working; `recall queue` says so, and the refusal names what is held. Moving either station would shift the economy to fix a sentence. `cursors_1` stays at 400 too: its *"sells ergonomics rather than capability"* turns over, since a second cursor is now the one concurrency the orb gives away, which is worth a node there. The owner asked for every open thread closed; the rest is ours |
+| A test that could not fail | `a_held_spell_may_invoke_another_and_keep_it` counted every grind in the session, and the setup's brews ground sage, so `> 1` held before the bind. Moved to `tests/holding.rs` and counted from the bind |
+| A spell asks about a spell | `<spell> is working`, `idle` or `empty`, from any spell, since a spell is nameable from anywhere. Working is `Running` or `Bound`: a held spell has no `Running` for the tick between laps, and would read idle and be started twice, so a bound spell never reads idle. Only `is`: `has` against a spell keeps *"there is no X here to ask about"*, which is why `Condition::rename` passes `Stoppable` for an `is` subject and `Place` for a `has` one. No new word: `running` was already `working`'s, so the readers' vocabulary does not move. The fair copy reads `is working` |
+| A spell and a place of one name | The exact place wins, then the exact spell, then today's fuzzy place: `laboratory` never reads as `laboratory.spell`, and `sparing` never fuzzes into a room. Exact, since a question's name is not a command |
+| `repeat until` and a bound name | Stood for its place, as an `if` already was: the entry check and the loop guard asked the name itself, so `part tend(task)` / `repeat until task is idle` stopped on its first question. A correction |
+| Where it is written | `scribe` at `/tower` from concentration 2, homed `tower`. *Supersedes* *Domain-scoped spells*'s *"`scribe` at `/tower` refuses, in voice"* from there on; below 2, and in the grimoire, it still refuses, so a new player at the tower keeps *"go where the work is first"*. Crossing concentration 2 says *the orb can watch the whole tower*, once, however far one credit jumps |
+| What it may say | `invoke`, and `stop` of a spell, with the control words, `bide` and `wait`. Any other line is refused once a line, *the tower only starts spells*, and is a fault. A room's verb, which elsewhere reads *nothing here answers*, says the same: nothing is missing, the line is in the wrong spell. Said at cast and unlit in the editor too, so a line in an untaken branch is not silent; the guide and Tab offer the two verbs only |
+| Where it needs the player | Anywhere in the tower: a hand-invoked tower spell ends only when the player leaves for the grimoire. Its children keep every invocation's rule, so by hand it starts only the spell of the room the player stands in, and a tower spell is tested by binding it. The gate guarantees the concentration to |
+| An invocation that would end at once | An attended spell's `invoke` of a spell homed in another room is refused, *needs you in its room*, instead of casting a run that ends a tick later with *needed you there*. Every attended spell, not only the tower's. Cost, not Danger: walking about with a hand-invoked tower spell is no fault |
+| One at a time, one way | A second tower spell is refused at `invoke` and `bind` while one runs or is held, naming it; writing several is fine. A spell's `invoke` of a tower spell is refused, *only you start a spell for the tower*: tower to rooms, never back, and the depth stays the rooms' |
+| Its fault | Latched on `tower`, which `briefs`, one per room, never held. `Sim::tower_brief` lands with the spell rather than with the rail, so a test reads the fault from the box that can make one |
+| What it sees | Every open room, and anything in one by its name, since place leaves are unique: from `/tower` a question's subject is the tower's child or any node under it. Not a satchel, one per room under one name, so the tower cannot mean any; and nothing in a sealed room, as the siege's pool skips them, or the tower's spell would find what discovery has not. A room spell still sees only its room. *Supersedes*, for the tower's spell only, *a spell's reads happen inside its own room* |
+| A room, asked | `<room> is working` while the instrument the rail reports it as runs or scours; `idle` otherwise; `empty` while that instrument is empty, or there is none. Not the rail's wait: `wait_in` answers `held` while any spell bides there, and a lit hearth is no job (*The tower speaks up*), so either would read a room busy for good. A puzzle open is working |
+| Where it is shown | On the rail's foot, drawn over the rule above `tick`: `►name +n`, and the tower's mark at the right edge where a box keeps its own, heard as `status rates` says it. Not a row of its own, since the foot has none to spare at 120×45, and not a seventh box, which is a room's. The rule stays drawn either side, so a frame without one is byte for byte today's. `status rates` gains a `tower` row only while one runs; `status`'s casting list already named it. The tube's fault strain counts its mark |
+| The enemy | Strikes the tower's spell as it strikes any: bound, it is in the clock's pool, and alone there while what it starts runs unbound, so a dragged tower slows every room it serves. A rewritten `invoke holding-` does not fuzz back to `holding.spell` (the parser refuses `x-` for `x`), so its text is as open to sabotage as a room spell's. `purge` from the grimoire mends both. A single point of failure on purpose: the automation is what is attacked |
+| What it does not need | No `CAPACITY` change: only instrument runs, the audit and anneal take the slot, so four rooms work at once at 1. ROADMAP's *"unreachable by construction until it rises"* and *"pane addressing and slot reservation come first"* are superseded for this exit: the web is routed by a spell, and pane addressing for typed commands stays open as the hand's half. No `orbs-balance` policy: at concentration 2 it runs one room at a time, a mix of rates already pinned, and its real question, one tower spell against several bound room spells, is no rate; `debug_ley` cannot stand in for earning. The sweep moved one `landed` record per policy that crosses concentration 2, the new line, and no rate |
+| The hand's half | Starting and stopping spells by hand, from anywhere, and reading the rooms off the rail and `status rates`: the tower's spell does nothing a player at the prompt cannot, which is the rule for every room's automation |
+| Away | Offline progression is unbuilt (*Breadth*). When it lands, a bound tower spell and everything it started run while the game is closed, as any bound spell will |
+| The example | `seneschal`, a dev spell: four rooms, each `if X is idle` / `invoke X` / `repeat until X is idle` / `bide 10`, longest last, one round that stands. At concentration 2 it holds itself and one room at a time; it went round six times in an hour. Driven by `tests/overseeing.rs`, since the solvers' table invokes and it must be bound; the solvers' coverage lint names it as driven elsewhere |
+| The run's reading of `is` | A place, then the spell, then anything else of the name: `compile`'s order. The run took the first node of any kind, so a spell called `charcoal` read as the charcoal on a shelf, idle for ever, and a guard on it never waited. Found by review after `0.24.6`, as are the rows below; no version moves |
+| A sealed room, named | Out of sight, as what is in it already was. A tower spell's question asked the tower's children before its walk, and those are the rooms, shut ones too, so `if the menagerie is idle` spent discovery. The seal is asked once a room, not once a node |
+| The news at each level | One line for each stretch: *the orb can hold a spell now* at the first, *the orb can watch the whole tower* at the second, and past it *the orb can hold 3 spells now*. Every level said the first, so the second latched two lines, one about a slot the orb already had. One credit that jumps says each it crossed |
+| A verb beside a name | A line naming a binding or a spell is still quoted, not resolved, but its verb is read from its first word, at cast and in the editor. So `let m be mortar_and_pestle` / `grind m` in a tower spell is said at cast, and `bind first_light` faults in the editor as the runner already refused it. No phrase opens with a word that alone names a refused verb where the phrase is allowed, so a first word refuses no good line |
+| The rail's count | `Panel.held`, read once a tick with the briefs, as this entry's plan said. The rail asked `Sim::held` every frame, two scans and a sort at 60 Hz |
+| No door below the gate | `write` refuses a new spell wherever `scribe` would, in its words, from one `home_here`. `Sim::write_spell` homed one where the player stood, so below concentration 2 it made a tower spell `scribe` would refuse. No player reached it; twelve tests wrote from `/tower` and now stand in a room |
+| One rule for what a spell may say | `speech`: `may_issue`, `may_say` and `Refused`, asked at cast, in the editor, by the guide, by Tab and when the line runs. The tower's rule had its own `if` at six sites, and Tab read offered phrases back into verbs. `Situation` carries `for_the_tower`, so the filter is the one `spell_may` always was, and Tab offers a tower spell's `stop` only spells. In the editor a refused line always names itself, `spell_forbidden` or `spell_tower_only` |
+| Whether a thing is the tower's | Asked only in `whole`, one function per thing it is asked of: a node, a run's home, a domain's name, a spell |
+| A question's subject, from the cast | `compile` keeps `.spell` on what it read as a spell, so the run takes that answer with no walk of the tower, and the fair copy strips it. A room is found before any walk. The walk stays for an instrument or a bound name, no costlier than the `node_of` every step already pays |
+| `run.rs` and `compile.rs` | Split with no change of behaviour, the captures identical: `run` keeps what a spell holds and its turn, with `strand`, `line`, `parts`, `guard` and `saying` beside it; `compile` keeps the cast, with `names` and `reading`. `run` stays at 457 lines, 230 of them `Running` and its documented fields |
+| Tests that raced | `a_keystroke_reaches_an_actual_audio_player` counted after a second frame, and with a sound card a click ends and despawns during any stall: counted after one, as *a cue written this frame is played this frame* promises. `home_and_end_reach_the_ends`, CI's old flake since `0.19.13`, pressed `Home` before the view had opened: it waits for the hint now, as the arrows' test does |
 
 ### A cold hearth names its fire
 
@@ -9868,7 +9920,9 @@ them mutually exclusive, since a tier gives exactly one node.
 **`cursors_1` sells ergonomics, not capability, and the tree says so.** Two
 spells already run at once for nothing; what `alongside` adds is both halves of a
 pipeline in one file. A node implying otherwise would be selling something the
-player already has.
+player already has. *(Superseded for a held spell by *The tower's spell*: each
+spell held costs a concentration, so `alongside` is the one concurrency the orb
+gives away. By hand this stands.)*
 
 `mastery::steps_granted` became `granted() -> Option<Grant>`, because a boolean
 squeezed into a `usize` parser is a `satchel_1` that reads as a step count and
@@ -16038,6 +16092,11 @@ starting to lie."*
 
 `scribe` at `/tower` refuses, in voice. The first refusal in the game about
 **where you are** rather than what you named.
+
+> **Superseded at `0.24.3`** (§19, *The tower's spell*): from concentration 2,
+> `scribe` at `/tower` writes a spell for the whole tower, which starts and
+> stops the rooms' spells and works nothing itself. Below 2, and in the
+> grimoire, it refuses as above.
 
 **This is a precondition for control flow, not a tidy-up.** Canonicalisation used
 to walk a simulated position through a spell's own `attend` lines. A `repeat`

@@ -1082,11 +1082,19 @@ impl Sim {
         tower::briefs(&self.world)
     }
 
-    /// The spells the orb is holding, named, in the order the tower keeps them.
+    /// The tower's spell at a glance, while one runs or is held or its fault
+    /// stands — which [`briefs`](Self::briefs), one per room, never holds.
+    #[must_use]
+    pub fn tower_brief(&self) -> Option<tower::Brief> {
+        tower::spell::tower_brief(&self.world)
+    }
+
+    /// The spells the orb is holding, named, in the order the tower keeps them:
+    /// each bound, and each a bound spell started.
     ///
     /// §8 surfaces concentration, and a player at capacity asks *which one*.
     #[must_use]
-    pub fn bound(&self) -> Vec<String> {
+    pub fn held(&self) -> Vec<String> {
         tower::spell::held(&self.world)
     }
 

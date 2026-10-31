@@ -367,8 +367,9 @@ lines = [
 # ===========================================================================
 # §8's channel: one spell handing another a name, and one spell in two places.
 #
-# Two spells always ran at once; the satchel is what two cursors say to each
-# other. Both need `satchel_1`, and `coursing` `cursors_1` (`debug_take`).
+# Two spells run at once by hand for nothing; held, each costs a concentration.
+# The satchel is what two cursors say to each other. Both need `satchel_1`, and
+# `coursing` `cursors_1` (`debug_take`).
 # ===========================================================================
 
 # The producer: it only names things, for a second spell to act on, and stops,
@@ -385,7 +386,8 @@ lines = [
 #
 # `invoke` does not wait, and the producer starts next tick, so `bide 2`, or
 # the loop over an empty satchel runs zero times (§19). `empty` paces it to
-# the mortar. Its records are in `laboratory.log`.
+# the mortar. Its records are in `laboratory.log`. Bound, it holds two
+# concentrations: itself and `ordering`.
 [milling]
 domain = "laboratory"
 lines = [
@@ -737,6 +739,44 @@ lines = [
     "    if charm has ebbing or charm has no graced",
     "        imbue mortar_and_pestle charm",
     "        anneal",
+    "    end",
+    "end",
+]
+
+# ===========================================================================
+# THE TOWER'S SPELL (§19, *The tower's spell*).
+#
+# It works nothing itself: it starts a room's spell, waits for it to finish,
+# and starts the next. Four rooms, longest last, at concentration 2 — itself
+# and one room at a time. `if X is idle` skips a room whose spell is already
+# held, which never reads idle and would be waited on for ever. One round, and
+# bound it stands, so it goes round again.
+# ===========================================================================
+[seneschal]
+domain = "tower"
+lines = [
+    "if forging is idle",
+    "    invoke forging",
+    "    repeat until forging is idle",
+    "        bide 10",
+    "    end",
+    "end",
+    "if holding is idle",
+    "    invoke holding",
+    "    repeat until holding is idle",
+    "        bide 10",
+    "    end",
+    "end",
+    "if taming is idle",
+    "    invoke taming",
+    "    repeat until taming is idle",
+    "        bide 10",
+    "    end",
+    "end",
+    "if breaking is idle",
+    "    invoke breaking",
+    "    repeat until breaking is idle",
+    "        bide 10",
     "    end",
     "end",
 ]

@@ -59,6 +59,11 @@ pub const REACH: &str = "debug_reach";
 /// It *sets* the total, so one word goes both ways — a rank is lost by falling
 /// back through it. Anything not a number is refused; see [`Asking`].
 pub const RENOWN: &str = "debug_renown";
+/// `debug_ley <n>` — raise experience to a total, so a dump can bind.
+///
+/// Renown's twin, one way only: experience never falls, so a lower total is
+/// refused. Through the real credit, so what the ley line opens is said.
+pub const LEY: &str = "debug_ley";
 
 /// A tester's word, read whole. `debug_spell` is read apart, since it is the one
 /// that writes a spell rather than acting on the world.
@@ -84,6 +89,8 @@ pub enum DebugWord {
     Reach(Option<String>),
     /// `debug_renown`.
     Renown(Asking),
+    /// `debug_ley`.
+    Ley(Asking),
 }
 
 impl DebugWord {
@@ -113,13 +120,19 @@ impl DebugWord {
         if let Some(id) = argument(line, REACH) {
             return Some(Self::Reach(named(id)));
         }
-        argument(line, RENOWN).map(|total| {
-            Self::Renown(if total.is_empty() {
-                Asking::Where
-            } else {
-                total.parse().map_or(Asking::Unreadable, Asking::Set)
-            })
-        })
+        if let Some(total) = argument(line, RENOWN) {
+            return Some(Self::Renown(asking(total)));
+        }
+        argument(line, LEY).map(|total| Self::Ley(asking(total)))
+    }
+}
+
+/// A total a tester typed: bare asks, a number sets, anything else is refused.
+fn asking(total: &str) -> Asking {
+    if total.is_empty() {
+        Asking::Where
+    } else {
+        total.parse().map_or(Asking::Unreadable, Asking::Set)
     }
 }
 
@@ -135,13 +148,13 @@ fn named(id: &str) -> Option<String> {
     (!id.is_empty()).then(|| id.to_lowercase())
 }
 
-/// What a `debug_renown` line asked for.
+/// What a `debug_renown` or `debug_ley` line asked for.
 ///
 /// Three states, or an unreadable word folds into "nought" and zeroes the
 /// renown. Not `Standing`, which is `tower::Standing`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Asking {
-    /// A bare `debug_renown`: say where the tower stands, change nothing.
+    /// A bare word: say where the tower stands, change nothing.
     Where,
     /// A number: set the total to it.
     Set(u64),
@@ -278,6 +291,19 @@ mod tests {
             DebugWord::read("debug_renown -1"),
             Some(DebugWord::Renown(Asking::Unreadable))
         );
+        assert_eq!(
+            DebugWord::read("debug_ley 96"),
+            Some(DebugWord::Ley(Asking::Set(96)))
+        );
+        assert_eq!(
+            DebugWord::read("debug_ley"),
+            Some(DebugWord::Ley(Asking::Where))
+        );
+        assert_eq!(
+            DebugWord::read("debug_ley lots"),
+            Some(DebugWord::Ley(Asking::Unreadable))
+        );
+        assert_eq!(DebugWord::read("debug_leyline 9"), None);
         assert_eq!(DebugWord::read("debug_spell"), None);
     }
 }

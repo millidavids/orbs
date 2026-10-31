@@ -273,8 +273,9 @@ pub(super) fn rooms_of(world: &World) -> Vec<(String, Entity)> {
         .collect()
 }
 
-/// The room most domains hang under (§7). The grimoire is its sibling.
-const TOWER: &str = "tower";
+/// The room most domains hang under (§7). The grimoire is its sibling, and a
+/// spell written for the whole tower names it as its domain.
+pub(crate) const TOWER: &str = "tower";
 
 /// Which spell is running in each domain, and how many cursors in total.
 ///

@@ -393,7 +393,11 @@ fn invoking_a_running_spell_twice_does_not_start_it_twice() {
 fn a_spell_may_invoke_another_but_not_endlessly() {
     // §8 permits it to a call-depth limit of 3: exhausting the execution budget
     // instead logs at high verbosity only, so automation would stop silently.
+    // In a room: written at `/tower`, these would be the tower's spells, and
+    // only the player starts one of those.
     let mut sim = Sim::new(1);
+    sim.submit("attend laboratory");
+    sim.step();
     for (name, lines) in [
         ("one", vec!["invoke two"]),
         ("two", vec!["invoke three"]),
@@ -1280,6 +1284,49 @@ fn a_forbidden_verb_is_refused_when_the_spell_is_cast() {
     assert!(
         ever_said(&sim, "will not take from a spell"),
         "a forbidden verb in an untaken branch was never mentioned: {:?}",
+        said(&sim),
+    );
+}
+
+#[test]
+fn a_forbidden_verb_beside_a_name_reads_as_forbidden_in_the_editor() {
+    // Both shapes are quoted rather than resolved, and quoted lines once read
+    // clean while the runner refused them.
+    let sim = Sim::new(1);
+    let lines: Vec<String> = [
+        "bind first_light",
+        "let m be mortar_and_pestle",
+        "attend m",
+        "invoke first_light",
+        "wield m",
+    ]
+    .map(str::to_owned)
+    .to_vec();
+    let reading = sim.read_spell("laboratory", &lines);
+    let fault = |index: usize| reading[index].fault.as_ref().map(|fault| fault.key);
+    assert_eq!(fault(0), Some("spell_forbidden"), "{reading:?}");
+    assert_eq!(fault(2), Some("spell_forbidden"), "{reading:?}");
+    // What may be said stays clean.
+    assert_eq!(fault(3), None, "{reading:?}");
+    assert_eq!(fault(4), None, "{reading:?}");
+}
+
+#[test]
+fn a_forbidden_verb_beside_a_bound_name_is_said_at_cast() {
+    let mut sim = with_spell(
+        "risky",
+        &[
+            "let m be mortar_and_pestle",
+            "if the dispensary has quartz",
+            "attend m",
+            "end",
+        ],
+    );
+    sim.submit("invoke risky");
+    sim.step_n(4);
+    assert!(
+        ever_said(&sim, "will not take from a spell"),
+        "{:?}",
         said(&sim),
     );
 }

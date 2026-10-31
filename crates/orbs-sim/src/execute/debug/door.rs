@@ -27,6 +27,7 @@ pub fn open(world: &mut World, line: &str, word: DebugWord) {
         DebugWord::Take(id) => progress::take(world, id.as_deref()),
         DebugWord::Reach(id) => progress::reach(world, id.as_deref()),
         DebugWord::Renown(total) => progress::renown(world, total),
+        DebugWord::Ley(total) => progress::ley(world, total),
     }
 }
 

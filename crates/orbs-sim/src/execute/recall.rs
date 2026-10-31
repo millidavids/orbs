@@ -313,8 +313,12 @@ fn scripting(world: &mut World) {
 ///
 /// `than` sits after `count`: it is the same comparison with the world on both
 /// sides, and is no use to a player who has not met a number in a question.
-const SHAPES: [&str; 6] = [
+const SHAPES: [&str; 8] = [
     "man_scripting_shape_is",
+    // After `is`, which they are the same shape of: what is asked is a spell,
+    // or a whole room.
+    "man_scripting_shape_spell",
+    "man_scripting_shape_room",
     "man_scripting_shape_has",
     "man_scripting_shape_count",
     "man_scripting_shape_than",

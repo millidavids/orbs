@@ -387,3 +387,67 @@ fn taking_a_node_replays_to_the_same_world() {
         orbs_sim::tower::spell::budget(live.world()),
     );
 }
+
+/// The tester's door to experience goes through the real credit: the level it
+/// crosses is said once, however many it jumps, and what the ley line opens
+/// opens.
+#[cfg(debug_assertions)]
+#[test]
+fn debug_ley_raises_experience_through_the_real_credit() {
+    let mut sim = laboratory();
+    run_all(&mut sim, &["debug_ley 96"]);
+    assert_eq!(sim.experience(), 96);
+    assert_eq!(sim.concentration(), 2);
+    let gained = said(&sim)
+        .into_iter()
+        .filter(|line| line.contains("the orb can hold"))
+        .count();
+    assert_eq!(
+        gained,
+        1,
+        "a jump of two levels said {gained}: {:?}",
+        said(&sim)
+    );
+
+    // Sixteen opens the grimoire, which a sealed tower keeps shut until then.
+    let mut sealed = Sim::sealed(1);
+    run_all(&mut sealed, &["debug_ley 16"]);
+    assert!(
+        said(&sealed)
+            .iter()
+            .any(|line| line.contains("the grimoire is yours now")),
+        "the ley line did not open the grimoire: {:?}",
+        said(&sealed),
+    );
+}
+
+#[cfg(debug_assertions)]
+#[test]
+fn debug_ley_never_lowers_experience() {
+    let mut sim = laboratory();
+    run_all(
+        &mut sim,
+        &["debug_ley 96", "debug_ley 10", "debug_ley lots"],
+    );
+    assert_eq!(sim.experience(), 96);
+    assert!(
+        said(&sim)
+            .iter()
+            .any(|line| line.contains("experience only rises")),
+        "a lower total was not refused: {:?}",
+        said(&sim),
+    );
+}
+
+/// Rule 3: the door is journalled, so a replay reaches the same world.
+#[cfg(debug_assertions)]
+#[test]
+fn a_replayed_debug_ley_reaches_the_same_world() {
+    let mut live = laboratory();
+    run_all(&mut live, &["debug_ley 96"]);
+
+    let replayed = common::replayed(&live, Sim::new(1));
+
+    assert_eq!(replayed.experience(), live.experience());
+    assert_eq!(replayed.concentration(), 2);
+}

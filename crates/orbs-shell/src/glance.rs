@@ -63,6 +63,11 @@ pub struct Panel {
     ///
     /// The most expensive answer here: `Sim::briefs` walks every room.
     pub briefs: Vec<orbs_sim::tower::Brief>,
+    /// The tower's spell, while one runs or its fault stands — the rail's foot,
+    /// since it is no room's box.
+    pub tower: Option<orbs_sim::tower::Brief>,
+    /// How many spells the orb holds, for the rail's `held` row.
+    pub held: usize,
     /// The pace of the road's next deed, for its forecast. From the gaps
     /// between makings, so it moves only when something is made.
     pub pace: Option<orbs_sim::tower::Pace>,
@@ -89,6 +94,8 @@ impl Panel {
         self.rampart = sim.rampart();
         self.lattice = sim.lattice();
         self.briefs = sim.briefs();
+        self.tower = sim.tower_brief();
+        self.held = sim.held().len();
         // The room, not the leaf: a player standing in the alembic is in the
         // laboratory, and the laboratory's line is the road they should see.
         self.line = domain

@@ -42,6 +42,14 @@ impl Scrivener for Shouty {
     }
 }
 
+/// A tower with the player in a room, where a new spell has a home.
+fn laboratory() -> Sim {
+    let mut sim = Sim::new(3);
+    sim.submit("attend laboratory");
+    sim.step();
+    sim
+}
+
 /// The spell node, once a queued write has landed.
 fn spell_node(sim: &Sim) -> bevy_ecs::entity::Entity {
     sim.world()
@@ -75,7 +83,7 @@ fn lines(of: &[&str]) -> Vec<String> {
 fn the_file_stays_the_players_however_loudly_it_is_read() {
     // The rule the whole shape exists to keep (§19): a reader that rewrites
     // every line must still leave `Held` byte-exact.
-    let mut sim = Sim::new(3);
+    let mut sim = laboratory();
     let typed = lines(&["crush the sage", "then have a rest"]);
     sim.write_spell_reading("morning", &typed, &Shouty::new());
     sim.step();
@@ -87,7 +95,7 @@ fn the_file_stays_the_players_however_loudly_it_is_read() {
 fn the_reading_is_what_compiles() {
     // ...and the other half: a reading that reached nothing would be a cache
     // with no consumer.
-    let mut sim = Sim::new(3);
+    let mut sim = laboratory();
     sim.write_spell_reading("morning", &lines(&["crush the sage"]), &Shouty::new());
     sim.step();
 
@@ -103,7 +111,7 @@ fn with_no_reader_the_reading_is_the_text() {
     // The identity case: every build without a reader must compile what it
     // always did. `Sim::write_spell` is `write_spell_reading` with a reader
     // that answers nothing, so there is no second code path.
-    let mut sim = Sim::new(3);
+    let mut sim = laboratory();
     let typed = lines(&["grind sage", "bide 10"]);
     sim.write_spell("morning", &typed);
     sim.step();
@@ -117,7 +125,7 @@ fn a_line_that_did_not_change_is_not_read_again() {
     // The editor writes the buffer out after every pause in the typing, so a
     // whole-file reading would pay for every line on every keystroke — 436µs a
     // line for the trained reader. Hence the per-line fingerprint.
-    let mut sim = Sim::new(3);
+    let mut sim = laboratory();
     let reader = Shouty::new();
 
     sim.write_spell_reading(
@@ -152,7 +160,7 @@ fn a_reading_is_kept_only_for_the_reader_that_made_it() {
     // The cache was keyed by the text alone, so a reading outlived the reader
     // that made it — saved again on `plain`, a spell went on compiling the
     // model's words.
-    let mut sim = Sim::new(3);
+    let mut sim = laboratory();
     let typed = lines(&["crush the sage"]);
     sim.write_spell_reading("morning", &typed, &Shouty::new());
     sim.step();
@@ -210,7 +218,7 @@ fn interpret_reads_nothing_the_save_already_read() {
     // It asked the reader about every line on every beat and ignored the reading
     // the node already held. It looks the lines up where the save does now — the
     // queued write, then the node — so the two are one reading.
-    let mut sim = Sim::new(3);
+    let mut sim = laboratory();
     let reader = Shouty::new();
     let typed = lines(&["crush the sage", "wait a bit"]);
     sim.write_spell_reading("morning", &typed, &reader);
@@ -239,7 +247,7 @@ fn a_reading_comes_back_from_a_save_only_where_its_line_does() {
     // A save carried one reading per line by position, so a hand-edited line of
     // `held` compiled the reading of whatever used to be there. It now carries
     // the text each reading was made from.
-    let mut sim = Sim::new(3);
+    let mut sim = laboratory();
     sim.write_spell_reading(
         "morning",
         &lines(&["crush the sage", "wait a bit"]),
@@ -268,7 +276,7 @@ fn a_reading_comes_back_from_a_save_only_where_its_line_does() {
 fn a_spell_no_reader_changed_saves_no_reading() {
     // The file says nothing a load could work out alone: a spell that is its
     // own reading throughout writes no `read` at all.
-    let mut sim = Sim::new(3);
+    let mut sim = laboratory();
     sim.write_spell("morning", &lines(&["grind sage", "bide 10"]));
     sim.step();
     let save = sim.snapshot();
@@ -345,7 +353,7 @@ fn the_sets_the_corpus_teaches_are_the_sets_the_tower_raises() {
     // Both directions: a set the tower never raises teaches the reader a `for
     // each` that walks nothing, and a set the corpus never names is one the
     // reader can never offer.
-    let mut sim = Sim::new(3);
+    let mut sim = laboratory();
     sim.step();
     let mut raised: Vec<String> = sim
         .world()
@@ -372,7 +380,7 @@ fn a_blank_line_and_a_comment_are_never_offered_to_a_reader() {
     // Neither is a statement, so there is nothing for a reader to say about one
     // — and a reader that answered a comment would turn a line the player
     // commented *out* into one the spell runs.
-    let mut sim = Sim::new(3);
+    let mut sim = laboratory();
     let reader = Shouty::new();
     sim.write_spell_reading(
         "morning",

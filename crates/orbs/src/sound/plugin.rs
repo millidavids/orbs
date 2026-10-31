@@ -167,7 +167,8 @@ mod tests {
         //
         let mut app = sounding();
         press(&mut app, LogicalKey::Character("a".into()));
-        app.update();
+        // One frame: with a sound card, a click ends and despawns its player
+        // during any stall before a second one.
         app.update();
         assert!(players(&mut app) > 0, "a keystroke reached no audio player");
     }

@@ -103,7 +103,7 @@ scripts/tour.sh all                                           # every surface, m
 domain at work, every puzzle mid-move, every screen crossing to the next, the
 boot card, the menus, and every effect the glass has. A scene sets itself up at
 once, then types its own commands at the keyboard as a player would, and holds
-for about five seconds. 87 scenes, in a debug build.
+for about five seconds. 88 scenes, in a debug build.
 
 ```bash
 scripts/tour.sh                          # list every scene: name, how long, what it shows

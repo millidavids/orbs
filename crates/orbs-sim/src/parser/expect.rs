@@ -31,6 +31,8 @@ pub struct Situation<'a> {
     /// Whether this line is a line of a spell rather than a command — which
     /// has words of its own and never sees §6's numbered prompt.
     pub spell: bool,
+    /// Whether that spell is written for the whole tower, which says less.
+    pub for_the_tower: bool,
     /// Whether §6's numbered prompt is waiting for a digit, which turns the
     /// answer off: here, so no surface has to remember to.
     pub prompt_open: bool,
@@ -180,7 +182,7 @@ pub fn expect(line: &str, caret: usize, at: &Situation<'_>) -> Expectation {
         } else {
             Vec::new()
         };
-        out.extend(verbs(partial, at.scene, at.spell));
+        out.extend(verbs(partial, at));
         out
     } else if let Some(word) = at.spell.then(|| opening(leading)).flatten() {
         // A line opening with one of the language's own words is the
@@ -188,7 +190,7 @@ pub fn expect(line: &str, caret: usize, at: &Situation<'_>) -> Expectation {
         after(word, leading, partial, at)
     } else {
         match verb_of(leading, at.scene) {
-            Some((verb, filled)) => nouns(verb, filled, partial, at.scene),
+            Some((verb, filled)) => nouns(verb, filled, partial, at),
             None => Vec::new(),
         }
     };
@@ -490,11 +492,11 @@ fn starting(offered: Vec<Expected>, partial: &str) -> Vec<Expected> {
 ///
 /// In a spell, two filters: `Scene::offers` asks whether the verb's fixture
 /// stands here, and [`spell_may`] whether a spell may issue it at all.
-fn verbs(partial: &str, scene: &Scene, spell: bool) -> Vec<Expected> {
+fn verbs(partial: &str, at: &Situation<'_>) -> Vec<Expected> {
     let mut out: Vec<(String, Verb)> = SYNONYMS
         .iter()
-        .filter(|entry| scene.offers(entry.verb))
-        .filter(|entry| !spell || spell_may(entry.verb))
+        .filter(|entry| at.scene.offers(entry.verb))
+        .filter(|entry| !at.spell || spell_may(entry.verb, at.for_the_tower))
         .map(|entry| (entry.words.join(" "), entry.verb))
         .filter(|(phrase, _)| phrase.starts_with(partial))
         .collect();
@@ -512,9 +514,9 @@ fn verbs(partial: &str, scene: &Scene, spell: bool) -> Vec<Expected> {
 /// Whether a spell may issue this verb at all — the pair
 /// [`spell_vocabulary`](crate::spell_vocabulary) applies too, so Tab never
 /// offers a word the guide does not explain.
-const fn spell_may(verb: Verb) -> bool {
+const fn spell_may(verb: Verb, for_the_tower: bool) -> bool {
     // *Nobody built this* and *a spell may not*: both dead ends.
-    crate::execute::is_live(verb) && crate::tower::spell::may_issue(verb)
+    crate::execute::is_live(verb) && crate::tower::spell::may_say(verb, for_the_tower)
 }
 
 /// The verb a line has already named, and how many argument slots follow it.
@@ -559,7 +561,7 @@ fn verb_order(verb: Verb) -> usize {
 }
 
 /// Every noun that fits the slot the caret is in.
-fn nouns(verb: Verb, filled: usize, partial: &str, scene: &Scene) -> Vec<Expected> {
+fn nouns(verb: Verb, filled: usize, partial: &str, at: &Situation<'_>) -> Vec<Expected> {
     let signature = verb.signature();
     let Some(slot) = signature.get(filled).or_else(|| signature.last()) else {
         return Vec::new();
@@ -573,14 +575,14 @@ fn nouns(verb: Verb, filled: usize, partial: &str, scene: &Scene) -> Vec<Expecte
     }
 
     // `Name` is free text, but the commonest `scribe` reopens a spell, so the
-    // spells that exist are offered.
-    let offered = if slot.kind == NounKind::Name {
+    // spells that exist are offered. A tower spell stops spells, never a tool.
+    let offered = if slot.kind == NounKind::Name || (at.for_the_tower && verb == Verb::Stop) {
         NounKind::Script
     } else {
         slot.kind
     };
 
-    scene
+    at.scene
         .nouns()
         .iter()
         .filter(|noun| offered.accepts(noun.kind))
@@ -629,6 +631,7 @@ mod tests {
             &Situation {
                 scene: &scene,
                 spell: true,
+                for_the_tower: false,
                 prompt_open: false,
                 open,
                 sets: &sets,
@@ -644,6 +647,7 @@ mod tests {
             &Situation {
                 scene: &scene,
                 spell: false,
+                for_the_tower: false,
                 prompt_open: false,
                 open: &[],
                 sets: &[],
@@ -898,6 +902,7 @@ mod tests {
                 &Situation {
                     scene: &scene,
                     spell: true,
+                    for_the_tower: false,
                     prompt_open: false,
                     open: &[],
                     sets: &sets,
@@ -1033,6 +1038,7 @@ mod tests {
                 &Situation {
                     scene: &scene,
                     spell,
+                    for_the_tower: false,
                     prompt_open: true,
                     open: &[],
                     sets: &[],

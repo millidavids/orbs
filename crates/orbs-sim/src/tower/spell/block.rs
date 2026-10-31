@@ -128,14 +128,23 @@ fn begins_work(intent: &Intent) -> bool {
     }
     // Operations that schedule nothing: scoped to an instrument, but instant.
     // Left in, a bound solver waits on a slot it never takes and gives up at
-    // `PATIENCE` — §19 records the sanctum's costing exactly that.
+    // `PATIENCE` — §19 records the sanctum's costing exactly that, and the
+    // lens's press and the athanor's fire after it.
     if matches!(
         intent.verb,
-        Verb::Dial | Verb::Muster | Verb::Haul | Verb::Summon | Verb::Limn
+        Verb::Dial
+            | Verb::Muster
+            | Verb::Haul
+            | Verb::Summon
+            | Verb::Limn
+            | Verb::Probe
+            | Verb::Kindle
     ) {
         return false;
     }
-    intent.verb.is_operation() || matches!(intent.verb, Verb::Wield | Verb::Research | Verb::Purge)
+    // Not `research` or `purge`: an opening takes no slot, and a purge runs in
+    // the triage slot, beside a brew.
+    intent.verb.is_operation() || intent.verb == Verb::Wield
 }
 
 /// Every instrument `intent` needs to find idle, where the script is standing.

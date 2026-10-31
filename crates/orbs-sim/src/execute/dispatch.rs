@@ -225,16 +225,17 @@ pub fn offered(world: &World) -> Vec<Verb> {
 /// The verbs a spell written for `domain` may actually use.
 ///
 /// The scene is built for `domain`, not the player's room, since a spell runs
-/// where it is written for; and `may_issue` filters what a spell may say. An
+/// where it is written for; and `may_say` filters what a spell may say. An
 /// unknown domain answers with the verbs that need no fixture.
 #[must_use]
 pub fn spell_vocabulary(world: &World, domain: &str) -> Vec<Verb> {
     let scene = super::navigate::find_domain(world, domain)
         .map(|at| crate::tower::scene_at(world, at))
         .unwrap_or_default();
+    let for_the_tower = tower::spell::names_tower(domain);
     Verb::ALL
         .into_iter()
-        .filter(|verb| is_live(*verb) && crate::tower::spell::may_issue(*verb))
+        .filter(|verb| is_live(*verb) && tower::spell::may_say(*verb, for_the_tower))
         .filter(|verb| scene.offers(*verb))
         .collect()
 }
@@ -266,6 +267,7 @@ pub fn spell_expect(
         &crate::parser::Situation {
             scene: &scene,
             spell: true,
+            for_the_tower: tower::spell::names_tower(domain),
             prompt_open: false,
             open,
             sets: sets.as_deref().unwrap_or_default(),

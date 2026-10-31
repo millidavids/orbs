@@ -288,7 +288,7 @@ fn sample(sim: &Sim) -> Sample {
 /// Through `Sim::write_spell`, the editor's entry, so the session replays —
 /// never `debug_spell`, which is debug-only.
 fn hand_over(sim: &mut Sim, name: &str, lines: &[&str]) -> bool {
-    // Compared by filename, because that is what the tower holds: `bound()`
+    // Compared by filename, because that is what the tower holds: `held()`
     // answers `tending.spell` where a policy names `tending`, so a bare `==`
     // never matched and the driver re-issued `bind` every free tick — 1,920
     // refusals in a two-hour sweep.
@@ -296,7 +296,7 @@ fn hand_over(sim: &mut Sim, name: &str, lines: &[&str]) -> bool {
 
     // Standing automation. There is nothing left for a player to do, which is
     // the whole claim this policy measures — so burn the tick and watch.
-    if sim.bound().contains(&filename) {
+    if sim.held().contains(&filename) {
         sim.step();
         return true;
     }

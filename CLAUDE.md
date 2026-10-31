@@ -14,11 +14,14 @@ CRT glowing in the dark.
 
 **Status: the game plays, and the premise is complete** — seven domains, the
 arsenal carrying their output, and a siege that rewrites the scripts behind you.
-`0.23` (*the tour* — every surface, moving, one scene at a time, for a person
-to watch and for Claude to screenshot) is the last feature closed, after `0.22`
-(*every instrument has a tempo*) and `0.21` (*the tower speaks up* — a rate, a
-wait, a forecast, the tower's news, and a glass that answers). `0.17` (*the tower as one machine*) is paused, its bottleneck box done
-under `0.21`. A few boxes in closed sections are left open
+`0.24` (*the tower's spell* — one spell at `/tower` that watches every room and
+starts and stops the rooms' spells, every spell held costing a concentration)
+is the last feature closed, after `0.23` (*the tour* — every surface, moving,
+one scene at a time, for a person to watch and for Claude to screenshot),
+`0.22` (*every instrument has a tempo*) and `0.21` (*the tower speaks up* — a
+rate, a wait, a forecast, the tower's news, and a glass that answers). `0.17`
+(*the tower as one machine*) is paused, its bottleneck box done under `0.21`
+and its one-spell box under `0.24`. A few boxes in closed sections are left open
 on purpose, and Phase 0's tester gate is deferred; [docs/ROADMAP.md](docs/ROADMAP.md)'s Open table has
 what remains.
 

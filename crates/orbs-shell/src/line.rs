@@ -306,6 +306,7 @@ impl Line {
             &orbs_sim::parser::Situation {
                 scene,
                 spell: false,
+                for_the_tower: false,
                 prompt_open,
                 // The prompt has no lines above it, cannot run a block, and
                 // cannot run a `for each`.
@@ -341,6 +342,7 @@ impl Line {
             &orbs_sim::parser::Situation {
                 scene,
                 spell: false,
+                for_the_tower: false,
                 prompt_open,
                 // The prompt has no lines above it, cannot run a block, and
                 // cannot run a `for each`.

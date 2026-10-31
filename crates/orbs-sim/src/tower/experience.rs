@@ -85,8 +85,17 @@ pub fn credit(world: &mut World, earned: u64) {
     let after = concentration(world);
 
     // Said on the edge, or a derived level would be true silently for ever.
-    if after > before {
-        say_gained(world, after);
+    // Each is about one stretch of the line, so one credit that jumps levels
+    // says each it crossed: the first spell, the tower's, then how many now.
+    let tower = super::spell::TOWER_CONCENTRATION;
+    if before == 0 && after > 0 {
+        say_gained(world, after, "concentration_gained");
+    }
+    if before < tower && after >= tower {
+        say_gained(world, after, "concentration_tower");
+    }
+    if after > before.max(tower) {
+        say_gained(world, after, "concentration_more");
     }
 
     // A room opened is not derived, so crossing a step writes it
@@ -103,12 +112,12 @@ fn earn(world: &mut World, named: &str) -> u64 {
     earned
 }
 
-/// The orb can hold one more than it could — §11.5's turn. It names the verb,
-/// because a capability nobody can find is one nobody has.
-fn say_gained(world: &mut World, level: usize) {
+/// The orb can hold one more than it could — §11.5's turn — said by `key`. It
+/// names the verb, because a capability nobody can find is one nobody has.
+fn say_gained(world: &mut World, level: usize, key: &str) {
     let message = world
         .resource::<Prose>()
-        .line("concentration_gained", &[("count", &level.to_string())]);
+        .line(key, &[("count", &level.to_string())]);
     world
         .resource_mut::<Scrollback>()
         .records_mut()
@@ -156,13 +165,14 @@ mod tests {
             .records()
             .iter()
             .filter_map(|record| record.field(FieldName::Message))
-            .filter(
-                |value| matches!(value, orbs_render::Value::Text(text) if text.contains("hold")),
-            )
+            .filter(|value| {
+                matches!(value, orbs_render::Value::Text(text)
+                    if text.contains("hold") || text.contains("watch the whole tower"))
+            })
             .count();
 
         // Forty alembic runs cross three levels now that the line runs to the
-        // soft ending; each is said exactly once.
+        // soft ending; each is said exactly once, the second in the tower's line.
         let crossed = Progression::builtin().concentration(sim.experience());
         assert!(crossed > 1, "the sweep never crossed a second level");
         assert_eq!(

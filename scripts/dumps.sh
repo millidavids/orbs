@@ -557,4 +557,42 @@ run fork_opened   ORBS_BOOT=0 ORBS_SEALED=1 ORBS_DUMP="attend laboratory; kindle
   debug_spawn clarified-draught 3; distil clarified-draught; meditate 60; empty alembic; \
   distil clarified-draught; meditate 60; empty alembic; distil clarified-draught; meditate 60"
 
+# --- the tower's spell (0.24) ------------------------------------------------
+# Experience raised to concentration 2 in one word; a lens spell pressing beside
+# a brew, which it once waited out.
+run ley_raised     ORBS_BOOT=0 ORBS_DUMP="debug_ley 96; status"
+run ley_more       ORBS_BOOT=0 ORBS_DUMP="debug_ley 96; debug_ley 256"
+run press_by_brew  ORBS_BOOT=0 ORBS_DUMP="attend laboratory; kindle charcoal; \
+  debug_spawn clarified-draught; distil clarified-draught; attend lens; invoke breaking; \
+  meditate 20; peruse lens.log"
+# What a held spell starts is held too: refused at a full orb, and counted
+# against the next bind.
+run orb_full       ORBS_BOOT=0 ORBS_DUMP="attend laboratory; debug_ley 16; debug_take satchel_1; \
+  bind milling; meditate 4; sift milling orb.log"
+run orb_holds_two  ORBS_BOOT=0 ORBS_DUMP="attend laboratory; debug_ley 96; debug_take satchel_1; \
+  bind milling; meditate 2; bind first_light"
+# A spell asking whether another runs, read in the editor and then in play.
+run ask_spell_read ORBS_BOOT=0 ORBS_GRID=100x30 ORBS_DUMP="attend laboratory; scribe asking" \
+  ORBS_EDIT=$'edit\ninvoke first_light\nif first_light is running\nwait for yes\nelse\nwait for no\nend\n<esc>\ninterpret'
+run ask_spell_run  ORBS_BOOT=0 ORBS_DUMP="attend laboratory; scribe asking" \
+  ORBS_EDIT=$'edit\ninvoke first_light\nif first_light is running\nwait for yes\nelse\nwait for no\nend\n<esc>\nquit' \
+  ORBS_THEN="invoke asking; meditate 2; sift asking orb.log"
+# A spell for the whole tower: refused at concentration 1, a page for the tower
+# at 2 with its room verbs unlit, and the dev example casting beside a room's.
+run tower_scribe_one ORBS_BOOT=0 ORBS_DUMP="debug_ley 16; scribe keeper"
+run tower_scribe     ORBS_BOOT=0 ORBS_GRID=100x30 ORBS_DUMP="debug_ley 96; scribe keeper" \
+  ORBS_EDIT=$'edit\ninvoke forging\nsurvey\ngrind sage\n<esc>\ninterpret'
+run tower_casting    ORBS_BOOT=0 ORBS_DUMP="debug_ley 96; bind seneschal; attend grimoire; \
+  meditate 600; attend tower; status"
+# It sees every room: an idle lens, read from the tower, starts its spell.
+run tower_sees       ORBS_BOOT=0 ORBS_DUMP="debug_ley 96; attend tower; scribe looking" \
+  ORBS_EDIT=$'edit\nif the lens is idle and the alembic is idle\ninvoke breaking\nend\n<esc>\nquit' \
+  ORBS_THEN="bind looking; meditate 30; attend lens"
+# It is shown: the rail's foot and a `tower` row in `status rates`.
+run tower_rates      ORBS_BOOT=0 ORBS_DUMP="debug_ley 96; bind seneschal; meditate 30; status rates"
+run tower_manual     ORBS_BOOT=0 ORBS_THRESHOLD=1 ORBS_DUMP=1 ORBS_MENU="manual" ORBS_MANUAL="spells"
+# One spell runs the whole tower: an hour away, four rooms' work by spells.
+run tower_hour       ORBS_BOOT=0 ORBS_DUMP="debug_ley 96; bind seneschal; attend grimoire; \
+  meditate 3600; attend tower; status"
+
 echo "captured $(ls -1 "$out"/*.txt | wc -l) screens into $out"

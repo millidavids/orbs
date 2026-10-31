@@ -76,9 +76,11 @@ impl Strain {
         let pressure = panel.rampart.as_ref().map_or(0.0, |rampart| {
             margin(rampart.enemy.vigour, rampart.garrison.vigour)
         });
+        // The tower's spell faults on its own brief, which no room's box holds.
         let fault = if panel
             .briefs
             .iter()
+            .chain(panel.tower.as_ref())
             .any(|brief| brief.mark == Some(Mark::Fault))
         {
             1.0

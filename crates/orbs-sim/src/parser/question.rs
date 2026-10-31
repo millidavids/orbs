@@ -257,26 +257,27 @@ pub enum Condition {
 }
 
 impl Condition {
-    /// Every **place** the question asks about, outermost first.
+    /// Every **place** the question asks about, outermost first — and an
+    /// `is`'s subject, which may be a spell.
     ///
     /// Separate from things because they fail differently: a missing place is
     /// §8's *Referent missing*, a missing thing is an answer of no — `if the
     /// dispensary has ground-sage` asks it *before* there is any.
     #[must_use]
     pub fn places(&self) -> Vec<&str> {
-        self.names(NounKind::Place)
+        self.names(&[NounKind::Place, NounKind::Stoppable])
     }
 
     /// Every **thing** the question looks for.
     #[must_use]
     pub fn things(&self) -> Vec<&str> {
-        self.names(NounKind::Any)
+        self.names(&[NounKind::Any])
     }
 
-    fn names(&self, wanted: NounKind) -> Vec<&str> {
+    fn names(&self, wanted: &[NounKind]) -> Vec<&str> {
         let mut out = Vec::new();
         self.walk(&mut |kind, name| {
-            if kind == wanted {
+            if wanted.contains(&kind) {
                 out.push(name);
             }
         });
@@ -298,7 +299,8 @@ impl Condition {
                 count.names(visit);
                 visit(NounKind::Any, thing);
             }
-            Self::Is { place, .. } => visit(NounKind::Place, place),
+            // As `rename` reads it: what is working or idle may be a spell.
+            Self::Is { place, .. } => visit(NounKind::Stoppable, place),
             Self::Not(inner) => inner.walk(visit),
             Self::All(items) | Self::Any(items) => {
                 for item in items {
@@ -330,8 +332,10 @@ impl Condition {
                     *thing = found;
                 }
             }
+            // `Stoppable`, not `Place`: what is working or idle may be a spell
+            // too, which `has` may not ask about.
             Self::Is { place, .. } => {
-                if let Some(found) = rename(NounKind::Place, place) {
+                if let Some(found) = rename(NounKind::Stoppable, place) {
                     *place = found;
                 }
             }

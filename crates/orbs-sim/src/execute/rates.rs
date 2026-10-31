@@ -19,6 +19,11 @@ const SLOT: &str = "slot";
 pub(super) fn rates(world: &mut World) {
     let yields = tower::yields(world);
     let slot = tower::slot(world);
+    // Only while a spell runs the tower: without one there is nothing to say,
+    // and every room's row already says what waits there.
+    let tower = tower::spell::tower_brief(world)
+        .filter(|brief| brief.spell.is_some())
+        .and_then(|brief| brief.detail_spoken);
     let prose = world.resource::<Prose>();
 
     let mut rows: Vec<(String, String)> = yields
@@ -43,6 +48,9 @@ pub(super) fn rates(world: &mut World) {
             (one.room.to_owned(), row)
         })
         .collect();
+    if let Some(sentence) = tower {
+        rows.push((tower::TOWER.to_owned(), sentence));
+    }
     rows.push((
         SLOT.to_owned(),
         slot.map_or_else(

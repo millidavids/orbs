@@ -318,8 +318,9 @@ fn spell(world: &mut World, entity: Entity, node: &NodeSave) {
         // The fingerprint above asks about `Held`, this asks about the reading:
         // a save records what the player wrote, so a spell that moved under a
         // running cast is detected on their text, and what compiles is what the
-        // orb read of it.
-        let program = spell::compile(world, spell, &spell::source(world, spell));
+        // orb read of it. Against its room, as `invoke::cast` compiles it: the
+        // spell's own node is in the grimoire, where no room's names are.
+        let program = spell::compile(world, at, &spell::source(world, spell));
         world.entity_mut(entity).insert(spell::Running {
             spell: spell_id,
             program,
@@ -332,7 +333,7 @@ fn spell(world: &mut World, entity: Entity, node: &NodeSave) {
             waiting_since: run.waiting_since.map(Tick::new),
             // Carried, and it was not: dropping it argued a `bide` re-reads its
             // delay from the world, which was true of the retired `bide until`.
-            // A literal has nothing to re-derive from, so `run::bide` took its
+            // A literal has nothing to re-derive from, so `line::bide` took its
             // start arm and stamped a fresh `waiting_since` — a save four ticks
             // into `bide 3600` reloaded into another whole hour.
             biding: run.biding,

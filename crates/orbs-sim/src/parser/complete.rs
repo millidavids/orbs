@@ -47,6 +47,7 @@ pub fn complete(line: &str, caret: usize, scene: &Scene, prompt_open: bool) -> C
         &super::expect::Situation {
             scene,
             spell: false,
+            for_the_tower: false,
             prompt_open,
             // The prompt has no lines above it and cannot run a block anyway,
             // nor a `for each`.

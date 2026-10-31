@@ -3,6 +3,11 @@
 
 use crate::play::Game;
 
+/// The pane's hint while the transcript is being read. Waited for before a key
+/// that only the open view answers: `send` waits for the prompt, a moment
+/// sooner, and on a slow machine `Home` landed at the prompt and did nothing.
+const READING: &str = "esc out";
+
 /// Wait for the screen to change, or fail with it.
 fn moved(game: &Game, before: &str, complaint: &str) {
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
@@ -44,7 +49,7 @@ fn the_arrows_step_the_transcript_one_record_at_a_time() {
     game.does("attend laboratory", "/tower/laboratory")
         .does("help", "the work")
         .does("recall clarity", "steps");
-    game.send("unfurl");
+    game.opens("unfurl", READING);
     let before = game.pane();
     game.press("Up");
     moved(&game, &before, "an arrow inside `unfurl` stepped nothing");
@@ -60,7 +65,7 @@ fn home_and_end_reach_the_ends() {
         game.does("recall clarity", "steps");
     }
     game.expect_off_screen("cold start");
-    game.send("unfurl");
+    game.opens("unfurl", READING);
     game.press("Home");
     game.expect_drawn("cold start");
     game.press("End");

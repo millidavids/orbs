@@ -410,6 +410,8 @@ mod tests {
         // Writing the whole corrupted text into `Read` sent a runnable spell
         // back to its player's loose words, and the repair put those back.
         let mut sim = Sim::new(11);
+        sim.submit("attend laboratory");
+        sim.step();
         let typed: Vec<String> = ["work the sage down", "hang on ten ticks", "grind sage"]
             .into_iter()
             .map(str::to_owned)

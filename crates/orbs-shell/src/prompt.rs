@@ -268,7 +268,7 @@ fn paint_view(frame: &mut Frame, linear: &mut Linear, view: View<'_>) -> Crossed
     if let Some(tapestry) = weaving {
         super::loom::paint(frame, tapestry, first, sim.prose());
         let (at, boxes, foot) = rail();
-        super::rail::paint(frame, sim, screen, at, boxes, foot, &panel.briefs);
+        super::rail::paint(frame, sim, screen, at, boxes, foot, panel);
         return whole;
     }
 
@@ -277,7 +277,7 @@ fn paint_view(frame: &mut Frame, linear: &mut Linear, view: View<'_>) -> Crossed
             frame.set_cursor(Some(Pos::new(col, row)));
         }
         let (at, boxes, foot) = rail();
-        super::rail::paint(frame, sim, screen, at, boxes, foot, &panel.briefs);
+        super::rail::paint(frame, sim, screen, at, boxes, foot, panel);
         // No prompt row: the prompt is dead while the editor has the keyboard
         // (`editing::not_editing`), and drawing a caret it cannot accept a
         // keystroke into is the clearest possible lie about where typing goes.
@@ -290,7 +290,7 @@ fn paint_view(frame: &mut Frame, linear: &mut Linear, view: View<'_>) -> Crossed
         let mut painter = frame.painter(first);
         super::stacks::paint_alone(&mut painter, first, maze, sim.prose());
         let (at, boxes, foot) = rail();
-        super::rail::paint(frame, sim, screen, at, boxes, foot, &panel.briefs);
+        super::rail::paint(frame, sim, screen, at, boxes, foot, panel);
         // No prompt row and no caret, exactly as the editor leaves none: every
         // keystroke is discarded while this is open, and a caret is the game's
         // one promise about where typing lands.
@@ -336,7 +336,7 @@ fn paint_view(frame: &mut Frame, linear: &mut Linear, view: View<'_>) -> Crossed
         }
     };
     let (at, boxes, foot) = rail();
-    super::rail::paint(frame, sim, screen, at, boxes, foot, &panel.briefs);
+    super::rail::paint(frame, sim, screen, at, boxes, foot, panel);
     // The ghost arrives already computed. `shell::input::suggest` owns the one
     // call and names what invalidates it, so no second copy can disagree with
     // the line it trails and it is not rebuilt on the ~59 frames in 60 where

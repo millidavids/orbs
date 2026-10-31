@@ -565,6 +565,18 @@ setup = "attend sanctum; debug_take satchel_1; debug_take cursors_1"
 expect = { room = "sanctum" }
 steps = [{ type = "invoke coursing", shots = [1.0, 3.0] }]
 
+[[scene]]
+name = "spell.tower"
+about = "the tower's spell on the rail's foot, its row in status rates, and the room it started"
+hold = 10
+setup = "debug_ley 96; bind seneschal; meditate 40"
+expect = { said = "the orb takes up seneschal.spell, and will hold it" }
+steps = [
+  { type = "status rates", shots = [0.5] },
+  { type = "attend forge", shots = [0.3, 1.5] },
+]
+ends = { room = "forge" }
+
 # --- stores -----------------------------------------------------------------
 
 [[scene]]

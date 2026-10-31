@@ -101,8 +101,9 @@ nodes = ["escrow_1", "garrison_1", "steps_2"]
 at = 256
 grants = "concentration"
 
-# The second cursor sells ergonomics rather than capability — two spells already
-# run at once, ungated — which is why it sits this far along.
+# The second cursor: one spell in two places. Two spells run at once by hand for
+# nothing, but a held spell's every `invoke` costs a concentration (§19, *The
+# tower's spell*), so this is the one concurrency the orb gives away.
 [[ley_line]]
 at = 400
 nodes = ["fuel_2", "mend_1", "cursors_1"]

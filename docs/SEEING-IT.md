@@ -2423,6 +2423,11 @@ two real distillations, or brewing one clarity end to end. The short route needs
 `kindle charcoal` (the alembic wants heat) and `empty alembic` between runs (a
 charged instrument will not take a second load):
 
+> **Superseded for a debug build at `0.24.0`** (§19, *The tower's spell*):
+> `debug_ley <n>` raises experience to `n` through the real credit, so
+> `debug_ley 96` is concentration 2 in one word. The curve below is still how a
+> player reaches it, and the only way a release build does.
+
 ```bash
 # The curve: one clarity by hand. `+1` … `+8` on the yield lines, then
 # "the orb can hold a spell now", then experience 16 / concentration 1.
@@ -2451,6 +2456,101 @@ ORBS_THEN="bind tending; attend archive; meditate 40; status" cargo run -p orbs
 time it runs off the end, so `first_light` bound would foul the mortar on its
 second pass and complain about it for ever — `grind sage` then `empty
 mortar_and_pestle` is the shortest loop that can actually lap.
+
+**What a held spell starts is held too** (`0.24.1`, §19, *The tower's spell*).
+A bound spell's `invoke` costs a concentration, so at a full orb it is refused,
+once a line, naming what is held, and the spell carries on. A refusal is a
+spell's record, so it is in `orb.log`, not the room's:
+
+```bash
+# Concentration 1: milling.spell holds the one, and ordering is not cast.
+ORBS_BOOT=0 ORBS_DUMP="attend laboratory; debug_ley 16; debug_take satchel_1; \
+  bind milling; meditate 4; sift milling orb.log" cargo run -p orbs
+# Concentration 2: both run, and a third bind names the two it holds.
+ORBS_BOOT=0 ORBS_DUMP="attend laboratory; debug_ley 96; debug_take satchel_1; \
+  bind milling; meditate 2; bind first_light" cargo run -p orbs
+```
+
+By hand, `invoke milling` still runs both for nothing: a hand invocation is how
+a spell is tested, and it ends when you walk out. So between `satchel_1` at 40
+and concentration 2 at 96 the channel runs by hand, and `recall queue` says so.
+
+The level's news says which stretch of the line it is: *hold a spell now*, then
+*watch the whole tower*, then how many:
+
+```bash
+ORBS_BOOT=0 ORBS_DUMP="debug_ley 96; debug_ley 256" cargo run -p orbs
+```
+
+**A spell asks whether another runs** (`0.24.2`): `if first_light is running`,
+from any spell. The editor's `interpret` reads it as *is working*, clean; a
+bound spell reads working between its laps too, so it is never started twice.
+
+```bash
+ORBS_BOOT=0 ORBS_GRID=100x30 ORBS_DUMP="attend laboratory; scribe asking" \
+  ORBS_EDIT=$'edit\ninvoke first_light\nif first_light is running\nwait for yes\nelse\nwait for no\nend\n<esc>\ninterpret' \
+  cargo run -p orbs
+```
+
+### The tower's spell — one spell that starts the rooms' (`0.24`)
+
+**One spell homed at `/tower` watches the tower and starts and stops the rooms'
+spells**, and works nothing itself (§19, *The tower's spell*). It is written at
+`/tower` from concentration 2, one runs at a time, and everything it starts
+holds a concentration of its own. Its refusals are spell records, so they are
+in `orb.log`: `sift <name> orb.log`.
+
+```bash
+# Concentration 1: still "go where the work is first".
+ORBS_BOOT=0 ORBS_DUMP="debug_ley 16; scribe keeper" cargo run -p orbs
+# Concentration 2: a page "in tower". `survey` and `grind sage` are unlit, and
+# the guide offers stop and invoke and nothing else.
+ORBS_BOOT=0 ORBS_GRID=100x30 ORBS_DUMP="debug_ley 96; scribe keeper" \
+  ORBS_EDIT=$'edit\ninvoke forging\nsurvey\ngrind sage\n<esc>\ninterpret' cargo run -p orbs
+# The dev example, bound, with the player in the grimoire: status lists it
+# casting at the tower beside the room spell it started.
+ORBS_BOOT=0 ORBS_DUMP="debug_ley 96; bind seneschal; attend grimoire; \
+  meditate 600; attend tower; status" cargo run -p orbs
+```
+
+**It sees every room** (`0.24.4`): a room by name, `if the lens is idle`, and
+anything in an open room by its own name, `if the alembic is idle`. A room is
+working while a run is in hand there, so a lit hearth or a biding spell leaves
+it idle. A sealed room is out of sight.
+
+```bash
+# A tower spell that starts the lens's solver whenever the lens stands idle.
+ORBS_BOOT=0 ORBS_DUMP="debug_ley 96; attend tower; scribe looking" \
+  ORBS_EDIT=$'edit\nif the lens is idle and the alembic is idle\ninvoke breaking\nend\n<esc>\nquit' \
+  ORBS_THEN="bind looking; meditate 30; attend lens" cargo run -p orbs
+```
+
+**It is shown** (`0.24.5`) on the rail's foot, over the rule above `tick`:
+`►seneschal`, `+n` for more cursors, and its own `‼` or `!` at the right edge,
+heard as the sentence `status rates` gives it. `status rates` has a `tower`
+row while one runs. `scripts/tour.sh spell.tower` is the scene.
+
+```bash
+ORBS_BOOT=0 ORBS_DUMP="debug_ley 96; bind seneschal; meditate 30; status rates" cargo run -p orbs
+```
+
+**One spell runs the whole tower** (`0.24.6`): bound, with the player in the
+grimoire for an hour, `seneschal` goes round the forge, sanctum, menagerie and
+lens six times, and `status` counts each room's work *by your spells*.
+
+```bash
+ORBS_BOOT=0 ORBS_DUMP="debug_ley 96; bind seneschal; attend grimoire; \
+  meditate 3600; attend tower; status" cargo run -p orbs
+```
+
+A siege strikes it as it does any held spell, and alone in the clock's pool, so
+a dragged tower spell slows every room it serves; `purge seneschal` from the
+grimoire mends it.
+
+**It is tested by binding it.** By hand it needs you anywhere in the tower, but
+what it starts needs you in its own room, so `invoke seneschal` at `/tower`
+says *forging.spell needs you in its room. not cast* and starts nothing until
+you stand in the forge.
 
 ### `recall apprentice` — the lesson, where `recall scripting` is the reference
 
@@ -5274,7 +5374,7 @@ screen with a listing — so byte-identity is a gate for a pure extraction only.
 
 ### The tour — every surface, moving (`0.23`)
 
-**A catalogue of 87 scenes, each a tower posed and then played**, in
+**A catalogue of 88 scenes, each a tower posed and then played**, in
 `crates/orbs-shell/src/tour/scenes.toml`. The README's *The visual showcase*
 is the short version. A scene's `setup` runs at once
 through the dump's own driver; its `steps` are then typed at the keyboard; its

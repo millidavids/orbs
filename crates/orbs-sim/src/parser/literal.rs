@@ -99,6 +99,7 @@ mod tests {
             "debug_take 1",
             "debug_ward",
             "debug_renown 40",
+            "debug_ley 96",
             "debug_siege",
             "debug_learn brewing",
             "debug_reach",

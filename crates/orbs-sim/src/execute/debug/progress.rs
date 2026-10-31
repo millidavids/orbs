@@ -58,6 +58,31 @@ pub(super) fn renown(world: &mut World, total: Asking) {
     said(world, &message);
 }
 
+/// Raise experience to a total, for a tester, through the real credit.
+///
+/// `tower::credit`, so the concentration news, the ley crossings and the rooms
+/// they open are the ones play says, and no pace is invented. Never down.
+pub(super) fn ley(world: &mut World, total: Asking) {
+    let standing = |world: &World| {
+        format!(
+            "experience {}, concentration {}",
+            world.resource::<tower::Experience>().get(),
+            tower::concentration(world),
+        )
+    };
+    let held = world.resource::<tower::Experience>().get();
+    let message = match total {
+        Asking::Set(total) if total > held => {
+            tower::credit(world, total - held);
+            standing(world)
+        }
+        Asking::Set(_) => format!("experience only rises. {}", standing(world)),
+        Asking::Where => standing(world),
+        Asking::Unreadable => format!("that is no number. {}", standing(world)),
+    };
+    said(world, &message);
+}
+
 /// Reach a mastery station without doing its deed.
 ///
 /// Every earlier station on the line too, and the room the line stands in,

@@ -12,6 +12,7 @@ use orbs_render::{Frame, Pos, Rect, Span, Style};
 use orbs_sim::Sim;
 use orbs_sim::tower::{Brief, Mark, State};
 
+use super::glance::Panel;
 use super::screen::Screen;
 
 /// A domain with something to say, and a domain with something wrong.
@@ -44,7 +45,7 @@ pub fn paint(
     at: Rect,
     boxes: &[Rect],
     foot: Rect,
-    briefs: &[Brief],
+    panel: &Panel,
 ) {
     if at.is_empty() {
         return;
@@ -55,14 +56,14 @@ pub fn paint(
     // Handed in from `Panel`, never asked from the sim here: `Sim::briefs` walks
     // every room and runs `instruments_in` per room, which is a 60 Hz sweep over
     // 1 Hz data — the allocation `Panel` exists to stop.
-    for (index, (brief, slot)) in briefs.iter().zip(boxes).enumerate() {
+    for (index, (brief, slot)) in panel.briefs.iter().zip(boxes).enumerate() {
         // The rule belongs to the box above the boundary and the last box has
         // none: the foot begins on the row after the last box and opens with a
         // rule of its own, so a rule here would draw two in adjacent rows.
         let ruled = index + 1 < boxes.len();
         domain(&mut painter, brief, *slot, ruled);
     }
-    readings(&mut painter, sim, screen, foot);
+    readings(&mut painter, sim, screen, foot, panel);
 }
 
 /// One domain's box: what it is, what it is doing, and what is running there.
@@ -206,7 +207,13 @@ fn casting(spell: &str, running: usize, width: usize) -> String {
 /// is §8's sidebar requirement, `scale` against a fixed `grid` is §19's change
 /// in two rows, and `focus` is §9's setting. Everything else the pane had is
 /// already in `status`, which is the full answer where this is the glance.
-fn readings(painter: &mut orbs_render::Painter<'_>, sim: &Sim, screen: &Screen, at: Rect) {
+fn readings(
+    painter: &mut orbs_render::Painter<'_>,
+    sim: &Sim,
+    screen: &Screen,
+    at: Rect,
+    panel: &Panel,
+) {
     if at.is_empty() {
         return;
     }
@@ -217,7 +224,7 @@ fn readings(painter: &mut orbs_render::Painter<'_>, sim: &Sim, screen: &Screen, 
         // starting state rather than an exhaustion, so `held 0 of 0` would
         // spend a line saying nothing for the game's first two minutes.
         if held > 0 {
-            format!("held  {} of {held}", sim.bound().len())
+            format!("held  {} of {held}", panel.held)
         } else {
             String::new()
         },
@@ -231,6 +238,9 @@ fn readings(painter: &mut orbs_render::Painter<'_>, sim: &Sim, screen: &Screen, 
     // below it are about the orb rather than about the seventh domain. Silent,
     // for the reason a border is: structure writes cells and no speech.
     painter.rule(Pos::new(at.col, row), at.cols, Style::DIM);
+    if let Some(tower) = &panel.tower {
+        whole_tower(painter, tower, Rect::new(at.col, row, at.cols, 1));
+    }
     row = row.saturating_add(1);
 
     for text in rows.iter().filter(|text| !text.is_empty()) {
@@ -242,6 +252,38 @@ fn readings(painter: &mut orbs_render::Painter<'_>, sim: &Sim, screen: &Screen, 
             &Span::new(truncate(text, usize::from(at.cols))).with_style(Style::DIM),
         );
         row = row.saturating_add(1);
+    }
+}
+
+/// The tower's spell, over the foot's rule: `►seneschal`, and the tower's mark
+/// at the right edge where a box keeps its own.
+///
+/// On the rule rather than a row of its own, since the foot has none to spare
+/// at 120×45, and no room's box is the tower's. The rule stays drawn either
+/// side, so the separation still reads.
+fn whole_tower(painter: &mut orbs_render::Painter<'_>, tower: &Brief, at: Rect) {
+    let width = usize::from(at.cols);
+    let (mark, style) = match tower.mark {
+        Some(Mark::Fault) => (FAULT, Style::DANGER),
+        Some(Mark::News) => (NEWS, Style::SUCCESS),
+        None => ("", Style::NORMAL),
+    };
+    let wide = mark.chars().count();
+    if let Some(spell) = &tower.spell {
+        // `casting`'s row, without the box's indent, and short of the mark.
+        let drawn = casting(spell, tower.running, width.saturating_sub(wide) + 2);
+        let drawn = drawn.trim_start();
+        let mut said = Span::new(drawn).with_style(Style::COST);
+        if let Some(spoken) = &tower.detail_spoken {
+            said = said.with_spoken(spoken);
+        }
+        painter.span(at.origin(), &said);
+    }
+    if !mark.is_empty() {
+        let col = at
+            .col
+            .saturating_add(u16::try_from(width.saturating_sub(wide)).unwrap_or(0));
+        painter.span(Pos::new(col, at.row), &Span::new(mark).with_style(style));
     }
 }
 
@@ -291,6 +333,34 @@ mod tests {
             orbs_render::MAX_PANES,
             orbs_sim::tower::DOMAINS.len(),
         );
+    }
+
+    #[test]
+    fn the_tower_row_keeps_its_count_and_its_mark() {
+        // A long name gives up its letters before the `+n` or the mark gives up
+        // its place, as a room's `►` row does.
+        let width = RAIL_COLS - 2;
+        let brief = Brief {
+            name: "tower",
+            built: true,
+            state: State::Empty,
+            wait: orbs_sim::tower::Wait::Nothing,
+            detail: None,
+            detail_spoken: Some("the_longest_tower_spell runs the tower".to_owned()),
+            spell: Some("the_longest_tower_spell".to_owned()),
+            running: 3,
+            mark: Some(Mark::Fault),
+            mastery: None,
+        };
+        let mut frame = Frame::new(orbs_render::GridSize::new(width, 1));
+        let at = Rect::new(0, 0, width, 1);
+        whole_tower(&mut frame.painter(at), &brief, at);
+        let row = frame.to_text();
+        let row = row.lines().next().unwrap_or_default();
+        assert!(row.starts_with(RUNNING), "{row:?}");
+        assert!(row.contains("+2"), "{row:?}");
+        assert!(row.ends_with(FAULT), "{row:?}");
+        assert_eq!(row.chars().count(), usize::from(width), "{row:?}");
     }
 
     #[test]

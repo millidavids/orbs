@@ -41,6 +41,10 @@ pub fn invoke(intent: &Intent, world: &mut World) {
         say(world, "spell_already", &wanted, Role::Cost);
         return;
     }
+    // One spell runs the tower at a time.
+    if super::whole::refused_while_taken(world, node, &wanted, Verb::Invoke) {
+        return;
+    }
 
     let empty = world
         .get::<Held>(node)
@@ -58,8 +62,8 @@ pub fn invoke(intent: &Intent, world: &mut World) {
 /// One door for `invoke` and `bind`, so the compile step, the depth counter and
 /// the complaints cannot drift apart. An empty `announce` is a lap nobody asked
 /// for: no line, and the previous lap's rationing carried over. `held` is a
-/// parameter because `bind` casts before `Bound` can be read back, and a spell a
-/// held one casts is unattended without being held.
+/// parameter because `bind` casts before `Bound` can be read back; a spell a
+/// held one casts is unattended, which is what `bind::held` counts it by.
 pub(super) fn cast(
     world: &mut World,
     node: Entity,
@@ -183,6 +187,54 @@ pub fn stop_spell(world: &mut World, named: &str) -> bool {
         say(world, "spell_stopped", &wanted, Role::Success);
     }
     true
+}
+
+/// Why the running spell `state` may not start `wanted` from its line, if it
+/// may not: the key, what fills its `{detail}`, and how loud.
+pub(super) fn refused_from(
+    world: &World,
+    state: &Running,
+    wanted: &str,
+) -> Option<(&'static str, String, Role)> {
+    // Only the player starts the tower's spell: the order runs one way.
+    if is_for_the_tower(world, wanted) {
+        return Some(("spell_tower_by_hand", String::new(), Role::Danger));
+    }
+    // A held spell starts another only if the orb can hold that one too.
+    if state.unattended {
+        return super::bind::full_for(world, wanted)
+            .map(|holding| ("spell_orb_full", holding.join(", "), Role::Danger));
+    }
+    // An attended run would cast a spell in another room only to see it end
+    // next tick. Cost, not Danger: walking about with one invoked by hand is no
+    // fault.
+    let player = world.resource::<super::Caller>().0?.player;
+    needs_you(world, wanted, player).map(|file| ("spell_needs_you", file, Role::Cost))
+}
+
+/// Whether `wanted` names a spell written for the tower, which only the player
+/// starts: the order runs one way, tower to rooms.
+fn is_for_the_tower(world: &World, wanted: &str) -> bool {
+    find(world, &crate::content::with_extension(wanted))
+        .is_some_and(|node| super::whole::for_the_tower(world, node))
+}
+
+/// The spell `wanted` names, when an attended run casting it would see it end
+/// a tick later: it is homed in a room the player is not in, and an invocation
+/// needs its player there.
+///
+/// `None` for one that is not there or already running, which `invoke`
+/// answers in its own words.
+fn needs_you(world: &World, wanted: &str, player: Entity) -> Option<String> {
+    let file = crate::content::with_extension(wanted);
+    let node = find(world, &file)?;
+    if world.get::<Running>(node).is_some() {
+        return None;
+    }
+    let Domain(home) = world.get::<Domain>(node)?;
+    let home = crate::execute::find_domain(world, home)?;
+    let here = tower::domain_of(world, player).unwrap_or(player);
+    (home != here && !super::whole::for_the_tower(world, node)).then_some(file)
 }
 
 /// The spell node called `wanted`, wherever it is kept — `tower::reach`'s walk.

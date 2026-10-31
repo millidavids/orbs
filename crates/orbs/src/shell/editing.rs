@@ -179,10 +179,14 @@ mod tests {
     /// exercises what the `Editor` unit tests cannot reach: a `Time` that
     /// really advances, driving a save that lands in the world.
     fn app() -> App {
+        // In a room, where a new spell has a home, as `scribe` would have asked.
+        let mut tower = Tower::new(1);
+        tower.submit("attend laboratory");
+        tower.step();
         let mut app = App::new();
         app.insert_resource(Time::<()>::default())
             .insert_resource(Editing::default())
-            .insert_resource(Tower::new(1))
+            .insert_resource(tower)
             .add_systems(
                 Update,
                 autosave.run_if(super::super::modal::is_open::<Editor>),

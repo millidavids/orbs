@@ -47,7 +47,7 @@ When this skill is activated, **immediately enter Plan Mode** using `EnterPlanMo
 | New surface | [surfaces.md](references/surfaces.md) | A screen that takes the pane and the keyboard — editor, weave, map |
 | New material or recipe | [instruments.md](references/instruments.md) | Content-only: `recipes.toml` + `materials.toml` |
 | New domain | [instruments.md](references/instruments.md) | §10's remaining five. The archive is the worked example; a domain is a node, its instruments, and its verbs |
-| New spell-language word | — | `parser/spellword.rs`, `tower/spell/{program,compile,run,watch}.rs`. Rare and load-bearing; read all four before proposing |
+| New spell-language word | — | `parser/spellword.rs`, `tower/spell/{program,compile,names,reading,strand,line,watch}.rs`. Rare and load-bearing; read them all before proposing |
 | Frontend enrichment | — | CRT, phosphor, audio. **Rule 2**: it may carry no information absent from the Frame |
 
 Features spanning several categories read all the relevant references. A new domain is usually all

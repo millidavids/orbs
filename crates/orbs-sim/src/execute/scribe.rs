@@ -17,13 +17,25 @@ use super::navigate::find_script;
 
 /// Write `lines` into the spell called `name`, creating it if it is not there.
 ///
-/// Returns the node, so a caller can report on what it just wrote.
+/// Returns the node, so a caller can report on what it just wrote, or `None`
+/// where a new spell has no home: what `scribe` refuses, this refuses, in its
+/// words, so no other door can make a spell for the tower below the gate.
 ///
-/// A save says nothing: the buffer saves after every pause, and the runner and
-/// editor already name an unreadable line.
-pub fn write(world: &mut World, name: &str, lines: &[String], read: &[String], by: u64) -> Entity {
+/// A save says nothing else: the buffer saves after every pause, and the runner
+/// and editor already name an unreadable line.
+pub fn write(
+    world: &mut World,
+    name: &str,
+    lines: &[String],
+    read: &[String],
+    by: u64,
+) -> Option<Entity> {
     let filename = with_extension(name);
     let existing = find_script(world, &filename);
+    if existing.is_none() && home_here(world).is_none() {
+        say_nowhere(world, &filename);
+        return None;
+    }
 
     // The spell's own domain, not where the player is standing: the domain is
     // what its lines are read against at cast, so re-homing a laboratory spell
@@ -100,7 +112,7 @@ pub fn write(world: &mut World, name: &str, lines: &[String], read: &[String], b
         }
     }
 
-    node
+    Some(node)
 }
 
 /// Whether this editing session has already been told the orb took a change up.
@@ -130,6 +142,32 @@ fn domain_here(world: &World) -> Option<String> {
     let cwd = world.resource::<Cwd>().0;
     let domain = tower::domain_of(world, cwd)?;
     world.get::<Name>(domain).map(|name| name.0.clone())
+}
+
+/// What a new spell written here would be homed at: the room, or at `/tower`
+/// itself a spell for the whole tower, once the orb can hold it and one spell
+/// it starts (§19, *The tower's spell*).
+fn home_here(world: &World) -> Option<String> {
+    domain_here(world)
+        .or_else(|| tower::spell::may_write_for_the_tower(world).then(|| tower::TOWER.to_owned()))
+}
+
+/// The first verb to refuse on *where you are*. §6 forbids a bare error, so the
+/// sentence teaches: a spell is written for a place, and `/tower` is not one you
+/// work in.
+fn say_nowhere(world: &mut World, filename: &str) {
+    let message = world
+        .resource::<Prose>()
+        .line("scribe_nowhere", &[("name", filename)]);
+    world
+        .resource_mut::<Scrollback>()
+        .records_mut()
+        .push(RecordKind::Completion)
+        .text(FieldName::Name, Verb::Scribe.canonical())
+        .text(FieldName::Path, filename)
+        .text(FieldName::Message, &message)
+        .role(Role::Danger)
+        .finish();
 }
 
 /// `/grimoire`, which is where a spell lives.
@@ -208,22 +246,8 @@ pub(super) fn scribe(intent: &Intent, world: &mut World) {
     let domain = match existing.and_then(|node| world.get::<Domain>(node).cloned()) {
         Some(Domain(named)) => named,
         None => {
-            let Some(here) = domain_here(world) else {
-                // The first verb to refuse on *where you are*. §6 forbids a
-                // bare error, so the sentence teaches: a spell is written for a
-                // place, and `/tower` is not one you work in.
-                let message = world
-                    .resource::<Prose>()
-                    .line("scribe_nowhere", &[("name", &filename)]);
-                world
-                    .resource_mut::<Scrollback>()
-                    .records_mut()
-                    .push(RecordKind::Completion)
-                    .text(FieldName::Name, Verb::Scribe.canonical())
-                    .text(FieldName::Path, &filename)
-                    .text(FieldName::Message, &message)
-                    .role(Role::Danger)
-                    .finish();
+            let Some(here) = home_here(world) else {
+                say_nowhere(world, &filename);
                 return;
             };
             here

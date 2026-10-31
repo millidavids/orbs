@@ -269,6 +269,78 @@ fn a_loaded_tower_keeps_running_the_same_world() {
     }
 }
 
+/// A resumed run's names are the room's, as a fresh cast's are. Compiled
+/// against the spell's node in the grimoire, the room's own satchel was not a
+/// name at all (`scene_at` offers only the satchel here), so `satch` stayed
+/// short for nothing and the loop stopped on the first lap after a load.
+#[test]
+#[cfg(debug_assertions)]
+fn a_resumed_spell_is_read_in_its_own_room() {
+    let mut lived = Sim::new(3);
+    lived.submit("attend laboratory");
+    lived.step();
+    lived.submit("debug_take satchel_1");
+    lived.step();
+    lived.write_spell(
+        "emptying",
+        &[
+            "repeat until not the satch is empty".to_owned(),
+            "bide 1".to_owned(),
+            "end".to_owned(),
+        ],
+    );
+    lived.step();
+    lived.submit("invoke emptying");
+    lived.step_n(3);
+    assert!(
+        lived.running_line("emptying").is_some(),
+        "the spell is not mid-run"
+    );
+
+    let mut loaded = reloaded(&lived.snapshot());
+    loaded.step_n(6);
+    assert!(
+        loaded.running_line("emptying").is_some(),
+        "the resumed spell read its question in the grimoire, and its loop stopped: {:?}",
+        common::said(&loaded),
+    );
+}
+
+/// The tower's spell and the room spell it started both come back from a save,
+/// and the two worlds run on as one.
+#[test]
+#[cfg(debug_assertions)]
+fn a_bound_tower_spell_wakes_running_the_tower() {
+    let mut lived = Sim::new(11);
+    for line in ["debug_ley 96", "bind seneschal"] {
+        lived.submit(line);
+        lived.step();
+    }
+    lived.step_n(30);
+    assert!(
+        lived.running_line("forging").is_some(),
+        "nothing was started"
+    );
+
+    let mut loaded = reloaded(&lived.snapshot());
+    same(
+        &loaded,
+        &lived,
+        "the tower's spell did not survive the save",
+    );
+    for _ in 0..LOCKSTEP {
+        lived.step();
+        loaded.step();
+    }
+    same(&loaded, &lived, "the two towers parted after the load");
+    assert!(
+        loaded
+            .tower_brief()
+            .is_some_and(|brief| brief.spell.as_deref() == Some("seneschal")),
+        "the loaded tower forgot what runs it"
+    );
+}
+
 /// A round picks its target from a sort, and a restored world must sort the
 /// same way: archetype order differs between a lived world and a rebuilt one.
 #[test]

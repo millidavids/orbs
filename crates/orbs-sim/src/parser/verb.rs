@@ -300,7 +300,7 @@ const WAY: &[Slot] = &[Slot::required(NounKind::Place)];
 
 /// `dial <socket> [<sigil>]` — which dial, and what to turn it to.
 ///
-/// Both `Place`, since a new kind leaks into Tab and `compile::fix`; the cost
+/// Both `Place`, since a new kind leaks into Tab and `names::fix`; the cost
 /// is that `dial laboratory nitre` parses and is refused. The sigil is
 /// optional: a variable-free script cannot name one it has not tried, so bare
 /// steps it (`Ward::advance`).

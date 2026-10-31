@@ -29,22 +29,58 @@ pub struct Bound {
     pub said: Vec<usize>,
 }
 
-/// Every spell the orb is currently holding, by name.
+/// Every spell the orb is currently holding, by name: each one bound, and each
+/// one running unattended, which is what a bound spell's `invoke` starts.
 ///
-/// By [`NodeId`](crate::NodeId), not query order, since a refusal names them.
-/// `&World` through `try_query`, so a sidebar can draw it; `None` is a world
-/// where nothing was ever bound.
+/// Children count, or one concentration and an `invoke` would run the whole
+/// tower (§19, *The tower's spell*). By [`NodeId`](crate::NodeId), not query
+/// order, since a refusal names them. Two `try_query`s rather than one with an
+/// `Option`, so a world where nothing was ever bound still counts its runs.
 #[must_use]
 pub fn held(world: &World) -> Vec<String> {
-    let Some(mut query) = world.try_query::<(&crate::NodeId, &Name, &Bound)>() else {
-        return Vec::new();
-    };
-    let mut found: Vec<(crate::NodeId, String)> = query
-        .iter(world)
-        .map(|(id, name, _)| (*id, name.0.clone()))
-        .collect();
+    let mut found: Vec<(crate::NodeId, String)> = Vec::new();
+    if let Some(mut bound) = world.try_query::<(&crate::NodeId, &Name, &Bound)>() {
+        found.extend(bound.iter(world).map(|(id, name, _)| (*id, name.0.clone())));
+    }
+    if let Some(mut running) = world.try_query::<(&crate::NodeId, &Name, &Running)>() {
+        found.extend(
+            running
+                .iter(world)
+                .filter(|(_, _, run)| run.unattended)
+                .map(|(id, name, _)| (*id, name.0.clone())),
+        );
+    }
     found.sort_unstable_by_key(|(id, _)| *id);
+    found.dedup_by_key(|(id, _)| *id);
     found.into_iter().map(|(_, name)| name).collect()
+}
+
+/// Whether the orb has room to hold `node` too, or what it holds instead.
+///
+/// Free when `node` is already held: binding a running child, or a bound
+/// spell's next lap, costs nothing more.
+pub(crate) fn room_for(world: &World, node: Entity) -> Result<(), Vec<String>> {
+    let already = world.get::<Bound>(node).is_some()
+        || world.get::<Running>(node).is_some_and(|run| run.unattended);
+    let holding = held(world);
+    if already || holding.len() < tower::concentration(world) {
+        Ok(())
+    } else {
+        Err(holding)
+    }
+}
+
+/// What the orb holds instead, when a held spell's `invoke wanted` would be one
+/// more than it can.
+///
+/// `None` for a spell that is not there or already running, which `invoke`
+/// answers in its own words.
+pub(super) fn full_for(world: &World, wanted: &str) -> Option<Vec<String>> {
+    let node = find(world, &with_extension(wanted))?;
+    if world.get::<Running>(node).is_some() {
+        return None;
+    }
+    room_for(world, node).err()
 }
 
 /// `bind <spell>` — ask the orb to hold a spell.
@@ -65,6 +101,10 @@ pub fn bind(intent: &Intent, world: &mut World) {
         say(world, "bind_already", &wanted, Role::Cost);
         return;
     }
+    // One spell runs the tower at a time, held or not.
+    if super::whole::refused_while_taken(world, node, &wanted, Verb::Bind) {
+        return;
+    }
 
     // The game's first gate on what you have earned, so the refusal teaches: at
     // concentration 0 a player cannot know holding a spell is a thing.
@@ -73,8 +113,7 @@ pub fn bind(intent: &Intent, world: &mut World) {
         say(world, "bind_untrained", &wanted, Role::Danger);
         return;
     }
-    let holding = held(world);
-    if holding.len() >= room {
+    if let Err(holding) = room_for(world, node) {
         // Naming what is held is the whole refusal: at concentration 1 it is the
         // sharpest decision in the game (§11.5).
         let message = world.resource::<Prose>().line(

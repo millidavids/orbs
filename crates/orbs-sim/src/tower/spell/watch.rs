@@ -8,8 +8,9 @@
 use bevy_ecs::prelude::{Entity, World};
 use orbs_render::{FieldName, Record, RecordKind, Value};
 
-use crate::parser::{Condition, SpellState};
-use crate::tower::{self, Cwd};
+use super::subject::find;
+use crate::parser::Condition;
+use crate::tower;
 
 /// Something that happened somewhere.
 ///
@@ -104,22 +105,9 @@ fn ask(world: &World, condition: &Condition, missing: &mut Vec<String>) -> Optio
                 crate::parser::Bound::Exactly => many == want,
             })
         }
-        // The panel's word, not `busy()`: an athanor's fire is `Burning`, which
-        // `busy()` cannot see — see [`State::is_busy`](tower::State::is_busy).
-        // `Empty` is about contents, since the athanor never reports
-        // `State::Empty`.
         Condition::Is { place, state } => {
-            let at = find(world, place, missing)?;
-            Some(match state {
-                SpellState::Idle => !tower::state_at(world, at).is_busy(),
-                SpellState::Working => tower::state_at(world, at).is_busy(),
-                // A satchel answers from its queue: `Stock` collapses
-                // duplicates, and a full satchel read empty (§19).
-                SpellState::Empty => world.get::<tower::Satchel>(at).map_or_else(
-                    || tower::children_of(world, at).is_empty(),
-                    tower::Satchel::is_empty,
-                ),
-            })
+            let at = super::subject::find_is(world, place, missing)?;
+            Some(super::subject::is(world, at, *state))
         }
     }
 }
@@ -187,33 +175,6 @@ fn every(world: &World, items: &[Condition], missing: &mut Vec<String>) -> Optio
         .collect()
 }
 
-/// The place `named`, or `None` with the name noted once as one the tower lacks.
-fn find(world: &World, named: &str, missing: &mut Vec<String>) -> Option<Entity> {
-    let cwd = world.resource::<Cwd>().0;
-    let leaf = crate::parser::leaf(named).to_owned();
-    let here = |at: Entity| {
-        tower::children_of(world, at).into_iter().find(|node| {
-            world
-                .get::<tower::Name>(*node)
-                .is_some_and(|name| name.0 == leaf)
-        })
-    };
-    // The room, then an arsenal *store* only: `for each store` binds a cursor to
-    // one from anywhere (§19), and a wider fallback would answer a laboratory's
-    // missing clarity from the arsenal's shelf, false for ever.
-    let found = here(cwd).or_else(|| {
-        tower::keep(world).and_then(here).filter(|node| {
-            world
-                .get::<tower::Grouped>(*node)
-                .is_some_and(|group| group.0 == tower::STORE)
-        })
-    });
-    if found.is_none() && !missing.iter().any(|already| *already == named) {
-        missing.push(named.to_owned());
-    }
-    found
-}
-
 fn text(record: &Record<'_>, field: FieldName) -> Option<String> {
     match record.field(field)? {
         Value::Text(text) => Some(text.to_owned()),
@@ -226,6 +187,7 @@ fn text(record: &Record<'_>, field: FieldName) -> Option<String> {
 mod tests {
     use super::*;
     use crate::Sim;
+    use crate::parser::SpellState;
 
     /// Every event a session produced, in order.
     fn events(sim: &Sim) -> Vec<Event> {

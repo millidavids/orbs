@@ -15,6 +15,48 @@
   at 1.0 (DESIGN.md §19).
 -->
 
+## [v0.24.6] - 2026-10-31
+
+### Description
+In development — a dev log, not patch notes. Automation now goes top to bottom:
+one spell at the tower watches every room and starts and stops the rooms' own.
+And every spell the orb holds costs a concentration, the ones it starts too.
+
+### Added
+- **A spell for the whole tower.** Once the orb can hold two spells, `scribe` at
+  `/tower` writes one that watches every open room and starts and stops the
+  rooms' spells. It never works an instrument itself, and only one runs at a
+  time. A siege can strike it like any other, and `purge` mends it. The manual's
+  spell chapter shows how.
+- **A spell can ask after another.** `if milling is running`, `is idle` and
+  `is empty` work from any spell, so one can wait for another to finish. A tower
+  spell can ask after rooms and what is in them too: `if the lens is idle`.
+- **The tower's spell is on show.** The foot of the rail names it, with its mark
+  when it has gone wrong. `status rates` gives it a row, and in the window the
+  glass drains for its faults as it does for a room's.
+
+### Changed
+- **Every spell the orb holds costs a concentration.** That now includes what a
+  held spell starts. At a full orb the start is refused, naming what is held,
+  and the spell carries on. A spell you start by hand stays free, and
+  `recall queue` explains the difference.
+- **Each new level says what it gives.** The orb says it can hold a spell, then
+  that it can watch the whole tower, then how many it can hold.
+- **A spell says when it needs you.** A spell you started by hand can't start one
+  in another room, and now says `needs you in its room` rather than beginning a
+  run that ends a moment later.
+
+### Fixed
+- **A spell beside a brew keeps working.** `probe`, `kindle`, `research` and
+  `purge` in a spell no longer wait for a brew to finish, so a lens spell doesn't
+  stall and give up while the alembic runs.
+- **A spell restored from a save reads its questions.** A loop asking after
+  something by a shortened name stopped on its first lap after a load.
+- **`repeat until` understands a bound name**, as `if` already did.
+- **The editor marks every line a spell can't say.** A forbidden verb beside a
+  name, or a `bind` line, now shows as you write it rather than failing when the
+  spell runs.
+
 ## [v0.23.5] - 2026-10-30
 
 ### Description

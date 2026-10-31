@@ -201,38 +201,7 @@ fn binding_a_running_invocation_takes_it_up_where_it_stands() {
     );
 }
 
-#[test]
-fn a_held_spell_may_invoke_another_and_keep_it() {
-    // `Bound` is worn by the parent alone: a child gets `Running` and no
-    // `Bound`, because it is a step of something held rather than held itself.
-    // Asking about the component ended the child the tick the player walked
-    // out. §8 permits nesting to depth 3.
-    let mut sim = ready();
-    sim.write_spell("inner", &["grind sage".to_owned()]);
-    sim.step();
-    sim.write_spell(
-        "outer",
-        &[
-            "invoke inner".to_owned(),
-            "empty mortar_and_pestle".to_owned(),
-        ],
-    );
-    sim.step();
-
-    run_all(&mut sim, &["bind outer", "attend archive"]);
-    sim.step_n(60);
-
-    assert!(
-        !ever_said(&sim, "needed you there"),
-        "the nested spell was ended by the player leaving: {:?}",
-        said(&sim),
-    );
-    assert!(
-        grinds(&sim) > 1,
-        "the nested spell never worked: {} grinds",
-        grinds(&sim),
-    );
-}
+// What a held spell starts, and what that costs, is `tests/holding.rs`.
 
 #[test]
 fn a_spell_an_invocation_starts_dies_with_it() {

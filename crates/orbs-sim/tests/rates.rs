@@ -399,3 +399,26 @@ fn the_forges_detail_says_what_the_nodes_publish() {
     let ebbing = forge(&sim);
     assert!(ebbing.starts_with("ebbing"), "{ebbing}");
 }
+
+/// A `tower` row while a spell runs the tower, and none without one: every
+/// room's row already says what waits there.
+#[test]
+#[cfg(debug_assertions)]
+fn status_rates_names_what_runs_the_tower() {
+    let mut sim = Sim::new(11);
+    run_all(&mut sim, &["debug_ley 96", "status rates"]);
+    assert!(
+        !rows(&sim).iter().any(|(room, _)| room == "tower"),
+        "{:?}",
+        rows(&sim)
+    );
+
+    run_all(&mut sim, &["bind seneschal"]);
+    sim.step_n(20);
+    run(&mut sim, "status rates");
+    let tower = rows(&sim)
+        .into_iter()
+        .find(|(room, _)| room == "tower")
+        .expect("no tower row with seneschal bound");
+    assert!(tower.1.starts_with("seneschal"), "{tower:?}");
+}

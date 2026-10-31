@@ -139,6 +139,9 @@ wield_beyond = "the {name} wants {kind} quintessence. a worn barrier holds {quan
 # than refuses, so it names the verb.
 # ---------------------------------------------------------------------------
 concentration_gained = "the orb can hold a spell now. bind one, and walk away"
+# The second concentration: room for a spell that starts another.
+concentration_tower = "the orb can watch the whole tower. scribe a spell at /tower"
+concentration_more = "the orb can hold {count} spells now. bind another, and walk away"
 
 # ---------------------------------------------------------------------------
 # Renown (§11.5, §19). The tower's second number, and the only one that falls.
@@ -225,6 +228,9 @@ rates_hold_pulling = "{name} waits for the {source} to fill"
 rates_hold_biding = "{name} bides with {count}t left"
 rates_slot_held = "the {name} is {state} with {count}t left"
 rates_slot_free = "free. nothing holds it"
+# The tower's row, while a spell runs the tower and is not held: the rooms'
+# rows say what it started.
+rates_tower = "{name} runs the tower"
 
 # The rail's detail row, twelve cells at most: the same wait as `status rates`,
 # in shorthand. `{name}` is an instrument's two letters; a reader hears the
@@ -866,6 +872,22 @@ bind_untrained = "the orb cannot hold a spell yet. work, and it will learn to"
 # sharpest decision in the game, and it cannot be made by a player who has to go
 # and look up what they are already holding.
 bind_full = "the orb holds {count}: {detail}. let one go first"
+# The same pool, reached from inside a held spell: what it starts is held too,
+# so a held `invoke` at a full orb is refused, naming what is held, and the
+# spell carries on. Once a line, not once a lap.
+spell_orb_full = "{name} line {count}: the orb is full, holding {detail}. not cast"
+# The tower's spell (§19): it watches every room and starts and stops their
+# spells, and only that. A room's verb in it is in the wrong spell, not missing
+# a thing, so it says what the tower's spell does. `_line` is the cast's, which
+# has no `{detail}` to fill.
+spell_tower_only = "{name} line {count}: the tower only starts spells, not '{detail}'"
+spell_tower_only_line = "{name} line {count}: a tower spell only starts and stops spells"
+# One runs the tower at a time, and only you start it: the order runs one way.
+spell_tower_taken = "{detail} already runs the tower. let it go first"
+spell_tower_by_hand = "{name} line {count}: only you start a spell for the tower"
+# An invocation needs you in its room, so a spell you invoked does not cast one
+# for a room you are not in only to end it a tick later.
+spell_needs_you = "{name} line {count}: {detail} needs you in its room. not cast"
 # An invocation whose caster walked out. §19: an invoked spell "needs you
 # standing there", and this is the line that makes it true - the difference
 # `bind` sells, said at the moment it costs something.
@@ -1403,6 +1425,8 @@ man_scripting_asking = "questions"
 man_scripting_here = "nameable here"
 man_scripting_sets = "sets for each walks"
 man_scripting_shape_is = "<place> is idle, working or empty"
+man_scripting_shape_spell = "<spell> is running or idle, from any spell"
+man_scripting_shape_room = "<room> is working or idle, from a spell at /tower"
 man_scripting_shape_has = "<place> has <thing>"
 man_scripting_shape_count = "<place> has 2 or more <thing>, or at most 2, or exactly 2"
 man_scripting_shape_than = "<place> has more <thing> than <place>. or fewer, or as many"
@@ -1843,6 +1867,8 @@ man_queue_1 = "every room has a satchel, and it is the one thing two"
 man_queue_2 = "spells can both reach. one puts names in, the other takes"
 man_queue_3 = "them out, oldest first. pull is that other half, and it"
 man_queue_4 = "is a spell word: only a spell can bind what it takes"
+man_queue_5 = "by hand the two run for nothing. held by the orb, each"
+man_queue_6 = "takes a concentration of its own"
 man_queue_eg1 = "queue heed, then survey satchel to see it waiting"
 man_queue_also = "survey, recall scripting"
 

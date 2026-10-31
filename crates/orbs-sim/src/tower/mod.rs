@@ -49,6 +49,7 @@ mod yields;
 pub use assault::{Reached, Retimed, Rewritten};
 pub use audit::{Cooling, Surface};
 pub use boot::report;
+pub(crate) use brief::TOWER;
 pub use brief::{
     Brief, Cast, DOMAINS, Mark, Marks, briefs, clear_mark, mark, mark_fault_at, running_spells,
 };

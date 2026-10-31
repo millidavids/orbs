@@ -242,6 +242,12 @@ const SOLVERS: &[Solver] = &[
     },
 ];
 
+/// Dev spells this file does not drive, and where they are driven instead.
+///
+/// `seneschal` is the tower's spell: it is bound, not invoked, and its work is
+/// four rooms' — `tests/overseeing.rs` holds it to the same claims.
+const DRIVEN_ELSEWHERE: &[&str] = &["seneschal"];
+
 /// Cast `solver` and let it work. Returns the sim for further questions.
 fn drive(solver: &Solver, seed: u64) -> Sim {
     let mut sim = Sim::new(seed);
@@ -367,6 +373,7 @@ fn every_shipped_solver_is_driven_by_this_file() {
         .iter()
         .map(|(name, _)| name)
         .filter(|name| !SOLVERS.iter().any(|solver| solver.name == *name))
+        .filter(|name| !DRIVEN_ELSEWHERE.contains(name))
         .map(str::to_owned)
         .collect();
     missed.sort();
