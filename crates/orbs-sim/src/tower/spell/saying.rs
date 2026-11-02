@@ -81,7 +81,7 @@ pub(super) fn finish(world: &mut World, entity: Entity, state: &Running) {
     let name = spell_name(world, state);
     if let Some(mut bound) = world.get_mut::<super::Bound>(entity) {
         // The binding outlives the run, so its rationing of complaints must too.
-        bound.said = state.said.clone();
+        bound.said.clone_from(&state.said);
         world.entity_mut(entity).remove::<Running>();
         return;
     }

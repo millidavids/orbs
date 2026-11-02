@@ -81,6 +81,8 @@ impl Plugin for RenderPlugin {
                         .run_if(atlas_ready)
                         .run_if(resource_changed::<super::weight::Weight>)
                         .run_if(not(resource_added::<super::weight::Weight>)),
+                    // Unconditional: a clock, and the caret blinks on the frames
+                    // where nothing happened, which is most of them.
                     blink::tick,
                     // Typing must not hide what is being typed: a caret caught
                     // mid-blink when a key lands reads as dropped input. Guarded

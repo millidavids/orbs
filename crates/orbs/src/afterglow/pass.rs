@@ -15,6 +15,6 @@ impl crate::fullscreen::Fullscreen for AfterglowUniform {
     }
 
     fn wanted(&self) -> bool {
-        AfterglowUniform::wanted(*self)
+        Self::wanted(*self)
     }
 }

@@ -215,7 +215,7 @@ pub fn tolerance(policy: &str) -> f64 {
 /// Never below `TOLERANCE`.
 #[must_use]
 pub fn tolerance_of_mean(policy: &str, worlds: usize) -> f64 {
-    #[allow(clippy::cast_precision_loss)]
+    #[expect(clippy::cast_precision_loss, reason = "a count of worlds")]
     let worlds = worlds.max(1) as f64;
     (tolerance(policy) / worlds.sqrt()).max(TOLERANCE)
 }

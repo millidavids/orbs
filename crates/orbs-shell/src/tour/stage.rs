@@ -9,6 +9,7 @@ use super::scene::{Scene, Start};
 use crate::install::Install;
 
 /// A scene's world, ready to show.
+#[derive(Debug)]
 pub struct Staged {
     /// The tower.
     pub sim: Sim,

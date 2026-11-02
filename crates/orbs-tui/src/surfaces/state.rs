@@ -96,7 +96,7 @@ impl Surfaces {
         sim: &mut Sim,
         scroll: &mut Scroll,
         page: usize,
-        held: crate::carried::Carried,
+        held: &crate::carried::Carried,
         scrivener: &dyn orbs_sim::Scrivener,
     ) {
         if self.editing.is_none()
@@ -121,7 +121,7 @@ impl Surfaces {
             self.menuing = Some(Menu::open_at(
                 orbs_shell::Stance::InTower,
                 held.driver(),
-                crate::carried::settings(&held),
+                crate::carried::settings(held),
             ));
         }
         // The book, assembled here because this is where the `Sim` is: the menu

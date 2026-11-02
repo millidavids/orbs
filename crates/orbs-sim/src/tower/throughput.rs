@@ -171,6 +171,7 @@ impl Throughput {
 }
 
 /// What a save keeps of a [`Throughput`].
+#[derive(Debug)]
 pub struct ThroughputParts<'a> {
     /// The tick it began watching.
     pub since: u64,

@@ -115,7 +115,7 @@ fn execute(intent: &Intent, world: &mut World, divined: bool) {
         Verb::Invoke => tower::spell::invoke(intent, world),
         Verb::Bind => tower::spell::bind(intent, world),
         Verb::Purge => pipeline::purge(intent, world),
-        _ => acknowledge(intent.verb, world),
+        Verb::Undo => acknowledge(intent.verb, world),
     }
 }
 

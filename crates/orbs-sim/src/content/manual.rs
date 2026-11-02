@@ -23,6 +23,7 @@ const FILE: &str = "manual.toml";
 
 /// One chapter of the manual.
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 pub struct Chapter {
     /// The word a player types to open it.
     ///
@@ -41,12 +42,14 @@ pub struct Chapter {
 
 /// Every authored chapter, in the order the contents page lists them.
 #[derive(Debug, Clone, Deserialize, Resource)]
+#[serde(deny_unknown_fields)]
 pub struct Manual {
     chapters: Vec<Chapter>,
 }
 
 /// A raw content file, before it is turned into a [`Manual`].
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct File {
     chapters: Vec<Chapter>,
 }

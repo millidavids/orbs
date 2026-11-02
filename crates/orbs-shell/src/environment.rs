@@ -262,6 +262,16 @@ pub struct Readers {
     scribe: Option<Box<dyn orbs_sim::Scrivener>>,
 }
 
+impl std::fmt::Debug for Readers {
+    /// Whether each loaded, which is all a trait object can say.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Readers")
+            .field("reader", &self.reader.is_some())
+            .field("scribe", &self.scribe.is_some())
+            .finish()
+    }
+}
+
 impl Readers {
     /// Whatever `ORBS_AUGURY` and `ORBS_SCRIVENER` asked for.
     #[must_use]

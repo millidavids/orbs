@@ -50,7 +50,7 @@ impl Menu {
             self.page = match self.page {
                 Page::Setting(_) => Page::Settings,
                 Page::Lengths => Page::Play,
-                _ => Page::Choices,
+                Page::Choices | Page::Play | Page::Settings => Page::Choices,
             };
             return None;
         }

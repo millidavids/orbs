@@ -15,6 +15,18 @@
   at 1.0 (DESIGN.md §19).
 -->
 
+## [v0.24.7] - 2026-11-01
+
+### Description
+In development — a dev log, not patch notes. A quiet one: the code was swept
+against the Rust and Bevy rules, with new lints to hold it there. Nothing in play
+changed, and every capture and rate came out identical.
+
+### Changed
+- **A stray key in the game's text files is refused.** Anyone rewriting the orb's
+  words or its manual from their own files is told a file with a stray key did
+  not load, rather than having the key ignored.
+
 ## [v0.24.6] - 2026-10-31
 
 ### Description

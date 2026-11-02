@@ -83,7 +83,7 @@ impl Pylon {
     pub const fn rows() -> u16 {
         // `TALLEST` is 7. The cast is a const-fn away from `try_from` and the
         // constant is right here — `Board::rows_for` takes the same licence.
-        #[allow(clippy::cast_possible_truncation)]
+        #[expect(clippy::cast_possible_truncation, reason = "`TALLEST` is 7")]
         let tallest = TALLEST as u16;
         Self::HEAD + tallest + Self::FOOT
     }

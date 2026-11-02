@@ -178,7 +178,7 @@ impl Named<'_> {
                 "`{event}` is not something a room does. One of: {}",
                 crate::tower::EVENTS.join(", "),
             )),
-            _ => Ok(()),
+            Self::Made(_) | Self::At(_) | Self::Event(_) | Self::Kind => Ok(()),
         }
     }
 }

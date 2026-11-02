@@ -199,7 +199,7 @@ fn a_verb_hands_its_surface_over_once_and_not_twice() {
         &mut sim,
         &mut scroll,
         1,
-        crate::carried::Carried::default(),
+        &crate::carried::Carried::default(),
         &orbs_sim::Verbatim,
     );
     assert_eq!(
@@ -213,7 +213,7 @@ fn a_verb_hands_its_surface_over_once_and_not_twice() {
         &mut sim,
         &mut scroll,
         1,
-        crate::carried::Carried::default(),
+        &crate::carried::Carried::default(),
         &orbs_sim::Verbatim,
     );
     assert_eq!(
@@ -238,7 +238,7 @@ fn a_maze_that_closes_takes_the_keyboard_with_it() {
         &mut sim,
         &mut scroll,
         1,
-        crate::carried::Carried::default(),
+        &crate::carried::Carried::default(),
         &orbs_sim::Verbatim,
     );
     assert_eq!(surfaces.owner(&scroll), Owner::Maze);

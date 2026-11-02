@@ -57,7 +57,7 @@ impl Session {
             &mut self.sim,
             &mut self.scroll,
             self.page,
-            held,
+            &held,
             scribing(&self.readers, self.held.driver),
         );
     }

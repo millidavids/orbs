@@ -32,6 +32,7 @@ pub const EXTENSION: &str = ".spell";
 
 /// One authored spell.
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Spell {
     /// Which domain it is written for, and runs in.
     ///

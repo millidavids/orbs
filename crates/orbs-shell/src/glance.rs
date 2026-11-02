@@ -81,7 +81,7 @@ impl Panel {
     /// A method, not a system, so the terminal asks it too.
     pub fn refresh(&mut self, sim: &Sim) {
         self.instruments = sim.instruments();
-        self.domain = orbs_sim::parser::leaf(&sim.location()).to_owned();
+        orbs_sim::parser::leaf(&sim.location()).clone_into(&mut self.domain);
         // `None` above `/tower`, where no work happens — the leaf is the honest
         // fallback there, so `/tower` and the arsenal are still different places
         // to be standing.

@@ -40,6 +40,6 @@ impl crate::fullscreen::Fullscreen for SightUniform {
     /// identity. The one place the accommodation may be conditional, because
     /// the condition is its own setting and nothing else's.
     fn wanted(&self) -> bool {
-        SightUniform::wanted(*self)
+        Self::wanted(*self)
     }
 }

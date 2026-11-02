@@ -180,10 +180,10 @@ const fn voice_of(kind: RecordKind, role: Role, outcome: Option<Outcome>) -> Opt
 ///
 /// The success chime, not `Done`: every yield rings `Done`, and news has to be
 /// told apart by ear from across the room. A rank lost is a warning.
-const fn news_voice(role: Role) -> Option<Voice> {
+const fn news_voice(role: Role) -> Voice {
     match role {
-        Role::Danger => Some(Voice::Ill),
-        Role::Success | Role::Normal | Role::Cost => Some(Voice::Good),
+        Role::Danger => Voice::Ill,
+        Role::Success | Role::Normal | Role::Cost => Voice::Good,
     }
 }
 
@@ -217,7 +217,7 @@ pub(super) fn ring_for_records(
         .since(last)
         .filter_map(|record| {
             if record.is_news() {
-                news_voice(record.role())
+                Some(news_voice(record.role()))
             } else {
                 voice_of(record.kind(), record.role(), record.outcome())
             }
@@ -283,12 +283,12 @@ mod tests {
     fn news_rings_the_success_chime_not_a_yields() {
         // A station a spell reached is drawn now; by ear it must not be one
         // more yield.
-        assert_eq!(news_voice(Role::Success), Some(Voice::Good));
+        assert_eq!(news_voice(Role::Success), Voice::Good);
         assert_ne!(
-            news_voice(Role::Success),
+            Some(news_voice(Role::Success)),
             voice_of(RecordKind::Completion, Role::Success, None)
         );
-        assert_eq!(news_voice(Role::Danger), Some(Voice::Ill));
+        assert_eq!(news_voice(Role::Danger), Voice::Ill);
     }
 
     #[test]

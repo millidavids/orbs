@@ -179,7 +179,7 @@ fn text(record: &Record<'_>, field: FieldName) -> Option<String> {
     match record.field(field)? {
         Value::Text(text) => Some(text.to_owned()),
         // `qty: 3` would match a spell waiting on something called 3.
-        _ => None,
+        Value::Count(_) | Value::Tick(_) => None,
     }
 }
 

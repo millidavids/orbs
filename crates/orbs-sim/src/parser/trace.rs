@@ -113,7 +113,7 @@ impl ParseRecord {
                     echo.push(' ');
                     echo.push_str(&argument.value);
                 }
-                echo.push_str(&format!(" <{missing:?}?>"));
+                let _ = write!(echo, " <{missing:?}?>");
                 (Outcome::Incomplete, Some(echo), Some(*register), Vec::new())
             }
             // Unresolved, since nothing ran; the echo names the verb, so a

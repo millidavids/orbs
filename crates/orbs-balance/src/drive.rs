@@ -78,7 +78,7 @@ impl Run {
         }
         // Both are small enough that f64 is exact here: experience over a
         // 25-hour session is thousands, ticks are tens of thousands.
-        #[allow(clippy::cast_precision_loss)]
+        #[expect(clippy::cast_precision_loss, reason = "exact at these sizes")]
         {
             last.experience as f64 / last.tick as f64
         }

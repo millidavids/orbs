@@ -384,7 +384,7 @@ struct Branch {
     name: &'static str,
     holds: &'static [Holding],
     /// Places *inside* this one. The laboratory's instruments (§10.1).
-    places: &'static [Branch],
+    places: &'static [Self],
     /// What makes this fixture behave unlike the rest, if anything.
     role: Option<Role>,
     /// The verb that charges it and starts it — see [`super::Operation`].

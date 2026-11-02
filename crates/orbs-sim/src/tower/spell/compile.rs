@@ -133,7 +133,13 @@ fn walk_learned(body: &Block, satchel: bool, cursors: bool, complaints: &mut Vec
                 walk_learned(body, satchel, cursors, complaints);
                 walk_learned(otherwise, satchel, cursors, complaints);
             }
-            _ => {}
+            Kind::Command(_)
+            | Kind::Wait(_)
+            | Kind::Bide(_)
+            | Kind::Let { .. }
+            | Kind::Pull { .. }
+            | Kind::Call { .. }
+            | Kind::Alongside { .. } => {}
         }
     }
 }

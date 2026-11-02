@@ -164,7 +164,7 @@ fn unseal(world: &mut World, domain: &str, stations: &[(String, String, Vec<Stri
             break;
         };
         order.push((line.clone(), id.clone()));
-        wanted = line.clone();
+        wanted.clone_from(line);
     }
     for (line, wanted) in order.into_iter().rev() {
         walk(world, stations, &line, &wanted);

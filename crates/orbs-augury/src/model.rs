@@ -127,6 +127,7 @@ impl<B: Backend> Reader<B> {
         // 0, 1, 2 … so each row knows where it sits. Built here rather than
         // passed in: it is a fact about the shape, and a caller that got it
         // wrong would be hard to notice.
+        #[expect(clippy::cast_possible_wrap, reason = "a line of tens of tokens")]
         let places = Tensor::arange(0..length as i64, &device)
             .reshape([1, length])
             .repeat_dim(0, batch);

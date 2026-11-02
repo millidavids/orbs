@@ -29,6 +29,16 @@ pub struct Sim {
     scene: Schedule,
 }
 
+impl std::fmt::Debug for Sim {
+    /// The clock: a failed assertion cannot use a whole `World`, and a `Schedule`
+    /// has nothing to say.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Sim")
+            .field("tick", &self.tick())
+            .finish_non_exhaustive()
+    }
+}
+
 impl Sim {
     /// Create a simulation from a master seed, with an empty schedule.
     ///

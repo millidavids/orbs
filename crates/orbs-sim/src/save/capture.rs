@@ -356,7 +356,12 @@ fn running(world: &World, run: &tower::spell::Running) -> RunningSave {
     RunningSave {
         spell: tower::path_of_id(world, run.spell).unwrap_or_default(),
         pc: first.pc.clone(),
-        loops: first.loops.iter().map(super::adopt::loop_code).collect(),
+        loops: first
+            .loops
+            .iter()
+            .copied()
+            .map(super::adopt::loop_code)
+            .collect(),
         seen: first.seen,
         depth: run.depth,
         unattended: run.unattended,
@@ -394,7 +399,12 @@ fn running(world: &World, run: &tower::spell::Running) -> RunningSave {
 fn strand(one: &tower::spell::Strand) -> super::StrandSave {
     super::StrandSave {
         pc: one.pc.clone(),
-        loops: one.loops.iter().map(super::adopt::loop_code).collect(),
+        loops: one
+            .loops
+            .iter()
+            .copied()
+            .map(super::adopt::loop_code)
+            .collect(),
         seen: one.seen,
         waiting_since: one.waiting_since.map(Tick::get),
         biding: one.biding,
@@ -411,7 +421,12 @@ fn descents(stack: &[tower::spell::Descent]) -> Vec<super::DescentSave> {
         .map(|frame| super::DescentSave {
             part: frame.part.clone(),
             pc: frame.pc.clone(),
-            loops: frame.loops.iter().map(super::adopt::loop_code).collect(),
+            loops: frame
+                .loops
+                .iter()
+                .copied()
+                .map(super::adopt::loop_code)
+                .collect(),
             vars: frame.vars.clone(),
         })
         .collect()

@@ -116,7 +116,7 @@ fn margin(enemy: u32, garrison: u32) -> f32 {
     if total == 0 {
         return 0.0;
     }
-    #[allow(clippy::cast_precision_loss)]
+    #[expect(clippy::cast_precision_loss, reason = "a siege's numbers are small")]
     let lead = enemy.saturating_sub(garrison) as f32 / total as f32;
     lead.clamp(0.0, 1.0)
 }

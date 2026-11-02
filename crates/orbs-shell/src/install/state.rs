@@ -212,6 +212,7 @@ impl Raise {
 }
 
 /// The tower a frontend puts in front of the player after `new` or a wake.
+#[derive(Debug)]
 pub struct Begun {
     /// The practice tower or the real one.
     pub sim: Sim,

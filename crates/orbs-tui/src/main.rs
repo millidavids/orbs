@@ -55,7 +55,7 @@ fn main() -> ExitCode {
     if let Some(flag) = args.next() {
         if flag == "--dump" {
             let script = args.next().unwrap_or_else(|| "1".to_owned());
-            orbs_shell::dump_script(wizard(), &engine(), default_settings(), &script);
+            orbs_shell::dump_script(wizard(), &engine(), &default_settings(), &script);
             return ExitCode::SUCCESS;
         }
         eprintln!("usage: orbs-tui [--dump <commands>]");

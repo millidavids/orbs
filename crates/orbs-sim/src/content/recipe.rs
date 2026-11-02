@@ -36,6 +36,7 @@ impl Lack {
 
 /// One transformation an instrument can perform.
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Recipe {
     /// The single input, for the instruments that take one.
     #[serde(default)]

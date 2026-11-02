@@ -21,6 +21,7 @@ const FILE: &str = "materials.toml";
 
 /// What one material looks like.
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Entry {
     /// One of [`Tint`]'s eight names.
     tint: String,

@@ -141,7 +141,7 @@ impl Board {
         } else {
             presses
         };
-        #[allow(clippy::cast_possible_truncation)]
+        #[expect(clippy::cast_possible_truncation, reason = "capped at `SHOWN`")]
         let presses = presses as u16;
         presses + Self::HEAD + Self::FOOT
     }

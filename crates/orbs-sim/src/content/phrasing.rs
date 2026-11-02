@@ -38,6 +38,7 @@ const FILE: &str = "phrasings.toml";
 
 /// One canonical command and the ways people ask for it.
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Phrasing {
     /// The command, in the form the orb echoes. May carry slots.
     pub canonical: String,
@@ -54,6 +55,7 @@ pub struct Phrasing {
 /// No `canonical`: a reader shown only commands answers everything. They carry
 /// slots, so a refusal is not learnable as "no game words in it".
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Refusal {
     /// Phrasings the reader is taught to refuse.
     #[serde(default)]
@@ -65,6 +67,7 @@ pub struct Refusal {
 
 /// Every authored template.
 #[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Phrasings {
     /// One per canonical command.
     #[serde(default, rename = "entry")]

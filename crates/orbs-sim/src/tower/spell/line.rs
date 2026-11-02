@@ -147,7 +147,11 @@ pub(super) fn run_line(world: &mut World, entity: Entity, state: &Running, line:
             return Progress::Done;
         }
         // §8's *Referent missing*: skips, logs, continues.
-        _ => {
+        Resolution::Ambiguous { .. }
+        | Resolution::Incomplete { .. }
+        | Resolution::Elsewhere { .. }
+        | Resolution::InSpell { .. }
+        | Resolution::Unresolved { .. } => {
             say_failure(world, state, "spell_missing", line, Role::Danger);
             advance_pc(world, entity);
             return Progress::Done;

@@ -48,7 +48,7 @@ impl Session {
         // happened"*. `F4`, `F5` and `F10` stay ungated for that build's reason:
         // they are about the screen, the menu is on it, and a way out that only
         // works once you are in is not one.
-        if self.threshold.is_waiting() && matches!(event.code, KeyCode::F(6) | KeyCode::F(7)) {
+        if self.threshold.is_waiting() && matches!(event.code, KeyCode::F(6 | 7)) {
             return true;
         }
         // The rest of the function keys, ungated by surface, exactly as the Bevy

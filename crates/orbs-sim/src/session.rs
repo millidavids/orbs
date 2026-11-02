@@ -182,7 +182,7 @@ impl Wizard {
     pub fn rename(&mut self, name: &str) {
         let name = name.trim();
         if !name.is_empty() {
-            self.name = name.to_owned();
+            name.clone_into(&mut self.name);
         }
     }
 }
@@ -205,7 +205,7 @@ impl Choices {
     /// Offer these readings, best first, and remember what was asked.
     pub fn offer(&mut self, line: &str, readings: Vec<Intent>) {
         self.readings = readings;
-        self.asked = line.to_owned();
+        line.clone_into(&mut self.asked);
     }
 
     /// The line that raised the question, if one is open.

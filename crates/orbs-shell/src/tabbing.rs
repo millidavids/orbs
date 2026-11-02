@@ -165,7 +165,7 @@ fn advance(text: &str, cycle: &mut Option<Cycle>) -> Option<Tabbed> {
     };
     let chosen = running.candidates.get(next)?.clone();
     running.index = Some(next);
-    running.filled = chosen.clone();
+    running.filled.clone_from(&chosen);
 
     Some(Tabbed::Wrote {
         replaces: span,

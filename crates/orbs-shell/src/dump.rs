@@ -191,7 +191,7 @@ pub fn run(wizard: Option<String>, engine: &str, settings: Vec<crate::settings::
     let Some(request) = requested() else {
         return false;
     };
-    run_script(wizard, engine, settings, &request);
+    run_script(wizard, engine, &settings, &request);
     true
 }
 
@@ -211,7 +211,7 @@ pub fn requested() -> Option<String> {
 pub fn run_script(
     wizard: Option<String>,
     engine: &str,
-    settings: Vec<crate::settings::Row>,
+    settings: &[crate::settings::Row],
     request: &str,
 ) {
     // The instrument's seed, never a game's — see `crate::seed`.
@@ -352,12 +352,7 @@ pub fn run_script(
         // ...and the same for a `menu`. Taken here so one in `ORBS_DUMP` and one
         // in `ORBS_THEN` both reach it.
         let mut opened_manual = false;
-        let mut menuing = menued(
-            &mut sim,
-            &settings,
-            waiting_at_threshold,
-            &mut opened_manual,
-        );
+        let mut menuing = menued(&mut sim, settings, waiting_at_threshold, &mut opened_manual);
         // Commands to run *after* the editing session. A `:w` queues its write
         // for the next tick, so a `peruse` in `ORBS_DUMP` runs before the spell
         // exists and offers the other readables — which looks like a bug. The
@@ -371,14 +366,8 @@ pub fn run_script(
             editing = editing.or_else(|| open(&mut sim));
             weaving = weaving.or_else(|| woven(&mut sim));
             walking |= walked(&mut sim);
-            menuing = menuing.or_else(|| {
-                menued(
-                    &mut sim,
-                    &settings,
-                    waiting_at_threshold,
-                    &mut opened_manual,
-                )
-            });
+            menuing = menuing
+                .or_else(|| menued(&mut sim, settings, waiting_at_threshold, &mut opened_manual));
         }
         // A maze can close under the walker; both frontends then give the
         // keyboard back.

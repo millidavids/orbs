@@ -14,6 +14,7 @@ const BUILTIN: &str = include_str!("../../content/fuel.toml");
 
 /// One thing the athanor will burn.
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Fuel {
     /// How many ticks one of these burns for.
     pub ticks: u64,

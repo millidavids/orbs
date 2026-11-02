@@ -101,13 +101,13 @@ pub(super) fn announce(world: &mut World, round: &Round) {
         let bought = match area {
             siege::Area::Succour => round.mended.to_string(),
             siege::Area::Sortie => round.sortied.to_string(),
-            _ => strength.to_string(),
+            siege::Area::Line | siege::Area::Buckler => strength.to_string(),
         };
         // What it cost, which only the sortie has, so no other key can print
         // the sortie's number.
         let cost = match area {
             siege::Area::Sortie => round.spent.to_string(),
-            _ => String::new(),
+            siege::Area::Line | siege::Area::Buckler | siege::Area::Succour => String::new(),
         };
         let message = world.resource::<Prose>().line(
             match area {

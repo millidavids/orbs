@@ -8,7 +8,7 @@
 // `unwrap` on a render is right here and nowhere else: a save that will not
 // render *is* the failure this file exists to find, and the panic names the file
 // and line as clearly as an `expect` would.
-#![allow(clippy::unwrap_used)]
+#![expect(clippy::unwrap_used, reason = "see above")]
 
 mod common;
 

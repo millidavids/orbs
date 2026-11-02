@@ -112,7 +112,7 @@ impl Stage {
     pub fn frame_progress(self, progress: f32) -> f32 {
         match self {
             Self::Post => (progress / Self::FRAME_SHARE).clamp(0.0, 1.0),
-            _ => 1.0,
+            Self::Dark | Self::Close | Self::Live => 1.0,
         }
     }
 }

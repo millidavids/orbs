@@ -78,3 +78,75 @@ pub(super) fn builtin<T: DeserializeOwned>(file: &'static str, text: &str) -> T 
         Err(error) => panic!("the built-in {file} is authored with the crate: {error}"),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::{
+        Charms, Fuels, Manual, Materials, Phrasings, Prose, Recipes, Spells, Trials,
+    };
+    use super::{ContentError, parse};
+
+    /// A key nothing reads. A string, so its value cannot be what is refused.
+    const STRAY: &str = "mistyped = \"x\"";
+
+    /// `text` with the stray key as the first thing under `head`.
+    fn under(text: &str, head: &str) -> String {
+        text.replacen(head, &format!("{head}\n{STRAY}"), 1)
+    }
+
+    /// `text` with the stray key above its first table.
+    fn above(text: &str) -> String {
+        format!("{STRAY}\n{text}")
+    }
+
+    #[track_caller]
+    fn refused<T>(parsed: Result<T, ContentError>) {
+        let Err(error) = parsed else {
+            panic!("a key nothing reads was taken");
+        };
+        let said = error.to_string();
+        assert!(said.contains("unknown field `mistyped`"), "{said}");
+    }
+
+    #[test]
+    fn a_mistyped_key_in_an_authored_file_is_refused() {
+        // A defaulted field mistyped would otherwise take its default in silence.
+        let fuel = include_str!("../../content/fuel.toml");
+        refused(Fuels::parse(&under(fuel, "[charcoal]")));
+
+        let forge = include_str!("../../content/forge.toml");
+        refused(Charms::parse(&under(forge, "[surcharge]")));
+        refused(Charms::parse(&under(forge, "[shielded]")));
+
+        let materials = include_str!("../../content/materials.toml");
+        refused(Materials::parse(&under(materials, "[sage]")));
+
+        let manual = include_str!("../../content/manual.toml");
+        refused(Manual::parse(&above(manual)));
+        refused(Manual::parse(&under(manual, "[[chapters]]")));
+
+        let prose = include_str!("../../content/prose.toml");
+        refused(Prose::parse(&above(prose)));
+
+        let spells = include_str!("../../content/spells.toml");
+        refused(Spells::parse(&under(spells, "[first_light]")));
+
+        let recipes = include_str!("../../content/recipes.toml");
+        refused(Recipes::parse(&under(recipes, "[[mortar_and_pestle]]")));
+
+        let phrasings = include_str!("../../content/phrasings.toml");
+        refused(Phrasings::parse(&above(phrasings)));
+        refused(Phrasings::parse(&under(phrasings, "[[entry]]")));
+        refused(Phrasings::parse(&under(phrasings, "[[refusal]]")));
+
+        let trials = include_str!("../../content/spell_trials.toml");
+        let read = |text: &str| parse::<Trials>("spell_trials.toml", text);
+        refused(read(&above(trials)));
+        refused(read(&under(trials, "[[script]]")));
+        refused(read(&trials.replacen(
+            "trial = [",
+            "trial = [\n  { said = \"x\", mistyped = \"x\" },",
+            1,
+        )));
+    }
+}

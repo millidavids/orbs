@@ -157,7 +157,6 @@ impl Rngs {
 const fn derive_stream_seed(master: u64, index: usize) -> u64 {
     // `as` rather than `u64::try_from`: this is a const fn, TryFrom is not const,
     // and `index` is bounded by RngStream::COUNT.
-    #[allow(clippy::cast_possible_truncation)]
     let index = index as u64;
     let mut z = master.wrapping_add(index.wrapping_mul(0x9E37_79B9_7F4A_7C15));
     z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);

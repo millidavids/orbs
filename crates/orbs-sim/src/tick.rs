@@ -59,8 +59,7 @@ impl Tick {
             self.0 < Self::EXACT_F64_LIMIT,
             "tick count exceeds exact f64 range"
         );
-        // Bounded above by the assertion, so the conversion is exact.
-        #[allow(clippy::cast_precision_loss)]
+        #[expect(clippy::cast_precision_loss, reason = "the assertion bounds it")]
         let ticks = self.0 as f64;
         ticks * Self::SECONDS
     }

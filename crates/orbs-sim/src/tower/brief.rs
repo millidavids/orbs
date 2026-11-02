@@ -248,9 +248,14 @@ fn detail_of(instrument: &Instrument) -> Option<String> {
     }
     // `t` only on a duration: a count of squares or sigils is not a job about to
     // finish.
-    (left > 0).then(|| match meter.unit {
-        super::panel::Unit::Ticks => format!("{} {left}t", instrument.short),
-        _ => format!("{} {left}", instrument.short),
+    (left > 0).then(|| {
+        use super::panel::Unit;
+        match meter.unit {
+            Unit::Ticks => format!("{} {left}t", instrument.short),
+            Unit::Cells | Unit::Sigils | Unit::Rows | Unit::Standing => {
+                format!("{} {left}", instrument.short)
+            }
+        }
     })
 }
 

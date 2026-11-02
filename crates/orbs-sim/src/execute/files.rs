@@ -226,7 +226,7 @@ fn in_domain(record: &Record<'_>, names: &[String]) -> bool {
         .filter_map(|field| record.field(field))
         .any(|value| match value {
             Value::Text(text) => names.iter().any(|name| name == crate::parser::leaf(text)),
-            _ => false,
+            Value::Count(_) | Value::Tick(_) => false,
         })
 }
 

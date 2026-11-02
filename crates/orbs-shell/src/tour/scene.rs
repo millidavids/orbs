@@ -106,7 +106,7 @@ impl Scene {
         match outcome {
             Outcome::Ambiguous => !self.asks,
             Outcome::Incomplete | Outcome::Unresolved => true,
-            _ => false,
+            Outcome::Resolved | Outcome::Forced => false,
         }
     }
 

@@ -180,7 +180,7 @@ fn rewrite(world: &mut World, node: Entity) {
         |read| read.aligned(&held.0),
     );
     let mut read = reading.lines.clone();
-    read[at] = lines[at].clone();
+    read[at].clone_from(&lines[at]);
     let corrupted = super::Read::new(&lines, read, reading.by);
     world.entity_mut(node).insert(Rewritten {
         was: held.0,

@@ -27,6 +27,7 @@ use super::transition::PaneTransition;
 /// A struct, so no two `&str`-ish arguments can be transposed; `Frame` and
 /// `Linear` stay apart as what `paint` writes. Not `Copy`: a viewport only the
 /// painter can size makes some fields `&mut`.
+#[derive(Debug)]
 pub struct View<'a> {
     /// The world, for everything the frame says.
     pub sim: &'a Sim,

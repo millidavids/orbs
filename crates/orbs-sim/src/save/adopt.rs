@@ -389,15 +389,15 @@ fn moved_under_it(world: &mut World, spell: &str) {
 ///
 /// The counts travel, or every enclosing loop resumes from its first turn —
 /// one integer per block (see `RunningSave::loops`).
-pub(super) fn loop_code(open: &spell::Loop) -> i64 {
+pub(super) fn loop_code(open: spell::Loop) -> i64 {
     match open {
-        spell::Loop::Repeat(Some(turns)) => i64::from(*turns),
+        spell::Loop::Repeat(Some(turns)) => i64::from(turns),
         spell::Loop::Repeat(None) => -1,
         spell::Loop::Branch => -2,
         // Below the two markers, one step per member: `-3` is the first, `-4`
         // the second. A `for each` is the first block shape to carry a number
         // *and* need a tag, which is why it takes a range.
-        spell::Loop::Each(index) => -3 - i64::from(*index),
+        spell::Loop::Each(index) => -3 - i64::from(index),
     }
 }
 

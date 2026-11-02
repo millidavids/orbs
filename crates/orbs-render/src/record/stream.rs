@@ -686,7 +686,7 @@ impl RecordBuilder<'_> {
 }
 
 /// A record's message, if it has one in words.
-fn said<'a>(record: Record<'a>) -> Option<&'a str> {
+fn said(record: Record<'_>) -> Option<&str> {
     match record.field(FieldName::Message) {
         Some(Value::Text(text)) => Some(text),
         _ => None,

@@ -122,7 +122,7 @@ fn a_swept_clarity_and_a_hand_played_one_agree() {
         sim.submit(line);
         sim.step();
     }
-    #[allow(clippy::cast_precision_loss)]
+    #[expect(clippy::cast_precision_loss, reason = "small counts")]
     let by_hand = sim.experience() as f64 / sim.tick().get() as f64;
 
     let policy = Policy::named("clarity").expect("the flagship policy exists");
@@ -240,7 +240,7 @@ fn every_pinned_rate_is_one_a_sweep_still_reaches() {
             .iter()
             .map(|seed| drive::run(policy, *seed, SPAN, EVERY, MEASURED))
             .collect();
-        #[allow(clippy::cast_precision_loss)]
+        #[expect(clippy::cast_precision_loss, reason = "a handful of seeds")]
         let mean = runs.iter().map(drive::Run::rate).sum::<f64>() / runs.len() as f64;
         let spread: Vec<String> = runs
             .iter()
@@ -281,7 +281,7 @@ fn quickening_pays_more_than_the_archive_spends_on_it() {
         .for_instrument("lectern")
         .first()
         .expect("the lectern has a recipe");
-    #[allow(clippy::cast_precision_loss)]
+    #[expect(clippy::cast_precision_loss, reason = "a recipe's ticks are small")]
     let ticks_a_scroll = lectern.ticks as f64 / f64::from(lectern.yields);
 
     let mut gained = 0.0;
@@ -292,7 +292,7 @@ fn quickening_pays_more_than_the_archive_spends_on_it() {
         let given = quick.given.get(SCROLL).copied().unwrap_or(0);
         let used = given - quick.held.get(SCROLL).copied().unwrap_or(0);
         assert!(used > 0, "seed {seed}: no scroll was used");
-        #[allow(clippy::cast_precision_loss)]
+        #[expect(clippy::cast_precision_loss, reason = "small counts")]
         let more = quick.last().experience as f64 - plain.last().experience as f64;
         gained += more / f64::from(used);
         spent += ticks_a_scroll * plain.rate();

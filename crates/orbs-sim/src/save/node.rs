@@ -187,7 +187,7 @@ pub struct NodeSave {
 }
 
 /// `#[serde(skip_serializing_if)]` wants a path, and `!` is not one.
-#[allow(clippy::trivially_copy_pass_by_ref)]
+#[expect(clippy::trivially_copy_pass_by_ref, reason = "serde hands a reference")]
 const fn not(flag: &bool) -> bool {
     !*flag
 }

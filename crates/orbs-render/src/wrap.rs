@@ -16,6 +16,7 @@
 ///
 /// Embedded newlines are **not** handled here — the caller splits on them first,
 /// which is what lets an empty line consume a row instead of vanishing.
+#[derive(Debug)]
 pub struct Wrap<'a> {
     rest: &'a str,
     width: u16,

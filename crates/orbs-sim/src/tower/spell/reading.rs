@@ -235,7 +235,11 @@ fn one(
                 detail: Some(extra),
             }));
         }
-        _ => {
+        Resolution::Ambiguous { .. }
+        | Resolution::Incomplete { .. }
+        | Resolution::Elsewhere { .. }
+        | Resolution::InSpell { .. }
+        | Resolution::Unresolved { .. } => {
             return verbatim(Some(Fault {
                 key: "spell_missing",
                 detail: Some(trimmed.to_owned()),
@@ -270,7 +274,10 @@ fn names_a_spell(resolution: &Resolution) -> bool {
                     .iter()
                     .all(|candidate| matches!(candidate.intent.verb, Verb::Invoke | Verb::Bind));
         }
-        _ => return false,
+        Resolution::TakesNothing { .. }
+        | Resolution::Elsewhere { .. }
+        | Resolution::InSpell { .. }
+        | Resolution::Unresolved { .. } => return false,
     };
     matches!(verb, Verb::Invoke | Verb::Bind)
 }

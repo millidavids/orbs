@@ -28,6 +28,7 @@ const FILE: &str = "spell_trials.toml";
 
 /// One line, and what the orb should make of it.
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Trial {
     /// What the player wrote.
     pub said: String,
@@ -56,6 +57,7 @@ pub struct Trial {
 /// one line: comments and blanks kept, canonical lines untouched, and the whole
 /// thing something the room can compile.
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Script {
     /// What to call it in a report.
     pub name: String,
@@ -70,6 +72,7 @@ pub struct Script {
 
 /// Every authored trial.
 #[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Trials {
     #[serde(default, rename = "trial")]
     lines: Vec<Trial>,

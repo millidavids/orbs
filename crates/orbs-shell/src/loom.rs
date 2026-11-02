@@ -333,9 +333,13 @@ fn along(width: u16, scale: u64, at: u64) -> u16 {
     let scale = scale.max(2);
     // `ln(1 + x)` rather than `ln(x)`, so nought is nought rather than negative
     // infinity and the first station is still visibly along the line.
-    #[allow(clippy::cast_precision_loss)]
+    #[expect(clippy::cast_precision_loss, reason = "a position on a drawn line")]
     let fraction = ((at.min(scale) + 1) as f64).ln() / ((scale + 1) as f64).ln();
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "clamped to a column count"
+    )]
     let cells = (fraction.clamp(0.0, 1.0) * span).round() as u16;
     cells
 }

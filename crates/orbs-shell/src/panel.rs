@@ -713,7 +713,9 @@ const fn style_of(state: State) -> Style {
         State::Working | State::Scouring | State::Burning => Style::COST,
         State::Ready => Style::SUCCESS,
         State::Fouled => Style::DANGER,
-        _ => Style::DIM,
+        State::Empty | State::Charged | State::Gathering | State::Banked | State::Cold => {
+            Style::DIM
+        }
     }
 }
 

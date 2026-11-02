@@ -81,7 +81,12 @@ impl Refused {
             // A room's verb at `/tower`: nothing is missing, the line is in the
             // wrong spell.
             Resolution::Elsewhere { .. } if for_the_tower => Some(Self::TowerOnly),
-            _ => None,
+            Resolution::Ambiguous { .. }
+            | Resolution::Incomplete { .. }
+            | Resolution::TakesNothing { .. }
+            | Resolution::Elsewhere { .. }
+            | Resolution::InSpell { .. }
+            | Resolution::Unresolved { .. } => None,
         }
     }
 

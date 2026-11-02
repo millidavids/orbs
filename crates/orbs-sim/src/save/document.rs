@@ -78,7 +78,7 @@ use super::node::NodeSave;
 pub const FORMAT: u32 = 19;
 
 /// Whether a count is nought, so the file stays quiet about it.
-#[allow(clippy::trivially_copy_pass_by_ref)] // serde hands a reference
+#[expect(clippy::trivially_copy_pass_by_ref, reason = "serde hands a reference")]
 const fn is_nought(count: &u32) -> bool {
     *count == 0
 }

@@ -22,12 +22,14 @@ const BUILTIN: &str = include_str!("../../content/prose.toml");
 /// map's order varies per process, and this crate's whole contract is that two
 /// runs of the same seed produce the same bytes.
 #[derive(Debug, Clone, Deserialize, Resource)]
+#[serde(deny_unknown_fields)]
 pub struct Prose {
     lines: BTreeMap<String, String>,
 }
 
 /// A raw content file, before it is turned into a [`Prose`].
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct File {
     lines: BTreeMap<String, String>,
 }

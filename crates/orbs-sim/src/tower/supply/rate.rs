@@ -151,7 +151,7 @@ pub fn may_raise(rates: &Rates, held: u32, freshness: Freshness, current: Option
     match freshness {
         Freshness::Spent => return Raise::Spent,
         Freshness::Thin if next > 0 => return Raise::Thin,
-        _ => {}
+        Freshness::Fresh | Freshness::Thin => {}
     }
     if held < rate.opens {
         return Raise::Short { opens: rate.opens };

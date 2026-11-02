@@ -82,6 +82,7 @@ pub trait Scrivener: Send + Sync {
 ///
 /// What a build with no reader uses, so `Sim::write_spell` is
 /// `write_spell_reading` with this rather than a second code path.
+#[derive(Debug)]
 pub struct Verbatim;
 
 impl Verbatim {

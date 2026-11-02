@@ -71,7 +71,7 @@ pub(super) fn migrate(mut save: Save) -> Result<Save, super::SaveError> {
         const NOW: &str = "/tower/bailey/enemy";
         for node in &mut save.nodes {
             if node.path == WAS {
-                node.path = NOW.to_owned();
+                NOW.clone_into(&mut node.path);
             }
         }
     }

@@ -134,7 +134,7 @@ pub struct Substituted {
 pub fn restore(world: &mut World, node: Entity) -> Option<String> {
     let was = world.get::<Substituted>(node)?.was.clone();
     if let Some(mut name) = world.get_mut::<Name>(node) {
-        name.0 = was.clone();
+        name.0.clone_from(&was);
     }
     world.entity_mut(node).remove::<Substituted>();
     Some(was)

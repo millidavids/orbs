@@ -54,6 +54,7 @@ pub struct Swapping<'a> {
 
 /// A tower a swap raised, and the live content files that would not load into
 /// it (see [`load`](crate::load)).
+#[derive(Debug)]
 pub struct Raised {
     /// The tower, its slot and any installation.
     pub begun: Begun,

@@ -105,7 +105,7 @@ impl Lattice {
     /// The cascade presses under every dark glyph, top to bottom, settling each
     /// row as it leaves.
     #[must_use]
-    fn cascade(opening: &[bool; CELLS], presses: &[bool; WIDTH]) -> [bool; CELLS] {
+    fn cascade(opening: &[bool; CELLS], presses: [bool; WIDTH]) -> [bool; CELLS] {
         let mut board = *opening;
         for (column, snapped) in presses.iter().enumerate() {
             if *snapped {
@@ -143,7 +143,7 @@ impl Lattice {
     /// residues. What the columns publish and a solver's table is keyed on.
     #[must_use]
     pub fn residue(&self) -> [bool; WIDTH] {
-        let settled = Self::cascade(&self.opening, &[false; WIDTH]);
+        let settled = Self::cascade(&self.opening, [false; WIDTH]);
         let mut out = [false; WIDTH];
         out.copy_from_slice(&settled[(HEIGHT - 1) * WIDTH..]);
         out
@@ -158,10 +158,7 @@ impl Lattice {
             for (column, press) in presses.iter_mut().enumerate() {
                 *press = (choice >> column) & 1 == 1;
             }
-            if Self::cascade(&self.opening, &presses)
-                .iter()
-                .all(|lit| *lit)
-            {
+            if Self::cascade(&self.opening, presses).iter().all(|lit| *lit) {
                 return presses;
             }
         }
@@ -190,7 +187,7 @@ impl Lattice {
     /// on every attempt for one table to serve a loop.
     pub fn settle(&mut self) -> bool {
         self.attempts = self.attempts.saturating_add(1);
-        self.set = Self::cascade(&self.opening, &self.pressed)
+        self.set = Self::cascade(&self.opening, self.pressed)
             .iter()
             .all(|lit| *lit);
         self.pressed = [false; WIDTH];
@@ -229,7 +226,7 @@ mod tests {
                 presses
             })
             .filter(|presses| {
-                Lattice::cascade(&lattice.opening, presses)
+                Lattice::cascade(&lattice.opening, *presses)
                     .iter()
                     .all(|lit| *lit)
             })
@@ -269,7 +266,7 @@ mod tests {
                 for (column, press) in presses.iter_mut().enumerate() {
                     *press = (choice >> column) & 1 == 1;
                 }
-                let settled = Lattice::cascade(&lattice.opening, &presses);
+                let settled = Lattice::cascade(&lattice.opening, presses);
                 seen.push(settled[(HEIGHT - 1) * WIDTH..].to_vec());
             }
             seen.sort();
@@ -357,7 +354,7 @@ mod tests {
                 for (column, press) in presses.iter_mut().enumerate() {
                     *press = (choice >> column) & 1 == 1;
                 }
-                let settled = Lattice::cascade(&lattice.opening, &presses);
+                let settled = Lattice::cascade(&lattice.opening, presses);
                 for row in 0..HEIGHT - 1 {
                     for column in 0..WIDTH {
                         assert!(

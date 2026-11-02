@@ -135,7 +135,7 @@ impl Row {
     /// type — see [`key`](Self::key).
     #[must_use]
     pub fn keyed(mut self, key: &str) -> Self {
-        self.key = key.to_owned();
+        key.clone_into(&mut self.key);
         self
     }
 

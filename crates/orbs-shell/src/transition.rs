@@ -93,7 +93,7 @@ impl PaneTransition {
     ///
     /// Smoothstep, not linear: a pane that starts and stops abruptly reads as a
     /// jump with frames in the middle.
-    fn progress(&self) -> f32 {
+    fn progress(self) -> f32 {
         if self.is_settled() {
             return 1.0;
         }
@@ -140,7 +140,7 @@ mod tests {
     /// The grid, which is the only one the game has now.
     const WIDE_GRID: GridSize = orbs_render::GRID;
 
-    fn at(transition: &PaneTransition, mode: DisplayMode) -> Vec<Rect> {
+    fn at(transition: PaneTransition, mode: DisplayMode) -> Vec<Rect> {
         transition.layout(WIDE_GRID, mode, 1).main().to_vec()
     }
 
@@ -151,7 +151,7 @@ mod tests {
         for mode in [DisplayMode::Deep, DisplayMode::Wide] {
             for panes in [1, 2] {
                 let settled = settled_layout(WIDE_GRID, mode, panes, 1);
-                assert_eq!(at(&PaneTransition::settled(panes), mode), settled.main());
+                assert_eq!(at(PaneTransition::settled(panes), mode), settled.main());
             }
         }
     }
@@ -162,7 +162,7 @@ mod tests {
         // half height, overlapping the pane it should be appearing beside.
         let mut transition = PaneTransition::settled(1);
         transition.retarget(2);
-        let early = at(&transition, DisplayMode::Deep);
+        let early = at(transition, DisplayMode::Deep);
 
         let arriving = early[1];
         assert!(
@@ -184,7 +184,7 @@ mod tests {
             transition.retarget(2);
             for step in 0..=40 {
                 transition.advance(DURATION / 40.0);
-                for rect in at(&transition, mode) {
+                for rect in at(transition, mode) {
                     assert!(
                         u32::from(rect.col) + u32::from(rect.cols) <= u32::from(WIDE_GRID.cols)
                             && u32::from(rect.row) + u32::from(rect.rows)
@@ -203,7 +203,7 @@ mod tests {
         assert!(!transition.is_settled());
         transition.advance(DURATION * 2.0);
         assert!(transition.is_settled());
-        assert_eq!(at(&transition, DisplayMode::Deep).len(), 2);
+        assert_eq!(at(transition, DisplayMode::Deep).len(), 2);
     }
 
     #[test]
@@ -231,7 +231,7 @@ mod tests {
         transition.retarget(1);
         transition.advance(DURATION / 2.0);
 
-        let leaving = at(&transition, DisplayMode::Deep);
+        let leaving = at(transition, DisplayMode::Deep);
         assert_eq!(leaving.len(), 2, "the departing pane stopped being painted");
         let settled = settled_layout(WIDE_GRID, DisplayMode::Deep, 2, 1).main()[1];
         assert!(

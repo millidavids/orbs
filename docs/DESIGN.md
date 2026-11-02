@@ -2463,7 +2463,7 @@ changelog block, so a minor can close untagged and ship inside a later one.
 | `0.21` | The tower speaks up | `0.21.5` | `v0.23.4` |
 | `0.22` | Every instrument has a tempo | `0.22.5` | `v0.23.4` |
 | `0.23` | The tour | `0.23.4` | `v0.23.4`, `v0.23.5` |
-| `0.24` | The tower's spell | `0.24.6` | — |
+| `0.24` | The tower's spell | `0.24.6` | `v0.24.6`, `v0.24.7` |
 
 ### Naming pass
 
@@ -2548,6 +2548,23 @@ wait on trace)
    price-shop — Exapunks is $19.99.
 
 ## 19. Decisions log
+
+### The Rust and Bevy rules, swept
+
+**Rule: the code follows the `rust-skills` and `bevy-idioms` rules where one can
+be broken, and a lint holds it there.** The owner asked for both applied across
+the workspace, after `0.24.6`. No box moves: nothing in play changes, and the
+captures and the sweep say so. Released as `v0.24.7`, since the owner asked, with
+the one difference anyone outside can reach as its bullet.
+
+| Question | Decision |
+|---|---|
+| A wrong key in an authored file | Refused, on every content type with named fields, so a mistyped key cannot leave a defaulted field at its default in silence. `deed` and `scrolls` already did. Not on a save, which must read a file a newer build wrote. Not on `Charms`, whose `flatten` serde cannot check: its `Charm` and `Surcharge` are refused instead. Only `prose.toml` and `manual.toml` can be replaced from outside: with a stray key in one under `ORBS_CONTENT`, `ORBS_BOOT=0 ORBS_DUMP=1` says *did not load; drawing the built-in text*. A misspelt key inside `prose.toml`'s `[lines]` is still just a line nobody asks for |
+| `_` in a `match` | Named where the arm decides something a new variant would have to answer: which pages `back` returns from, what a refused line means, what a validator lets by. The menu's `_ => Page::Choices` had already caused the bug its comment records. Kept where it can only mean *not this one* (an accessor's `_ => None`, a pass-through's `other => other`), where a type's stated default covers it (the panel's plain gauge), and on foreign keys. `wildcard_enum_match_arm` stays off for those; `match_wildcard_for_single_variants` is on |
+| A suppression | `#[expect]` with a reason, so a stale one fails the gate. That found one: the `cast_possible_truncation` in `rng.rs` silenced nothing, and went. The two in `tests/common` stay `allow`, since each test binary uses a different part |
+| The lints | On for good, each nearly clean already: see `Cargo.toml`. `missing_debug_implementations` too, which gave `Sim` a hand-written `Debug` naming only its clock |
+| What was left alone | `mul_add`, which `suboptimal_flops` asks for in about 25 places and which is slower without a chosen CPU and moves a bit of every eased value. `missing_copy_implementations`: a board that copies itself is how a mutation gets lost. The 300 or so `format!`s, some in painters: nothing has measured them, and `perf-profile-first` says measure. `Result<_, String>` in validators and the tour, whose string is the message. The 23 `println!`s and `eprintln!`s outside tests: a harness's output, and `ORBS_SOUND`'s, are what they are for |
+| Bevy | One comment. No stale names, `Time<Fixed>` for the world, motion by `delta_secs`, and every `Update` system guarded, or for `blink::tick` now saying why not. `render/plugin.rs` and `sim/plugin.rs` still hold system bodies, against CLAUDE.md's *registration only*, which neither skill asks about; left for its own change |
 
 ### The tower's spell (`0.24`)
 

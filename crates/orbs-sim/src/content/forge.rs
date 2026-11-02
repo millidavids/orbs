@@ -21,6 +21,7 @@ const BUILTIN: &str = include_str!("../../content/forge.toml");
 
 /// What one charm costs and how long it runs.
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Charm {
     /// Quintessence to bind it.
     pub costs: u32,
@@ -32,6 +33,7 @@ pub struct Charm {
 
 /// What the surcharge is, and when it applies.
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Surcharge {
     /// What a charm costs while a siege is being fought, as a multiplier.
     pub besieged: u32,

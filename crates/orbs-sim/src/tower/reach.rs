@@ -86,7 +86,7 @@ pub fn look(world: &World) -> Reach<'_> {
     }
 }
 
-impl<'a> Reach<'a> {
+impl Reach<'_> {
     /// Look somewhere else.
     #[must_use]
     pub const fn scope(mut self, scope: Scope) -> Self {

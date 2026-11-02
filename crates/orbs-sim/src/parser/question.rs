@@ -115,13 +115,13 @@ pub enum Quantity {
         thing: String,
     },
     /// Twice what is inside — `than double the garrison`. A word, not a `*`.
-    Doubled(Box<Quantity>),
+    Doubled(Box<Self>),
     /// What is inside, and `by` more — `than the enemy has mettle plus 6`.
     ///
     /// The only operator: subtraction is `A > B + n` read from the other end.
     Plus {
         /// What to add to.
-        of: Box<Quantity>,
+        of: Box<Self>,
         /// How much.
         by: u32,
     },
@@ -249,11 +249,11 @@ pub enum Condition {
     },
     /// `not the mortar is idle`, and the two spellings that mean it:
     /// `the mortar is not idle`, `the dispensary has no sage`.
-    Not(Box<Condition>),
+    Not(Box<Self>),
     /// `and` — every one of them.
-    All(Vec<Condition>),
+    All(Vec<Self>),
     /// `or` — any one of them.
-    Any(Vec<Condition>),
+    Any(Vec<Self>),
 }
 
 impl Condition {
