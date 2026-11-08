@@ -67,7 +67,9 @@ impl Analysis {
     #[must_use]
     pub fn reads_outright(&self) -> bool {
         match &self.resolution {
-            Resolution::Elsewhere { .. } | Resolution::InSpell { .. } => true,
+            Resolution::Elsewhere { .. }
+            | Resolution::InSpell { .. }
+            | Resolution::Aside { .. } => true,
             // Wanting one more thing is outright; a verb followed by words it
             // could not use is `Incomplete` too (§19), and must reach a reader.
             Resolution::Incomplete { .. } | Resolution::TakesNothing { .. } => self
@@ -138,10 +140,70 @@ pub fn analyse(input: &str, scene: &Scene, mode: Mode) -> Analysis {
             candidates: Vec::new(),
         };
     }
-
+    // An aside too, so `sudo` cannot fuzz into a verb. Split once, for the
+    // table and the matcher both.
     let tokens = normalise::Tokens::split(input);
     let all = tokens.words();
+    if let Some(aside) = super::aside::among(&all) {
+        // §3: no joke in a siege. What follows an opening word is offered in
+        // its place, and read only then.
+        let quiet = (aside.kind == super::AsideKind::Joke && scene.is_besieged()).then(|| {
+            let rest = super::aside::rest_of(input);
+            // The rest answered by a table offers nothing, or a quiet `sudo
+            // exit` suggested the `scribe` the table exists to stop.
+            let tabled =
+                super::spellword::leading(&rest).is_some() || super::aside::aside(&rest).is_some();
+            if aside.opening && !tabled {
+                read(&rest, scene, mode)
+            } else {
+                Analysis {
+                    resolution: Resolution::Unresolved {
+                        suggestions: Vec::new(),
+                    },
+                    candidates: Vec::new(),
+                }
+            }
+        });
+        return Analysis {
+            resolution: Resolution::Aside {
+                aside,
+                quiet: quiet.as_ref().map(offered),
+            },
+            candidates: quiet.map_or_else(Vec::new, |rest| rest.candidates),
+        };
+    }
+    read_words(&all, scene, mode)
+}
 
+/// The verbs a reading names, best first, to suggest in its place.
+fn offered(past: &Analysis) -> Vec<Verb> {
+    match &past.resolution {
+        Resolution::Unresolved { suggestions } => suggestions.clone(),
+        Resolution::Resolved { intent, .. } => vec![intent.verb],
+        Resolution::Ambiguous { candidates } => {
+            let mut verbs: Vec<Verb> = Vec::new();
+            for candidate in candidates {
+                if verbs.len() < MAX_SUGGESTIONS && !verbs.contains(&candidate.intent.verb) {
+                    verbs.push(candidate.intent.verb);
+                }
+            }
+            verbs
+        }
+        Resolution::Incomplete { verb, .. }
+        | Resolution::TakesNothing { verb, .. }
+        | Resolution::Elsewhere { verb } => vec![*verb],
+        Resolution::InSpell { .. } | Resolution::Aside { .. } => Vec::new(),
+    }
+}
+
+/// The matcher's reading of a line, with no table asked first.
+pub(crate) fn read(input: &str, scene: &Scene, mode: Mode) -> Analysis {
+    let tokens = normalise::Tokens::split(input);
+    read_words(&tokens.words(), scene, mode)
+}
+
+/// [`read`], of a line already split.
+fn read_words(all: &[Word<'_>], scene: &Scene, mode: Mode) -> Analysis {
     if all.is_empty() {
         return Analysis {
             resolution: Resolution::Unresolved {
@@ -154,7 +216,7 @@ pub fn analyse(input: &str, scene: &Scene, mode: Mode) -> Analysis {
     // The verb matcher only looks at the head, so leading filler goes first —
     // "please go to the laboratory" opens on a word no phrase starts with.
     // `skip_leading_filler` yields 0 when all is filler, so this is never empty.
-    let words = &all[normalise::skip_leading_filler(&all)..];
+    let words = &all[normalise::skip_leading_filler(all)..];
 
     let (mut candidates, incomplete, elsewhere) = collect(words, scene);
 

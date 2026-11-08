@@ -41,7 +41,7 @@ pub(super) struct Laid {
 }
 
 /// Lay out one row, or nothing for a track nobody has measured — `0/1` and
-/// `nothing more authored` would both be wrong for it.
+/// `end of the line` would both be wrong for it.
 ///
 /// `rolled` is where the number has got to. Cells come from it; speech, colour
 /// and every width come from the truth, so a roll never moves the bar.

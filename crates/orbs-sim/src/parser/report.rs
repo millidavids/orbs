@@ -136,6 +136,26 @@ pub fn report(input: &str, resolution: &Resolution, prose: &Prose, records: &mut
                 .text(FieldName::Message, &message)
                 .finish();
         }
+        // Another shell's word, or an old joke: answered, never run (§3, §19
+        // *Both tongues*). A joke kept quiet reads as any line not understood.
+        Resolution::Aside {
+            quiet: Some(suggestions),
+            ..
+        } => report(
+            input,
+            &Resolution::Unresolved {
+                suggestions: suggestions.clone(),
+            },
+            prose,
+            records,
+        ),
+        Resolution::Aside { aside, quiet: None } => {
+            records
+                .push(RecordKind::Echo)
+                .outcome(Outcome::Unresolved)
+                .text(FieldName::Message, &prose.line(aside.key, &[]))
+                .finish();
+        }
         Resolution::Unresolved { suggestions } => {
             unresolved(input, records);
             for verb in suggestions {
@@ -262,7 +282,7 @@ mod tests {
         // tells a command that will run from one that could not be read.
         let scene = Scene::default();
         let good = records_for("look around", &scene);
-        let bad = records_for("xyzzy", &scene);
+        let bad = records_for("qwfp", &scene);
 
         assert_ne!(
             good.get(0).expect("echo").field(FieldName::Outcome),
@@ -279,7 +299,7 @@ mod tests {
         // §6 numbers ambiguous readings and has the player pick one. A "did you
         // mean" list is not selectable, and a view drawing numbers beside it
         // would promise an interaction that does nothing.
-        let records = records_for("xyzzy", &Scene::default());
+        let records = records_for("qwfp", &Scene::default());
         for (outcome, _) in outcomes(&records).iter().skip(1) {
             assert_eq!(outcome, Outcome::Suggestion.as_str());
         }
@@ -295,7 +315,7 @@ mod tests {
         // §6 forbids a bare error, and silence is worse than one. An input that
         // resolves to nothing *and* suggests nothing must still say so.
         let scene = Scene::default();
-        for input in ["", "   ", "xyzzy", "!!!!"] {
+        for input in ["", "   ", "qwfp", "!!!!"] {
             let records = records_for(input, &scene);
             assert!(!records.is_empty(), "{input:?} produced silence");
             assert_eq!(
@@ -312,7 +332,7 @@ mod tests {
         // been read an internal token; the correction affordance is the view's
         // job to draw from the same field.
         let scene = Scene::default();
-        for input in ["look around", "meditate", "xyzzy"] {
+        for input in ["look around", "meditate", "qwfp"] {
             for record in records_for(input, &scene).iter() {
                 let spoken = record.to_speech();
                 for outcome in Outcome::ALL {
@@ -331,7 +351,7 @@ mod tests {
         // §14 tags the echo as metadata precisely so verbosity settings can drop
         // it without dropping output. That works off the utterance kind.
         let scene = Scene::default();
-        for input in ["look around", "meditate", "xyzzy"] {
+        for input in ["look around", "meditate", "qwfp"] {
             for record in records_for(input, &scene).iter() {
                 assert_eq!(
                     record.kind().utterance(),

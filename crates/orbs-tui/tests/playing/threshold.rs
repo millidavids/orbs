@@ -120,17 +120,19 @@ fn a_new_game_draws_a_seed_of_its_own() {
     };
     game.expect_drawn("no tower yet");
     game.raise("short");
+    // `status`'s, since the cold start carries no seed (§19, *Both tongues*).
+    game.does("status", "seed");
     let screen = game.screen();
     let seed = screen
-        .split("orb 0 ")
-        .nth(1)
-        .and_then(|rest| rest.split_whitespace().next())
+        .lines()
+        .find(|row| row.contains("seed ."))
+        .and_then(|row| {
+            row.split_whitespace()
+                .find(|word| word.parse::<u64>().is_ok())
+        })
         .unwrap_or_default()
         .to_owned();
-    assert!(
-        seed.parse::<u64>().is_ok(),
-        "no seed on the orb's line:\n{screen}",
-    );
+    assert!(seed.parse::<u64>().is_ok(), "no seed in status:\n{screen}",);
     assert_ne!(
         seed, "11",
         "a new game drew the harness's seed — ORBS_SEED leaked in"

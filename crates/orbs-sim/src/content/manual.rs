@@ -168,9 +168,8 @@ mod tests {
     fn the_manual_is_written_as_a_book_and_never_shouts() {
         // Two registers, on purpose: `prose.toml` is the orb speaking and is
         // held to lower case by `authored_lines_do_not_shout` (§3), while the
-        // manual is a book written about the game and capitalises its
-        // sentences. A second lint rather than the first widened, then — but
-        // neither may shout, and that lint never saw `manual.toml` at all.
+        // manual is the orb's handbook and capitalises its sentences. A second
+        // lint rather than the first widened, then — but neither may shout.
         for chapter in Manual::builtin().chapters() {
             for line in &chapter.lines {
                 let letters = line.chars().filter(|glyph| glyph.is_alphabetic());

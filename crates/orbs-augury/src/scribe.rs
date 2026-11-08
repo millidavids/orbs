@@ -145,8 +145,8 @@ impl<B: Backend> Scribe<B> {
     ///
     /// Five checks, and a line survives all of them or none:
     ///
-    /// 1. It is not already readable — a line opening on a spell word, or one
-    ///    that parses, is returned untouched.
+    /// 1. It is not already readable — a line opening on a spell word, one
+    ///    that parses, or an aside is returned untouched.
     /// 2. The binary head found something, trained on `phrasings.toml`'s
     ///    refusals.
     /// 3. The shape fills honestly: [`spelling::assemble`] refuses more slots
@@ -169,7 +169,10 @@ impl<B: Backend> Scribe<B> {
         if trimmed.is_empty() || trimmed.starts_with('#') {
             return None;
         }
-        if orbs_sim::tower::spell::reads_cleanly(trimmed) {
+        // An aside is the orb's to answer, and a spell's to refuse as written.
+        if orbs_sim::tower::spell::reads_cleanly(trimmed)
+            || orbs_sim::parser::aside(trimmed).is_some()
+        {
             return None;
         }
 
@@ -239,6 +242,9 @@ impl<B: Backend> Scribe<B> {
         }
         if orbs_sim::tower::spell::reads_cleanly(trimmed) {
             return gated("already a statement");
+        }
+        if orbs_sim::parser::aside(trimmed).is_some() {
+            return gated("an aside");
         }
         let Some(read) = decode(
             &self.reader,

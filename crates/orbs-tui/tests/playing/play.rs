@@ -154,7 +154,7 @@ impl Game {
         self.type_raw("play");
         self.expect_drawn("open a tower");
         self.type_raw("new");
-        self.expect_drawn("how long a game?");
+        self.expect_drawn("how long will this tower run?");
         self.type_raw(length);
         self.expect_drawn("wizard $");
     }

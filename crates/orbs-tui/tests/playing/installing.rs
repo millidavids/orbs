@@ -15,7 +15,7 @@ fn installing() -> Option<Game> {
     game.type_raw("play");
     game.expect_drawn("open a tower");
     game.type_raw("new");
-    game.expect_drawn("how long a game?");
+    game.expect_drawn("how long will this tower run?");
     game.type_raw("short");
     game.expect_drawn("initialising the orb");
     game.expect_drawn("step 1 of 5");
@@ -104,7 +104,7 @@ fn the_setting_turns_it_off() {
     game.type_raw("play");
     game.expect_drawn("open a tower");
     game.type_raw("new");
-    game.expect_drawn("how long a game?");
+    game.expect_drawn("how long will this tower run?");
     game.type_raw("short");
 
     game.expect_drawn("cold start");

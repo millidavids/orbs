@@ -21,8 +21,8 @@ fn status_keeps_a_ledger_of_whose_hand() {
         return;
     };
     game.does("status", "ledger")
-        .expect("scrolls copied 1")
-        .expect("scrolls copied by your spells 1")
+        .expect("scrolls assembled 1")
+        .expect("scrolls assembled by your spells 1")
         .expect("done by your spells 1");
 }
 

@@ -209,7 +209,7 @@ fn a_runaway_fork_is_bounded_and_says_so() {
     sim.step_n(40);
 
     assert!(
-        ever_said(&sim, "too many already running"),
+        ever_said(&sim, "too many threads"),
         "an unbounded fork was allowed: {:?}",
         said(&sim),
     );

@@ -32,7 +32,7 @@ impl Surfaces {
                 // tower tense with the menu up, and a secret answered in that
                 // beat punctures it (§3). A tick is too late.
                 if let Some(menu) = &mut self.menuing {
-                    menu.show_register(sim.register());
+                    menu.show_tension(sim.register(), sim.besieged());
                 }
                 self.menu_took(code);
             }

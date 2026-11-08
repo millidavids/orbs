@@ -105,7 +105,7 @@ fn an_evening_writing_a_spell() {
     game.closes_editor();
 
     // A binding survives leaving the room; an invocation would not.
-    game.does("bind tending", "will hold")
+    game.does("bind tending", "keeps it running")
         .does("attend archive", "/tower/archive")
         .meditates(60)
         .does("sift sage laboratory.log", "sage");

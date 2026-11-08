@@ -143,6 +143,17 @@ impl ParseRecord {
                 None,
                 Vec::new(),
             ),
+            // Unresolved for `InSpell`'s reason, with the key it was answered
+            // with as the echo; kept quiet, it said nothing but what it offered.
+            Resolution::Aside { aside, quiet } => match quiet {
+                Some(suggestions) => (Outcome::Unresolved, None, None, suggestions.clone()),
+                None => (
+                    Outcome::Unresolved,
+                    Some(aside.key.to_owned()),
+                    None,
+                    Vec::new(),
+                ),
+            },
             Resolution::Unresolved { suggestions } => {
                 (Outcome::Unresolved, None, None, suggestions.clone())
             }
@@ -336,7 +347,7 @@ mod tests {
 
     #[test]
     fn outcomes_are_tallied_for_the_gate() {
-        let log = log_of(&["recall clarity", "purge", "xyzzy"], Mode::Calm);
+        let log = log_of(&["recall clarity", "purge", "qwfp"], Mode::Calm);
         assert_eq!(log.resolved(), 1);
         assert_eq!(log.ambiguous(), 1);
         assert_eq!(log.unresolved(), 1);
@@ -364,14 +375,14 @@ mod tests {
     fn unresolved_inputs_still_appear() {
         // These are the rows the gate cares about most; dropping them would
         // silently flatter the numbers.
-        let tsv = log_of(&["xyzzy"], Mode::Calm).to_tsv();
-        assert!(tsv.contains("xyzzy"), "{tsv}");
+        let tsv = log_of(&["qwfp"], Mode::Calm).to_tsv();
+        assert!(tsv.contains("qwfp"), "{tsv}");
         assert!(tsv.contains("unresolved"), "{tsv}");
     }
 
     #[test]
     fn the_export_is_rectangular() {
-        let tsv = log_of(&["recall clarity", "brew", "xyzzy"], Mode::Calm).to_tsv();
+        let tsv = log_of(&["recall clarity", "brew", "qwfp"], Mode::Calm).to_tsv();
         let mut lines = tsv.lines();
         let columns = lines.next().expect("header").split('\t').count();
         for line in lines {

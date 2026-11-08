@@ -19,6 +19,8 @@ mod scrolls;
 mod siege;
 mod spell;
 mod trials;
+#[cfg(test)]
+mod voice;
 
 pub use deed::Deed;
 pub use forge::{Charm as CharmCost, Charms};

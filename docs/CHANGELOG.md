@@ -15,6 +15,43 @@
   at 1.0 (DESIGN.md §19).
 -->
 
+## [v0.25.6] - 2026-11-08
+
+### Description
+In development — a dev log, not patch notes. A pass over the orb's words, so a
+line about the orb is true of a scrying orb and a computer at once. The manual
+became the orb's own handbook, and the prompt answers sudo and exit in voice.
+
+### Added
+- **The orb answers shell habits.** `sudo`, `exit`, `ps`, `kill`, `whoami`,
+  `clear`, `xyzzy` and a few more get an answer in the orb's voice, and nothing
+  runs. Most name the orb's own word for what you meant; the jokes keep quiet
+  during a siege.
+
+### Changed
+- **The orb speaks both tongues.** What it says about itself — reading,
+  remembering, its logs, saves and spells — now reads true of a scrying orb and
+  of a computer alike. Talk that sounded like the game's makers is gone: a full
+  gauge reads *end of the line*, and `recall undo` says the orb does not take a
+  line back.
+- **The manual is the orb's handbook.** Every chapter reads as the book that
+  came with the orb, not a guide to a video game.
+- **A page reads as one paragraph.** About 35 `recall` pages ran two sentences
+  together where their lines met; each now reads straight through.
+- **A new tower wakes like a machine.** The first screen lists each room as
+  `...... ok`, counts the grimoire, and closes with *the orb warms to your
+  touch*. The seed is in `status`.
+
+### Fixed
+- **`kill` no longer starts a spell.** With the trained reader on,
+  `kill first_light` ran `invoke first_light`. It now points you at `stop`.
+- **Shell words stopped guessing.** `sudo grind sage` was read as studying in
+  the stacks, `exit` offered `scribe`, and `rm -rf /` offered to purge the
+  grimoire.
+- **Lines that were wrong.** Quitting said the tower carries on; it stops. The
+  lens's ledger said wards broken; the lens breaks seals. A count on the ledger
+  and on its mastery line now uses one verb.
+
 ## [v0.24.7] - 2026-11-01
 
 ### Description

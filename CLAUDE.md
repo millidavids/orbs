@@ -14,9 +14,10 @@ CRT glowing in the dark.
 
 **Status: the game plays, and the premise is complete** — seven domains, the
 arsenal carrying their output, and a siege that rewrites the scripts behind you.
-`0.24` (*the tower's spell* — one spell at `/tower` that watches every room and
-starts and stops the rooms' spells, every spell held costing a concentration)
-is the last feature closed, after `0.23` (*the tour* — every surface, moving,
+`0.25` (*both tongues* — the orb's lines true of a scrying orb and a computer at
+once, DESIGN §3 *Both at once*) is the last feature closed, after `0.24` (*the
+tower's spell* — one spell at `/tower` that watches every room and starts and
+stops the rooms' spells, every spell held costing a concentration), `0.23` (*the tour* — every surface, moving,
 one scene at a time, for a person to watch and for Claude to screenshot),
 `0.22` (*every instrument has a tempo*) and `0.21` (*the tower speaks up* — a
 rate, a wait, a forecast, the tower's news, and a glass that answers). `0.17`

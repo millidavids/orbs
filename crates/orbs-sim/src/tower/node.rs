@@ -420,6 +420,19 @@ pub fn root(world: &World) -> Entity {
     filesystem_root(world, world.resource::<Cwd>().0)
 }
 
+/// `/grimoire`, the tower's sibling and where a spell lives.
+///
+/// Found by walking rather than cached: an `Entity` held anywhere is
+/// meaningless across a save.
+#[must_use]
+pub fn grimoire(world: &World) -> Option<Entity> {
+    children_of(world, root(world)).into_iter().find(|node| {
+        world
+            .get::<Name>(*node)
+            .is_some_and(|name| name.0 == super::GRIMOIRE)
+    })
+}
+
 /// Every child of `node`, in the order they were spawned.
 ///
 /// The safe ordering. See the module docs for why a query is not.

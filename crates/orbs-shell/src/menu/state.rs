@@ -337,12 +337,13 @@ impl Menu {
         }
     }
 
-    /// Say which register the tower behind the menu speaks in.
+    /// Say whether the tower behind the menu is tense: speaking in any register
+    /// but plain, or under siege (§3).
     ///
     /// Asked again before each key, not once at opening: `F7` works over an open
     /// menu, so a snapshot let `xyzzy` answer in the eldritch register.
-    pub const fn show_register(&mut self, register: orbs_render::Presentation) {
-        self.tense = !matches!(register, orbs_render::Presentation::Plain);
+    pub const fn show_tension(&mut self, register: orbs_render::Presentation, besieged: bool) {
+        self.tense = besieged || !matches!(register, orbs_render::Presentation::Plain);
     }
 
     /// Whether a page of settings is on screen.

@@ -203,6 +203,18 @@ pub enum Resolution {
         /// The word they used.
         word: super::SpellWord,
     },
+    /// A line the orb answers and never runs: another shell's word, or a joke.
+    ///
+    /// Answered before the matcher, as [`InSpell`](Self::InSpell) is, and
+    /// never handed to a reader, even kept quiet: a siege would otherwise force
+    /// a fuzzed reading of `sudo hold`.
+    Aside {
+        /// What it is answered with.
+        aside: super::Aside,
+        /// A joke kept quiet in a siege (§3), with what the rest of the line
+        /// offers in its place, best first. `None` when it is said.
+        quiet: Option<Vec<Verb>>,
+    },
     /// Nothing scored. Never a bare error (§6) — always something to try.
     Unresolved {
         /// Verbs worth suggesting, best first.
@@ -221,6 +233,7 @@ impl Resolution {
             | Self::TakesNothing { .. }
             | Self::Elsewhere { .. }
             | Self::InSpell { .. }
+            | Self::Aside { .. }
             | Self::Unresolved { .. } => None,
         }
     }

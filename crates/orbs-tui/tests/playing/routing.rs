@@ -266,7 +266,7 @@ fn the_threshold_reaches_a_tower() {
     game.type_raw("play");
     game.expect_drawn("open a tower");
     game.type_raw("new");
-    game.expect_drawn("how long a game?");
+    game.expect_drawn("how long will this tower run?");
     game.type_raw("short");
 
     // A prompt, a room, and a world that is running — which is the whole claim.

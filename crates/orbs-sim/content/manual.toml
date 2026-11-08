@@ -1,4 +1,5 @@
-# The manual: chapters a player reads, rather than sentences the orb says.
+# The manual: the handbook that came with the orb, chapters a wizard reads
+# rather than sentences the orb says (DESIGN.md §3, *Both at once*).
 #
 # Not `prose.toml`, which holds lines to 70 cells and turns `recall_` keys into
 # nouns (`content/manual.rs`). A chapter is a typed word, a title and lines that
@@ -7,25 +8,25 @@
 # Every name is one lowercase word with its own first letter, since the contents
 # page is prefix-matched; `commands` and `language` are built, taking `c` and
 # `l`. Leading spaces are trimmed, so hierarchy is columns, blank lines and
-# words.
+# words. "game" is said in `notices` alone (`content/voice.rs`).
 
 [[chapters]]
 name = "orbs"
-title = "what this is"
+title = "what this orb is"
 lines = [
-  "You are a wizard. You have found a computer terminal inside your scrying orb, and through it you can reach every part of your tower.",
+  "This orb has a terminal in it. Through it you can reach every part of your tower, and this book is how to run one.",
   "",
-  "Your job is to keep the tower running: brew potions, assemble scrolls, break the seals a rival has placed on your instruments, and hold the barrier that protects you. All of it is work you can do by hand.",
+  "The work is yours: brew potions, assemble scrolls, break the seals on another wizard's orb, and hold the barrier that keeps the tower. All of it can be done by hand.",
   "",
-  "And all of it is work the orb can be taught to do for you. That is the game. Doing a task by hand once is how you learn it; writing a spell that does it while you are elsewhere is how you get anywhere.",
+  "And all of it can be taught to the orb. Doing a thing by hand once is how you learn it; writing a spell that does it while you are elsewhere is how a tower comes to run itself.",
   "",
-  "The orb answers words. There is no mouse, and nothing anywhere rewards typing quickly.",
+  "The orb answers words. There is no mouse, and nothing here rewards typing quickly.",
   "",
   "Three words will carry you a long way. `attend` goes somewhere. `survey` looks at where you are. `help` lists every word that works where you are standing, which is different in every room.",
   "",
   "If you are starting now: type `attend laboratory`, then `help`.",
   "",
-  "This manual is the long way round. `help` is the short one, and it is the one you will use. Nothing here is a secret the game will not tell you when you ask it in the room.",
+  "This book is the long way round. `help` is the short one, and it is the one you will use. Nothing here is a secret the orb keeps from you when you ask it in the room.",
 ]
 
 [[chapters]]
@@ -38,9 +39,9 @@ lines = [
   "",
   "starting",
   "",
-  "`play` opens the towers you have. Any you have already raised are listed under it with a number, a name, how long a game each is and what it has earned, so `play` then `1` is the whole of what a returning player does.",
+  "`play` opens the towers you have. Any you have already raised are listed under it with a number, whose tower it is, how long it runs and what it has earned, so `play` then `1` is the whole of what a returning wizard does.",
   "",
-  "`new` raises a fresh one, and asks how long a game you want. That answer is the only thing about a tower you cannot change later. It is not a difficulty: a long game is more of the game, not a harder one.",
+  "`new` raises a fresh one, and asks how long it is to run. That answer is the only thing about a tower you cannot change later. It is not a difficulty: a longer run is more of the work, not harder work.",
   "",
   "`back` is the way you came, from any page. `quit` puts the orb down, and asks first.",
   "",
@@ -56,7 +57,7 @@ lines = [
   "",
   "The first is `orbs-save.toml` and the rest are numbered after it. Your preferences sit beside them in `orbs-settings.toml`, which is the same kind of file and just as readable.",
   "",
-  "If you played before this and your towers were beside the game rather than in that folder, the orb copies them across the first time it finds them. It copies: the originals stay where they were, untouched, and it only does it once.",
+  "If your towers were once kept beside the orb itself rather than in that folder, the orb copies them across the first time it finds them. It copies: the originals stay where they were, untouched, and it only does it once.",
   "",
   "six towers",
   "",
@@ -93,11 +94,13 @@ lines = [
   "",
   "When it cannot read a line at all, it says so and suggests. It never fails silently, and it never runs a different command than the one it echoed.",
   "",
+  "If your hands know another shell, some of its words are answered too. `exit`, `ps` and `kill` run nothing here; the orb names its own word for each instead.",
+  "",
   "how the orb reads you is a setting",
   "",
   "In `settings`, under `habits`, `reading` chooses between two. `augury` works a sentence out and echoes what it settled on. `plain` answers only the words it already knows, and suggests when it cannot.",
   "",
-  "`augury` is the default and is what most people want. `plain` is there because a reader that guesses is sometimes not what you want, and because the orb should never be a thing you argue with.",
+  "`augury` is the default and is what most wizards want. `plain` is there because a reader that guesses is sometimes not what you want, and because the orb should never be a thing you argue with.",
   "",
   "Tab completes the word you are typing. Press it again to step through the choices. Up and Down walk back through what you have typed before, filtered by whatever is on the line already.",
 ]
@@ -106,7 +109,7 @@ lines = [
 name = "tower"
 title = "the tower, and getting about"
 lines = [
-  "The tower is a filesystem, and the filesystem is the game. Rooms are places you stand in. The things in them are files you can read.",
+  "The tower is a filesystem. Rooms are directories you stand in, and the things in them are files you can read.",
   "",
   "`attend <room>` goes somewhere. `survey` lists what is where you are; `survey <place>` lists what is somewhere else, without going there.",
   "",
@@ -150,7 +153,7 @@ lines = [
   "",
   "lens",
   "",
-  "Another wizard's orb, sealed with sigils you cannot see. `dial` turns a socket to a sigil, `probe` presses the set of them, and the orb tells you how many are right and how many are merely present. Both are free, so the room costs thought rather than time.",
+  "Another wizard's orb, sealed with sigils you cannot see. `dial` turns a socket to a sigil, `probe` presses the set of them against the seal, and the far orb tells you how many are right and how many are merely present. Both are free, so the room costs thought rather than time.",
   "",
   "sanctum",
   "",
@@ -173,11 +176,11 @@ lines = [
 
 [[chapters]]
 name = "hours"
-title = "time, and why waiting is the game"
+title = "time, and why waiting is the work"
 lines = [
   "One tick is one second. The tower runs whether or not you are typing, and nearly everything worth doing takes time rather than a resource.",
   "",
-  "Grinding a reagent is eight ticks. A whole clarity is ninety-four. Nothing about that is a fee you can pay to skip. It is the shape of the game, and it is why teaching the orb to do the waiting is the whole point.",
+  "Grinding a reagent is eight ticks. A whole clarity is ninety-four. Nothing about that is a fee you can pay to skip. It is the shape of the work, and it is why teaching the orb to do the waiting is the whole point.",
   "",
   "`meditate <count>` passes time deliberately. You are not idle while you do it; the tower keeps working, instruments finish, and anything bound keeps running.",
   "",
@@ -185,13 +188,13 @@ lines = [
   "",
   "how many things at once",
   "",
-  "You can only hold so much in mind. The number of things you can have going at once is a limit that grows as you do, and it is the real currency of the middle game, not the reagents.",
+  "You can only hold so much in mind. The number of things you can have going at once is a limit that grows as you do, and it is the real currency of a growing tower, not the reagents.",
   "",
   "This is also why a spell is worth writing. A bound spell runs unattended; a thing you are doing by hand needs you in the room.",
   "",
-  "the orb does not run while you are away",
+  "the tower stops when the orb goes dark",
   "",
-  "Closing the game stops the tower. When you come back the orb says how long it was dark, and nothing accrued in the meantime. Progress while away is a thing the game does not do yet.",
+  "When you put the orb down the tower stops with it, written down where it stood. When you come back the orb says how long it was dark, and nothing turned in the meantime: a tower runs only while its glass is lit.",
 ]
 
 [[chapters]]
@@ -212,7 +215,7 @@ lines = [
   "",
   "In the calm it trickles in on its own. In a siege, a round you resolve grants a lump, and nothing at all is granted for dawdling: the only way to more of it is to advance the fight.",
   "",
-  "Two things draw on it. Pledging a die in a siege costs what that die is worth, so a d20 is dear and a d4 is not. And the forge charges for a charm, and again for every anneal it takes you to land one.",
+  "Two things draw on it. Pledging a die in a siege costs what that die is worth, so a d20 is dear and a d6 is not. And the forge charges for a charm, and again for every anneal it takes you to land one.",
   "",
   "That is the tension the pool exists for. A charm makes an instrument faster for a while, and the quintessence it cost is quintessence you will not have when the enemy is at the wall.",
   "",
@@ -235,7 +238,7 @@ lines = [
 name = "progress"
 title = "the ley line, and mastery"
 lines = [
-  "Two tracks run the whole game, and `weave` draws them both.",
+  "Two tracks run through the whole tower, and `weave` draws them both.",
   "",
   "the ley line",
   "",
@@ -249,11 +252,11 @@ lines = [
   "",
   "Mastery is what makes a room worth returning to after the ley line has moved past it.",
   "",
-  "how long a game is",
+  "how long a tower runs",
   "",
-  "When you raise a tower you choose how long a game it is: short, medium or long. That number is the ley line's last station, and it stretches the far end of the curve rather than the near one. The first thing you do by hand is the same length whichever you pick.",
+  "When you raise a tower you choose how long it runs: short, medium or long. That number is the ley line's last station, and it stretches the far end of the curve rather than the near one. The first thing you do by hand is the same length whichever you pick.",
   "",
-  "There is no difficulty setting. A longer game is more of the game, not a harder one.",
+  "There is no difficulty setting. A longer run is more of the work, not harder work.",
   "",
   "renown",
   "",
@@ -280,13 +283,13 @@ lines = [
   "",
   "where its output goes",
   "",
-  "**A spell's records go to the room's log, never to the screen.** That surprises everybody once. `peruse laboratory.log` is how you see what it did, and `sift` is how you find the line you want in it.",
+  "**A spell's records go to the room's log, never to the screen.** That surprises every wizard once. `peruse laboratory.log` is how you see what it did, and `sift` is how you find the line you want in it.",
   "",
   "The pane shows what *you* did. If it showed everything a bound spell did as well, a tower with six of them running would be unreadable.",
   "",
   "binding",
   "",
-  "`bind <name>` hands the spell to the orb, which keeps it running. An invocation needs you in the room; a binding does not. Whatever a bound spell starts is held too, and costs a concentration of its own. `status` lists everything running, and the rail's foot counts what is held, which is the ambient defence against forgetting what is running unattended.",
+  "`bind <name>` hands the spell to the orb, which keeps it running unwatched and starts it again from the top each time it ends. An invocation needs you in the room; a binding does not. Whatever a bound spell starts is held too, and costs a concentration of its own. `status` lists everything running, and the rail's foot counts what is held, which is the ambient defence against forgetting what is running unattended.",
   "",
   "`stop` ends one. `purge` removes it.",
   "",
@@ -372,7 +375,7 @@ lines = [
 name = "glass"
 title = "the screen, and what every part of it says"
 lines = [
-  "The whole game is one screen and it never changes shape.",
+  "The orb is one screen, and it never changes shape.",
   "",
   "the pane",
   "",
@@ -425,7 +428,7 @@ lines = [
   "",
   "tube",
   "",
-  "How the glass looks, and nothing about how the game plays.",
+  "How the glass looks, and nothing about how the tower works.",
   "",
   "`crt` is the curved screen: the bulge, the scanlines, the glow and the flicker of a real tube. `peak` is the tube at its most agitated, as a siege at its worst would leave it. `off` is a flat, still, modern screen.",
   "",
@@ -441,9 +444,9 @@ lines = [
   "",
   "access",
   "",
-  "What the orb does so that you can read it. None of it is a concession and none of it changes the game.",
+  "What the orb does so that you can read it. None of it is a concession and none of it changes the work.",
   "",
-  "`sight` takes the colour out of the glass: `greyscale` draws every phosphor in shades of one grey. Nothing in this game is *only* colour: every state the orb can be in is also a word, so greyscale loses a cue and never a fact.",
+  "`sight` takes the colour out of the glass: `greyscale` draws every phosphor in shades of one grey. Nothing the orb shows is *only* colour: every state the orb can be in is also a word, so greyscale loses a cue and never a fact.",
   "",
   "`linear` is the plain stream. It draws everything on screen as text in reading order, with no boxes and nothing positional, and `F5` is the same switch. It is what a screen reader wants, and it is also simply easier to read.",
   "",
@@ -465,7 +468,7 @@ lines = [
   "",
   "`focus` is how the panes sit when there is more than one. Deep draws every pane full size, tiled; wide keeps the one you are working in full size and folds the rest into strips. A small window wants wide.",
   "",
-  "`skip` passes over the boot sequence. It is worth seeing once and it is not worth seeing every time, and this is a setting rather than a key you press because the first thing you do to a game should not be dismissing it.",
+  "`skip` passes over the boot sequence. It is worth seeing once and it is not worth seeing every time, and this is a setting rather than a key you press because the first thing you do on waking an orb should not be dismissing it.",
   "",
   "`install` is the setup a new tower begins with: a practice tower where the orb learns your voice, thrown away when you wake the real one. Turn it off once you know the way around. Typing `skip` during the setup ends it for that tower alone.",
   "",
@@ -486,15 +489,15 @@ lines = [
 name = "keys"
 title = "the keys, and what they do"
 lines = [
-  "You play by typing. These are the only keys that mean anything on their own.",
+  "You work by typing. These are the only keys that mean anything on their own.",
   "",
   "Enter    runs the line you have typed",
   "Tab      completes the word you are typing, or lists what would fit",
   "Up/Down  walks back and forward through what you have typed before",
   "PgUp     scrolls the transcript. PgDn comes back",
-  "Escape   leaves whatever has the keyboard, and never the game",
+  "Escape   leaves whatever has the keyboard, and never the orb",
   "",
-  "Inside a surface the arrows do whatever that surface needs: they walk the archive's stacks, move the caret in a spell, and scroll a chapter of this manual.",
+  "Inside a surface the arrows do whatever that surface needs: they walk the archive's stacks, move the caret in a spell, and scroll a chapter of this book.",
   "",
   "the function keys",
   "",
@@ -508,9 +511,9 @@ lines = [
   "F8   sight: the glass in colour, or in greys",
   "F10  leaves the orb",
   "",
-  "F6 writes out what the orb made of every line you typed, as a file beside the game. It is for reporting a line the orb read wrongly. F12 does the same for the screen, as a picture.",
+  "F6 writes out what the orb made of every line you typed, as `orbs-parse.tsv` in the folder the orb was started from. It is for reporting a line the orb read wrongly. F12 does the same for the screen, as a picture.",
   "",
-  "F9 does nothing. It used to, and a key that did something a release ago is one a returning player presses expecting the first thing.",
+  "F9 does nothing. It used to, and a key an older orb answered is one a returning wizard still presses.",
 ]
 
 [[chapters]]
@@ -535,15 +538,15 @@ lines = [
   "",
   "a tower did not come back",
   "",
-  "If the orb cannot read a save it says so and **keeps the file**, setting it aside rather than writing over it. Nothing is deleted. A tower written by a newer build is refused rather than half-read.",
+  "If the orb cannot read a save it says so and **keeps the file**, setting it aside rather than writing over it. Nothing is deleted. A tower written by a newer orb is refused rather than half-read.",
   "",
   "the window is too small",
   "",
-  "The game is one fixed grid and will say when there is not room for it. Make the window bigger, or press `F4`, which folds two panes into one.",
+  "The orb is one fixed grid and will say when there is not room for it. Make the window bigger, or press `F4`, which folds two panes into one.",
   "",
   "something looks wrong on screen",
   "",
-  "`F6` writes out what the orb made of every line you typed, as a file beside the game. If a line was read as something you did not mean, that file is the useful thing to send.",
+  "`F6` writes out what the orb made of every line you typed, as `orbs-parse.tsv` in the folder the orb was started from. If a line was read as something you did not mean, that file is the useful thing to send.",
 ]
 
 [[chapters]]

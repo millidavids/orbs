@@ -105,7 +105,7 @@ fn pool_and_floor_raise_the_ceiling() {
         "a tier of pool did not add four",
     );
 
-    // The floor only shows under a worn wall: at full integrity it is the
+    // The floor only shows under a worn barrier: at full integrity it is the
     // same ceiling, and at nought it is a higher fraction of it.
     let floor_up = orbs_sim::tower::quintessence::ceiling_with(
         0,

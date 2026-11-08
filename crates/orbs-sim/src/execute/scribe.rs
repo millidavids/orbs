@@ -170,20 +170,9 @@ fn say_nowhere(world: &mut World, filename: &str) {
         .finish();
 }
 
-/// `/grimoire`, which is where a spell lives.
-///
-/// Found by walking rather than cached: a `Entity` handle stored anywhere would
-/// be the thing `tower::node` warns is meaningless across a save.
+/// `/grimoire`, or the root in a world raised without one.
 fn grimoire(world: &World) -> Entity {
-    let root = tower::root(world);
-    tower::children_of(world, root)
-        .into_iter()
-        .find(|node| {
-            world
-                .get::<Name>(*node)
-                .is_some_and(|name| name.0 == "grimoire")
-        })
-        .unwrap_or(root)
+    tower::grimoire(world).unwrap_or_else(|| tower::root(world))
 }
 
 /// Ask the frontend to open a spell for editing.

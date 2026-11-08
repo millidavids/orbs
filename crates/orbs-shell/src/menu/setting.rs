@@ -319,7 +319,7 @@ mod tests {
 
         // §3: comedy never punctures a tense moment.
         let mut eldritch = menu();
-        eldritch.show_register(orbs_render::Presentation::Eldritch);
+        eldritch.show_tension(orbs_render::Presentation::Eldritch, false);
         eldritch.type_text("voice eleven");
         assert_eq!(eldritch.enter(), None, "the secret set something");
         assert!(matches!(eldritch.complaint(), Some(Complaint::Unknown(_))));

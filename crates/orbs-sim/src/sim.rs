@@ -598,6 +598,7 @@ impl Sim {
             | Resolution::TakesNothing { .. }
             | Resolution::Elsewhere { .. }
             | Resolution::InSpell { .. }
+            | Resolution::Aside { .. }
             | Resolution::Unresolved { .. } => {}
         }
     }
@@ -751,6 +752,7 @@ impl Sim {
             | Resolution::TakesNothing { .. }
             | Resolution::Elsewhere { .. }
             | Resolution::InSpell { .. }
+            | Resolution::Aside { .. }
             | Resolution::Unresolved { .. } => {}
         }
     }
@@ -834,6 +836,11 @@ impl Sim {
                 // nothing for a reader to say about them.
                 let trimmed = line.trim();
                 if trimmed.is_empty() || trimmed.starts_with('#') {
+                    return line.clone();
+                }
+                // Nor about an aside, which the spell refuses as written: read,
+                // `kill first_light` became `invoke first_light`.
+                if crate::parser::aside(trimmed).is_some() {
                     return line.clone();
                 }
                 // Unchanged text keeps its reading — this reader's, which makes
@@ -1610,6 +1617,12 @@ impl Sim {
     #[must_use]
     pub fn pending(&self) -> &Pending {
         self.world.resource::<Pending>()
+    }
+
+    /// Whether a siege is open anywhere in the tower.
+    #[must_use]
+    pub fn besieged(&self) -> bool {
+        crate::tower::besieged(&self.world)
     }
 
     /// The register the orb is currently speaking in.

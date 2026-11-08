@@ -395,3 +395,27 @@ fn a_blank_line_and_a_comment_are_never_offered_to_a_reader() {
         lines(&["", "# grind sage", "   ", "survey crush the sage"]),
     );
 }
+
+#[test]
+fn an_aside_is_never_offered_to_a_reader() {
+    // The augury read `kill first_light` as `invoke first_light`: a spell
+    // asked to end something started it. The spell refuses the line as written.
+    let mut sim = laboratory();
+    let reader = Shouty::new();
+    sim.write_spell_reading(
+        "morning",
+        &lines(&["kill first_light", "sudo grind sage", "crush the sage"]),
+        &reader,
+    );
+    sim.step();
+
+    assert_eq!(reader.asked(), 1, "an aside reached the reader");
+    assert_eq!(
+        compiled_from(&sim),
+        lines(&[
+            "kill first_light",
+            "sudo grind sage",
+            "survey crush the sage"
+        ]),
+    );
+}

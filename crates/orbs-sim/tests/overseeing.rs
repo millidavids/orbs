@@ -524,7 +524,7 @@ fn no_line_a_tower_spell_can_say_has_a_hole_in_it() {
         "a tower spell only starts and stops spells",
         "to ask about",
         "needs you in its room",
-        "waited too long",
+        "waited out its time",
         "the orb is full, holding",
         "already runs the tower",
         "only you start a spell for the tower",

@@ -384,10 +384,13 @@ mod tests {
     use crate::Sim;
     use orbs_render::{FieldName, Outcome, RecordKind, Value};
 
+    /// What was said from the first line typed on: the cold start's closing
+    /// line is the orb's own, not an answer.
     fn messages(sim: &Sim) -> Vec<String> {
         sim.scrollback()
             .records()
             .iter()
+            .skip_while(|record| record.kind() != RecordKind::Input)
             .filter_map(|record| record.field(FieldName::Message))
             .map(|value| value.with_str(str::to_owned))
             .collect()
@@ -445,7 +448,7 @@ mod tests {
         // The orb boots with a report (§4), so the transcript never starts
         // empty — measure from where this line begins rather than from zero.
         let before = sim.scrollback().records().len();
-        sim.submit("xyzzy");
+        sim.submit("qwfp");
 
         assert!(sim.pending().is_empty());
         assert_eq!(
@@ -635,7 +638,7 @@ mod tests {
     fn the_same_seed_and_the_same_typing_produce_the_same_world() {
         // The property the whole architecture rests on, now exercised through
         // the path a player actually drives.
-        let transcript = ["look around", "meditate", "xyzzy", "look around"];
+        let transcript = ["look around", "meditate", "qwfp", "look around"];
         let mut a = Sim::new(0xC0FFEE);
         let mut b = Sim::new(0xC0FFEE);
         for sim in [&mut a, &mut b] {
@@ -739,7 +742,7 @@ mod tests {
         // enough — the losing candidates are what say whether the miss was the
         // verb or the argument, and they are unrecoverable after the fact.
         let mut sim = Sim::new(1);
-        for line in ["look around", "meditate", "xyzzy"] {
+        for line in ["look around", "meditate", "qwfp"] {
             sim.submit(line);
             sim.step();
         }

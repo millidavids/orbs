@@ -53,8 +53,10 @@ pub enum Pledged {
 /// Whether a siege is being fought anywhere in the tower — asked of the world,
 /// since it runs wherever the player stands.
 #[must_use]
-pub fn besieged(world: &mut World) -> bool {
-    world.query::<&Siege>().iter(world).any(Siege::running)
+pub fn besieged(world: &World) -> bool {
+    world
+        .try_query::<&Siege>()
+        .is_some_and(|mut sieges| sieges.iter(world).any(Siege::running))
 }
 
 /// A siege in progress.

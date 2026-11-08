@@ -54,7 +54,7 @@ ORBS_BOOT=0 ORBS_DUMP="attend laboratory; kindle charcoal; \
 ```text
 │rates ────────────────────────────
 │  laboratory  brews finished: 55 an hour · the alembic is ready. empty it
-│  archive     scrolls copied: too soon to say · nothing is waiting
+│  archive     scrolls assembled: too soon to say · nothing is waiting
 │  ...
 │  slot        free. nothing holds it
 ```
@@ -190,9 +190,9 @@ ORBS_BOOT=0 ORBS_DUMP="attend archive; debug_spawn fragment 8; debug_spell assem
 
 ```text
 │ledger ───────────────────────────
-│  scrolls copied ................. 1
-│  scrolls copied by your spells .. 1      ← named in full: a record stands alone
-│  done by your spells ............ 1      ← each completion once
+│  scrolls assembled ................. 1
+│  scrolls assembled by your spells .. 1      ← named in full: a record stands alone
+│  done by your spells ............... 1      ← each completion once
 ```
 
 A grind by hand counts nothing there; brew a clarity by hand (`lab_clarity` in
@@ -209,7 +209,7 @@ ORBS_BOOT=0 ORBS_ROLL_AT=0.4 ORBS_DUMP="attend archive; debug_spawn fragment 8; 
 ```
 
 ```text
-│ley line [||||                ] 2/16  +4          scrolls copied      0 +1  │
+│ley line [||||                ] 2/16  +4          scrolls assembled   0 +1  │
 │renown   [|                   ] 1/25  +2          your spells' share  0 +1  │
 ```
 
@@ -3005,13 +3005,14 @@ digits from the wall clock. The POST card prints it, so a report carries the
 world it came from, and `ORBS_SEED=<that number>` goes back to it.
 
 ```bash
-# Two games started a moment apart, no ORBS_SEED: two seeds in the condition report, two worlds.
+# Two games started a moment apart, no ORBS_SEED: two seeds in `status`, two worlds.
 cargo build -p orbs-tui
 for run in 1 2; do
   tmux -L seen new-session -d -s seen -x 120 -y 45 -e ORBS_SAVE=off -e ORBS_BOOT=0 target/debug/orbs-tui
-  sleep 3; tmux -L seen capture-pane -p -t seen | grep -o "orb 0 [0-9]* cold start"; tmux -L seen kill-server
+  sleep 3; tmux -L seen send-keys -t seen status Enter; sleep 1
+  tmux -L seen capture-pane -p -t seen | grep -oE "seed \.+ +[0-9]+"; tmux -L seen kill-server
 done
-# → e.g. "orb 0 82177 cold start" then "orb 0 211335 cold start"; with -e ORBS_SEED=181, 181 both times
+# → e.g. "seed ...........  82177" then "seed ........... 211335"; with -e ORBS_SEED=181, 181 both times
 
 cargo test -p orbs-shell --lib seed        # the clock's seed: short, spread, and pure
 cargo test -p orbs --bin orbs menuing      # a menu's new game is built from the seed it was asked for
@@ -4149,6 +4150,56 @@ ORBS_BOOT=0 ORBS_DUMP="quit" ORBS_THEN="quit" cargo run -q -p orbs      # ...and
 ORBS_BOOT=0 ORBS_DUMP="quit" ORBS_THEN="status; quit" cargo run -q -p orbs  # asks again
 scripts/tui.sh start && scripts/tui.sh type 'quit' 'quit'   # the session ends
 ```
+
+### The orb's asides — another shell's words, and the old jokes (`0.25.5`)
+
+**Answered and never run.** `parser/aside.rs` matches a whole line, or `sudo`
+and `kill` as an opening word, before the matcher sees it. Before this, `sudo`
+fuzzed to `study` and ran `research`, `exit` asked whether you meant `scribe`,
+and with the reader on `kill first_light` *invoked* it. A pointer (`exit`, `ps`,
+`top`, `kill`, `whoami`, `pwd`, `clear`, `reboot`, `fsck`, `date`) names the
+orb's own word. A joke (`xyzzy`, `plugh`, `sudo`, the sandwich, `rm -rf /`) is
+the menu's table too, and is silent in a tense moment. At the prompt that is a
+siege, and only a siege, since `F7` is not journalled and a replay must say what
+was said. At the menu, which writes nothing into the record, it is a siege or
+any register but plain, and only a word said alone. A quiet `sudo hold` offers
+`hold`, listed and never run; a quiet `sudo exit` offers nothing. The table
+folds a line as the matcher does, so `exit.` and `please sudo hold` are its
+too, and a spell line it holds is never handed to a scrivener.
+
+```bash
+ORBS_BOOT=0 ORBS_DUMP="sudo grind sage; exit; ps; kill first_light; whoami; clear; xyzzy" cargo run -q -p orbs
+ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend; xyzzy; sudo hold; sudo exit" cargo run -q -p orbs   # quiet mid-siege
+cargo test -p orbs-sim --test asides        # nothing runs, and the quiet rule
+cargo test -p orbs-sim --test scrivener an_aside   # a spell's aside, never read
+scripts/play.sh besieged::a_siege_quiets    # a joke mid-siege, typed
+```
+
+A real shell synonym retires an aside: `no_aside_takes_a_word_the_orb_already_has`
+fails the moment one arrives, and the shadows it allows are each named in §19.
+
+### The cold start — §4's report, on a new tower (`0.25.6`)
+
+**Walked, not written, and drawn as readings.** Every row is a name and one
+value, so the run takes leaders: `orb` and *cold start*, each open room and
+*ok* or *tampered*, the grimoire's spells, what is bound. The grimoire is
+counted as a player's would be, without the tester spells a debug build
+shelves beside it, and only once it is open: the sealed start has no grimoire
+row. Then the verbs, then
+§4's closing line from the rows: *the orb warms to your touch*, or *N warnings*
+before it. A run with a word in it leads every row up to its value; `status`,
+numbers alone, still pads its digits. The seed is `status`'s now.
+
+```bash
+ORBS_BOOT=0 ORBS_DUMP=1 cargo run -q -p orbs                    # the open tower
+ORBS_BOOT=0 ORBS_SEALED=1 ORBS_DUMP=1 cargo run -q -p orbs      # what a player gets
+ORBS_BOOT=0 ORBS_GRID=80x22 ORBS_DUMP=1 cargo run -q -p orbs    # the floor: every row on screen
+cargo test -p orbs-sim --lib tower::boot    # the closing line, a tampered room, a shut grimoire
+```
+
+The report is written once, in `Sim::new`, from the built-in prose, so
+`ORBS_CONTENT` never reaches it, and *N warnings* cannot happen in play: a new
+tower is never tampered. The test is its gate.
 
 ### `menu` opens the orb's own screen
 

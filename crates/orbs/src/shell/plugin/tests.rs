@@ -2,7 +2,7 @@ use super::*;
 use crate::shell::{Reading, Standing};
 use bevy::input::ButtonState;
 use bevy::input::keyboard::Key;
-use orbs_render::{FieldName, Outcome};
+use orbs_render::{FieldName, Outcome, RecordKind};
 
 fn app() -> App {
     let mut app = App::new();
@@ -322,6 +322,8 @@ fn type_line(app: &mut App, line: &str) {
     app.update();
 }
 
+/// What was said from the first line typed on: the cold start's closing line is
+/// the orb's own, not an answer.
 fn messages(app: &App) -> Vec<String> {
     app.world()
         .resource::<Tower>()
@@ -329,6 +331,7 @@ fn messages(app: &App) -> Vec<String> {
         .scrollback()
         .records()
         .iter()
+        .skip_while(|record| record.kind() != RecordKind::Input)
         .filter_map(|record| record.field(FieldName::Message))
         .map(|value| value.with_str(str::to_owned))
         .collect()

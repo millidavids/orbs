@@ -42,6 +42,7 @@ pub struct Scene {
     nouns: Vec<Noun>,
     operations: Vec<Verb>,
     known: Vec<String>,
+    besieged: bool,
 }
 
 impl Scene {
@@ -49,6 +50,20 @@ impl Scene {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Say whether a siege is being fought: §3's tense moment, which the orb's
+    /// jokes keep out of.
+    #[must_use]
+    pub const fn besieged(mut self, besieged: bool) -> Self {
+        self.besieged = besieged;
+        self
+    }
+
+    /// Whether a siege is being fought.
+    #[must_use]
+    pub const fn is_besieged(&self) -> bool {
+        self.besieged
     }
 
     /// Add a nameable entity.

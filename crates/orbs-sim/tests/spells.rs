@@ -758,7 +758,7 @@ fn four_blocks_deep_runs_the_steps_it_should_and_no_others() {
         issued(&sim),
     );
     assert!(
-        ever_said(&sim, "is finished"),
+        ever_said(&sim, "runs to its end"),
         "the spell never came out of its blocks: {:?}",
         issued(&sim),
     );
@@ -824,7 +824,7 @@ fn an_unanswerable_question_inside_a_loop_stops_neither_the_loop_nor_the_spell()
         "a branch ran on a question nobody could answer: {:?}",
         issued(&sim),
     );
-    assert!(ever_said(&sim, "is finished"), "{:?}", issued(&sim));
+    assert!(ever_said(&sim, "runs to its end"), "{:?}", issued(&sim));
 }
 
 #[test]
@@ -1017,7 +1017,7 @@ fn no_line_a_spell_can_say_has_a_hole_in_it() {
         "an unfilled placeholder was said: {holes:?}"
     );
     // ...and it really reached the failures, or the sweep proves nothing.
-    for expected in ["to ask about", "neither half runs", "waited too long"] {
+    for expected in ["to ask about", "neither half runs", "waited out its time"] {
         assert!(
             ever_said(&sim, expected),
             "{expected:?} never said: {:?}",

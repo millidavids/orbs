@@ -47,7 +47,7 @@ fn a_second_tower_never_takes_the_firsts_slot() {
 
     menu(&game);
     game.type_raw("play");
-    game.expect_drawn("1 wizard, a short game");
+    game.expect_drawn("1 wizard's tower, short");
     game.type_raw("1");
     game.expect_drawn("/tower/laboratory");
 }
@@ -91,7 +91,7 @@ fn loading_the_tower_you_are_in_keeps_where_you_are() {
         return;
     };
     game.type_raw("play");
-    game.expect_drawn("1 wizard, a short game");
+    game.expect_drawn("1 wizard's tower, short");
     game.type_raw("1");
     game.expect_drawn("/tower/laboratory");
     // A sealed tower has one room, so the move is out of it. The border title is
@@ -100,7 +100,7 @@ fn loading_the_tower_you_are_in_keeps_where_you_are() {
     game.expect_drawn("┌ /tower F4");
     menu(&game);
     game.type_raw("play");
-    game.expect_drawn("1 wizard, a short game");
+    game.expect_drawn("1 wizard's tower, short");
     game.type_raw("1");
     game.expect_off_screen("open a tower");
     // Back where the player stood, not where the last save had them.
@@ -116,7 +116,7 @@ fn an_unreadable_tower_leaves_you_where_you_were() {
         return;
     };
     game.type_raw("play");
-    game.expect_drawn("1 wizard, a short game");
+    game.expect_drawn("1 wizard's tower, short");
     // Spoiled after the listing was read, so the menu still offers it.
     std::fs::write(kept.save(), "not a tower").expect("the save can be spoiled");
     game.type_raw("1");
@@ -141,7 +141,7 @@ fn a_tower_gone_since_it_was_listed_raises_nothing() {
         return;
     };
     game.type_raw("play");
-    game.expect_drawn("1 wizard, a short game");
+    game.expect_drawn("1 wizard's tower, short");
     std::fs::remove_file(kept.save()).expect("the save can be removed");
     game.type_raw("1");
     game.expect_drawn("no towers yet");
@@ -170,7 +170,7 @@ fn the_orb_keeps_six_towers() {
     game.expect_drawn("the orb cannot write what it remembers down");
     menu(&game);
     game.type_raw("play");
-    game.expect_drawn("6 wizard, a short game");
+    game.expect_drawn("6 wizard's tower, short");
     game.type_raw("new");
     game.expect_drawn("the orb keeps no more towers. open one and quit from it");
 }

@@ -39,7 +39,11 @@ pub fn scene_at(world: &World, at: Entity) -> Scene {
     // §3's log is nameable from the moment the game starts and is not a node in
     // the tree, so it is registered first — dropping it here would silently kill
     // `peruse orb.log` and `sift <pattern> orb.log`.
-    let mut scene = Scene::new().with(NounKind::File, LOG);
+    // A siege is the world's, asked here so every reading of a line hears it.
+    // Never the register: `F7` moves that and no journal records it.
+    let mut scene = Scene::new()
+        .with(NounKind::File, LOG)
+        .besieged(super::besieged(world));
 
     // Every recipe and manual subject is a `Topic`, nameable anywhere, from the
     // [`Topics`] snapshot (see there). A secret is subtracted here, against the

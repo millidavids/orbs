@@ -64,8 +64,8 @@ pub enum Grant {
     Edge(usize),
     /// `pool_<n>` — [`POOL_BONUS`] × n on the quintessence ceiling.
     Pool(usize),
-    /// `floor_<n>` — the pool's floor under a worn wall rises [`FLOOR_BONUS`] × n
-    /// points.
+    /// `floor_<n>` — the pool's floor under a worn barrier rises [`FLOOR_BONUS`]
+    /// × n points.
     Floor(usize),
     /// `escrow_<n>` — a siege pays [`ESCROW_PERCENT`] × n more.
     Escrow(usize),
@@ -239,7 +239,7 @@ pub fn pool_bonus(world: &World) -> u32 {
     )
 }
 
-/// Points added to the pool's floor under a worn wall.
+/// Points added to the pool's floor under a worn barrier.
 #[must_use]
 pub fn floor_bonus(world: &World) -> u32 {
     FLOOR_BONUS.saturating_mul(

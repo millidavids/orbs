@@ -239,6 +239,7 @@ fn one(
         | Resolution::Incomplete { .. }
         | Resolution::Elsewhere { .. }
         | Resolution::InSpell { .. }
+        | Resolution::Aside { .. }
         | Resolution::Unresolved { .. } => {
             return verbatim(Some(Fault {
                 key: "spell_missing",
@@ -277,6 +278,7 @@ fn names_a_spell(resolution: &Resolution) -> bool {
         Resolution::TakesNothing { .. }
         | Resolution::Elsewhere { .. }
         | Resolution::InSpell { .. }
+        | Resolution::Aside { .. }
         | Resolution::Unresolved { .. } => return false,
     };
     matches!(verb, Verb::Invoke | Verb::Bind)

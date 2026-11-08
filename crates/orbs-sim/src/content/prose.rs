@@ -126,6 +126,14 @@ impl Prose {
             .filter_map(|key| key.strip_prefix("recall_"))
             .collect()
     }
+
+    /// Every key and its line, for a lint over the whole voice.
+    #[cfg(test)]
+    pub(super) fn every_line(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.lines
+            .iter()
+            .map(|(key, line)| (key.as_str(), line.as_str()))
+    }
 }
 
 impl Default for Prose {

@@ -31,6 +31,7 @@
 //! ```
 
 mod arguments;
+mod aside;
 mod complete;
 mod expect;
 mod fuzzy;
@@ -47,6 +48,7 @@ mod trace;
 mod verb;
 mod vocabulary;
 
+pub use aside::{Aside, Kind as AsideKind, alone as aside_alone, aside, every as every_aside};
 pub use complete::{Completion, Suggestion, complete, is_answer};
 pub use expect::{Expectation, Expected, Reason, Situation, expect, open_blocks};
 pub use fuzzy::{EXACT, MIN_SIMILARITY, distance, is_near, similarity};
@@ -59,6 +61,7 @@ pub(crate) use normalise::Tokens;
 pub use normalise::is_filler;
 pub use question::{Bound, Condition, Quantity, State as SpellState, condition, write_condition};
 pub use report::report;
+pub(crate) use resolve::read as matched;
 pub use resolve::{Analysis, analyse, reading_to_run, resolve};
 pub use scene::{Noun, NounMatch, Scene};
 pub use spellword::{

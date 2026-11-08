@@ -16,6 +16,21 @@ fn besieged() -> Option<Game> {
 
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
+fn a_siege_quiets_the_prompts_jokes_and_not_its_pointers() {
+    // The prompt's asides are the menu's jokes and another shell's words. A
+    // siege keeps the jokes quiet (§3); a pointer is never a joke.
+    let Some(game) = besieged() else { return };
+    game.does("plugh", "plugh");
+    game.does("exit", "quit puts it down");
+    assert!(
+        !game.screen().contains("hollow voice"),
+        "a joke was told mid-siege:\n{}",
+        game.screen(),
+    );
+}
+
+#[test]
+#[ignore = "plays a real game through tmux; run with scripts/play.sh"]
 fn stillness_ends_a_siege() {
     let Some(game) = besieged() else { return };
     game.does("hold", "they onslaught")

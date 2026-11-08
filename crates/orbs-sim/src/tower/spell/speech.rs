@@ -86,6 +86,7 @@ impl Refused {
             | Resolution::TakesNothing { .. }
             | Resolution::Elsewhere { .. }
             | Resolution::InSpell { .. }
+            | Resolution::Aside { .. }
             | Resolution::Unresolved { .. } => None,
         }
     }

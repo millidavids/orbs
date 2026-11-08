@@ -91,6 +91,35 @@ Rules:
   the effect through diction, cadence, and stage direction rather than glyph
   damage. Without this, screen-reader players lose an entire tonal register.
 
+### Both at once
+
+**Rule: a line about the orb is true of a scrying orb and of a computer, in the
+same words.** Pillar 1 asks for both at once; this is how a sentence does it.
+*"the orb loses the thread"*, *"the orb cannot write what it remembers down"*,
+*"a log is not telling the truth"*. §19, *Both tongues*, has the decisions.
+
+1. **The orb about itself says both** — its reading, memory, attention, logs,
+   saves, the spells it holds. Words old in both worlds do it: *read, write,
+   hold, keep, remember, run, wake, dark, thread, deep, line, page, record,
+   log, call, answer, fork, bind*.
+2. **The world stays in the tower, in a terminal's shape.** Fire, herbs, seals,
+   beasts and walls are arcane; the line still reads as output — one line, the
+   thing first, the number last, said once.
+3. **The player's machine is named plainly**, since the player has to act on
+   it: keys, window, folder, disk. The orb speaks of them as hardware it sits
+   on — *the glass*, *is the disk full?*
+4. **Never the maker.** Nothing the orb says has *authored*, *not built*,
+   *built yet*, *tier* or *game* in it, and `content/voice.rs` holds that. The
+   manual says *game* in `notices` alone.
+5. **Never a wink.** A machine word that only works as a joke is an aside —
+   §3's comedy — never an ordinary line. The test is two readers: a wizard who
+   has never seen a computer, and a sysadmin. Both must take it as sincere.
+6. **True on both sides.** The alchemy is real alchemy, and a Unix analogy, once
+   named (*the tower's grep*), behaves as the real thing does. A word claiming
+   a meaning the mechanic lacks is the word to change.
+7. **One word per act.** A seal for the lens, a ward for the sanctum, the wall
+   for the bailey, one verb for each counter.
+
 ## 4. The screen
 
 **Framing: always inside.** The player never sees the orb, the wizard, or the
@@ -240,6 +269,11 @@ bound:
 
 orbs:~$ _
 ```
+
+*(As built at `0.25.6`: each open room is a reading led to `ok` or `tampered`,
+with `grimoire` and `bound` counted, then the verbs and the closing line from
+the rows. The version and the machine's checks are the POST card's, and the
+seed is `status`'s. §19, *Both tongues*.)*
 
 Listing bound scripts here is not decoration — it is the ambient defence against
 forgetting what is running unattended (§8.1).
@@ -2548,6 +2582,143 @@ wait on trace)
    price-shop — Exapunks is $19.99.
 
 ## 19. Decisions log
+
+### Both tongues (`0.25`)
+
+**Rule: a line about the orb is true of a scrying orb and of a computer, in the
+same words** — §3, *Both at once*. The owner asked for a pass that strikes the
+crossover. Read across `prose.toml`'s 1,284 lines, a word-list count put 9% in
+both worlds, 39% arcane alone, 12% machine alone and 40% in neither, which is
+game-interface English. The best lines were already the target: *"the orb loses
+the thread"*.
+
+| Question | Decision |
+|---|---|
+| How far the machine reaches | **Both at once**, the owner's choice over an openly Unix voice (`{name} daemonised`, `EOF`) and over defects alone. The orb about itself says both; the world stays arcane; §3's earnest default stands |
+| The manual | **The orb's handbook**: the book that came with it, second person and capitalised as before (*the manual is written as a book*), *game* only in `notices` |
+| The maker's words | Refused by `content/voice.rs`, whole words, any case: *authored*, *not built*, *built yet*, *tier*, *game*. `built` alone is a tower's word, so it passes |
+| The topped gauge | *end of the line*, which is both the ley line's end and a file's. *nothing more authored* was the developer saying what is left to write |
+| A new tower's length | *how long will this tower run?*, and a slot reads *wizard's tower, short*: a tower runs, a game is the maker's word |
+| `weave`'s page | It said the ley line *runs straight* and mastery *branches*, the wrong way round (`progression.toml`'s header). It now says the ley line forks and mastery is one line a room |
+| Asides at the prompt (`0.25.5`) | Answered before the matcher, as spell words are, because `sudo` fuzzed to `study` and so to `research`, and `exit` asked about `scribe`. The jokes are silent in a tense moment; the pointers name the orb's word |
+| §4's cold start (`0.25.6`) | Rebuilt toward §4's mock-up, which *Boot sequence, scaffold tutorial…* promised a content file would compose (*"the orb warms to your touch"*) |
+| What was left | **Real shell synonyms**, and `cron` on `bind`, which schedules nothing: each moves the vocabulary, and the readers would retrain. **`phrasings.toml`**, a corpus and not the voice. **The eldritch register's lines**, which do not exist yet and are their own feature |
+
+**What each box moved.**
+
+- `0.25.0`: the lint, and the thirteen lines it and the rule caught.
+- `0.25.1`: eight lines. Most of what the orb says about itself already said
+  both, so this box confirmed more than it changed. The lines that moved:
+  - `quit_begins`: *the tower is written down, and waits*. It used to claim the
+    tower kept its own counsel.
+  - `spell_done`: *runs to its end*.
+  - `spell_gave_up`: *waited out its time*.
+  - `bind_done`: *keeps it running unwatched*.
+  - `spell_strands_too_many`: *too many threads*.
+  - The weave's line-a-second nodes, which were *steps*: `spell::budget`
+    counts a line as a step.
+  - The menu's `manual` row: *the orb's own handbook*.
+- `0.25.2`: the pages. `recall` joins a page's numbered lines into one
+  paragraph, and no line may end in a full stop, so a sentence that ended at a
+  line ran into the next. About 35 pages did, `kindle`'s since Phase 1. A
+  break now sits inside a line, or a line ends on `;` or `:`. Some pages were
+  also wrong:
+  - `bind` said *"it also laps costs concentration"*.
+  - `verify` never named itself.
+  - `anneal` said *"holds the tower to it"*; it holds the tower's slot.
+- `0.25.3`: one word per act.
+  - The lens's ledger row and mastery line said *wards broken*, though the
+    seal took the word when *ward* went to the sanctum.
+  - A counter had two verbs. Scrolls were *copied* on the ledger and
+    *assembled* on the line. Courses were *run* and *mustered*, though
+    mustering only draws one, and the deed counts it finished. Sieges were
+    *held* and *won*.
+  - The floor nodes said *a worn wall*, but `ceiling` scales by the sanctum's
+    integrity, so they now say *worn barrier*.
+  - The world's own lines stay arcane, as rule 2 asks, and needed no other
+    change.
+- `0.25.4`: the handbook. Every chapter is kept and the facts stand; *the
+  game* became the tower, the orb or the work. Four things were wrong:
+  - It said a rival had sealed *your instruments*; the seals are on another
+    wizard's orb.
+  - It said a d4 was a cheap die; the coffer holds a d6, a d8 and a d20.
+  - It said F6 writes *beside the game*; it writes `orbs-parse.tsv` to the
+    folder the orb was started from.
+  - It called time away a feature *not done yet*. Now: the tower stops with
+    the glass.
+
+#### Asides, at the prompt (`0.25.5`)
+
+| Question | Decision |
+|---|---|
+| What is matched | A whole line, once folded as the matcher folds one (case, spacing, leading filler, trailing punctuation), or `sudo` and `kill` as an opening word. Whole lines first, so `sudo make me a sandwich` is not `sudo`'s. Before the matcher, as spell words are: `sudo` had fuzzed to `study` and run `research`, `clear` reached `haul` and `date` reached `digest` |
+| Pointers | `exit`, `ps`, `top`, `kill`, `whoami`, `pwd`, `clear`, `reboot`, `shutdown`, `fsck`, `date`, each naming the orb's word. They stand in for §6's shell register, which has these nowhere, because a real synonym moves the vocabulary and the readers retrain. Answered in any register |
+| Jokes | The menu's six, now one table both read, and `rm -rf /`. **At the prompt, silent while a siege is open**, and the register is not asked: `F7` moves it and no journal records `F7`, so a replay would say something else. **At the menu, silent in any register but plain or in a siege**, and only said alone (`sudo`, never `sudo play`), since the menu writes nothing into the record. The scene carries the siege, so `analyse` decides and every caller hears it. A silent opening-word joke offers what follows it (`sudo hold` offers `hold`), listed and never run, and is still never handed to a reader, so a siege cannot force a fuzzed reading. The rest is read only then, and offers nothing when a table answers it (`sudo exit`); a whole-line joke offers nothing |
+| `kill` | **Taken knowingly.** With the reader on, `kill first_light` ran `invoke first_light`, starting the spell it was asked to end; `kill the forge` ran `stop forge`, which was right. The aside names `stop` for both. The corpus still teaches `kill the {place}`, which is the next retrain's to settle |
+| The shadow rule | `no_aside_takes_a_word_the_orb_already_has`: no whole line is a synonym, a verb or a line the readers learn, and no opening word opens one. It passes over the ones taken on purpose: `kill`, and three whole lines that reached a verb with words to spare (the sandwich, `hello sailor`, `rm -rf /`). When a real shell synonym arrives, the test fails and the aside goes |
+| The trace | `Outcome::Unresolved`, as `InSpell` is, with the key as the echo and no scored readings: no new outcome, so the tour, the installation and the gate's counts are untouched. An aside finishes no installation step |
+| In a spell | Refused as `spell_missing`, beside `InSpell`, and never offered to a scrivener, which read `kill first_light` as `invoke first_light` |
+| An old question | A save's open numbered question is read again by the matcher alone, which asked it: `rm -rf /` raised four `purge` readings before this, and the numbers are on the restored screen |
+| Gibberish in tests | `xyzzy` was the stand-in for a word the orb does not know, and is now answered. The parser's own tests moved to `qwfp`; one had started passing for the wrong reason |
+
+**The review.** A context-free read of the whole pass found fifteen faults,
+and all are fixed. No version moved: the corrections fold into their boxes.
+
+- **Four lines were false.**
+  - `aside_whoami` said settings change the name, but only a new tower takes
+    it.
+  - `aside_kill` said the orb ends nothing by force, but `stop` loses work.
+  - `aside_clear` said the glass forgets nothing, but a save keeps 500
+    records.
+  - `weave_spent` named the node it was aimed at as the one taken.
+- **Two pages contradicted other things.** `invoke` said a line a tick while
+  the ley line grants more, and `research` said four fragments make one scroll
+  where the lectern makes two.
+- **The prompt asked the register**, which put an unjournalled key into what
+  a replay says.
+- **A quiet `sudo` offered nothing**, and `rm -rf /` offered `purge`.
+- **The menu ignored the siege.**
+- **The rest was wording.**
+  - `unfurl` said *record* twice for two things.
+  - `undo` said *yet*.
+  - `verify` read *tires the orb of that kind*.
+  - `shutdown` shared `reboot`'s line.
+  - `top` claimed every room.
+  - The handbook's F9 line repeated *did* and pointed at nothing.
+
+**The second review**, of the closed pass, found fourteen. Thirteen are fixed;
+one was checked and holds.
+
+- **Two leaks.** The cold start named a shut grimoire, and counted a debug
+  build's tester spells, 22 against a player's 1.
+- **A spell could still start what it was asked to end.** The scrivener read
+  `kill first_light` as `invoke`, since only the prompt asked the table.
+- **The table missed what the matcher forgives**: `exit.`, `ps?`, `please
+  sudo hold`.
+- **The menu answered `sudo` by prefix**, against its own rule.
+- **A quiet `sudo exit` offered `scribe`**, its rest read past the tables.
+- **The quiet was a post-pass in `submit`.** It is the scene's now, which also
+  means the rest is read, and scored into the trace, only for a quiet joke.
+- **An old save's `rm -rf /` question** came back with no numbers.
+- **Two ticked See-it lines quoted wording since changed**, and the
+  determinism test still parsed `xyzzy`.
+- **`written` repeated `scribe`'s grimoire walk**; both use `tower::grimoire`.
+- **`pwd` holds.** The pane's title is the first thing `F5`'s mirror speaks.
+
+#### The cold start (`0.25.6`)
+
+| Question | Decision |
+|---|---|
+| The rows | Each is a name and one value, so the run draws as readings with §4's leaders. `orb` is *cold start* alone: the tick is always nought there, and the seed is `status`'s. A room is *ok* or *tampered*, without the count of what it holds, which nobody could read (supersedes *what it holds*). `grimoire` counts the spells a player's would hold, not the tester spells a debug build shelves beside them, and only once the grimoire is open; `bound` stays |
+| The closing line | `boot_warm`, *the orb warms to your touch*, or `boot_warned` naming the rooms found tampered. It is composed from the rows, as *Boot sequence* promised a content file would. A new tower is never tampered, so the warning has a test and no See-it line |
+| A word in the readings | `Readings` takes a state word as well as a count. A run with a word in it leads every row up to its value, since a gap before *ok* reads as something missing. A run of numbers alone, `status`, still pads its digits, and draws exactly as it did |
+| The floor | Measured at 80×22: the open tower had two spare rows. The grimoire row and the closing line take both, and the `orb` row stays on screen. The sealed start has room to spare |
+| What it is written from | The built-in prose, in `Sim::new` before any `set_prose`, kept in the scrollback like every record. `ORBS_CONTENT` does not reach it |
+
+**No word the parser knows moves**, so `weights_on_disk_are_this_vocabularys`
+holds and the readers keep their weights. A rewrite box changes values; a `man_`
+key may be added where a page needs a line, and a `recall_` key never is, since
+`Prose::topics` makes each a noun.
 
 ### The Rust and Bevy rules, swept
 
@@ -17679,7 +17850,7 @@ tower, and it ends by naming the vocabulary.
 
 | Question | Decision |
 |---|---|
-| **Walked, not written** | A boot report that could go stale is a lie the player reads first. Every row comes from the world — one per domain with what it holds and whether it is sound, plus §8.1's `bound` count so automation cannot be forgotten |
+| **Walked, not written** | A boot report that could go stale is a lie the player reads first. Every row comes from the world — one per domain with what it holds and whether it is sound, plus §8.1's `bound` count so automation cannot be forgotten. ⚠ *What it holds* superseded at `0.25.6` (§19, *Both tongues*): the count went, since it drew an unexplained number |
 | **`bound: 0` is printed, not omitted** | The script engine is Phase 1. An absent section leaves a player unable to tell *none* from *not shown*, and this is the line a Phase 1 script slots into |
 | **The tutorial names verbs that work, not verbs that exist** | Six of §6.1's sixteen only acknowledge in Phase 0. Offering them spends the gate's most important metric — the dead-end rate — on things nobody has built. `execute::is_live` is where "works" is written down, and a test drives all sixteen through a real `Sim` to keep it honest |
 | **Names, not sentences** | The same line §19 already drew: the parser's tables emit facts. §4's *"the orb warms to your touch"* is composed by a Phase 1 content file from exactly these records |

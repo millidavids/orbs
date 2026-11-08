@@ -45,7 +45,7 @@ const PLACES: [&str; 10] = [
 /// prose once and the answer does not change while somebody is reading it.
 ///
 /// Authored chapters first, then the generated ones: a player who has just found
-/// the orb wants *what this is* before *every word in the language*.
+/// the orb wants *what this orb is* before *every word in the language*.
 #[must_use]
 pub fn book(sim: &Sim) -> Vec<Chapter> {
     let mut book = sim.manual().chapters().to_vec();

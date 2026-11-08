@@ -351,7 +351,9 @@ fn resolution_is_deterministic() {
     let inputs = [
         "make a potion of clarity",
         "brew",
-        "xyzzy",
+        // A word nobody has, which the matcher must fail to read the same way
+        // each time. Not `xyzzy`, which an aside answers before it gets there.
+        "qwfp",
         "grep march feed.log",
         "go to the laboratory",
     ];

@@ -37,9 +37,8 @@ Progression, `v0.11.x` is Renown. Nothing below is edited again.
 **Every pass was done highest-first**, and there is no fifth. Phase numbers
 survive below as names, not as an order.
 
-Last updated: 2026-10-29 · `v0.23.4` released, carrying `0.21`–`0.23`; `0.23`,
-*the tour*, closed at `0.23.4`, after `0.22`,
-*every instrument has a tempo*, at `0.22.5`.
+Last updated: 2026-11-04 · `0.25`, *both tongues*, closed at `0.25.6`, after
+`v0.24.7`; `0.24`, *the tower's spell*, closed at `0.24.6`.
 
 ---
 
@@ -80,6 +79,7 @@ not consecutive.
 | [**Every instrument has a tempo**](#every-instrument-has-a-tempo) | `0.22.5` | ✅ every box ticked · the prism, the lattice, the pylon, the lectern and the circle draw pictures of their own |
 | [**The tour**](#the-tour) | `0.23.4` | ✅ every box ticked · every surface, moving, one scene at a time, in the window and headless; the instrument for judging the look |
 | [**The tower's spell**](#the-towers-spell) | `0.24.6` | ✅ every box ticked · one spell at `/tower` watches every room and starts and stops their spells; every spell held costs a concentration · ticks *the tower as one machine*'s last box |
+| [**Both tongues**](#both-tongues) | `0.25.6` | ✅ every box ticked · the orb's lines true of a scrying orb and a computer at once; the manual as its handbook; asides at the prompt; §4's cold start |
 
 ### Open — and **this table is not a running order**
 
@@ -874,7 +874,7 @@ needs a person, so it **moved with its item to Phase 14**.
       east\nend\n<esc>\nquit" ORBS_THEN="invoke check; meditate 8; peruse
       orb.log"` — zero passes with the stacks shut, and it loops with one open.
       ✅ the same with `until the mortar_and_pestle is working` around a `grind
-      sage` in the laboratory — one pass, then *"is finished"*.
+      sage` in the laboratory — one pass, then *"runs to its end"*.
       ✅ `ORBS_DUMP="recall repeat; recall until; recall if"` — the manual the
       language never had.
       ✅ `ORBS_SEED=3 ORBS_BOOT=0 ORBS_GRID=160x45 ORBS_DUMP="attend archive;
@@ -1861,8 +1861,8 @@ a first pass and `orbs-balance` decides it.
       on a logarithmic scale, and `status` says the pool and its ceiling (§19)
       **See it:** `ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="weave"
       ORBS_WEAVE="ley\n<right>\n<right>\n<down>"` — sixteen stations, the
-      forks three deep, `40` aimed at its war node and the panel reading *"a
-      worn wall keeps more pool · costs 40 · war"*. Then, each grant on the
+      forks three deep, `40` aimed at its war node and the panel reading
+      *"worn barrier: more pool kept · costs 40 · war"*. Then, each grant on the
       surface it moves: `ORBS_DUMP="debug_take fuel_1; attend laboratory;
       kindle charcoal"` — *"fuel for 720 ticks"* where it was 600;
       `ORBS_DUMP="status; debug_take pool_1; status"` — the ceiling four
@@ -2103,8 +2103,9 @@ It **supersedes Phase 5's rhythm game** and makes summoning's scarcity time.
       from the wall clock unless `ORBS_SEED` names one; `orbs_shell::seed` stays
       the instruments'. Nothing in the sim reads the clock
       **See it:** two `orbs-tui` launches under tmux with no `ORBS_SEED` print
-      two seeds in the condition report — *"orb 0 82177 cold start"*, *"orb 0
-      211335 cold start"* — the loop in SEEING-IT's *`ORBS_SEED`* section.
+      two seeds in `status` — *"seed ... 82177"*, *"seed ... 211335"* — the
+      loop in SEEING-IT's *`ORBS_SEED`* section. (The cold start carried the
+      seed until `0.25.6`.)
       `cargo test -p orbs-shell --lib seed`; `cargo test -p orbs --bin orbs
       menuing` builds a new game from the seed it was asked for
 - [x] **The circle, tested as a whole domain** (`0.15.6`) — 108 tests by what
@@ -3423,9 +3424,77 @@ resumed spell reads its questions in its own room.
 - [x] **One spell that runs the whole tower** (`0.24.6`) — ticks *The tower as
       one machine*'s last box; a siege can drag it and `purge` mends it
       **See it:** `ORBS_BOOT=0 ORBS_DUMP="debug_ley 96; bind seneschal; attend grimoire; meditate 3600; attend tower; status" cargo run -p orbs`
-      — wards broken, courses run, beasts held and charms laid, each *by your
+      — seals broken, courses run, beasts held and charms laid, each *by your
       spells*, while the player was in the grimoire. `cargo test -p orbs-sim
       --test overseeing --test surveying`
+
+---
+
+## Both tongues
+
+**A pass of the orb's prose, so a line about the orb is true of a scrying orb
+and of a computer at once** — DESIGN §3, *Both at once*, is the rule and §19,
+*Both tongues*, the decisions. **Every box ticked at `0.25.6`.** The world's lines stay arcane; developer talk and
+wrong statements go; the manual becomes the orb's handbook. Two boxes are code:
+asides at the prompt, and §4's cold start.
+
+**`0.25`, one patch per box.** Prose only, except the two code boxes: no verb,
+synonym, noun or `recall_` key changes, so the readers keep their weights. Each
+rewrite box is gated on `scripts/dumps.sh` diffed against the box before it,
+where only that box's wording may move.
+
+- [x] **The rule, and the lint against the maker** (`0.25.0`) — §3's seven
+      rules; `the_orb_never_speaks_as_its_maker` refuses *authored*, *not
+      built*, *built yet*, *tier* and *game* in anything the orb says
+      **See it:** `ORBS_BOOT=0 ORBS_DUMP="debug_ley 100000; status; recall undo; recall weave" cargo run -p orbs`
+      — the gauge reads *end of the line*, `undo`'s page says *the orb does
+      not take a line back*, and `weave`'s says the ley line forks and mastery
+      is a line per room, the right way round. `cargo test -p orbs-sim content::voice`
+- [x] **The orb about itself** (`0.25.1`) — spells, binding, the editor,
+      saving, waking and quitting, logs, `verify`, `status rates`, the
+      gauges, the installation, the weave's furniture, the menu's words. Most
+      already said both; eight lines moved
+      **See it:** `ORBS_BOOT=0 ORBS_DUMP="quit; quit" cargo run -p orbs` —
+      *the tower is written down, and waits*;
+      `ORBS_BOOT=0 ORBS_DUMP="attend laboratory; invoke first_light; meditate 30; peruse laboratory.log" cargo run -p orbs`
+      — *first_light.spell runs to its end*. `cargo test -p orbs-sim --test strands`
+      for *too many threads*
+- [x] **The pages** (`0.25.2`) — `man_*`, `recall_*`, `using_*`, `craft_*`
+      and the room primers; values only. A page's numbered lines are joined
+      into one paragraph, and about 35 pages ran two sentences together at a
+      break (*"…one at a time an instrument at work…"*): each is written as a
+      paragraph, read joined, then split
+      **See it:** `ORBS_BOOT=0 ORBS_DUMP="attend laboratory; recall bind; recall move; recall verify" cargo run -p orbs`
+      — *…starts again from the top when it ends*, *…one at a time. an
+      instrument at work…*, *…the orb rests from that kind for a while*
+- [x] **The rooms keep one word per act** (`0.25.3`) — the lens breaks seals,
+      a counter has one verb on the ledger and on its mastery line, and the
+      floor grant's barrier is the sanctum's, not the bailey's wall
+      **See it:** `ORBS_BOOT=0 ORBS_DUMP="debug_ley 96; bind seneschal; attend grimoire; meditate 3600; attend tower; status" cargo run -p orbs`
+      — *the lens line advances: 5 seals broken*, `seals broken`, `courses run`;
+      `ORBS_BOOT=0 ORBS_DUMP="attend sanctum" cargo run -p orbs` — the road
+      reads *a course run · 0 of 1*
+- [x] **The manual is the orb's handbook** (`0.25.4`) — "game" only in
+      `notices`, and the lint reads the manual too
+      **See it:** `ORBS_BOOT=0 ORBS_THRESHOLD=1 ORBS_DUMP=1 ORBS_MENU=manual ORBS_MANUAL=orbs cargo run -p orbs`
+      — *This orb has a terminal in it*; `ORBS_MANUAL=hours` — *time, and why
+      waiting is the work*, and *the tower stops when the orb goes dark*.
+      `cargo test -p orbs-sim content::voice`
+- [x] **Words the orb answers and never offers, at the prompt** (`0.25.5`) —
+      `sudo`, `exit`, `ps`, `kill`, `xyzzy` and the rest, answered in voice and
+      running nothing; the jokes silent in a siege. The menu reads the same
+      table
+      **See it:** `ORBS_BOOT=0 ORBS_DUMP="sudo grind sage; exit; ps; kill first_light; whoami; clear; xyzzy" cargo run -p orbs`
+      — *there is no one above you in this tower*, *the orb is not a shell you
+      leave*, and nothing runs. `cargo test -p orbs-sim --test asides`;
+      `scripts/play.sh besieged::a_siege_quiets`
+- [x] **The cold start reads like §4** (`0.25.6`) — rooms `...... ok`, a
+      grimoire row, *the orb warms to your touch*; the seed is `status`'s
+      **See it:** `ORBS_BOOT=0 ORBS_DUMP=1 cargo run -p orbs`, and with
+      `ORBS_GRID=80x22` — `laboratory .......... ok`, `grimoire .............
+      1`, the closing line, and the `orb` row still on screen; with
+      `ORBS_SEALED=1`, no grimoire row.
+      `cargo test -p orbs-sim --lib tower::boot` for a tampered room counted
 
 ---
 
@@ -3461,7 +3530,7 @@ whose hand did the work.
       deed's spellings and no number; and a `ledger` section in `status`. No
       `FORMAT` bump, and the sweep is unmoved
       **See it:** `ORBS_BOOT=0 ORBS_DUMP="attend archive; debug_spawn fragment 8; debug_spell assembling" ORBS_THEN="invoke assembling; meditate 120; status" cargo run -p orbs`
-      reads `scrolls copied 1`, `scrolls copied by your spells 1`,
+      reads `scrolls assembled 1`, `scrolls assembled by your spells 1`,
       `done by your spells 1`.
       `cargo test -p orbs-sim --test ledger`
 - [x] **The room counts what it made** (`0.17.5`) — the room's first ledger row
@@ -3470,8 +3539,8 @@ whose hand did the work.
       and its title, otherwise it drops whole. The road's `n of m` rolls too.
       The strip's *"these two and nothing else"* is superseded (§19)
       **See it:** `ORBS_BOOT=0 ORBS_ROLL_AT=0.4 ORBS_DUMP="attend archive; debug_spawn fragment 8; debug_spell assembling; invoke assembling; meditate 30" cargo run -p orbs`
-      reads `scrolls copied 0 +1` and `your spells' share 0 +1` on their way to
-      `1`; `1.0` arrives. `attend laboratory` reads `potions brewed 0`.
+      reads `scrolls assembled 0 +1` and `your spells' share 0 +1` on their way to
+      `1`; `1.0` arrives. `attend laboratory` reads `brews finished 0`.
       `scripts/dumps.sh` captures `roll_column`
 - [x] **The siege board's stock rolls** (`0.17.6`) — the coffer and both sides'
       vigour, drawn from a rolled copy and spoken from the truth. `chance`

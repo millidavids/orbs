@@ -648,31 +648,39 @@ const fn wrap_width(cols: u16, lead: u16, kind: RecordKind) -> u16 {
 /// A run of readings, measured so their values share a column.
 ///
 /// Not `Tiling`: readings are a sequence. Strict — two or more records, each
-/// exactly a name and a number — since `Status` has five emit sites and only
-/// `status` is this shape.
+/// exactly a name and one value, a number or a state word — since `Status` has
+/// five emit sites and only `status` and the cold start are this shape.
 #[derive(Debug, Clone, Copy)]
 struct Readings {
     /// Cells the widest name takes.
     name: usize,
     /// Cells the widest value takes, so the digits end in one column.
     value: usize,
+    /// Whether any value is a word, which leads every row up to its value.
+    words: bool,
 }
 
 impl Readings {
     /// The plan for a run starting here, or `None` if it is not a run of readings.
     fn plan<'r>(run: impl Iterator<Item = Record<'r>>) -> Option<Self> {
-        let (mut name, mut value, mut count) = (0usize, 0usize, 0usize);
+        let (mut name, mut value, mut count, mut words) = (0usize, 0usize, 0usize, false);
         let mut text = String::new();
         for record in run.take_while(|record| record.kind() == RecordKind::Status) {
             let mut fields = record.fields();
-            let (Some((FieldName::Name, label)), Some((FieldName::Quantity, amount)), None) =
+            let (Some((FieldName::Name, label)), Some((field, amount)), None) =
                 (fields.next(), fields.next(), fields.next())
             else {
                 return None;
             };
-            if !amount.is_numeric() {
+            let reads = match field {
+                FieldName::Quantity => amount.is_numeric(),
+                FieldName::State => true,
+                _ => false,
+            };
+            if !reads {
                 return None;
             }
+            words |= field == FieldName::State;
             text.clear();
             label.write(&mut text);
             name = name.max(text.chars().count());
@@ -682,7 +690,7 @@ impl Readings {
             count += 1;
         }
         // One reading is not a column, and padding it would only move it right.
-        (count >= 2).then_some(Self { name, value })
+        (count >= 2).then_some(Self { name, value, words })
     }
 
     /// One reading, laid out — or `None` if it would not fit on its row.
@@ -691,8 +699,10 @@ impl Readings {
     /// the unpadded form the measure counted.
     fn row(&self, record: &Record<'_>, width: u16) -> Option<String> {
         let mut fields = record.fields();
-        let (Some((FieldName::Name, label)), Some((FieldName::Quantity, amount))) =
-            (fields.next(), fields.next())
+        let (
+            Some((FieldName::Name, label)),
+            Some((FieldName::Quantity | FieldName::State, amount)),
+        ) = (fields.next(), fields.next())
         else {
             return None;
         };
@@ -702,15 +712,23 @@ impl Readings {
 
         // ` name ....... value `: one space either side of the leader so the
         // dots never touch either, as `post.rs` does and the reason a leader is
-        // legible at all.
-        let dots = (self.name + 2 + 1).saturating_sub(name.chars().count() + 1);
+        // legible at all. Numbers alone are padded so their digits line up; a
+        // run with a word in it is led right up to every value, as §4's
+        // `[ ok ]` is, since a gap before a word reads as something missing.
+        let pad = self.value.saturating_sub(value.chars().count());
+        let lead = (self.name + 2).saturating_sub(name.chars().count());
+        let (dots, spaces) = if self.words {
+            (lead + pad, 0)
+        } else {
+            (lead, pad)
+        };
         let mut out = name;
         out.push(' ');
         for _ in 0..dots {
             out.push('.');
         }
         out.push(' ');
-        for _ in value.chars().count()..self.value {
+        for _ in 0..spaces {
             out.push(' ');
         }
         out.push_str(&value);

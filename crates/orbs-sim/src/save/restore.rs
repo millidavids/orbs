@@ -400,15 +400,17 @@ fn stream(world: &mut World, save: &Save) {
 
 /// Ask the open numbered question again.
 ///
-/// After the scene is rebuilt, since `analyse` reads the `Scene` resource and
-/// `tower::raise` builds none.
+/// After the scene is rebuilt, since the matcher reads the `Scene` resource
+/// and `tower::raise` builds none.
 fn prompt(world: &mut World, save: &Save) {
     tower::rebuild(world);
 
-    // The line is re-analysed (see `Choices`); a reading the restored scene
-    // cannot offer is honestly dropped.
+    // The line is re-read (see `Choices`); a reading the restored scene cannot
+    // offer is honestly dropped. Only the matcher asks a numbered question, so
+    // only the matcher reads it: a line a table took since (`exit`, before
+    // `0.25`) keeps the numbers already on screen.
     if let Some(line) = save.progress.asked.as_deref() {
-        let analysis = crate::parser::analyse(
+        let analysis = crate::parser::matched(
             line,
             world.resource::<crate::parser::Scene>(),
             crate::parser::Mode::Calm,

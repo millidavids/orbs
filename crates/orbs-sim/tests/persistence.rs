@@ -1085,6 +1085,25 @@ fn an_open_question_survives_a_reload() {
     );
 }
 
+/// A question asked before an aside took its line is still asked after a load.
+///
+/// `rm -rf /` raised four `purge` readings until `0.25`; the numbers are on
+/// the restored screen, so the digit must still mean one.
+#[test]
+fn a_question_an_aside_took_since_is_asked_again() {
+    let mut lived = Sim::new(11);
+    lived.submit("attend laboratory");
+    lived.step();
+    let mut save = lived.snapshot();
+    save.progress.asked = Some("rm -rf /".to_owned());
+
+    let loaded = reloaded(&save);
+    assert!(
+        loaded.choices().len() > 1,
+        "the old question came back with no numbers",
+    );
+}
+
 /// A hostile but well-formed save is refused a panic, not just a parse error.
 ///
 /// A document that parses and reaches `Sim::restored`, since a player may edit

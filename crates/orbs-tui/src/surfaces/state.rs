@@ -160,7 +160,7 @@ impl Surfaces {
         // §3: the menu's secret words are silent while the tower is tense, and
         // F7 can change that with the menu up.
         if let Some(menu) = &mut self.menuing {
-            menu.show_register(sim.register());
+            menu.show_tension(sim.register(), sim.besieged());
         }
     }
 

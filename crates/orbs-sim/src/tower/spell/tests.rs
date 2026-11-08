@@ -57,7 +57,7 @@ fn a_guard_stops_the_loop_when_the_body_makes_it_true() {
         said(&sim),
     );
     assert!(
-        ever_said(&sim, "is finished"),
+        ever_said(&sim, "runs to its end"),
         "the spell never ended: {:?}",
         said(&sim),
     );
@@ -75,7 +75,7 @@ fn a_guard_that_cannot_be_answered_stops_the_loop_rather_than_spinning() {
     sim.submit("invoke check");
     sim.step_n(10);
     assert!(
-        ever_said(&sim, "is finished"),
+        ever_said(&sim, "runs to its end"),
         "an unanswerable guard left the loop spinning: {:?}",
         said(&sim),
     );
@@ -167,7 +167,7 @@ fn no_instruction_in_a_spell_is_ever_refused_for_being_busy() {
         );
     }
     assert!(
-        ever_said(&sim, "is finished"),
+        ever_said(&sim, "runs to its end"),
         "the spell never completed: {:?}",
         said(&sim),
     );
@@ -302,7 +302,7 @@ fn a_line_naming_something_gone_is_logged_and_the_spell_carries_on() {
         said(&sim),
     );
     assert!(
-        ever_said(&sim, "is finished"),
+        ever_said(&sim, "runs to its end"),
         "the spell halted on a line it should have skipped: {:?}",
         said(&sim),
     );
@@ -380,7 +380,7 @@ fn invoking_a_running_spell_twice_does_not_start_it_twice() {
     sim.submit("invoke slow");
     sim.step();
     assert!(
-        !ever_said(&sim, "is finished"),
+        !ever_said(&sim, "runs to its end"),
         "the spell finished inside one tick, so nothing is being tested",
     );
 
@@ -546,7 +546,7 @@ fn a_question_about_nowhere_says_so_rather_than_answering_no() {
     );
     // Still §8: it logs, and does not halt.
     assert!(
-        ever_said(&sim, "is finished"),
+        ever_said(&sim, "runs to its end"),
         "the spell halted on a bad question: {:?}",
         said(&sim),
     );
@@ -1009,7 +1009,7 @@ fn a_part_that_calls_itself_stops_and_says_so() {
         said(&sim),
     );
     assert!(
-        ever_said(&sim, "is finished"),
+        ever_said(&sim, "runs to its end"),
         "the spell halted rather than carrying on: {:?}",
         said(&sim),
     );

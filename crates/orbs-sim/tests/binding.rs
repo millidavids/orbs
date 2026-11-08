@@ -137,7 +137,7 @@ fn standing_up_again_says_nothing() {
     // match it. A held spell has not finished; it is being held.
     let done = said(&sim)
         .iter()
-        .filter(|line| line.contains("is finished"))
+        .filter(|line| line.contains("runs to its end"))
         .count();
     assert_eq!(done, 0, "a lap called itself a finish: {done} lines");
 }

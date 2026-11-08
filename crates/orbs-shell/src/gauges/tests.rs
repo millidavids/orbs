@@ -127,7 +127,7 @@ fn a_row_with_no_room_for_a_bar_still_speaks_its_reading() {
 
 /// A track with nothing left to reach must not speak of a next tier.
 /// `Toward::FULL` is `1/1` because that fills the bar, and the sentence read
-/// those numbers anyway — so the screen said `nothing more authored` while a
+/// those numbers anyway — so the screen said the line had ended while a
 /// listener was told the tower stood one step from a tier that does not exist,
 /// the two halves of §14's one stream disagreeing.
 #[test]
@@ -138,10 +138,11 @@ fn a_topped_gauge_speaks_what_it_draws() {
         ahead: Ahead::Nothing,
     };
     let frame = ley_row(topped, still(topped), 80);
+    let ended = Prose::builtin().line("gauge_topped", &[]);
 
     let said = frame.speech().to_transcript();
     assert!(
-        said.contains("nothing more authored"),
+        said.contains(&ended),
         "a topped gauge did not say it had topped: {said}",
     );
     assert!(
@@ -149,7 +150,7 @@ fn a_topped_gauge_speaks_what_it_draws() {
         "a topped gauge spoke of a tier that is not authored: {said}",
     );
     assert!(
-        frame.to_text().contains("nothing more authored"),
+        frame.to_text().contains(&ended),
         "the row and its speech disagree:\n{}",
         frame.to_text(),
     );
@@ -178,8 +179,8 @@ fn an_unmeasured_track_draws_and_says_nothing() {
 
 /// The title yields to the bar, which is what the doc always promised. The rank
 /// was appended to the reading and the whole tail charged to the bar, so
-/// `nothing more authored  remembered` — 33 cells against the 25 a `LEAST`-wide
-/// pane leaves — drew no row at all.
+/// `nothing more authored  remembered`, as the topped line then read — 33 cells
+/// against the 25 a `LEAST`-wide pane leaves — drew no row at all.
 #[test]
 fn a_long_title_yields_before_the_bar_does() {
     let prose = Prose::builtin();

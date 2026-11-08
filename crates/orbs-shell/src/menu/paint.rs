@@ -67,8 +67,8 @@ pub fn paint(frame: &mut Frame, menu: &Menu, pane: Rect, prose: &Prose) {
 fn body(painter: &mut Painter<'_>, menu: &Menu, inner: Rect, prose: &Prose) -> Pos {
     let lead = match menu.page() {
         // The top page says where you are standing; the other three need not,
-        // because "which tower?" and "how long a game?" are the same question
-        // over a tower and in front of none.
+        // because "which tower?" and "how long will this tower run?" are the
+        // same question over a tower and in front of none.
         Page::Choices if menu.stance().is_threshold() => "menu_lead_threshold",
         Page::Choices => "menu_lead",
         Page::Play => "menu_play_lead",

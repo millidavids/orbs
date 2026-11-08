@@ -71,7 +71,7 @@ fn abandon_asks_once() {
         return;
     };
     game.type_raw("play");
-    game.expect_drawn("1 wizard, a short game, 0 earned");
+    game.expect_drawn("1 wizard's tower, short, 0 earned");
     game.type_raw("abandon 1");
     game.expect_drawn("set the tower in 1 aside? abandon 1 again to do it");
     game.type_raw("abandon 1");
@@ -94,7 +94,7 @@ fn loading_another_leaves_the_first_as_it_was() {
         return;
     };
     game.type_raw("play");
-    game.expect_drawn("1 wizard, a short game");
+    game.expect_drawn("1 wizard's tower, short");
     game.type_raw("1");
     game.expect_drawn("/tower/laboratory");
 
@@ -108,13 +108,13 @@ fn loading_another_leaves_the_first_as_it_was() {
     game.send("menu");
     game.expect_drawn("the tower waits");
     game.type_raw("play");
-    game.expect_drawn("1 wizard, a short game");
+    game.expect_drawn("1 wizard's tower, short");
     game.type_raw("1");
     game.expect_drawn("/tower/laboratory");
     game.send("menu");
     game.expect_drawn("the tower waits");
     game.type_raw("play");
-    game.expect_drawn("2 wizard, a short game");
+    game.expect_drawn("2 wizard's tower, short");
 }
 
 #[test]
@@ -141,7 +141,7 @@ fn a_new_tower_takes_the_chosen_name() {
     game.type_raw("play");
     game.expect_drawn("open a tower");
     game.type_raw("new");
-    game.expect_drawn("how long a game?");
+    game.expect_drawn("how long will this tower run?");
     game.type_raw("short");
     game.expect_drawn("morgana $");
 }

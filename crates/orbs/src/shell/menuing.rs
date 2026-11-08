@@ -128,7 +128,7 @@ pub(crate) fn type_into_menu(
         // §3: the secret words are silent while the tower is tense. Asked here,
         // with the keys, because F7 can change it with the menu up.
         if let Some(tower) = &tower {
-            menu.show_register(tower.sim().register());
+            menu.show_tension(tower.sim().register(), tower.sim().besieged());
         }
         for event in keys.read() {
             if event.state != ButtonState::Pressed {

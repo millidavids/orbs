@@ -549,6 +549,43 @@ fn a_records_drawn_form_never_nests_another_records_speech() {
 }
 
 #[test]
+fn a_state_word_reads_like_a_count_in_a_run_of_readings() {
+    // The cold start's rows are a name and a word, beside `bound`'s count
+    // (§4, §19 *Both tongues*): one column, right-aligned, leaders between.
+    let mut records = Records::new();
+    records
+        .push(RecordKind::Status)
+        .text(FieldName::Name, "orb")
+        .text(FieldName::State, "cold start")
+        .finish();
+    records
+        .push(RecordKind::Status)
+        .text(FieldName::Name, "laboratory")
+        .text(FieldName::State, "ok")
+        .finish();
+    records
+        .push(RecordKind::Status)
+        .text(FieldName::Name, "bound")
+        .count(FieldName::Quantity, 0)
+        .finish();
+
+    let mut frame = frame_of(40, 4);
+    let area = frame.area();
+    RecordView::lines().draw(&mut frame.painter(area), area, records.iter());
+    let text = frame.to_text();
+    let rows: Vec<&str> = text.lines().filter(|row| row.contains(" ..")).collect();
+    assert_eq!(rows.len(), 3, "not every row drew as a reading:\n{text}");
+    let ends: Vec<usize> = rows
+        .iter()
+        .map(|row| row.trim_end().chars().count())
+        .collect();
+    assert!(
+        ends.windows(2).all(|pair| pair[0] == pair[1]),
+        "the values do not share a column:\n{text}"
+    );
+}
+
+#[test]
 fn a_register_reaches_every_record_emitted_after_it() {
     // §3 puts the eldritch treatment on messages, not on call sites: it is how
     // the orb is currently speaking. Setting it once is what stops a register
